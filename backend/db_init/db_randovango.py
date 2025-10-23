@@ -1,26 +1,20 @@
 import mysql.connector
-import os
+from backend.utils.mysql_utils import connect_mysql
 from mysql.connector import Error
-from dotenv import load_dotenv
+from backend.utils.service_util import ServiceUtil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT/".env")
+ServiceUtil.load_env()
 
 # base mysql
-DB_HOST = os.getenv("DB_HOST")
-DB_ROOT = os.getenv("DB_ROOT")
-DB_ROOT_PSWD = os.getenv("DB_ROOT_PSWD")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PSWD = os.getenv("DB_PSWD")
+DB_HOST = ServiceUtil.get_env("DB_HOST")
+DB_ROOT = ServiceUtil.get_env("DB_ROOT")
+DB_ROOT_PSWD = ServiceUtil.get_env("DB_ROOT_PSWD")
+DB_NAME = ServiceUtil.get_env("DB_NAME")
+DB_USER = ServiceUtil.get_env("DB_USER")
+DB_PSWD = ServiceUtil.get_env("DB_PSWD")
 
-MYSQL_CONF = {
-    'host':     os.getenv('DB_HOST'),
-    'user':     os.getenv('DB_USER'),
-    'password': os.getenv('DB_PSWD'),
-    'database': os.getenv('DB_NAME'),
-}
 
 def init_database():
     try:
@@ -50,15 +44,7 @@ def init_database():
         admin_cnx.close()
         print(f"Utilisateur {DB_USER} créé.")
 
-    except Error as err:
-        print(f"[Erreur admin] {err}")
-        return
-
-    try:
-        # 2. Connexion utilisateur pour créer la table randonnée
-        user_cnx = mysql.connector.connect(**MYSQL_CONF)
-        user_cursor = user_cnx.cursor()
-
+        # Liste des statements pour la création des tables
         statements = [
             # table cities
             """
@@ -69,22 +55,38 @@ def init_database():
                 longitude FLOAT NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
-            # table hikes
+            # table sources
+            """
+            CREATE TABLE IF NOT EXISTS sources (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # table services
+            """
+            CREATE TABLE IF NOT EXISTS services (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                service_type VARCHAR(100)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # table hikes (ajout explicite des champs filename, city_id et description)
             """
             CREATE TABLE IF NOT EXISTS hikes (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
+                description TEXT,
                 start_latitude FLOAT,
                 start_longitude FLOAT,
                 distance_km FLOAT,
                 estimated_duration_h FLOAT,
                 elevation_gain_m FLOAT,
-                description TEXT,
-                city_id INT,
+                filename VARCHAR(255),
                 mongo_id VARCHAR(24),
                 source_id INT,
-                FOREIGN KEY (city_id) REFERENCES cities(id),
-                FOREIGN KEY (source_id) REFERENCES sources(id)
+                city_id INT,
+                FOREIGN KEY (source_id) REFERENCES sources(id),
+                FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # table spots
@@ -104,14 +106,6 @@ def init_database():
                 FOREIGN KEY (source_id) REFERENCES sources(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
-            # table services
-            """
-            CREATE TABLE IF NOT EXISTS services (
-                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                service_type VARCHAR(100)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """,
             # table spot_service
             """
             CREATE TABLE IF NOT EXISTS spot_service (
@@ -120,13 +114,6 @@ def init_database():
                 PRIMARY KEY (spot_id, service_id),
                 FOREIGN KEY (spot_id) REFERENCES spots(id),
                 FOREIGN KEY (service_id) REFERENCES services(id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """,
-            # table sources
-            """
-            CREATE TABLE IF NOT EXISTS sources (
-                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # table poi
@@ -152,7 +139,6 @@ def init_database():
             """
             CREATE TABLE IF NOT EXISTS weather (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                city_id INT NOT NULL,
                 date DATE NOT NULL,
                 temp_max_c FLOAT,
                 temp_min_c FLOAT,
@@ -160,24 +146,25 @@ def init_database():
                 wind_max_kmh FLOAT,
                 weather_code INT,
                 solar_energy_sum FLOAT,
+                city_id INT NOT NULL,
                 FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """
+            """,
             # table trip_plans
             """
             CREATE TABLE IF NOT EXISTS trip_plans (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                session_token VARCHAR(64) UNIQUE NOT NULL,
-                city_id INT NOT NULL,
                 start_date DATE NOT NULL,
                 duration_days INT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                city_id INT NOT NULL,
+                user_token VARCHAR(64),
                 FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """
+            """,
             # table trip_days
             """
-            CREATE TABLE trip_days (
+            CREATE TABLE IF NOT EXISTS trip_days (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 trip_plan_id INT NOT NULL,
                 day_number INT NOT NULL,
@@ -185,25 +172,30 @@ def init_database():
                 spot_id INT,
                 FOREIGN KEY (trip_plan_id) REFERENCES trip_plans(id) ON DELETE CASCADE,
                 FOREIGN KEY (hike_id) REFERENCES hikes(id),
-                FOREIGN KEY (spot_id) REFERENCES pois(id)
+                FOREIGN KEY (spot_id) REFERENCES poi(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # table trip_day_pois
             """
-            # table trip_day_services
-            """
-            CREATE TABLE poi (
+            CREATE TABLE IF NOT EXISTS trip_day_pois (
                 trip_day_id INT NOT NULL,
                 poi_id INT NOT NULL,
                 PRIMARY KEY (trip_day_id, poi_id),
                 FOREIGN KEY (trip_day_id) REFERENCES trip_days(id),
-                FOREIGN KEY (poi_id) REFERENCES pois(id)
+                FOREIGN KEY (poi_id) REFERENCES poi(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """,
+            """
         ]
         print("- Création des tables :")
+        user_cnx = connect_mysql()
+        user_cursor = user_cnx.cursor()
         for stmt in statements:
             user_cursor.execute(stmt)
+            try:
+                user_cursor.fetchall()
+            except Exception:
+                pass
             print("→ OK :", stmt.strip().split()[5])
-
         user_cnx.commit()
         user_cursor.close()
         user_cnx.close()

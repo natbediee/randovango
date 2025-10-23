@@ -5,20 +5,23 @@ services:
     restart: always
     ports:
       - 27017:27017
-    env_file:
-      - .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
     volumes:
       - ./storage/mongodb:/data/db
     networks:
       - randovango
-  db:
+  db_randovango:
     image: mysql
     container_name: db_randovango
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PSWD}
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PSWD}
+    ports:
+      - "3306:3306"
     volumes:
       - ./storage/mysql:/var/lib/mysql
     restart: always

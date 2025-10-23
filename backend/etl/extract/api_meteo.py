@@ -1,35 +1,57 @@
-# Import standard et tierces
-from pathlib import Path
-from dotenv import load_dotenv
-import requests
-import json
-import os
-import sys
 import logging
+from pathlib import Path
+import requests
+from backend.utils.path_utils import add_etl_paths
+from backend.etl.load.load_meteo import insert_weather_data
+from backend.utils.geo_utils import get_coordinates_for_city
+from backend.utils.mysql_utils import connect_mysql
 
-# Import spécifique au projet
-from geo_utils import get_coordinates_for_city
-
-# Assurez-vous que ROOT est défini avant d'ajouter le chemin
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(ROOT / "backend/etl/extraction"))
+add_etl_paths(ROOT)
 
 # Configuration du logging
 logging.basicConfig(
-    level=logging.DEBUG,  # Niveau de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),  # Affiche les logs dans la console
-        logging.FileHandler(ROOT / "logs/api_meteo.log", mode='a', encoding='utf-8')  # Sauvegarde dans un fichier log
+        logging.StreamHandler(),
+        logging.FileHandler(ROOT / "logs/api_meteo.log", mode='a', encoding='utf-8')
     ]
 )
 
-load_dotenv(ROOT / ".env")
-
-# Chemin vers data/in
-DATA_IN = ROOT / os.getenv("DATA_IN")/"meteo"
-
 # --- Fonction d'Extraction Météo (Paramétrée par Coordonnées) ---
+def get_or_create_city(city_name, latitude, longitude):
+    """
+    Récupère l'ID de la ville depuis la table cities, ou la crée si elle n'existe pas.
+    
+    Returns:
+        int: L'ID de la ville dans la table cities
+    """
+    cnx = connect_mysql()
+    cursor = cnx.cursor()
+    
+    # Vérifier si la ville existe
+    cursor.execute("SELECT id FROM cities WHERE name = %s", (city_name,))
+    result = cursor.fetchone()
+    
+    if result:
+        city_id = result[0]
+        logging.info(f"Ville {city_name} trouvée avec ID={city_id}")
+    else:
+        # Créer la ville
+        cursor.execute(
+            "INSERT INTO cities (name, latitude, longitude) VALUES (%s, %s, %s)",
+            (city_name, latitude, longitude)
+        )
+        cnx.commit()
+        city_id = cursor.lastrowid
+        logging.info(f"Ville {city_name} créée avec ID={city_id}")
+    
+    cursor.close()
+    cnx.close()
+    return city_id
+
+
 def fetch_weather_data(city):
     """
     Récupère les données météo pour une ville donnée via l'API Open-Meteo.
@@ -44,6 +66,9 @@ def fetch_weather_data(city):
         return None
 
     logging.info(f"Coordonnées trouvées: {latitude}, {longitude}")
+    
+    # Récupérer ou créer l'entrée de la ville dans la base
+    city_id = get_or_create_city(city, latitude, longitude)
 
     # Paramètres de l'API Open-Meteo
     params = {
@@ -70,40 +95,41 @@ def fetch_weather_data(city):
         daily_data = data.get('daily', {})
         weather_list = []
 
-        # Transformation des données en une liste de jours
+        # Transformation des données en une liste de tuples pour l'insertion SQL
         for i in range(len(daily_data.get('time', []))):
-            weather_day = {
-                "date": daily_data['time'][i],
-                "temp_max_c": daily_data['temperature_2m_max'][i],
-                "temp_min_c": daily_data['temperature_2m_min'][i],
-                "precipitation_mm": daily_data['precipitation_sum'][i],
-                "wind_max_kmh": daily_data['wind_speed_10m_max'][i],
-                "weather_code": daily_data['weather_code'][i],
-                "solar_energy_sum": daily_data['shortwave_radiation_sum'][i]
-            }
-            weather_list.append(weather_day)
+            weather_tuple = (
+                city_id,  # city_id récupéré depuis la table cities
+                daily_data['time'][i],
+                daily_data['temperature_2m_max'][i],
+                daily_data['temperature_2m_min'][i],
+                daily_data['precipitation_sum'][i],
+                daily_data['wind_speed_10m_max'][i],
+                daily_data['weather_code'][i],
+                daily_data['shortwave_radiation_sum'][i]
+            )
+            weather_list.append(weather_tuple)
 
         logging.info(f"{len(weather_list)} jours de prévisions récupérés")
-
-        # Définition du chemin de sauvegarde (data_input/raw)
-        DATA_IN.mkdir(parents=True, exist_ok=True)
-        filename = f'weather_data_{city.replace(" ", "_")}.json'
-        file_path = DATA_IN / filename
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(weather_list, f, indent=4, ensure_ascii=False)
-
-        logging.info(f"Données sauvegardées dans: {file_path}")
-        return file_path
+        # Appel direct à l'insertion en base
+        insert_weather_data(weather_list)
+        logging.info(f"Données météo insérées en base pour {city}")
+        return True
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Échec de l'extraction API météo : {e}")
         return None
 
-# --- BLOC DE LANCEMENT PARAMÉTRABLE ---
-
 if __name__ == "__main__":
+    logging.info("[MAIN] Bloc main exécuté")
+    print("[MAIN] Bloc main exécuté")
+    import sys
     if len(sys.argv) < 2:
         print("Usage: python meteo.py <nom_de_la_ville>")
-        sys.exit(1) 
+        logging.warning("Usage: python meteo.py <nom_de_la_ville>")
+        sys.exit(1)
     city = sys.argv[1]
+    logging.info(f"[MAIN] Ville demandée: {city}")
+    print(f"[MAIN] Ville demandée: {city}")
     fetch_weather_data(city)
+
+

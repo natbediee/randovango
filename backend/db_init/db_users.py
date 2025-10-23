@@ -3,16 +3,18 @@ import sqlite3
 
 from pathlib import Path
 from passlib.hash import bcrypt
+from backend.utils.service_util import ServiceUtil
 
 ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = ROOT / "db" / "quiz_users.sqlite"
+ServiceUtil.load_env()
+DB_PATH = ROOT / "storage" / ServiceUtil.get_env("SQLITE_DB_NAME", "rando_users.sqlite")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-ROLES = ["admin", "teacher", "student"]
+ROLES = ["admin", "user", "contributor", "guest"]
 USERS = [
     ("admin", "admin123", 1, ["admin"]),
-    ("teacher1", "teach123", 1, ["teacher"]),
-    ("student1", "stud123", 1, ["student"]),
-    ("teacher2", "teach123", 0, ["teacher"]),  # inactif
+    ("contributor1", "cont123", 1, ["contributor"]),
+    ("user1", "user123", 1, ["user"]),
+    ("contributor2", "cont123", 0, ["contributor"]),  # inactif
 ]
 
 DDL = """
@@ -44,14 +46,18 @@ CREATE TABLE IF NOT EXISTS user_role (
 );
 
 CREATE TABLE IF NOT EXISTS auth_log (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id      INTEGER NULL,
-  username     TEXT    NULL,
-  action       TEXT    NOT NULL,
-  route        TEXT    NOT NULL,
-  status_code  INTEGER NOT NULL,
-  timestamp    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NULL,
+    username     TEXT    NULL,
+    token        TEXT    NULL,
+    action       TEXT    NOT NULL,
+    route        TEXT    NOT NULL,
+    status_code  INTEGER NOT NULL,
+    ip_address   TEXT    NULL,
+    access_type  TEXT    NULL,
+    expires_at   DATETIME NULL,
+    timestamp    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 """
 
@@ -68,7 +74,7 @@ def seed(conn):
         if row:
             uid = row[0]
         else:
-            pwd_hash = bcrypt.hash(pwd)
+            pwd_hash = bcrypt.hash(pwd[:72])
             cur.execute(
                 "INSERT INTO users(username, password_hash, is_active) VALUES (?,?,?)",
                 (username, pwd_hash, active),
@@ -82,6 +88,21 @@ def seed(conn):
                 "INSERT OR IGNORE INTO user_role(user_id, role_id) VALUES (?,?)",
                 (uid, rid),
             )
+    # Ajout utilisateur anonyme si absent
+    cur.execute("SELECT id FROM users WHERE username=?", ("anonymous",))
+    if not cur.fetchone():
+        cur.execute(
+            "INSERT INTO users(username, password_hash, is_active) VALUES (?,?,?)",
+            ("anonymous", bcrypt.hash(""), 1),
+        )
+        anon_id = cur.lastrowid
+        # Lier au rôle 'guest'
+        cur.execute("SELECT id FROM roles WHERE name=?", ("guest",))
+        rid = cur.fetchone()[0]
+        cur.execute(
+            "INSERT OR IGNORE INTO user_role(user_id, role_id) VALUES (?,?)",
+            (anon_id, rid),
+        )
     conn.commit()
 
 

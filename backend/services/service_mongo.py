@@ -1,11 +1,9 @@
-"""Service for handling connection to MongoDB for Randovango."""
-
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import ConnectionFailure
 
-from services.util import ServiceUtil
+from backend.utils.service_util import ServiceUtil
 
 DATABASE_NAME = "randovango"
 
@@ -16,15 +14,26 @@ class ServiceMongo:
 
     @classmethod
     def connect(cls) -> None:
-        """Create MongoClient."""
+        """Create MongoClient using env variables via ServiceUtil."""
         ServiceUtil.load_env()
-        username = ServiceUtil.get_env("MONGO_INITDB_ROOT_USERNAME")
-        password = ServiceUtil.get_env("MONGO_INITDB_ROOT_PASSWORD")
-        url = f"mongodb://{username}:{password}@mongo:27017"
+        username = ServiceUtil.get_env("MONGO_INITDB_ROOT_USERNAME", "")
+        password = ServiceUtil.get_env("MONGO_INITDB_ROOT_PASSWORD", "")
+        host = ServiceUtil.get_env("MONGO_HOST", "localhost")
+        port = ServiceUtil.get_env("MONGO_PORT", "27017")
+        
+        # Si username et password sont fournis ET non vides, utiliser l'authentification
+        if username and password and username.strip() and password.strip():
+            url = f"mongodb://{username.strip()}:{password.strip()}@{host}:{port}"
+        else:
+            # Sinon, connexion sans authentification
+            url = f"mongodb://{host}:{port}"
+        
         try:
             cls.client = MongoClient(url)
+            # Test de la connexion
+            cls.client.admin.command('ping')
         except ConnectionFailure as e:
-            raise RuntimeError from e
+            raise RuntimeError("MongoDB connection failed") from e
 
     @classmethod
     def disconnect(cls) -> None:

@@ -13,7 +13,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import logging
 
-from geo_utils import get_coordinates_for_city
+from backend.utils.geo_utils import get_coordinates_for_city
 
 ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT / ".env")

@@ -1,0 +1,10 @@
+# Environnement virtuel
+.venv/
+# Fichiers sensibles
+.env
+# Python cache
+__pycache__/
+# bdd
+storage/
+logs/
+data/
