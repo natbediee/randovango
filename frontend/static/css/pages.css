@@ -1,0 +1,819 @@
+/* ===== STYLES SPÉCIFIQUES PAGES PLANIFICATEUR ===== */
+
+/* Étape 1 - Ville */
+.selected-city {
+    margin-top: var(--gap-xl);
+    display: flex;
+    justify-content: center;
+}
+
+.selected-city .card {
+    max-width: 600px;
+    width: 100%;
+}
+
+.city-header h3 {
+    color: var(--blue);
+    margin-bottom: var(--gap-sm);
+}
+
+.city-stats {
+    display: flex;
+    gap: var(--gap-lg);
+    margin-top: var(--gap-md);
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    color: var(--gray-500);
+    font-size: 0.875rem;
+}
+
+.weather-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--gap-md);
+    margin-top: var(--gap-lg);
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.weather-section {
+    text-align: center;
+}
+
+.weather-day {
+    text-align: center;
+    padding: var(--gap-md);
+    background: var(--gray-100);
+    border-radius: var(--radius-md);
+}
+
+.weather-day.today {
+    background: var(--blue);
+    color: white;
+}
+
+/* Étape 2 - Randonnée */
+.hiking-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--gap-lg);
+    margin-bottom: var(--gap-xl);
+}
+
+.hiking-card {
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-lg);
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.hiking-card:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+}
+
+.hiking-card.selected {
+    border-color: var(--blue);
+    background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+}
+
+.hiking-details {
+    display: flex;
+    gap: var(--gap-md);
+    margin: var(--gap-md) 0;
+    flex-wrap: wrap;
+}
+
+.detail-badge {
+    background: var(--gray-200);
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-xl);
+    font-size: 0.8rem;
+    color: var(--blue-dark);
+}
+
+/* Étape 3 - Nuit */
+.timing-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--gap-lg);
+    margin-bottom: var(--gap-xl);
+}
+
+.timing-card {
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-lg);
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.timing-card:hover,
+.timing-card.selected {
+    border-color: var(--blue);
+    background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+    transform: translateY(-2px);
+}
+
+.spots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--gap-lg);
+}
+
+.spot-card {
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-lg);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.spot-card:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+}
+
+.spot-card.selected {
+    border-color: var(--blue);
+    background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+}
+
+.spot-features {
+    display: flex;
+    gap: var(--gap-sm);
+    margin-top: var(--gap-md);
+    flex-wrap: wrap;
+}
+
+.feature-tag {
+    background: var(--gray-200);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: var(--blue-dark);
+}
+
+/* Étape 4 - Services */
+.services-categories {
+    margin-bottom: var(--gap-xl);
+}
+
+.category-tabs {
+    display: flex;
+    gap: var(--gap-sm);
+    margin-bottom: var(--gap-lg);
+    border-bottom: 2px solid var(--gray-200);
+    flex-wrap: wrap;
+}
+
+.category-tab {
+    padding: var(--gap-md) var(--gap-lg);
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--gray-500);
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.category-tab:hover,
+.category-tab.active {
+    color: var(--blue);
+    border-bottom-color: var(--blue);
+    background: var(--gray-100);
+}
+
+.services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--gap-lg);
+}
+
+.service-card {
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-lg);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.service-card:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+}
+
+.service-card.selected {
+    border-color: var(--green);
+    background: linear-gradient(135deg, #E8F5E8, #C8E6C9);
+}
+
+.service-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--gap-md);
+}
+
+.service-distance {
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+.selected-services {
+    margin-top: var(--gap-xl);
+    background: var(--gray-100);
+    padding: var(--gap-lg);
+    border-radius: var(--radius-lg);
+}
+
+.selected-services h3 {
+    color: var(--blue);
+    margin-bottom: var(--gap-md);
+    text-align: center;
+}
+
+.selected-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+}
+
+.selected-service-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--white);
+    padding: var(--gap-md);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gray-300);
+}
+
+.service-name {
+    font-weight: 500;
+    color: var(--blue);
+}
+
+/* Page Résultat - Timeline */
+.day-summary {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-xl);
+    margin-bottom: var(--gap-lg);
+    box-shadow: var(--shadow);
+}
+
+.day-header {
+    text-align: center;
+    margin-bottom: var(--gap-xl);
+    padding-bottom: var(--gap-lg);
+    border-bottom: 2px solid var(--gray-200);
+}
+
+.weather-info {
+    display: flex;
+    justify-content: center;
+    gap: var(--gap-md);
+    flex-wrap: wrap;
+    margin-top: var(--gap-md);
+}
+
+.weather-badge {
+    background: var(--blue-light);
+    color: white;
+    padding: 0.5rem var(--gap-md);
+    border-radius: var(--radius-xl);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.timeline-container {
+    position: relative;
+    padding-left: var(--gap-xl);
+}
+
+.timeline-container::before {
+    content: '';
+    position: absolute;
+    left: var(--gap-md);
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(to bottom, var(--blue), var(--green));
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: var(--gap-xl);
+}
+
+.timeline-icon {
+    position: absolute;
+    left: -2rem;
+    top: 0.5rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border: 3px solid white;
+    box-shadow: var(--shadow);
+}
+
+.timeline-icon.morning {
+    background: linear-gradient(135deg, #FFB74D, #FFA726);
+}
+
+.timeline-icon.day {
+    background: linear-gradient(135deg, var(--blue), var(--blue-light));
+}
+
+.timeline-icon.services {
+    background: linear-gradient(135deg, var(--green), #66BB6A);
+}
+
+.location-card,
+.activity-card {
+    background: var(--gray-100);
+    padding: var(--gap-lg);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--gap-md);
+}
+
+.location-details,
+.activity-stats {
+    display: flex;
+    gap: var(--gap-md);
+    margin-top: var(--gap-sm);
+    flex-wrap: wrap;
+}
+
+.location-details span,
+.activity-stats span {
+    background: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-xl);
+    font-size: 0.875rem;
+    color: var(--blue-dark);
+    border: 1px solid var(--gray-300);
+}
+
+/* Actions finales */
+.final-actions {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-xl);
+    margin-bottom: var(--gap-lg);
+    box-shadow: var(--shadow);
+    text-align: center;
+}
+
+.choice-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--gap-lg);
+    margin-bottom: var(--gap-lg);
+}
+
+.choice-option {
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-xl);
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.choice-option:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-hover);
+}
+
+.choice-option.primary {
+    border-color: var(--blue);
+    background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+}
+
+.choice-option.secondary {
+    border-color: var(--green);
+    background: linear-gradient(135deg, #E8F5E8, #C8E6C9);
+}
+
+.choice-icon {
+    font-size: 3rem;
+    margin-bottom: var(--gap-md);
+    color: var(--blue-dark);
+}
+
+.choice-option.secondary .choice-icon {
+    color: var(--green);
+}
+
+.secondary-actions {
+    text-align: center;
+    margin-bottom: var(--gap-lg);
+}
+
+.action-buttons-row {
+    display: flex;
+    justify-content: center;
+    gap: var(--gap-md);
+    flex-wrap: wrap;
+}
+
+/* Informations pratiques */
+.practical-info {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-xl);
+    box-shadow: var(--shadow);
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--gap-md);
+}
+
+.info-item {
+    background: var(--gray-100);
+    padding: var(--gap-md);
+    border-radius: var(--radius-md);
+    border-left: 4px solid var(--blue);
+}
+
+/* User section */
+.user-section {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-md);
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-md);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    color: var(--blue-dark);
+}
+
+/* Status bar */
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-md);
+}
+
+/* ===== ANIMATIONS ET TRANSITIONS ===== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+@keyframes progress {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 100%;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Classes d'animation */
+.fade-in {
+    animation: fadeIn 0.6s ease-out;
+}
+
+.slide-in-right {
+    animation: slideInRight 0.5s ease-out;
+}
+
+.pulse-hover:hover {
+    animation: pulse 0.5s ease-in-out;
+}
+
+/* Styles pour l'état de chargement */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--gray-300);
+    border-radius: 50%;
+    border-top-color: var(--blue);
+    animation: spin 1s ease-in-out infinite;
+}
+
+/* Progress bar pour le stepper */
+.step-progress {
+    position: relative;
+    height: 6px;
+    background: var(--gray-300);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: var(--gap-lg);
+}
+
+.step-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--blue), var(--blue-light));
+    border-radius: 3px;
+    transition: width 0.5s ease-in-out;
+}
+
+/* Styles pour les messages de validation */
+.validation-message {
+    background: var(--red-light);
+    color: var(--red);
+    padding: var(--gap-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--gap-md);
+    border: 1px solid var(--red);
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+}
+
+.validation-message.success {
+    background: var(--green-light);
+    color: var(--green);
+    border-color: var(--green);
+}
+
+.validation-message.info {
+    background: var(--blue-light);
+    color: var(--blue);
+    border-color: var(--blue);
+}
+
+/* ===== RESPONSIVE POUR COMPOSANTS SPÉCIFIQUES ===== */
+@media (max-width: 768px) {
+    .weather-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .hiking-grid,
+    .timing-options,
+    .spots-grid,
+    .services-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .category-tabs {
+        flex-direction: column;
+    }
+    
+    .timeline-container {
+        padding-left: var(--gap-lg);
+    }
+    
+    .timeline-icon {
+        left: -1.5rem;
+        width: 35px;
+        height: 35px;
+        font-size: 1rem;
+    }
+    
+    .choice-buttons {
+        grid-template-columns: 1fr;
+    }
+    
+    .action-buttons-row {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .city-stats,
+    .hiking-details,
+    .spot-features {
+        flex-direction: column;
+        gap: var(--gap-sm);
+    }
+    
+    .service-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--gap-sm);
+    }
+}
+
+/* ===== CLASSES UTILITAIRES ===== */
+.text-muted {
+    color: var(--gray-500);
+}
+
+.text-accent {
+    color: var(--blue);
+}
+
+.text-success {
+    color: var(--green);
+}
+
+.text-warning {
+    color: #FF9800;
+}
+
+.text-error {
+    color: var(--red);
+}
+
+.bg-light {
+    background-color: var(--gray-100);
+}
+
+.border-accent {
+    border: var(--border-strong);
+}
+
+.shadow-light {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.rounded {
+    border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+    border-radius: var(--radius-lg);
+}
+
+.overflow-hidden {
+    overflow: hidden;
+}
+
+.position-relative {
+    position: relative;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+.h-100 {
+    height: 100%;
+}
+
+.d-flex {
+    display: flex;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.align-center {
+    align-items: center;
+}
+
+.gap-sm {
+    gap: var(--gap-sm);
+}
+
+.gap-md {
+    gap: var(--gap-md);
+}
+
+.gap-lg {
+    gap: var(--gap-lg);
+}
+
+.mt-auto {
+    margin-top: auto;
+}
+
+.mb-0 {
+    margin-bottom: 0;
+}
+
+.p-0 {
+    padding: 0;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.user-select-none {
+    user-select: none;
+}
+
+/* Classes pour masquer/afficher selon la taille d'écran */
+.d-none {
+    display: none;
+}
+
+.d-block {
+    display: block;
+}
+
+@media (min-width: 768px) {
+    .d-md-block {
+        display: block;
+    }
+    
+    .d-md-none {
+        display: none;
+    }
+}
+
+@media (max-width: 767px) {
+    .d-mobile-none {
+        display: none;
+    }
+    
+    .d-mobile-block {
+        display: block;
+    }
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+    * {
+        box-shadow: none !important;
+    }
+    
+    .header,
+    .stepper-container,
+    .btn,
+    .final-actions {
+        display: none !important;
+    }
+    
+    .container {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .day-summary {
+        break-inside: avoid;
+        margin-bottom: 20px;
+    }
+    
+    .timeline-container::before {
+        background: #333 !important;
+    }
+    
+    .timeline-icon {
+        background: #666 !important;
+        color: white !important;
+    }
+}

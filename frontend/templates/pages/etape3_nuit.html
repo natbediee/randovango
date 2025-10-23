@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% set current_step = 3 %}
+
+{% block title %}Étape 3 - Choix de la Nuit - RandoVanGo{% endblock %}
+
+{% block hero_subtitle %}Trouvez l'endroit parfait pour passer la nuit{% endblock %}
+
+{% block planning_content %}
+<div class="step-section">
+    <div class="step-header">
+        <h2>🌙 Jour 1 : Où dormir cette nuit ?</h2>
+        <p>Choisissez votre hébergement pour terminer parfaitement cette première journée</p>
+    </div>
+
+    <!-- Filtres d'hébergement -->
+    <div class="accommodation-filters">
+        <div class="filter-group">
+            <label>Quand :</label>
+            <button class="filter-btn active" data-filter="same-day">Le jour même</button>
+            <button class="filter-btn" data-filter="night-before">La veille (J-1)</button>
+        </div>
+        <div class="filter-group">
+            <label>Type :</label>
+            <button class="filter-btn active" data-filter="camping">Camping</button>
+            <button class="filter-btn" data-filter="bivouac">Bivouac</button>
+            <button class="filter-btn" data-filter="camping-car">Aire de camping-car</button>
+        </div>
+    </div>
+
+    <!-- Spots de bivouac -->
+    <div class="spots-section" id="spotsSection" style="display: none;">
+        <h3>Spots disponibles près de votre randonnée</h3>
+        <div class="spots-list">
+            <!-- Spot 1 -->
+            <div class="spot-card" data-type="camping-car" data-timing="same-day">
+                <div class="spot-content-grid">
+                    <!-- Colonne gauche : Type + Vérifié -->
+                    <div class="spot-left">
+                        <span class="hiking-stats"><span class="stat">Aire de camping-car</span></span>
+                        <span class="status-badge verified">✅ Vérifié</span>
+                    </div>
+                    
+                    <!-- Colonne centre : Infos bivouac -->
+                    <div class="spot-center">
+                        <h4>Aire CC de Plougonvelin</h4>
+                        <p class="spot-description">Aire aménagée avec services complets, proche du centre-ville</p>
+                        <div class="spot-features">
+                            <span class="feature">💧 Eau</span>
+                            <span class="feature">🚽 WC</span>
+                            <span class="feature">⚡ Électricité</span>
+                            <span class="feature">🛒 Commerces 500m</span>
+                        </div>
+                        <div class="spot-details">
+                            <span class="price">💰 12€/nuit</span>
+                            <span class="distance">📍 2.3 km du départ randonnée</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Colonne droite : Boutons -->
+                    <div class="spot-right">
+                        <button class="btn btn-outline btn-sm" onclick="showSpotMap(1)">
+                            <i class="fas fa-map"></i> Voir
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="selectSpot(1)">Choisir</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spot 2 -->
+            <div class="spot-card" data-type="bivouac" data-timing="same-day">
+                <div class="spot-content-grid">
+                    <!-- Colonne gauche : Type + Vérifié -->
+                    <div class="spot-left">
+                        <span class="hiking-stats"><span class="stat">Bivouac</span></span>
+                        <span class="status-badge pending">⚠️ En attente</span>
+                    </div>
+                    
+                    <!-- Colonne centre : Infos bivouac -->
+                    <div class="spot-center">
+                        <h4>Parking Fort de Bertheaume</h4>
+                        <p class="spot-description">Vue exceptionnelle sur le fort, mais sans services</p>
+                        <div class="spot-features">
+                            <span class="feature disabled">❌ Pas d'eau</span>
+                            <span class="feature disabled">❌ Pas de WC</span>
+                            <span class="feature">🌅 Vue mer</span>
+                            <span class="feature">📸 Très photogénique</span>
+                        </div>
+                        <div class="spot-details">
+                            <span class="price">💰 Gratuit</span>
+                            <span class="distance">📍 1.8 km du départ randonnée</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Colonne droite : Boutons -->
+                    <div class="spot-right">
+                        <button class="btn btn-outline btn-sm" onclick="showSpotMap(2)">
+                            <i class="fas fa-map"></i> Voir
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="selectSpot(2)">Choisir</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spot 3 -->
+            <div class="spot-card" data-type="camping" data-timing="same-day">
+                <div class="spot-content-grid">
+                    <!-- Colonne gauche : Type + Vérifié -->
+                    <div class="spot-left">
+                        <span class="hiking-stats"><span class="stat">Camping</span></span>
+                        <span class="status-badge verified">✅ Vérifié</span>
+                    </div>
+                    
+                    <!-- Colonne centre : Infos bivouac -->
+                    <div class="spot-center">
+                        <h4>Camping de Porsmilin</h4>
+                        <p class="spot-description">Camping familial face à la plage, sanitaires propres</p>
+                        <div class="spot-features">
+                            <span class="feature">💧 Eau chaude</span>
+                            <span class="feature">🚿 Douches</span>
+                            <span class="feature">🏖️ Accès plage</span>
+                            <span class="feature">🥐 Dépôt pain</span>
+                        </div>
+                        <div class="spot-details">
+                            <span class="price">💰 18€/nuit</span>
+                            <span class="distance">📍 3.1 km du départ randonnée</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Colonne droite : Boutons -->
+                    <div class="spot-right">
+                        <button class="btn btn-outline btn-sm" onclick="showSpotMap(3)">
+                            <i class="fas fa-map"></i> Voir
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="selectSpot(3)">Choisir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Option hébergement personnel -->
+    <div class="no-spot-option" id="noSpotCard">
+        <button class="btn btn-primary no-spot-btn" onclick="selectNoSpot()">
+            Autre hébergement (ami, hôtel, chez soi...)
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block navigation %}
+<div class="navigation-buttons">
+    <a href="{{ url_for('planificateur_etape2') }}" class="btn btn-outline">
+        <i class="fas fa-arrow-left"></i>
+        Étape précédente
+    </a>
+    
+    <a href="{{ url_for('planificateur_etape4') }}" class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;">
+        Étape suivante : Services
+        <i class="fas fa-arrow-right"></i>
+    </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Gestion des filtres d'hébergement
+document.addEventListener('DOMContentLoaded', function() {
+    // Adapter le contenu si pas de randonnée
+    const selectedHiking = localStorage.getItem('selectedHiking');
+    if (selectedHiking === 'no-hiking') {
+        const stepHeader = document.querySelector('.step-header p');
+        stepHeader.textContent = 'Choisissez votre hébergement pour cette journée détente et découverte';
+        
+        const stepTitle = document.querySelector('.step-header h2');
+        stepTitle.textContent = '🌙 Jour 1 : Où dormir après cette journée détente ?';
+    }
+    
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const spotCards = document.querySelectorAll('.spot-card');
+    
+    // Gestion des filtres
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Retirer active de tous les boutons du même groupe
+            const group = this.parentElement;
+            group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Afficher la section des spots si un filtre spécifique est sélectionné
+            const filterValue = this.getAttribute('data-filter');
+            if (filterValue !== 'all') {
+                document.getElementById('spotsSection').style.display = 'block';
+            }
+        });
+    });
+    
+    // Auto-afficher les spots
+    document.getElementById('spotsSection').style.display = 'block';
+});
+
+function selectSpot(spotId) {
+    // Marquer le spot comme sélectionné
+    document.querySelectorAll('.spot-card').forEach(card => card.classList.remove('selected'));
+    document.querySelector(`[onclick="selectSpot(${spotId})"]`).closest('.spot-card').classList.add('selected');
+    
+    // Désélectionner l'option "autre hébergement"
+    const noSpotOption = document.querySelector('.no-spot-option');
+    if (noSpotOption) {
+        noSpotOption.classList.remove('selected');
+    }
+    
+    // Sauvegarder le choix dans localStorage
+    localStorage.setItem('selectedSpot', spotId);
+    
+    // Afficher la météo nocturne
+    const nightWeather = document.getElementById('nightWeather');
+    if (nightWeather) {
+        nightWeather.style.display = 'block';
+    }
+    
+    // Afficher le bouton suivant
+    const nextBtn = document.getElementById('nextStepBtn');
+    if (nextBtn) {
+        nextBtn.style.display = 'block';
+    }
+}
+
+function selectNoSpot() {
+    // Désélectionner tous les spots
+    document.querySelectorAll('.spot-card').forEach(card => card.classList.remove('selected'));
+    
+    // Marquer l'option "autre hébergement" comme sélectionnée
+    const noSpotOption = document.querySelector('.no-spot-option');
+    if (noSpotOption) {
+        noSpotOption.classList.add('selected');
+    }
+    
+    // Sauvegarder le choix dans localStorage
+    localStorage.setItem('selectedSpot', 'autre_hebergement');
+    
+    // Masquer la météo nocturne (pas nécessaire pour un hébergement alternatif)
+    const nightWeather = document.getElementById('nightWeather');
+    if (nightWeather) {
+        nightWeather.style.display = 'none';
+    }
+    
+    // Afficher le bouton suivant
+    const nextBtn = document.getElementById('nextStepBtn');
+    if (nextBtn) {
+        nextBtn.style.display = 'block';
+    }
+}
+
+function showSpotMap(spotId) {
+    // Ouvrir la vue cartographique avec la randonnée choisie + l'emplacement du bivouac
+    const selectedHiking = localStorage.getItem('selectedHiking') || '1';
+    const mapUrl = `/map/spot/${spotId}?hiking=${selectedHiking}`;
+    window.open(mapUrl, '_blank', 'width=1200,height=800');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,895 @@
+{
+    "head": {
+        "vars": [
+            "item",
+            "itemLabel",
+            "itemDescription",
+            "coord",
+            "image",
+            "commonsCat",
+            "types"
+        ]
+    },
+    "results": {
+        "bindings": [
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q22925755"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "Kastell Lostmarc'h"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "ensemble à Crozon (Finistère)"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.556794 48.213006)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "site archéologique, monument, fortification"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Breizh%2029%20-%20Kraozon%20-%20beg%20lostmarc%27h%2001.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Kastell Lostmarc'h"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q2462490"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "Ti ar C'huré"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "enclos mégalithiques de Crozon, France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.51361111 48.21361111)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "monument, site archéologique"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Crozon%20alg-Ty-ar-C%27hur%C3%A9%2002.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Ty-ar-C'huré"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q2821559"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "aber de Crozon"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "petit fleuve côtier dans la commune de Crozon en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.435549296 48.228181247)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "lac"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Aber de Crozon"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q22925753"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "alignement de Crozon"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "alignement mégalithique à Crozon (Finistère)"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.556892 48.212849)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "monument"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Menhir%20en%20Lostmarc%27h%2C%20Crouzon%2C%20Breta%C3%B1a.JPG"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Alignement de Lostmarc'h"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q2836894"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "alignements de Lagatjar"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "alignement mégalithique de Camaret-sur-Mer, France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.60944444 48.27333333)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "monument"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Alignement%20de%20Lagatjar%20in%202025%2004.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Alignement de Lagatjar"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q56085125"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "ancienne chapelle Saint-Laurent de Crozon"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.423792 48.245795)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ancienne%20chapelle%20St%20Laurent%2002.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Ancienne chapelle Saint-Laurent de Crozon"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q60351084"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle Notre-Dame-de-Gwel-Mor de Morgat"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.505368 48.225737)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Morgat2011%2096.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Église Notre-Dame-de-Gwel-Mor de Morgat"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q22925649"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle Notre-Dame-de-Rocamadour"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.592886 48.280605)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/08%20Camaret%20Chapelle%20Notre-Dame%20de%20Rocamamadour.JPG"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Chapelle de Notre-Dame-de-Rocamadour (Camaret-sur-Mer)"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q22925754"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle Saint-Fiacre de Kerifloc'h"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.534356 48.282293)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Crozon%20%2829%29%20Chapelle%20Saint-Fiacre%2001.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Chapelle Saint-Fiacre de Crozon"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q56417103"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle Saint-Hernot de Crozon"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.530388 48.202966)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/St%20Hernot%2001.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Chapelle Saint-Hernot de Crozon"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q65088334"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle Saint-Julien de Lannilien"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.581559 48.262852)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/St%20Julien%2004.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Chapelle Saint-Julien de Camaret-sur-Mer"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q56417012"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle Saint-Laurent de Crozon"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.421645 48.247153)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/St%20Laurent%20%C3%A0%20Crozon.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Chapelle Saint-Laurent de Crozon"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q56417637"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle Saint-Philibert de Crozon"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.531988 48.257051)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/St%20Philibert%2001.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Chapelle Saint-Philibert de Crozon"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q60340943"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle de Trébéron"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "chapelle située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.446959 48.240179)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q20009627"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "dolmen de Pen-ar-Run"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "dolmen de Telgruc-sur-Mer, France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.3665 48.243)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "site archéologique, monument"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Dolmen%20de%20Pen-ar-Run%20%282%29.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Dolmen de Pen-ar-Run"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q113835217"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "dolmen de Rostudel"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.535449 48.185938)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "monument, site archéologique"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Rostudel%20Dolmen%2001.jpg"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q1235964"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "dolmen de Rostudel"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "dolmen de Crozon, France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.53544444 48.18594444)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "site archéologique, monument"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q131378007"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "fort de Landaoudec"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "fort du Finistère"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.4843921 48.2709399)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "fortification"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cour%203.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Fort de Landaoudec"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q105563219"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "fort de Quélern"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "Fort du retranchement de Quélern"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.5641553 48.2987455)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "fortification"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/037%20Carte%20de%20la%20presqu%27%C3%AEle%20de%20Quelern%20Beautemps-Beaupr%C3%A9%201817.JPG"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q106868022"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "fort de l'Aber"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "fort situé sur l'île de l'Aber en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.43711 48.22512)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "fortification"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/494%20Fort%20de%20l%27Aber.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Fort de l'Aber (Crozon)"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q3078304"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "fort de la Fraternité"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.57269444 48.30788056)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "fortification"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Fort%20fraternite%201.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Fort de la Fraternité"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q136052351"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "monument aux morts de Crozon"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "monument aux morts du Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.4897819 48.2465024)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "monument"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q1494461"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "tour Vauban"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "tour à Camaret-sur-Mer (Finistère)"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.59168 48.28003)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "fortification"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/20100712%20Tour%20Vauban%20-%204.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Tour Vauban"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q22926545"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église Saint-Magloire de Telgruc-sur-Mer"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.357069 48.2318)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/%C3%89glise%20Saint-Magloire%20%C3%A0%20Telgruc-sur-Mer%2001%2C%20Finist%C3%A8re.JPG"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Église Saint-Magloire de Telgruc-sur-Mer"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q16008704"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église Saint-Pierre de Crozon"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.4898 48.2467)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Crozon%20%C3%89glise%20Saint-Pierre.JPG"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Église Saint-Pierre (Crozon)"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q48375755"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église Saint-Rémi de Camaret-sur-Mer"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église située dans le Finistère (France)"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.59754 48.27343)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Eglise%20St%20Remi%20entree.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Église Saint-Rémi de Camaret-sur-Mer"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q38517210"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église Saint-Éloi de Roscanvel"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.548397 48.315232)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Eglise%20St%20Eloi%2002.jpg"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Église Saint-Éloi de Roscanvel"
+                }
+            },
+            {
+                "item": {
+                    "type": "uri",
+                    "value": "http://www.wikidata.org/entity/Q38503983"
+                },
+                "itemLabel": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église Sainte-Anne de Lanvéoc"
+                },
+                "itemDescription": {
+                    "xml:lang": "fr",
+                    "type": "literal",
+                    "value": "église située dans le Finistère, en France"
+                },
+                "coord": {
+                    "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+                    "type": "literal",
+                    "value": "Point(-4.461255 48.28686)"
+                },
+                "types": {
+                    "type": "literal",
+                    "value": "temple, église"
+                },
+                "image": {
+                    "type": "uri",
+                    "value": "http://commons.wikimedia.org/wiki/Special:FilePath/%C3%89glise%20Sainte-Anne%20%C3%A0%20Lanv%C3%A9oc%2C%20Finist%C3%A8re.JPG"
+                },
+                "commonsCat": {
+                    "type": "literal",
+                    "value": "Église Sainte-Anne de Lanvéoc"
+                }
+            }
+        ]
+    }
+}

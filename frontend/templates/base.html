@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+        <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RandoVanGo{% endblock %}</title>
+    
+    <!-- CSS Master unifié (TEST) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles-master.css') }}">
+    
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+</head>
+<body>
+    <!-- Header -->
+    {% if request.endpoint not in ['planificateur_etape1', 'planificateur_etape2', 'planificateur_etape3', 'planificateur_etape4', 'planificateur_resultat'] %}
+    <header class="header">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="logo-img">
+        </div>
+        <nav class="nav-tabs">
+            <a href="{{ url_for('planificateur_etape1') }}" class="nav-tab">
+                <i class="fas fa-map-marker-alt"></i>
+                Planificateur
+            </a>
+        </nav>
+        
+        <div class="status-bar">
+            <div class="user-section">
+                <button id="loginBtn" class="btn btn-primary">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Se connecter
+                </button>
+                <div id="userMenu" class="user-menu hidden">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="userName">Utilisateur</span>
+                    </div>
+                    <button id="logoutBtn" class="btn btn-outline">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Se déconnecter
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+    {% endif %}
+
+    <!-- Main Container -->
+    <div class="main-container">
+        {% if request.endpoint in ['planificateur_etape1', 'planificateur_etape2', 'planificateur_etape3', 'planificateur_etape4', 'planificateur_resultat'] %}
+            <!-- PLANIFICATEUR SECTION -->
+            <!-- Hero Section Unifiée pour le Planificateur -->
+            <div class="page-header">
+                <div class="hero-section">
+                    <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
+                    <div class="hero-overlay"></div>
+                    
+                    <!-- Logo sur la gauche avec fond blanc -->
+                    <div class="hero-logo-container">
+                        <div class="hero-logo-white">
+                            <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
+                        </div>
+                    </div>
+                    
+                    <div class="hero-content">
+                        <h1 class="hero-title">Planificateur RandoVanGo </h1>
+                        <p class="hero-subtitle">{% block hero_subtitle %}Organisez votre aventure en 4 étapes{% endblock %}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stepper de progression -->
+            <div class="planning-stepper">
+                <!-- Bouton de connexion dans le stepper -->
+                <div class="stepper-login">
+                    <button id="loginBtn" class="btn btn-white btn-sm">
+                        <i class="fas fa-user-plus"></i>
+                        Connexion Contributeur
+                    </button>
+                    <div id="userMenu" class="user-menu hidden">
+                        <div class="user-info">
+                            <i class="fas fa-user-circle"></i>
+                            <span id="userName">Contributeur</span>
+                        </div>
+                        <button id="logoutBtn" class="btn btn-white btn-sm">
+                            <i class="fas fa-sign-out-alt"></i>
+                            Se déconnecter
+                        </button>
+                    </div>
+                </div>
+                <div class="stepper-container">
+                    <div class="step {% if current_step >= 1 %}active{% endif %} {% if current_step > 1 %}completed{% endif %}">
+                        <div class="step-circle">
+                            {% if current_step > 1 %}✓{% else %}1{% endif %}
+                        </div>
+                        <div class="step-label">Ville</div>
+                    </div>
+                    
+                    <div class="step-line {% if current_step > 1 %}completed{% endif %}"></div>
+                    
+                    <div class="step {% if current_step >= 2 %}active{% endif %} {% if current_step > 2 %}completed{% endif %}">
+                        <div class="step-circle">
+                            {% if current_step > 2 %}✓{% else %}2{% endif %}
+                        </div>
+                        <div class="step-label">Randonnée</div>
+                    </div>
+                    
+                    <div class="step-line {% if current_step > 2 %}completed{% endif %}"></div>
+                    
+                    <div class="step {% if current_step >= 3 %}active{% endif %} {% if current_step > 3 %}completed{% endif %}">
+                        <div class="step-circle">
+                            {% if current_step > 3 %}✓{% else %}3{% endif %}
+                        </div>
+                        <div class="step-label">Nuit</div>
+                    </div>
+                    
+                    <div class="step-line {% if current_step > 3 %}completed{% endif %}"></div>
+                    
+                    <div class="step {% if current_step >= 4 %}active{% endif %} {% if current_step > 4 %}completed{% endif %}">
+                        <div class="step-circle">
+                            {% if current_step > 4 %}✓{% else %}4{% endif %}
+                        </div>
+                        <div class="step-label">Services</div>
+                    </div>
+                    
+                    <div class="step-line {% if current_step > 4 %}completed{% endif %}"></div>
+                    
+                    <div class="step {% if current_step >= 5 %}active{% endif %} {% if current_step > 5 %}completed{% endif %}">
+                        <div class="step-circle">
+                            {% if current_step > 5 %}✓{% else %}📋{% endif %}
+                        </div>
+                        <div class="step-label">Résultat</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenu spécifique à chaque étape -->
+            <div class="planning-content">
+                {% block planning_content %}{% endblock %}
+            </div>
+
+            <!-- Navigation entre étapes -->
+            <div class="planning-navigation">
+                {% block navigation %}{% endblock %}
+            </div>
+        {% else %}
+            <!-- AUTRES PAGES (non-planificateur) -->
+            {% block content %}{% endblock %}
+        {% endif %}
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Connexion
+                </h2>
+                <button class="close-btn" onclick="closeLoginModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="loginEmail" class="form-input" placeholder="admin@test.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mot de passe</label>
+                    <input type="password" id="loginPassword" class="form-input" placeholder="password123" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Se connecter
+                </button>
+            </form>
+            <div class="text-center text-muted" style="margin-top: 1rem; font-size: 0.875rem;">
+                Demo: admin@test.com / password123
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,65 @@
+[
+    {
+        "date": "2025-10-21",
+        "temp_max_c": 15.6,
+        "temp_min_c": 13.0,
+        "precipitation_mm": 2.7,
+        "wind_max_kmh": 23.8,
+        "weather_code": 61,
+        "solar_energy_sum": 6.1
+    },
+    {
+        "date": "2025-10-22",
+        "temp_max_c": 16.5,
+        "temp_min_c": 10.1,
+        "precipitation_mm": 9.3,
+        "wind_max_kmh": 47.5,
+        "weather_code": 63,
+        "solar_energy_sum": 2.95
+    },
+    {
+        "date": "2025-10-23",
+        "temp_max_c": 14.4,
+        "temp_min_c": 9.4,
+        "precipitation_mm": 11.2,
+        "wind_max_kmh": 51.0,
+        "weather_code": 63,
+        "solar_energy_sum": 8.66
+    },
+    {
+        "date": "2025-10-24",
+        "temp_max_c": 13.1,
+        "temp_min_c": 10.5,
+        "precipitation_mm": 8.1,
+        "wind_max_kmh": 40.1,
+        "weather_code": 53,
+        "solar_energy_sum": 6.78
+    },
+    {
+        "date": "2025-10-25",
+        "temp_max_c": 13.5,
+        "temp_min_c": 10.7,
+        "precipitation_mm": 1.1,
+        "wind_max_kmh": 33.2,
+        "weather_code": 51,
+        "solar_energy_sum": 8.54
+    },
+    {
+        "date": "2025-10-26",
+        "temp_max_c": 13.6,
+        "temp_min_c": 10.4,
+        "precipitation_mm": 1.8,
+        "wind_max_kmh": 27.9,
+        "weather_code": 3,
+        "solar_energy_sum": 6.32
+    },
+    {
+        "date": "2025-10-27",
+        "temp_max_c": 14.4,
+        "temp_min_c": 13.7,
+        "precipitation_mm": 1.2,
+        "wind_max_kmh": 33.0,
+        "weather_code": 3,
+        "solar_energy_sum": 3.69
+    }
+]

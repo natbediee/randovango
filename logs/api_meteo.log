@@ -1,0 +1,12 @@
+2025-10-22 15:05:57,728 - INFO - Recherche des coordonnées pour plougonvelin
+2025-10-22 15:05:57,791 - DEBUG - Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+2025-10-22 15:05:57,791 - DEBUG - Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+2025-10-22 15:05:57,792 - DEBUG - Nominatim.geocode: https://nominatim.openstreetmap.org/search?q=plougonvelin%2C+France&format=json&limit=1
+2025-10-22 15:05:57,794 - DEBUG - Starting new HTTPS connection (1): nominatim.openstreetmap.org:443
+2025-10-22 15:05:58,082 - DEBUG - https://nominatim.openstreetmap.org:443 "GET /search?q=plougonvelin%2C+France&format=json&limit=1 HTTP/1.1" 200 486
+2025-10-22 15:05:58,085 - INFO - Coordonnées trouvées: 48.3415116, -4.7192399
+2025-10-22 15:05:58,085 - INFO - Appel de l'API météo...
+2025-10-22 15:05:58,087 - DEBUG - Starting new HTTPS connection (1): api.open-meteo.com:443
+2025-10-22 15:05:58,316 - DEBUG - https://api.open-meteo.com:443 "GET /v1/forecast?latitude=48.3415116&longitude=-4.7192399&timezone=Europe%2FParis&daily=weather_code&daily=temperature_2m_max&daily=temperature_2m_min&daily=precipitation_sum&daily=wind_speed_10m_max&daily=shortwave_radiation_sum&forecast_days=7 HTTP/1.1" 200 None
+2025-10-22 15:05:58,319 - INFO - 7 jours de prévisions récupérés
+2025-10-22 15:05:58,329 - INFO - Données sauvegardées dans: /home/n_bediee/iadev/randovango/data/in/meteo/weather_data_plougonvelin.json

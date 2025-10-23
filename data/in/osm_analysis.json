@@ -1,0 +1,7641 @@
+[
+  {
+    "osm_id": 279021910,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "Parking de la Mairie",
+    "latitude": 48.3405821,
+    "longitude": -4.7183567,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Parking de la Mairie",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 299319137,
+    "osm_type": "node",
+    "type_amenity": "drinking_water",
+    "nom": "",
+    "latitude": 48.3677403,
+    "longitude": -4.759171,
+    "tags": {
+      "access": "yes",
+      "amenity": "drinking_water",
+      "fee": "no",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 542575330,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "Keruynan",
+    "latitude": 48.3315309,
+    "longitude": -4.7281582,
+    "tags": {
+      "amenity": "parking",
+      "name": "Keruynan",
+      "name:br": "Keriunan",
+      "parking": "surface",
+      "source:name:br": "ofis publik ar brezhoneg"
+    }
+  },
+  {
+    "osm_id": 560173599,
+    "osm_type": "node",
+    "type_amenity": "wayside_shrine",
+    "nom": "Saint-Jean",
+    "latitude": 48.3476513,
+    "longitude": -4.729335,
+    "tags": {
+      "historic": "wayside_shrine",
+      "name": "Saint-Jean",
+      "name:br": "Sant Yann",
+      "place": "locality"
+    }
+  },
+  {
+    "osm_id": 582223754,
+    "osm_type": "node",
+    "type_amenity": "fuel",
+    "nom": "Intermarché",
+    "latitude": 48.3423116,
+    "longitude": -4.7231542,
+    "tags": {
+      "addr:city": "Plougonvelin",
+      "addr:postcode": "29217",
+      "addr:street": "Rue du Stade",
+      "amenity": "fuel",
+      "brand": "Intermarché",
+      "brand:wikidata": "Q3153200",
+      "brand:wikipedia": "fr:Intermarché",
+      "compressed_air": "yes",
+      "fuel:diesel": "yes",
+      "fuel:e10": "yes",
+      "fuel:e85": "yes",
+      "fuel:octane_98": "yes",
+      "name": "Intermarché",
+      "opening_hours": "24/7",
+      "operator": "Groupement des Mousquetaires",
+      "ref:FR:prix-carburants": "29217001",
+      "shop": "convenience;gas",
+      "source": "Ministère de l'Economie, de l'Industrie et du Numérique - 03/2020",
+      "vending": "fuel",
+      "vending_machine": "fuel"
+    }
+  },
+  {
+    "osm_id": 582686784,
+    "osm_type": "node",
+    "type_amenity": "monument",
+    "nom": "Stèle du Cosquer",
+    "latitude": 48.355028,
+    "longitude": -4.6883261,
+    "tags": {
+      "historic": "monument",
+      "name": "Stèle du Cosquer"
+    }
+  },
+  {
+    "osm_id": 582689659,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "Statue de Sainte-Anne",
+    "latitude": 48.3533891,
+    "longitude": -4.6945628,
+    "tags": {
+      "historic": "wayside_cross",
+      "name": "Statue de Sainte-Anne"
+    }
+  },
+  {
+    "osm_id": 677979769,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Office du Tourisme",
+    "latitude": 48.346788,
+    "longitude": -4.7042747,
+    "tags": {
+      "information": "office",
+      "name": "Office du Tourisme",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 902366315,
+    "osm_type": "node",
+    "type_amenity": "pharmacy",
+    "nom": "Pharmacie Rivoalen",
+    "latitude": 48.3419148,
+    "longitude": -4.7177221,
+    "tags": {
+      "addr:city": "Plougonvelin",
+      "addr:postcode": "29217",
+      "addr:street": "Rue Saint-Yves",
+      "amenity": "pharmacy",
+      "dispensing": "yes",
+      "healthcare": "pharmacy",
+      "name": "Pharmacie Rivoalen",
+      "opening_hours": "Mo-Fr 09:00-12:30,14:00-19:30; Sa 09:00-12:30",
+      "ref:FR:FINESS": "290011048",
+      "source": "Le ministère des solidarités et de la santé - 08/2018",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 907225803,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Le Plez'Hir",
+    "latitude": 48.345087,
+    "longitude": -4.7047468,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "Le Plez'Hir",
+      "ref:FR:SIRET": "92838422100018"
+    }
+  },
+  {
+    "osm_id": 964949446,
+    "osm_type": "node",
+    "type_amenity": "convenience",
+    "nom": "Au Rdv des 4 Saisons",
+    "latitude": 48.3411436,
+    "longitude": -4.7187249,
+    "tags": {
+      "name": "Au Rdv des 4 Saisons",
+      "ref:FR:SIRET": "47778307000022",
+      "shop": "convenience"
+    }
+  },
+  {
+    "osm_id": 967166484,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "La Cabane",
+    "latitude": 48.3454199,
+    "longitude": -4.7043046,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "La Cabane",
+      "opening_hours": "Tu-Fr 11:00-15:00, 17:30-22:00; Sa 11:00-22:00; Su 11:00-19:00",
+      "ref:FR:SIRET": "98247488400011"
+    }
+  },
+  {
+    "osm_id": 967166493,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.344607,
+    "longitude": -4.7080604,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 967182591,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Bar le Pêcheur",
+    "latitude": 48.3419667,
+    "longitude": -4.7169868,
+    "tags": {
+      "addr:city": "Plougonvelin",
+      "addr:street": "Rue Saint-Yves",
+      "amenity": "restaurant",
+      "name": "Bar le Pêcheur",
+      "ref:FR:SIRET": "32900559900017"
+    }
+  },
+  {
+    "osm_id": 996806843,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3395541,
+    "longitude": -4.702223,
+    "tags": {
+      "amenity": "toilets",
+      "fee": "no"
+    }
+  },
+  {
+    "osm_id": 1230988123,
+    "osm_type": "node",
+    "type_amenity": "ruins",
+    "nom": "Fort de Bertheaume",
+    "latitude": 48.3369413,
+    "longitude": -4.697581,
+    "tags": {
+      "historic": "ruins",
+      "name": "Fort de Bertheaume",
+      "name:br": "Kastell Perzell",
+      "source:name:br": "ofis publik ar brezhoneg",
+      "wikidata": "Q541130"
+    }
+  },
+  {
+    "osm_id": 1267427211,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Informations",
+    "latitude": 48.328793,
+    "longitude": -4.7591992,
+    "tags": {
+      "information": "guidepost",
+      "name": "Informations",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 1269704883,
+    "osm_type": "node",
+    "type_amenity": "ruins",
+    "nom": "Pigeonnier de St Mathieu",
+    "latitude": 48.329598,
+    "longitude": -4.7642015,
+    "tags": {
+      "historic": "ruins",
+      "man_made": "dovecote",
+      "name": "Pigeonnier de St Mathieu"
+    }
+  },
+  {
+    "osm_id": 1272482687,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "La Crêperie de la Plage",
+    "latitude": 48.3459392,
+    "longitude": -4.7047992,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "La Crêperie de la Plage"
+    }
+  },
+  {
+    "osm_id": 1272482688,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "Boulangerie de la Plage",
+    "latitude": 48.3457077,
+    "longitude": -4.7048417,
+    "tags": {
+      "addr:city": "Plougonvelin",
+      "addr:postcode": "29217",
+      "addr:street": "Boulevard de la Mer",
+      "name": "Boulangerie de la Plage",
+      "opening_hours": "Mo,We-Sa 06:45-13:00,15:00-19:30; Su 06:45-19:30",
+      "phone": "+33298380085",
+      "shop": "bakery"
+    }
+  },
+  {
+    "osm_id": 1272482690,
+    "osm_type": "node",
+    "type_amenity": "cafe",
+    "nom": "Le Cap'Ouest",
+    "latitude": 48.3451504,
+    "longitude": -4.7046416,
+    "tags": {
+      "amenity": "cafe",
+      "name": "Le Cap'Ouest",
+      "ref:FR:SIRET": "89531704800018"
+    }
+  },
+  {
+    "osm_id": 1272497703,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Embruns et Mistral",
+    "latitude": 48.3748805,
+    "longitude": -4.7476133,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "Embruns et Mistral"
+    }
+  },
+  {
+    "osm_id": 1277382847,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "Nécropole néolithique",
+    "latitude": 48.3379117,
+    "longitude": -4.7098544,
+    "tags": {
+      "historic": "archaeological_site",
+      "name": "Nécropole néolithique"
+    }
+  },
+  {
+    "osm_id": 1277382868,
+    "osm_type": "node",
+    "type_amenity": "boundary_stone",
+    "nom": "Vieil Amer Balise Nord",
+    "latitude": 48.3368607,
+    "longitude": -4.7111078,
+    "tags": {
+      "height": "20m",
+      "historic": "boundary_stone",
+      "man_made": "tower",
+      "name": "Vieil Amer Balise Nord",
+      "tower:type": "communication"
+    }
+  },
+  {
+    "osm_id": 1277446730,
+    "osm_type": "node",
+    "type_amenity": "boundary_stone",
+    "nom": "Vieil Amer Balise Sud",
+    "latitude": 48.3326079,
+    "longitude": -4.7087364,
+    "tags": {
+      "height": "20",
+      "historic": "boundary_stone",
+      "man_made": "tower",
+      "name": "Vieil Amer Balise Sud",
+      "tower:type": "communication"
+    }
+  },
+  {
+    "osm_id": 1277446751,
+    "osm_type": "node",
+    "type_amenity": "boundary_stone",
+    "nom": "Borne marine VIII",
+    "latitude": 48.3327744,
+    "longitude": -4.7110033,
+    "tags": {
+      "historic": "boundary_stone",
+      "name": "Borne marine VIII"
+    }
+  },
+  {
+    "osm_id": 1290484761,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Mille Sabords",
+    "latitude": 48.3547741,
+    "longitude": -4.6742733,
+    "tags": {
+      "addr:city": "Locmaria-Plouzané",
+      "addr:postcode": "29280",
+      "addr:street": "Boulevard de l'Océan",
+      "amenity": "restaurant",
+      "delivery": "no",
+      "name": "Mille Sabords",
+      "opening_hours": "Tu-Su 10:00-24:00",
+      "phone": "+33 2 98 48 50 96",
+      "takeaway": "yes",
+      "website": "https://mille-sabords-restaurant-brasserie.business.site/",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 1290532405,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.354859,
+    "longitude": -4.6744889,
+    "tags": {
+      "access": "yes",
+      "amenity": "toilets",
+      "changing_table": "no",
+      "fee": "no",
+      "survey:date": "2025-05-30",
+      "toilets:disposal": "flush",
+      "unisex": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 1293797557,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3559345,
+    "longitude": -4.6784005,
+    "tags": {
+      "access": "yes",
+      "amenity": "toilets",
+      "check_date": "2023-08-15",
+      "fee": "no"
+    }
+  },
+  {
+    "osm_id": 1331310794,
+    "osm_type": "node",
+    "type_amenity": "ruins",
+    "nom": "Ancienne Ferme d'Illien",
+    "latitude": 48.3817115,
+    "longitude": -4.7618694,
+    "tags": {
+      "historic": "ruins",
+      "name": "Ancienne Ferme d'Illien",
+      "place": "locality",
+      "ref:FR:FANTOIR": "29201B026S"
+    }
+  },
+  {
+    "osm_id": 1579743579,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "Le domaine de Bertheaume",
+    "latitude": 48.346446,
+    "longitude": -4.7057165,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "name": "Le domaine de Bertheaume",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 2087678283,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "L'Archipel",
+    "latitude": 48.3388639,
+    "longitude": -4.7275199,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "L'Archipel",
+      "source": "survey",
+      "website": "https://www.hoteldularge.com/restaurant-bar/"
+    }
+  },
+  {
+    "osm_id": 2598784710,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3459039,
+    "longitude": -4.748047,
+    "tags": {
+      "description": "encuvement pour 280mm (disparu)",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 2598784717,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3464867,
+    "longitude": -4.7550776,
+    "tags": {
+      "description": "encuvement pour 280mm (disparu)",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 2598784725,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3466864,
+    "longitude": -4.7521593,
+    "tags": {
+      "description": "Encuvement pour 280mm",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 2598784728,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3471276,
+    "longitude": -4.7489147,
+    "tags": {
+      "description": "Soute à munition",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 2598784729,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3353572,
+    "longitude": -4.7626578,
+    "tags": {
+      "bunker_type": "blockhouse",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 2598917332,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "SK Munition bunker",
+    "latitude": 48.3471426,
+    "longitude": -4.7534575,
+    "tags": {
+      "historic": "yes",
+      "military": "bunker",
+      "name": "SK Munition bunker"
+    }
+  },
+  {
+    "osm_id": 2598917347,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "M151",
+    "latitude": 48.3458344,
+    "longitude": -4.7509071,
+    "tags": {
+      "description": "bunker abri",
+      "historic": "yes",
+      "military": "bunker",
+      "name": "M151"
+    }
+  },
+  {
+    "osm_id": 2598917350,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3454207,
+    "longitude": -4.7508078,
+    "tags": {
+      "description": "Soute à munitions",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 2598917363,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3456881,
+    "longitude": -4.7498717,
+    "tags": {
+      "description": "Soute à munition",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 2598934180,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "R621",
+    "latitude": 48.3474458,
+    "longitude": -4.7500033,
+    "tags": {
+      "description": "abri",
+      "historic": "yes",
+      "military": "bunker",
+      "name": "R621"
+    }
+  },
+  {
+    "osm_id": 2598934185,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3461517,
+    "longitude": -4.7477555,
+    "tags": {
+      "description": "soute à munitions",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 2598934189,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "L409",
+    "latitude": 48.3475031,
+    "longitude": -4.7471816,
+    "tags": {
+      "description": "Abri flak",
+      "historic": "yes",
+      "military": "bunker",
+      "name": "L409"
+    }
+  },
+  {
+    "osm_id": 2598934194,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "R639",
+    "latitude": 48.3469683,
+    "longitude": -4.7499979,
+    "tags": {
+      "description": "abri infirmerie",
+      "historic": "yes",
+      "military": "bunker",
+      "name": "R639"
+    }
+  },
+  {
+    "osm_id": 2675737005,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3564373,
+    "longitude": -4.7662653,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "yes",
+      "lit": "yes",
+      "parking": "surface",
+      "source": "Bing",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 3880895272,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3812188,
+    "longitude": -4.7477414,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "religion": "christian"
+    }
+  },
+  {
+    "osm_id": 4173297793,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3314904,
+    "longitude": -4.7683895,
+    "tags": {
+      "amenity": "toilets",
+      "check_date": "2023-08-20",
+      "fee": "no",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 4226844839,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "Passerelle",
+    "latitude": 48.3627409,
+    "longitude": -4.7665295,
+    "tags": {
+      "name": "Passerelle",
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 4226844840,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "La végétation de la ria",
+    "latitude": 48.3631648,
+    "longitude": -4.7662838,
+    "tags": {
+      "board_type": "wildlife",
+      "check_date": "2023-08-08",
+      "information": "board",
+      "name": "La végétation de la ria",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 5594192798,
+    "osm_type": "node",
+    "type_amenity": "memorial",
+    "nom": "batterie de Toul al Logot",
+    "latitude": 48.3534039,
+    "longitude": -4.6845905,
+    "tags": {
+      "historic": "memorial",
+      "material": "stone",
+      "memorial": "stone",
+      "name": "batterie de Toul al Logot"
+    }
+  },
+  {
+    "osm_id": 5643609227,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3382319,
+    "longitude": -4.6996271,
+    "tags": {
+      "amenity": "toilets"
+    }
+  },
+  {
+    "osm_id": 5709167021,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "Le Gibet des Moines",
+    "latitude": 48.3329324,
+    "longitude": -4.7663739,
+    "tags": {
+      "historic": "wayside_cross",
+      "name": "Le Gibet des Moines",
+      "name:br": "An Div Groaz",
+      "source:name:br": "ofis publik ar brezhoneg"
+    }
+  },
+  {
+    "osm_id": 5881211349,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "Laot",
+    "latitude": 48.3407189,
+    "longitude": -4.7194728,
+    "tags": {
+      "name": "Laot",
+      "ref:FR:SIRET": "81028950400013",
+      "shop": "bakery",
+      "source": "survey",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 5881243645,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3403139,
+    "longitude": -4.7199073,
+    "tags": {
+      "amenity": "toilets",
+      "fee": "no",
+      "source": "survey"
+    }
+  },
+  {
+    "osm_id": 5881243646,
+    "osm_type": "node",
+    "type_amenity": "memorial",
+    "nom": "",
+    "latitude": 48.3402872,
+    "longitude": -4.7199905,
+    "tags": {
+      "historic": "memorial",
+      "source": "survey"
+    }
+  },
+  {
+    "osm_id": 5881243647,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Ti Mad Eo",
+    "latitude": 48.3412766,
+    "longitude": -4.7186433,
+    "tags": {
+      "addr:housenumber": "6",
+      "addr:street": "Rue Pen ar Bed",
+      "amenity": "restaurant",
+      "contact:housenumber": "6",
+      "contact:phone": "+33 2 98 02 68 25",
+      "contact:street": "Rue Pen ar Bed",
+      "cuisine": "pizza",
+      "delivery": "yes",
+      "name": "Ti Mad Eo",
+      "opening_hours": "Mo, Tu 19:00-21:30; Th-Sa 19:00-22:00; Su 18:00-22:00",
+      "ref:FR:SIRET": "85223576100016",
+      "takeaway": "yes",
+      "website": "timadeo.com"
+    }
+  },
+  {
+    "osm_id": 6332766674,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3596616,
+    "longitude": -4.7512032,
+    "tags": {
+      "historic": "wayside_cross"
+    }
+  },
+  {
+    "osm_id": 6390260721,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3730455,
+    "longitude": -4.7362108,
+    "tags": {
+      "historic": "wayside_cross"
+    }
+  },
+  {
+    "osm_id": 6390260722,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3710535,
+    "longitude": -4.7363173,
+    "tags": {
+      "historic": "wayside_cross"
+    }
+  },
+  {
+    "osm_id": 6390260723,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3689396,
+    "longitude": -4.7343897,
+    "tags": {
+      "historic": "wayside_cross"
+    }
+  },
+  {
+    "osm_id": 8546001229,
+    "osm_type": "node",
+    "type_amenity": "cannon",
+    "nom": "",
+    "latitude": 48.3296964,
+    "longitude": -4.7594268,
+    "tags": {
+      "historic": "cannon"
+    }
+  },
+  {
+    "osm_id": 8546001230,
+    "osm_type": "node",
+    "type_amenity": "cannon",
+    "nom": "",
+    "latitude": 48.3297166,
+    "longitude": -4.759334,
+    "tags": {
+      "historic": "cannon"
+    }
+  },
+  {
+    "osm_id": 9015275817,
+    "osm_type": "node",
+    "type_amenity": "attraction",
+    "nom": "Jardin du Vaéré",
+    "latitude": 48.3337257,
+    "longitude": -4.7516209,
+    "tags": {
+      "name": "Jardin du Vaéré",
+      "name:en": "Vaere's Garden",
+      "opening_hours": "24/7",
+      "tourism": "attraction"
+    }
+  },
+  {
+    "osm_id": 9535086294,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Restaurant KerLan's",
+    "latitude": 48.3687914,
+    "longitude": -4.734784,
+    "tags": {
+      "addr:city": "Trébabu",
+      "addr:postcode": "29217",
+      "addr:street": "Keravel",
+      "amenity": "restaurant",
+      "bar": "yes",
+      "brewery": "yes",
+      "name": "Restaurant KerLan's",
+      "outdoor_seating": "yes",
+      "phone": "+33 229021556",
+      "reservation": "recommended",
+      "website": "https://kerlans.bzh/",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 9893672046,
+    "osm_type": "node",
+    "type_amenity": "drinking_water",
+    "nom": "",
+    "latitude": 48.3617726,
+    "longitude": -4.7674883,
+    "tags": {
+      "amenity": "drinking_water",
+      "fee": "no",
+      "man_made": "water_tap",
+      "wheelchair": "no"
+    }
+  },
+  {
+    "osm_id": 10010792447,
+    "osm_type": "node",
+    "type_amenity": "cafe",
+    "nom": "L'univers",
+    "latitude": 48.3404839,
+    "longitude": -4.7197243,
+    "tags": {
+      "amenity": "cafe",
+      "name": "L'univers",
+      "opening_hours": "fermé le mardi après-midi",
+      "outdoor_seating": "yes",
+      "ref:FR:SIRET": "83054799800013"
+    }
+  },
+  {
+    "osm_id": 10141426384,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3388382,
+    "longitude": -4.7368693,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10141445488,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3429001,
+    "longitude": -4.7630601,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian"
+    }
+  },
+  {
+    "osm_id": 10141479704,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3381858,
+    "longitude": -4.7449615,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10141486515,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3389956,
+    "longitude": -4.7418596,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180333540,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3383183,
+    "longitude": -4.7183508,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian"
+    }
+  },
+  {
+    "osm_id": 10180336984,
+    "osm_type": "node",
+    "type_amenity": "wayside_shrine",
+    "nom": "",
+    "latitude": 48.3530748,
+    "longitude": -4.7178136,
+    "tags": {
+      "historic": "wayside_shrine",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180337564,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3399789,
+    "longitude": -4.7197203,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180342201,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3466753,
+    "longitude": -4.7329233,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180358515,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.34814,
+    "longitude": -4.7473932,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180361061,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3646179,
+    "longitude": -4.7445562,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10185996779,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.380576,
+    "longitude": -4.712137,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186000023,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3582593,
+    "longitude": -4.7073722,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186005720,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3747351,
+    "longitude": -4.6729058,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186007751,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3660637,
+    "longitude": -4.6925435,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186008381,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3757392,
+    "longitude": -4.7484021,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186023741,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3739051,
+    "longitude": -4.7089817,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186026249,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3854655,
+    "longitude": -4.7008169,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186030036,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3869953,
+    "longitude": -4.7154294,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186059531,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3849833,
+    "longitude": -4.7621262,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186067828,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3894615,
+    "longitude": -4.762564,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10186164298,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3913659,
+    "longitude": -4.7480325,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10188954508,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.3833465,
+    "longitude": -4.6751081,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10188967622,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "Croaz ar Go",
+    "latitude": 48.3908136,
+    "longitude": -4.6707741,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "name": "Croaz ar Go",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10982267297,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3787619,
+    "longitude": -4.7597734,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "capacity": "5",
+      "fee": "no",
+      "parking": "surface",
+      "surface": "gravel"
+    }
+  },
+  {
+    "osm_id": 10982267298,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3797269,
+    "longitude": -4.7597316,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "surface": "gravel"
+    }
+  },
+  {
+    "osm_id": 10982300467,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3642059,
+    "longitude": -4.7659354,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "surface": "gravel"
+    }
+  },
+  {
+    "osm_id": 11044673206,
+    "osm_type": "node",
+    "type_amenity": "monument",
+    "nom": "Jardin du Vaéré",
+    "latitude": 48.3352778,
+    "longitude": -4.7509484,
+    "tags": {
+      "historic": "monument",
+      "name": "Jardin du Vaéré"
+    }
+  },
+  {
+    "osm_id": 11111487840,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3679477,
+    "longitude": -4.7573788,
+    "tags": {
+      "access": "customers",
+      "amenity": "toilets",
+      "toilets:disposal": "flush",
+      "unisex": "yes"
+    }
+  },
+  {
+    "osm_id": 11111487841,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3665132,
+    "longitude": -4.7599696,
+    "tags": {
+      "access": "customers",
+      "amenity": "toilets",
+      "toilets:disposal": "flush",
+      "unisex": "yes"
+    }
+  },
+  {
+    "osm_id": 11111487842,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3657394,
+    "longitude": -4.7597579,
+    "tags": {
+      "access": "customers",
+      "amenity": "toilets",
+      "toilets:disposal": "flush"
+    }
+  },
+  {
+    "osm_id": 11111487844,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3676977,
+    "longitude": -4.7583576,
+    "tags": {
+      "access": "customers",
+      "amenity": "toilets",
+      "toilets:disposal": "flush",
+      "unisex": "yes"
+    }
+  },
+  {
+    "osm_id": 11111487845,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.365693,
+    "longitude": -4.7593868,
+    "tags": {
+      "access": "customers",
+      "amenity": "toilets",
+      "toilets:disposal": "flush"
+    }
+  },
+  {
+    "osm_id": 11131978695,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.367715,
+    "longitude": -4.7592014,
+    "tags": {
+      "access": "yes",
+      "amenity": "toilets",
+      "changing_table": "no",
+      "fee": "no",
+      "toilets:disposal": "flush",
+      "unisex": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 11132003636,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3325001,
+    "longitude": -4.7679544,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 11173766092,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Le Hangar du Pecheur",
+    "latitude": 48.3604444,
+    "longitude": -4.7629581,
+    "tags": {
+      "amenity": "restaurant",
+      "cuisine": "fish;french",
+      "name": "Le Hangar du Pecheur"
+    }
+  },
+  {
+    "osm_id": 11207272771,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.3280387,
+    "longitude": -4.7617099,
+    "tags": {
+      "source": "IGN - 2022-06",
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 12073476625,
+    "osm_type": "node",
+    "type_amenity": "drinking_water",
+    "nom": "",
+    "latitude": 48.3463871,
+    "longitude": -4.7623396,
+    "tags": {
+      "amenity": "drinking_water",
+      "check_date": "2024-07-19",
+      "fee": "no"
+    }
+  },
+  {
+    "osm_id": 12174944715,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.346988,
+    "longitude": -4.7509126,
+    "tags": {
+      "building": "bunker",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 12174944724,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3466484,
+    "longitude": -4.75084,
+    "tags": {
+      "building": "bunker",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 12309339602,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3616785,
+    "longitude": -4.7672275,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 12309352801,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.361377,
+    "longitude": -4.7668724,
+    "tags": {
+      "amenity": "toilets",
+      "fee": "no",
+      "wheelchair": "limited"
+    }
+  },
+  {
+    "osm_id": 12709521423,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.3542833,
+    "longitude": -4.6727739,
+    "tags": {
+      "description": "Plaque poême \"Mer d'Iroise\"",
+      "historic": "memorial",
+      "information": "terminal",
+      "memorial": "stone",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12709872839,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Mémoires d'Iroise",
+    "latitude": 48.3300757,
+    "longitude": -4.7524276,
+    "tags": {
+      "board_type": "history",
+      "information": "board",
+      "name": "Mémoires d'Iroise",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12712841720,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.3371683,
+    "longitude": -4.6998045,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 12712846709,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.3370238,
+    "longitude": -4.7007525,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 12809504936,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.3559955,
+    "longitude": -4.6788145,
+    "tags": {
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12809504940,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.3560191,
+    "longitude": -4.6787961,
+    "tags": {
+      "hiking": "yes",
+      "information": "guidepost",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12809536957,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.3546186,
+    "longitude": -4.6758151,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 12809536966,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.3547607,
+    "longitude": -4.6736232,
+    "tags": {
+      "information": "map",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12809638686,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.3395339,
+    "longitude": -4.7024813,
+    "tags": {
+      "information": "map",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12875469131,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.3546099,
+    "longitude": -4.6737161,
+    "tags": {
+      "information": "board",
+      "survey:date": "2025-05-30",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12973267697,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "Parking Kennedy",
+    "latitude": 48.3568335,
+    "longitude": -4.7673523,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "yes",
+      "name": "Parking Kennedy",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 12973381863,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3568504,
+    "longitude": -4.7672506,
+    "tags": {
+      "amenity": "toilets",
+      "changing_table": "no",
+      "fee": "no",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 13045458401,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.3833466,
+    "longitude": -4.7621684,
+    "tags": {
+      "amenity": "toilets",
+      "opening_hours": "Mo-Su 10:00-21:00"
+    }
+  },
+  {
+    "osm_id": 13045561301,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.3840241,
+    "longitude": -4.7638574,
+    "tags": {
+      "board_type": "nature",
+      "information": "board",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 13056332337,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Hissez haut!",
+    "latitude": 48.3282449,
+    "longitude": -4.7608254,
+    "tags": {
+      "board_type": "history",
+      "information": "board",
+      "name": "Hissez haut!",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 27269238,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Blancs sablons P5",
+    "latitude": 48.3669679,
+    "longitude": -4.7606417,
+    "tags": {
+      "amenity": "parking",
+      "name": "Blancs sablons P5",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 29329952,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Blancs sablons P1",
+    "latitude": 48.3741394,
+    "longitude": -4.7554267,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Blancs sablons P1",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 29329962,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Parking de la Plage d'Illien",
+    "latitude": 48.3829312,
+    "longitude": -4.7618196,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Parking de la Plage d'Illien",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 43910433,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Place Général de Gaulle",
+    "latitude": 48.3416656,
+    "longitude": -4.7193866,
+    "tags": {
+      "amenity": "parking",
+      "name": "Place Général de Gaulle",
+      "name:br": "Plasenn Jeneral de Gaulle",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 44145228,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Les Terrasses de Bertheaume",
+    "latitude": 48.3404051,
+    "longitude": -4.7022101,
+    "tags": {
+      "addr:street": "Route de Perzel",
+      "caravans": "yes",
+      "name": "Les Terrasses de Bertheaume",
+      "stars": "3",
+      "tents": "yes",
+      "tourism": "camp_site",
+      "website": "https://www.camping-brest.com/"
+    }
+  },
+  {
+    "osm_id": 44150827,
+    "osm_type": "way",
+    "type_amenity": "caravan_site",
+    "nom": "Aire de camping-cars de Bertheaume-Plougonvelin",
+    "latitude": 48.3374276,
+    "longitude": -4.706912,
+    "tags": {
+      "caravan_site": "motorhome_stopover",
+      "caravan_site:type": "coastal",
+      "charge": "10.20 EUR",
+      "fee": "yes",
+      "name": "Aire de camping-cars de Bertheaume-Plougonvelin",
+      "name:br": "Leur kirri-kampiñ Perzell",
+      "power_supply": "yes",
+      "power_supply:capacity": "50",
+      "power_supply:fee": "no",
+      "sanitary_dump_station": "yes",
+      "seasonal": "no",
+      "shower": "yes",
+      "source:name:br": "proper translation",
+      "toilets": "yes",
+      "tourism": "caravan_site",
+      "water_point": "yes",
+      "water_point:charge": "2 EUR",
+      "water_point:fee": "yes",
+      "website": "https://www.iroise-bretagne.bzh/hebergement/aire-de-camping-cars-de-bertheaume-plougonvelin/"
+    }
+  },
+  {
+    "osm_id": 44215796,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Place des FFI",
+    "latitude": 48.3550057,
+    "longitude": -4.6883902,
+    "tags": {
+      "amenity": "parking",
+      "name": "Place des FFI",
+      "name:br": "Plasenn an FFI",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 45396706,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Place de l'Église",
+    "latitude": 48.3403993,
+    "longitude": -4.7199966,
+    "tags": {
+      "amenity": "parking",
+      "name": "Place de l'Église",
+      "name:br": "Plasenn an Iliz",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 45585800,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Kéraudy",
+    "latitude": 48.3438438,
+    "longitude": -4.7212503,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "carpool": "designated",
+      "name": "Kéraudy",
+      "name:br": "Keraodi",
+      "parking": "surface",
+      "ref:FR:BNCLC": "29190-C-001",
+      "source:name:br": "proper translation",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 45750252,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Grève de Porski",
+    "latitude": 48.3546711,
+    "longitude": -4.6908281,
+    "tags": {
+      "name": "Grève de Porski",
+      "natural": "beach"
+    }
+  },
+  {
+    "osm_id": 51560911,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage du Perzel ou de Bertheaume",
+    "latitude": 48.3395999,
+    "longitude": -4.7014221,
+    "tags": {
+      "alt_name": "Plage du Perzel;Plage de Bertheaume",
+      "name": "Plage du Perzel ou de Bertheaume",
+      "name:br": "Aod Perzell",
+      "natural": "beach",
+      "source:name:br": "ofis publik ar brezhoneg",
+      "surface": "sand"
+    }
+  },
+  {
+    "osm_id": 51571045,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage du Trez-Hir",
+    "latitude": 48.3493438,
+    "longitude": -4.6989067,
+    "tags": {
+      "name": "Plage du Trez-Hir",
+      "name:br": "Aod Traezh Hir",
+      "natural": "beach",
+      "source:name:br": "ofis publik ar brezhoneg",
+      "surface": "sand"
+    }
+  },
+  {
+    "osm_id": 53673097,
+    "osm_type": "way",
+    "type_amenity": "castle",
+    "nom": "Château de Kerjean-Mol",
+    "latitude": 48.3629754,
+    "longitude": -4.7487662,
+    "tags": {
+      "building": "yes",
+      "historic": "castle",
+      "name": "Château de Kerjean-Mol",
+      "ref:mhs": "IA29002820",
+      "wikidata": "Q58643250"
+    }
+  },
+  {
+    "osm_id": 53673141,
+    "osm_type": "way",
+    "type_amenity": "castle",
+    "nom": "Château de Kermorvan-Névé",
+    "latitude": 48.3725368,
+    "longitude": -4.7375085,
+    "tags": {
+      "building": "yes",
+      "historic": "castle",
+      "name": "Château de Kermorvan-Névé",
+      "ref:mhs": "IA29002821"
+    }
+  },
+  {
+    "osm_id": 53691199,
+    "osm_type": "way",
+    "type_amenity": "supermarket",
+    "nom": "Intermarché Super",
+    "latitude": 48.343154,
+    "longitude": -4.7229064,
+    "tags": {
+      "addr:city": "Plougonvelin",
+      "addr:postcode": "29217",
+      "addr:street": "Rue du Stade",
+      "brand": "Intermarché Super",
+      "brand:wikidata": "Q98278038",
+      "building": "retail",
+      "name": "Intermarché Super",
+      "opening_hours": "Mo-Sa 08:45-19:45; Su 09:00-12:30",
+      "operator": "Groupement des Mousquetaires",
+      "shop": "supermarket",
+      "source": "cadastre-dgi-fr source : PaysDeBrest - 20100329"
+    }
+  },
+  {
+    "osm_id": 53715265,
+    "osm_type": "way",
+    "type_amenity": "yes",
+    "nom": "Phare de Lochrist",
+    "latitude": 48.3425227,
+    "longitude": -4.7635371,
+    "tags": {
+      "building": "yes",
+      "height": "17",
+      "man_made": "lighthouse",
+      "name": "Phare de Lochrist",
+      "ref:FR:ANFR": "1478946",
+      "source": "ANFR 08/2019;cadastre-dgi-fr source : PaysDeBrest - 20100329",
+      "wikidata": "Q71254350"
+    }
+  },
+  {
+    "osm_id": 93324987,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3427827,
+    "longitude": -4.7211673,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 105776246,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Blancs sablons P6",
+    "latitude": 48.3652145,
+    "longitude": -4.7671515,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Blancs sablons P6",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 112156382,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3394486,
+    "longitude": -4.726531,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 112310863,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Parking à bateaux",
+    "latitude": 48.3391204,
+    "longitude": -4.7030182,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Parking à bateaux",
+      "name:br": "Parklec'h Bigi",
+      "parking": "surface",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 114189888,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.34151,
+    "longitude": -4.7256481,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 114190749,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3393203,
+    "longitude": -4.7286648,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 114190751,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3417969,
+    "longitude": -4.727142,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 114191062,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3388979,
+    "longitude": -4.7278373,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 131663149,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Camping municipal de Portez",
+    "latitude": 48.3562895,
+    "longitude": -4.6702878,
+    "tags": {
+      "addr:city": "Locmaria-Plouzané",
+      "addr:postcode": "29280",
+      "addr:street": "Plage de Portez",
+      "capacity": "100",
+      "caravans": "yes",
+      "dog": "yes",
+      "email": "camping-portez@locmaria-plouzane.fr",
+      "internet_access": "no",
+      "name": "Camping municipal de Portez",
+      "name:br": "Tachenn-gampiñ kêr Portez",
+      "phone": "+33 2 98 48 49 85",
+      "source:name:br": "proper translation",
+      "stars": "2",
+      "tents": "yes",
+      "tourism": "camp_site",
+      "website": "http://camping-portez.fr/"
+    }
+  },
+  {
+    "osm_id": 131663523,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Domaine de Kéryel",
+    "latitude": 48.3454536,
+    "longitude": -4.7419848,
+    "tags": {
+      "addr:city": "Plougonvelin",
+      "addr:postcode": "29217",
+      "addr:street": "Kéryel",
+      "capacity:tents": "16",
+      "caravans": "yes",
+      "check_date": "2024-07-23",
+      "email": "domainedekeryel@gmail.com",
+      "fee": "yes",
+      "mobile": "+33 2 98 48 33 35",
+      "name": "Domaine de Kéryel",
+      "phone": "+33 7 83 200 201",
+      "shower": "yes",
+      "stars": "3",
+      "tents": "yes",
+      "toilets": "yes",
+      "tourism": "camp_site",
+      "website": "https://domainedekeryel.fr/"
+    }
+  },
+  {
+    "osm_id": 131663820,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Camping les Blancs Sablons",
+    "latitude": 48.3665761,
+    "longitude": -4.7586806,
+    "tags": {
+      "addr:city": "Le Conquet",
+      "addr:postcode": "29217",
+      "addr:street": "Route de Kermorvan",
+      "capacity:pitches": "235",
+      "caravans": "yes",
+      "internet_access": "wlan",
+      "internet_access:fee": "yes",
+      "name": "Camping les Blancs Sablons",
+      "name:br": "Tachenn-gampiñ Gwendraezh",
+      "nudism": "no",
+      "phone": "+33 2 98 36 07 91",
+      "sanitary_dump_station": "customers",
+      "stars": "2",
+      "tents": "yes",
+      "tourism": "camp_site",
+      "website": "https://www.camping-blancs-sablons.com",
+      "wheelchair": "designated"
+    }
+  },
+  {
+    "osm_id": 134893086,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage des Blancs Sablons",
+    "latitude": 48.3707585,
+    "longitude": -4.7705215,
+    "tags": {
+      "name": "Plage des Blancs Sablons",
+      "natural": "beach",
+      "surface": "sand"
+    }
+  },
+  {
+    "osm_id": 171981963,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Place de Trez Hir",
+    "latitude": 48.3484269,
+    "longitude": -4.70403,
+    "tags": {
+      "amenity": "parking",
+      "name": "Place de Trez Hir",
+      "name:br": "Plasenn Traezh Hir",
+      "parking": "surface",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 202316417,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.347577,
+    "longitude": -4.7090532,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 202332191,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.347156,
+    "longitude": -4.7047823,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 203440403,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Blancs sablons P2",
+    "latitude": 48.3720632,
+    "longitude": -4.7541553,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Blancs sablons P2",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 204274510,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Grève de Poull serp dite grève des Curés",
+    "latitude": 48.3430194,
+    "longitude": -4.7011931,
+    "tags": {
+      "name": "Grève de Poull serp dite grève des Curés",
+      "natural": "beach",
+      "surface": "sand",
+      "wheelchair": "no"
+    }
+  },
+  {
+    "osm_id": 232249635,
+    "osm_type": "way",
+    "type_amenity": "caravan_site",
+    "nom": "Aire de Camping Car de Portez",
+    "latitude": 48.3553173,
+    "longitude": -4.6721512,
+    "tags": {
+      "addr:city": "Locmaria-Plouzané",
+      "addr:postcode": "29280",
+      "caravan_site": "motorhome_stopover",
+      "caravan_site:type": "beach",
+      "charge": "5 EUR",
+      "dog": "yes",
+      "fee": "yes",
+      "name": "Aire de Camping Car de Portez",
+      "power_supply": "yes",
+      "power_supply:fee": "yes",
+      "sanitary_dump_station": "yes",
+      "tourism": "caravan_site"
+    }
+  },
+  {
+    "osm_id": 235223600,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Parking de Porsliogan",
+    "latitude": 48.3475368,
+    "longitude": -4.7693347,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Parking de Porsliogan",
+      "name:br": "Parklec'h Porzh Liogan",
+      "source": "Bing",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 254043112,
+    "osm_type": "way",
+    "type_amenity": "yes",
+    "nom": "Blockhaus de la Casquette",
+    "latitude": 48.3281858,
+    "longitude": -4.7616263,
+    "tags": {
+      "building": "bunker",
+      "bunker_type": "pillbox",
+      "historic": "yes",
+      "military": "bunker",
+      "name": "Blockhaus de la Casquette"
+    }
+  },
+  {
+    "osm_id": 254043113,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Batterie des Rospects",
+    "latitude": 48.3294725,
+    "longitude": -4.7571713,
+    "tags": {
+      "historic": "fort",
+      "name": "Batterie des Rospects",
+      "name:br": "Batiri ar Rospeg",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 254044730,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Batterie Graf Spee (Keringar)",
+    "latitude": 48.3465947,
+    "longitude": -4.750793,
+    "tags": {
+      "historic": "fort",
+      "name": "Batterie Graf Spee (Keringar)"
+    }
+  },
+  {
+    "osm_id": 254108195,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Batterie de Kergounan - 4/AR343",
+    "latitude": 48.3780635,
+    "longitude": -4.7093315,
+    "tags": {
+      "historic": "fort",
+      "name": "Batterie de Kergounan - 4/AR343"
+    }
+  },
+  {
+    "osm_id": 254119685,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Fort de Bertheaume",
+    "latitude": 48.3377321,
+    "longitude": -4.6985712,
+    "tags": {
+      "historic": "fort",
+      "name": "Fort de Bertheaume",
+      "name:br": "Kastell Perzell",
+      "source:name:br": "ofis publik ar brezhoneg"
+    }
+  },
+  {
+    "osm_id": 254122162,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Batterie Basse de 95mm",
+    "latitude": 48.3371818,
+    "longitude": -4.7021931,
+    "tags": {
+      "historic": "fort",
+      "name": "Batterie Basse de 95mm"
+    }
+  },
+  {
+    "osm_id": 254122173,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Batterie haute de 270mm",
+    "latitude": 48.3373316,
+    "longitude": -4.7077131,
+    "tags": {
+      "historic": "fort",
+      "name": "Batterie haute de 270mm"
+    }
+  },
+  {
+    "osm_id": 254122174,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Fort de Bertheaume",
+    "latitude": 48.3370374,
+    "longitude": -4.6974986,
+    "tags": {
+      "barrier": "retaining_wall",
+      "historic": "fort",
+      "landuse": "meadow",
+      "name": "Fort de Bertheaume",
+      "name:br": "Kastell Perzell",
+      "source:name:br": "ofis publik ar brezhoneg"
+    }
+  },
+  {
+    "osm_id": 255271852,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage de Portez",
+    "latitude": 48.354324,
+    "longitude": -4.6741082,
+    "tags": {
+      "name": "Plage de Portez",
+      "name:br": "Aod Portez",
+      "name:fr": "Plage de Portez",
+      "natural": "beach",
+      "source:name:br": "ofis publik ar brezhoneg",
+      "surface": "sand"
+    }
+  },
+  {
+    "osm_id": 255271853,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage de Porsmilin",
+    "latitude": 48.3556932,
+    "longitude": -4.6798488,
+    "tags": {
+      "name": "Plage de Porsmilin",
+      "name:br": "Aod Porzh Milin",
+      "natural": "beach",
+      "source:name:br": "proper translation",
+      "surface": "sand"
+    }
+  },
+  {
+    "osm_id": 255661194,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Redoute Intermédiaire",
+    "latitude": 48.3661767,
+    "longitude": -4.762816,
+    "tags": {
+      "barrier": "retaining_wall",
+      "historic": "fort",
+      "name": "Redoute Intermédiaire"
+    }
+  },
+  {
+    "osm_id": 276904406,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Parking des Îles",
+    "latitude": 48.3583782,
+    "longitude": -4.7627023,
+    "tags": {
+      "amenity": "parking",
+      "fee": "yes",
+      "name": "Parking des Îles",
+      "name:br": "Parklec'h an Enezeier",
+      "parking": "surface",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 281787843,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3554665,
+    "longitude": -4.6731857,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "supervised": "no",
+      "surface": "gravel;grass"
+    }
+  },
+  {
+    "osm_id": 301227686,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3414971,
+    "longitude": -4.7096565,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 308631784,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3485413,
+    "longitude": -4.7027122,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 322941822,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage d'Illien",
+    "latitude": 48.382751,
+    "longitude": -4.7644666,
+    "tags": {
+      "name": "Plage d'Illien",
+      "name:br": "Traezhenn Ilien",
+      "natural": "beach",
+      "source:name:br": "proper translation",
+      "surface": "sand"
+    }
+  },
+  {
+    "osm_id": 323143521,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Blancs sablons P4",
+    "latitude": 48.3681741,
+    "longitude": -4.7595371,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Blancs sablons P4",
+      "parking": "surface",
+      "source": "Mapbox",
+      "surface": "gravel"
+    }
+  },
+  {
+    "osm_id": 323693135,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3503813,
+    "longitude": -4.7006061,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "source": "Mapbox"
+    }
+  },
+  {
+    "osm_id": 368955370,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3379518,
+    "longitude": -4.7010905,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 368955781,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3393499,
+    "longitude": -4.7021568,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 368955782,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3392977,
+    "longitude": -4.70214,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 396834494,
+    "osm_type": "way",
+    "type_amenity": "lavoir",
+    "nom": "Lavoir Lochrist",
+    "latitude": 48.3453691,
+    "longitude": -4.7641113,
+    "tags": {
+      "basin": "retention",
+      "historic": "lavoir",
+      "landuse": "basin",
+      "name": "Lavoir Lochrist",
+      "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2016 + Bing"
+    }
+  },
+  {
+    "osm_id": 401782729,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.3544593,
+    "longitude": -4.6880292,
+    "tags": {
+      "natural": "beach",
+      "tidal": "yes"
+    }
+  },
+  {
+    "osm_id": 401782731,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.3545089,
+    "longitude": -4.6879857,
+    "tags": {
+      "natural": "beach"
+    }
+  },
+  {
+    "osm_id": 401782734,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.355288,
+    "longitude": -4.6798738,
+    "tags": {
+      "natural": "beach",
+      "surface": "sand",
+      "tidal": "yes"
+    }
+  },
+  {
+    "osm_id": 401782735,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.3540668,
+    "longitude": -4.6906786,
+    "tags": {
+      "natural": "beach",
+      "tidal": "yes"
+    }
+  },
+  {
+    "osm_id": 401782736,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.3538884,
+    "longitude": -4.6739718,
+    "tags": {
+      "natural": "beach",
+      "tidal": "yes"
+    }
+  },
+  {
+    "osm_id": 401782743,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.349328,
+    "longitude": -4.6979298,
+    "tags": {
+      "natural": "beach",
+      "tidal": "yes"
+    }
+  },
+  {
+    "osm_id": 401787258,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.3398427,
+    "longitude": -4.7003206,
+    "tags": {
+      "natural": "beach",
+      "tidal": "yes"
+    }
+  },
+  {
+    "osm_id": 621795308,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3668798,
+    "longitude": -4.7469013,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "parking": "surface",
+      "surface": "ground"
+    }
+  },
+  {
+    "osm_id": 621795329,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3606365,
+    "longitude": -4.744023,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 621795330,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3597303,
+    "longitude": -4.7427725,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 623889796,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3529868,
+    "longitude": -4.7186715,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 683448296,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3529147,
+    "longitude": -4.6688113,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 683921674,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3633163,
+    "longitude": -4.671252,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 684572566,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.355853,
+    "longitude": -4.6786335,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "capacity": "7",
+      "capacity:disabled": "4",
+      "fee": "no",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 684572568,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3560286,
+    "longitude": -4.6786061,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "capacity": "13",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 685459285,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3582506,
+    "longitude": -4.6770812,
+    "tags": {
+      "access": "private",
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 685459286,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3560387,
+    "longitude": -4.6771469,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 685459287,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3570925,
+    "longitude": -4.6760057,
+    "tags": {
+      "access": "private",
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 687054060,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.3361764,
+    "longitude": -4.7056572,
+    "tags": {
+      "natural": "beach"
+    }
+  },
+  {
+    "osm_id": 760653512,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Rospects",
+    "latitude": 48.3308938,
+    "longitude": -4.7599285,
+    "tags": {
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Rospects",
+      "park_ride": "no",
+      "parking": "surface",
+      "surface": "grass"
+    }
+  },
+  {
+    "osm_id": 814995806,
+    "osm_type": "way",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.347447,
+    "longitude": -4.7038319,
+    "tags": {
+      "amenity": "toilets",
+      "building": "yes",
+      "fee": "no",
+      "source": "cadastre-dgi-fr source : Direction Générale des Finances Publiques - Cadastre. Mise à jour : 2020",
+      "unisex": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 886405805,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3315483,
+    "longitude": -4.7680447,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 932305757,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3480536,
+    "longitude": -4.7064704,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 982792501,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3549828,
+    "longitude": -4.6714436,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1000279416,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3575902,
+    "longitude": -4.6783938,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1110712241,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "plage des trois curés",
+    "latitude": 48.3429129,
+    "longitude": -4.7012754,
+    "tags": {
+      "lifeguard": "no",
+      "name": "plage des trois curés",
+      "natural": "beach",
+      "surface": "sand"
+    }
+  },
+  {
+    "osm_id": 1168186271,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Blancs sablons P3",
+    "latitude": 48.3712406,
+    "longitude": -4.7536783,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "Blancs sablons P3",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1204024495,
+    "osm_type": "way",
+    "type_amenity": "attraction",
+    "nom": "2 pignons de Kéravel",
+    "latitude": 48.3349268,
+    "longitude": -4.7590315,
+    "tags": {
+      "alt_name": "Le deux amers de Plougonvellin",
+      "building": "yes",
+      "historic": "yes",
+      "name": "2 pignons de Kéravel",
+      "tourism": "attraction"
+    }
+  },
+  {
+    "osm_id": 1204024496,
+    "osm_type": "way",
+    "type_amenity": "attraction",
+    "nom": "2 pignons de Kéravel",
+    "latitude": 48.3349727,
+    "longitude": -4.7588954,
+    "tags": {
+      "alt_name": "Le deux amers de Plougonvellin",
+      "building": "yes",
+      "historic": "yes",
+      "name": "2 pignons de Kéravel",
+      "tourism": "attraction"
+    }
+  },
+  {
+    "osm_id": 1205835799,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3605915,
+    "longitude": -4.7628496,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "ref": "Le Hangar du Pecheur"
+    }
+  },
+  {
+    "osm_id": 1208860121,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3347697,
+    "longitude": -4.7620059,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 1315337323,
+    "osm_type": "way",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3473677,
+    "longitude": -4.7511979,
+    "tags": {
+      "building": "bunker",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 1315337331,
+    "osm_type": "way",
+    "type_amenity": "shelter",
+    "nom": "",
+    "latitude": 48.3467292,
+    "longitude": -4.7498935,
+    "tags": {
+      "amenity": "shelter",
+      "building": "yes"
+    }
+  },
+  {
+    "osm_id": 1315337332,
+    "osm_type": "way",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.3459637,
+    "longitude": -4.7485539,
+    "tags": {
+      "building": "bunker",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 1383706987,
+    "osm_type": "way",
+    "type_amenity": "lavoir",
+    "nom": "",
+    "latitude": 48.3499432,
+    "longitude": -4.7610462,
+    "tags": {
+      "historic": "lavoir"
+    }
+  },
+  {
+    "osm_id": 1384439384,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3671662,
+    "longitude": -4.7600261,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1384439387,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3675844,
+    "longitude": -4.7594483,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1442826334,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.3683745,
+    "longitude": -4.7356795,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1812815,
+    "osm_type": "relation",
+    "type_amenity": "beach",
+    "nom": "Plage de Perzic",
+    "latitude": 48.3787813,
+    "longitude": -4.7637119,
+    "tags": {
+      "area": "yes",
+      "name": "Plage de Perzic",
+      "name:br": "Traezhenn Perzig",
+      "natural": "beach",
+      "note": "Plage naturiste",
+      "nudism": "yes",
+      "source:name:br": "proper translation",
+      "type": "multipolygon"
+    }
+  },
+  {
+    "osm_id": 2393603,
+    "osm_type": "relation",
+    "type_amenity": "fort",
+    "nom": "Fort Saint-Louis",
+    "latitude": 48.3694118,
+    "longitude": -4.7596397,
+    "tags": {
+      "access": "permit",
+      "building": "yes",
+      "historic": "fort",
+      "name": "Fort Saint-Louis",
+      "type": "multipolygon"
+    }
+  },
+  {
+    "osm_id": 2393604,
+    "osm_type": "relation",
+    "type_amenity": "building",
+    "nom": "Maison Quéré",
+    "latitude": 48.3854115,
+    "longitude": -4.7632461,
+    "tags": {
+      "building": "house",
+      "heritage": "3",
+      "heritage:operator": "mhs",
+      "historic": "building",
+      "mhs:inscription_date": "1996-05-21",
+      "name": "Maison Quéré",
+      "ref:mhs": "PA29000008",
+      "source:heritage": "data.gouv.fr, Ministère de la Culture - 2016",
+      "start_date": "C20",
+      "type": "multipolygon",
+      "wikidata": "Q22996313"
+    }
+  },
+  {
+    "osm_id": 4501033,
+    "osm_type": "relation",
+    "type_amenity": "fort",
+    "nom": "Redoute des Blancs-Sablons",
+    "latitude": 48.3652416,
+    "longitude": -4.7675922,
+    "tags": {
+      "building": "yes",
+      "historic": "fort",
+      "name": "Redoute des Blancs-Sablons",
+      "type": "multipolygon"
+    }
+  },
+  {
+    "osm_id": 278953533,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2338767,
+    "longitude": -4.4978293,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 427973336,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "Calvaire du Gador",
+    "latitude": 48.2185481,
+    "longitude": -4.4988234,
+    "tags": {
+      "historic": "wayside_cross",
+      "name": "Calvaire du Gador",
+      "name:br": "Kalvar ar Gador",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 427973339,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Batterie du Kador",
+    "latitude": 48.2199207,
+    "longitude": -4.4963709,
+    "tags": {
+      "board_type": "history",
+      "description": "Descriptions du site",
+      "information": "board",
+      "name": "Batterie du Kador",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 494866370,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2767247,
+    "longitude": -4.5336097,
+    "tags": {
+      "historic": "wayside_cross"
+    }
+  },
+  {
+    "osm_id": 670055348,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "Moulin du chat",
+    "latitude": 48.2836471,
+    "longitude": -4.5197746,
+    "tags": {
+      "description": "Moulin : Poincon : Sommet - Point vu en place en 2002",
+      "ele": "60.6",
+      "name": "Moulin du chat",
+      "name:br": "Millin Ar C'has",
+      "note": "Ne pas déplacer ce point, cf. - Do not move this node, see - http://wiki.openstreetmap.org/wiki/WikiProject_France/Repères_Géodésiques#Permanence_des_rep.C3.A8res",
+      "ref": "29042B -",
+      "source": "©IGN 2010 dans le cadre de la cartographie réglementaire",
+      "tourism": "viewpoint",
+      "url": "http://ancien-geodesie.ign.fr/fiche_point.asp?num_site=29042B&no_ptg=01&numero_f50=0417"
+    }
+  },
+  {
+    "osm_id": 741576117,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "La Grève",
+    "latitude": 48.2922254,
+    "longitude": -4.4565919,
+    "tags": {
+      "name": "La Grève",
+      "name:br": "An Aod",
+      "source": "CCPC/Cadastre 2010",
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 1338472853,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "La Presqu'île",
+    "latitude": 48.2460578,
+    "longitude": -4.4897329,
+    "tags": {
+      "name": "La Presqu'île",
+      "shop": "bakery",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 1392861728,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "Le Spot",
+    "latitude": 48.2250894,
+    "longitude": -4.5046295,
+    "tags": {
+      "indoor_seating": "yes",
+      "name": "Le Spot",
+      "opening_hours": "Mo-Sa 12:00-16:00; Su 12:00-16:00",
+      "outdoor_seating": "yes",
+      "shop": "bakery",
+      "smoking": "outside",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 1412624373,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Cap de la Chèvre",
+    "latitude": 48.2030348,
+    "longitude": -4.5196066,
+    "tags": {
+      "hiking": "yes",
+      "information": "guidepost",
+      "mtb": "yes",
+      "name": "Cap de la Chèvre",
+      "source": "survey",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 1412624375,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.2030824,
+    "longitude": -4.519459,
+    "tags": {
+      "information": "guidepost",
+      "source": "survey",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 1412624382,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Souvenirs d'un instituteur de Ty-Skol",
+    "latitude": 48.2032118,
+    "longitude": -4.5211384,
+    "tags": {
+      "information": "audioguide",
+      "name": "Souvenirs d'un instituteur de Ty-Skol",
+      "network": "Territoires Sonores",
+      "operator": "Maison des minéreaux",
+      "ref": "09",
+      "tourism": "information",
+      "website": "https://expoos.mmx.bzh/article284.html"
+    }
+  },
+  {
+    "osm_id": 1412978347,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Les lichens du bord de mer",
+    "latitude": 48.1973055,
+    "longitude": -4.5203764,
+    "tags": {
+      "information": "audioguide",
+      "name": "Les lichens du bord de mer",
+      "operator": "Territoires Sonores",
+      "ref": "06",
+      "tourism": "information",
+      "website": "https://expoos.mmx.bzh/article281.html"
+    }
+  },
+  {
+    "osm_id": 1412978384,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.1995909,
+    "longitude": -4.5175815,
+    "tags": {
+      "source": "survey",
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 1412978389,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "La pêche au sprat",
+    "latitude": 48.1997622,
+    "longitude": -4.5176341,
+    "tags": {
+      "information": "audioguide",
+      "name": "La pêche au sprat",
+      "operator": "Territoires Sonores",
+      "ref": "05",
+      "tourism": "information",
+      "website": "https://expoos.mmx.bzh/article280.html"
+    }
+  },
+  {
+    "osm_id": 1412978406,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Au coeur d’une grotte",
+    "latitude": 48.2017279,
+    "longitude": -4.5148256,
+    "tags": {
+      "information": "audioguide",
+      "name": "Au coeur d’une grotte",
+      "operator": "Territoires Sonores",
+      "ref": "04",
+      "tourism": "information",
+      "website": "https://expoos.mmx.bzh/article279.html"
+    }
+  },
+  {
+    "osm_id": 1412978425,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Du temps des mammouths",
+    "latitude": 48.2046899,
+    "longitude": -4.5163182,
+    "tags": {
+      "information": "audioguide",
+      "name": "Du temps des mammouths",
+      "operator": "Territoires Sonores",
+      "ref": "03",
+      "source": "survey",
+      "tourism": "information",
+      "website": "https://expoos.mmx.bzh/article278.html"
+    }
+  },
+  {
+    "osm_id": 1412978427,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Accès au sentier côtier GR 34",
+    "latitude": 48.2049162,
+    "longitude": -4.5186326,
+    "tags": {
+      "hiking": "yes",
+      "information": "guidepost",
+      "name": "Accès au sentier côtier GR 34",
+      "source": "survey",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 1412978429,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Les débroussailleurs",
+    "latitude": 48.2056031,
+    "longitude": -4.5258955,
+    "tags": {
+      "information": "audioguide",
+      "name": "Les débroussailleurs",
+      "operator": "Territoires Sonores",
+      "ref": "0",
+      "source": "survey",
+      "tourism": "information",
+      "website": "https://expoos.mmx.bzh/article276.html"
+    }
+  },
+  {
+    "osm_id": 1413081260,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "La presqu’île",
+    "latitude": 48.2079513,
+    "longitude": -4.5180763,
+    "tags": {
+      "information": "audioguide",
+      "name": "La presqu’île",
+      "operator": "Territoires Sonores",
+      "ref": "02",
+      "source": "survey",
+      "tourism": "information",
+      "website": "https://expoos.mmx.bzh/article277.html"
+    }
+  },
+  {
+    "osm_id": 1413081261,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Souvenirs de moisson",
+    "latitude": 48.1979411,
+    "longitude": -4.5230665,
+    "tags": {
+      "information": "audioguide",
+      "name": "Souvenirs de moisson",
+      "network": "Territoires Sonores",
+      "ref": "08",
+      "tourism": "information",
+      "website": "https://expoos.mmx.bzh/article283.html"
+    }
+  },
+  {
+    "osm_id": 1656017754,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2227672,
+    "longitude": -4.4959025,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1814788774,
+    "osm_type": "node",
+    "type_amenity": "fort",
+    "nom": "Fort du Kador",
+    "latitude": 48.2213989,
+    "longitude": -4.4952857,
+    "tags": {
+      "historic": "fort",
+      "name": "Fort du Kador"
+    }
+  },
+  {
+    "osm_id": 1814788776,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Beg ar gador toull an diaoul",
+    "latitude": 48.2196047,
+    "longitude": -4.4956934,
+    "tags": {
+      "board_type": "geology",
+      "information": "board",
+      "name": "Beg ar gador toull an diaoul",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 1864870762,
+    "osm_type": "node",
+    "type_amenity": "drinking_water",
+    "nom": "",
+    "latitude": 48.2842499,
+    "longitude": -4.509497,
+    "tags": {
+      "amenity": "drinking_water",
+      "note": "Camping Cars"
+    }
+  },
+  {
+    "osm_id": 1864870765,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Hostellerie de la mer",
+    "latitude": 48.2856118,
+    "longitude": -4.5078566,
+    "tags": {
+      "amenity": "restaurant",
+      "contact:email": "contact@hostelleriedelamer.com",
+      "contact:fax": "+33 2 98276589",
+      "contact:phone": "+33 2 98276190",
+      "cuisine": "french",
+      "name": "Hostellerie de la mer",
+      "name:br": "Letierezh ar Mor",
+      "opening_hours": "Tu 19:15-20:00; Su 12:15-13:00; We-Sa 12:15-13:00,19:15-20:00",
+      "source:name:br": "proper translation",
+      "tourism": "hotel",
+      "website": "https://www.hostelleriedelamer.com/",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 1864916494,
+    "osm_type": "node",
+    "type_amenity": "convenience",
+    "nom": "Epicerie du Bout du Monde",
+    "latitude": 48.2849993,
+    "longitude": -4.5086646,
+    "tags": {
+      "contact:phone": "+33 2 98 27 65 10",
+      "description": "From June to August also open between 16:00 and 19:00",
+      "name": "Epicerie du Bout du Monde",
+      "opening_hours": "Tu-Su 08:00-13:30; Mo off",
+      "shop": "convenience",
+      "source": "survey:date"
+    }
+  },
+  {
+    "osm_id": 1864919195,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Les yeux dans l'eau",
+    "latitude": 48.2861087,
+    "longitude": -4.5070229,
+    "tags": {
+      "addr:housenumber": "27",
+      "addr:street": "Quai du Fret",
+      "amenity": "restaurant",
+      "check_date": "2024-07-21",
+      "name": "Les yeux dans l'eau",
+      "source": "cadastre-dgi-fr source : Direction Générale des Finances Publiques - Cadastre. Mise à jour : 2014"
+    }
+  },
+  {
+    "osm_id": 1864920436,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Crêperie Presbytère",
+    "latitude": 48.2864184,
+    "longitude": -4.5069189,
+    "tags": {
+      "amenity": "restaurant",
+      "diet:vegan": "yes",
+      "diet:vegetarian": "yes",
+      "name": "Crêperie Presbytère",
+      "opening_hours": "Mo, Tu, Th-Su 12:00-14:30, 19:00-21:30; We off",
+      "payment:credit_cards": "yes",
+      "payment:debit_cards": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 1894169787,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "",
+    "latitude": 48.286917,
+    "longitude": -4.4623948,
+    "tags": {
+      "shop": "bakery"
+    }
+  },
+  {
+    "osm_id": 1898338031,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "",
+    "latitude": 48.2852846,
+    "longitude": -4.4609098,
+    "tags": {
+      "shop": "bakery"
+    }
+  },
+  {
+    "osm_id": 1898338034,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2863791,
+    "longitude": -4.4616187,
+    "tags": {
+      "amenity": "toilets"
+    }
+  },
+  {
+    "osm_id": 1910936817,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2357244,
+    "longitude": -4.446979,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1912298115,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "",
+    "latitude": 48.2467598,
+    "longitude": -4.4901393,
+    "tags": {
+      "addr:housenumber": "19",
+      "addr:street": "Rue de Reims",
+      "shop": "bakery"
+    }
+  },
+  {
+    "osm_id": 1912298178,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "L'Océanic",
+    "latitude": 48.2470294,
+    "longitude": -4.4993968,
+    "tags": {
+      "amenity": "restaurant",
+      "contact:phone": "+33 2 98270270",
+      "cuisine": "pizza",
+      "name": "L'Océanic",
+      "website": "https://loceanic-crozon.fr/"
+    }
+  },
+  {
+    "osm_id": 1912298213,
+    "osm_type": "node",
+    "type_amenity": "convenience",
+    "nom": "Bio Presqu'île",
+    "latitude": 48.2481546,
+    "longitude": -4.4878711,
+    "tags": {
+      "addr:city": "Crozon",
+      "addr:postcode": "29160",
+      "addr:street": "Rue Yves Le Gallo",
+      "bulk_purchase": "yes",
+      "contact:email": "Rouletapierre@wanadoo.fr",
+      "contact:phone": "+33 2 98 26 11 71",
+      "name": "Bio Presqu'île",
+      "opening_hours": "Mo-Sa 09:00-19:00",
+      "organic": "only",
+      "shop": "convenience"
+    }
+  },
+  {
+    "osm_id": 1912298246,
+    "osm_type": "node",
+    "type_amenity": "supermarket",
+    "nom": "Carrefour Contact",
+    "latitude": 48.2456039,
+    "longitude": -4.4894159,
+    "tags": {
+      "addr:city": "Crozon",
+      "addr:housenumber": "7",
+      "addr:postcode": "29160",
+      "addr:street": "Rue Alsace Lorraine",
+      "brand": "Carrefour Contact",
+      "brand:wikidata": "Q2940188",
+      "brand:wikipedia": "fr:Carrefour Contact",
+      "name": "Carrefour Contact",
+      "opening_hours": "Mo-Sa 08:00-20:00; Su 09:00-13:00",
+      "phone": "+33 2 98 27 06 08",
+      "shop": "supermarket",
+      "website": "https://www.carrefour.fr/magasin/contact-crozon"
+    }
+  },
+  {
+    "osm_id": 1912298320,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "Le Fourn'île",
+    "latitude": 48.2483439,
+    "longitude": -4.489357,
+    "tags": {
+      "check_date:opening_hours": "2020-12-28",
+      "description": "Boulangerie artisanale au feu de de bois",
+      "name": "Le Fourn'île",
+      "opening_hours": "Mo-Fr 08:00-12:30,16:00-19:00; Th off; Sa 08:00-13:00,15:30-18:30",
+      "shop": "bakery"
+    }
+  },
+  {
+    "osm_id": 1912298334,
+    "osm_type": "node",
+    "type_amenity": "convenience",
+    "nom": "",
+    "latitude": 48.2460671,
+    "longitude": -4.4896554,
+    "tags": {
+      "opening_hours": "Mo-Sa 08:00-20:00;Su 09:00-13:00",
+      "shop": "convenience",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 1944497018,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "menhir",
+    "latitude": 48.2278897,
+    "longitude": -4.537114,
+    "tags": {
+      "historic": "archaeological_site",
+      "name": "menhir"
+    }
+  },
+  {
+    "osm_id": 1944497021,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "",
+    "latitude": 48.2487824,
+    "longitude": -4.4754229,
+    "tags": {
+      "archaeological_site": "megalith",
+      "historic": "archaeological_site",
+      "megalith_type": "menhir"
+    }
+  },
+  {
+    "osm_id": 1944497022,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "menhir",
+    "latitude": 48.2606632,
+    "longitude": -4.4453765,
+    "tags": {
+      "historic": "archaeological_site",
+      "name": "menhir"
+    }
+  },
+  {
+    "osm_id": 2092275270,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Hôtel Restaurant Julia",
+    "latitude": 48.2278413,
+    "longitude": -4.5083897,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "Hôtel Restaurant Julia",
+      "tourism": "hotel"
+    }
+  },
+  {
+    "osm_id": 2092280749,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Bistrot Le 34",
+    "latitude": 48.2247187,
+    "longitude": -4.5063362,
+    "tags": {
+      "amenity": "restaurant",
+      "contact:phone": "+33 2 98260590",
+      "cuisine": "french",
+      "indoor_seating": "yes",
+      "name": "Bistrot Le 34",
+      "old_name": "Hôtel Sainte Marine",
+      "outdoor_seating": "yes",
+      "tourism": "hotel",
+      "website": "https://www.escale-marine.bzh/bistrot-le-34"
+    }
+  },
+  {
+    "osm_id": 2133744962,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "L'Hermine",
+    "latitude": 48.2027592,
+    "longitude": -4.5301607,
+    "tags": {
+      "amenity": "restaurant",
+      "contact:email": "nivaux.yolande@gmail.com",
+      "contact:phone": "+33 2 98 27 15 00",
+      "contact:website": "https://lhermine-saint-hernot29.com/",
+      "cuisine": "french",
+      "name": "L'Hermine",
+      "opening_hours": "Mo 11:30-15:30; Th-Fr 11:30-15:30, 18:30-23:30; Sa-Su 12:00-23:30",
+      "tourism": "guest_house"
+    }
+  },
+  {
+    "osm_id": 2773219599,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "La grange de Toul-boss",
+    "latitude": 48.2251684,
+    "longitude": -4.5047677,
+    "tags": {
+      "amenity": "restaurant",
+      "check_date:opening_hours": "2025-03-15",
+      "name": "La grange de Toul-boss",
+      "opening_hours:signed": "no",
+      "phone": "+33 2 98 26 02 60",
+      "ref:FR:NAF": "56.10A",
+      "ref:FR:SIREN": "522696632",
+      "ref:FR:SIRET": "52269663200010",
+      "source": "INSEE - 2025-07",
+      "website": "https://www.restaurant-creperie-crozon.fr"
+    }
+  },
+  {
+    "osm_id": 2909905511,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Atao Aman",
+    "latitude": 48.2269194,
+    "longitude": -4.5039934,
+    "tags": {
+      "amenity": "restaurant",
+      "check_date:opening_hours": "2025-03-15",
+      "contact:phone": "+33 2 98160075",
+      "cuisine": "crepe",
+      "diet:vegan": "no",
+      "diet:vegetarian": "yes",
+      "indoor_seating": "yes",
+      "name": "Atao Aman",
+      "opening_hours:signed": "no",
+      "outdoor_seating": "yes"
+    }
+  },
+  {
+    "osm_id": 3005398633,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Bar Restaurant de la Rade",
+    "latitude": 48.2880255,
+    "longitude": -4.462619,
+    "tags": {
+      "amenity": "restaurant",
+      "diet:vegetarian": "no",
+      "hotel": "yes",
+      "name": "Bar Restaurant de la Rade"
+    }
+  },
+  {
+    "osm_id": 3078623503,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Les Flots",
+    "latitude": 48.2249885,
+    "longitude": -4.5043309,
+    "tags": {
+      "amenity": "restaurant",
+      "check_date:opening_hours": "2025-03-15",
+      "contact:phone": "+33 2 98270196",
+      "cuisine": "italian",
+      "indoor_seating": "yes",
+      "name": "Les Flots",
+      "opening_hours:signed": "no",
+      "outdoor_seating": "yes",
+      "website": "http://www.restaurantlesflots.com/"
+    }
+  },
+  {
+    "osm_id": 3229330336,
+    "osm_type": "node",
+    "type_amenity": "pharmacy",
+    "nom": "Pharmacie Etchandy",
+    "latitude": 48.2462899,
+    "longitude": -4.4899676,
+    "tags": {
+      "addr:housenumber": "3",
+      "addr:street": "Rue de Reims",
+      "amenity": "pharmacy",
+      "dispensing": "yes",
+      "healthcare": "pharmacy",
+      "name": "Pharmacie Etchandy",
+      "ref:FR:FINESS": "290011733",
+      "source": "cadastre-dgi-fr source : Direction Générale des Finances Publiques - Cadastre. Mise à jour : 2014"
+    }
+  },
+  {
+    "osm_id": 3230966507,
+    "osm_type": "node",
+    "type_amenity": "pharmacy",
+    "nom": "Pharmacie Lars",
+    "latitude": 48.2458874,
+    "longitude": -4.4910957,
+    "tags": {
+      "addr:housenumber": "33",
+      "addr:street": "Rue Alsace Lorraine",
+      "amenity": "pharmacy",
+      "dispensing": "yes",
+      "healthcare": "pharmacy",
+      "name": "Pharmacie Lars",
+      "ref:FR:FINESS": "290010602",
+      "source": "cadastre-dgi-fr source : Direction Générale des Finances Publiques - Cadastre. Mise à jour : 2014"
+    }
+  },
+  {
+    "osm_id": 3230976842,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "La Flambée",
+    "latitude": 48.2245467,
+    "longitude": -4.5033917,
+    "tags": {
+      "addr:housenumber": "22",
+      "addr:street": "Quai Kador",
+      "amenity": "restaurant",
+      "check_date:opening_hours": "2025-03-15",
+      "cuisine": "french",
+      "diet:vegetarian": "yes",
+      "indoor_seating": "yes",
+      "name": "La Flambée",
+      "opening_hours:signed": "no",
+      "outdoor_seating": "yes",
+      "source": "cadastre-dgi-fr source : Direction Générale des Finances Publiques - Cadastre. Mise à jour : 2014"
+    }
+  },
+  {
+    "osm_id": 3811359807,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Café du port",
+    "latitude": 48.2863348,
+    "longitude": -4.5064943,
+    "tags": {
+      "addr:housenumber": "39",
+      "addr:street": "Quai du Fret",
+      "amenity": "restaurant",
+      "check_date": "2024-07-19",
+      "name": "Café du port",
+      "ref:FR:NAF": "56.30Z",
+      "ref:FR:SIREN": "382808095",
+      "ref:FR:SIRET": "38280809500014",
+      "source": "INSEE - 2025-07"
+    }
+  },
+  {
+    "osm_id": 4237303003,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.2943388,
+    "longitude": -4.4608578,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 4344372906,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Crêperie Pen ar Menez",
+    "latitude": 48.2478044,
+    "longitude": -4.4997684,
+    "tags": {
+      "amenity": "restaurant",
+      "contact:phone": "+33 2 98270322",
+      "name": "Crêperie Pen ar Menez"
+    }
+  },
+  {
+    "osm_id": 4344424167,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Le Mutin Gourmand",
+    "latitude": 48.2462659,
+    "longitude": -4.488946,
+    "tags": {
+      "amenity": "restaurant",
+      "contact:email": "mutin.gourmand1@wanadoo.fr",
+      "contact:phone": "+33 2 98 27 06 51",
+      "cuisine": "french",
+      "name": "Le Mutin Gourmand",
+      "website": "http://lemutingourmand.fr"
+    }
+  },
+  {
+    "osm_id": 4344424168,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Saveurs et Marée",
+    "latitude": 48.2257502,
+    "longitude": -4.5044626,
+    "tags": {
+      "addr:housenumber": "52",
+      "addr:street": "Boulevard de la Plage",
+      "amenity": "restaurant",
+      "contact:email": "denis@saveurs-et-maree.com",
+      "contact:phone": "+33 2 98262318",
+      "cuisine": "seafood",
+      "indoor_seating": "yes",
+      "name": "Saveurs et Marée",
+      "outdoor_seating": "yes",
+      "ref:FR:NAF": "56.10A",
+      "ref:FR:SIREN": "942166950",
+      "ref:FR:SIRET": "94216695000017",
+      "source": "INSEE - 2025-07",
+      "website": "https://saveurs-et-maree.com"
+    }
+  },
+  {
+    "osm_id": 4344446088,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Restaurant Le Korrigan",
+    "latitude": 48.23783,
+    "longitude": -4.4620353,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "Restaurant Le Korrigan"
+    }
+  },
+  {
+    "osm_id": 4344446089,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "l'Île ô Crêpes",
+    "latitude": 48.2259898,
+    "longitude": -4.5046899,
+    "tags": {
+      "addr:housenumber": "1",
+      "addr:street": "Rue Kreisker",
+      "amenity": "restaurant",
+      "check_date": "2025-05-20",
+      "check_date:diet:vegetarian": "2025-05-20",
+      "check_date:opening_hours": "2025-03-15",
+      "contact:phone": "+33 2 98235215",
+      "cuisine": "crepe",
+      "diet:vegetarian": "yes",
+      "name": "l'Île ô Crêpes",
+      "opening_hours:signed": "no",
+      "ref:FR:NAF": "56.10A",
+      "ref:FR:SIREN": "809766538",
+      "ref:FR:SIRET": "80976653800015",
+      "source": "INSEE - 2025-07",
+      "takeaway": "yes"
+    }
+  },
+  {
+    "osm_id": 4419531423,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2459763,
+    "longitude": -4.4885697,
+    "tags": {
+      "amenity": "toilets",
+      "drinking_water": "yes",
+      "fee": "no",
+      "toilets:wheelchair": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 4603918620,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Le Café de Bretagne",
+    "latitude": 48.2463453,
+    "longitude": -4.4890459,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "Le Café de Bretagne"
+    }
+  },
+  {
+    "osm_id": 4792382406,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.2362482,
+    "longitude": -4.459115,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 4858119424,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Della Spiaggia",
+    "latitude": 48.2258534,
+    "longitude": -4.5044207,
+    "tags": {
+      "amenity": "restaurant",
+      "check_date": "2025-03-15",
+      "check_date:opening_hours": "2025-03-15",
+      "cuisine": "italian;pizza",
+      "indoor_seating": "yes",
+      "level": "0",
+      "name": "Della Spiaggia",
+      "opening_hours:signed": "no",
+      "outdoor_seating": "yes"
+    }
+  },
+  {
+    "osm_id": 4921619096,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.236824,
+    "longitude": -4.4770807,
+    "tags": {
+      "information": "map",
+      "source": "survey:date=2017-06-07",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 4971588865,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.2375869,
+    "longitude": -4.4709367,
+    "tags": {
+      "noexit": "yes",
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 5557747291,
+    "osm_type": "node",
+    "type_amenity": "fuel",
+    "nom": "Total",
+    "latitude": 48.2823219,
+    "longitude": -4.4568953,
+    "tags": {
+      "amenity": "fuel",
+      "brand": "TotalEnergies",
+      "brand:wikidata": "Q154037",
+      "fuel:diesel": "yes",
+      "fuel:e10": "yes",
+      "fuel:essence": "yes",
+      "fuel:octane_95": "yes",
+      "fuel:octane_98": "yes",
+      "name": "Total",
+      "opening_hours": "24/7",
+      "ref:FR:prix-carburants": "29160002",
+      "source": "Ministère de l'Economie, de l'Industrie et du Numérique - 03/2020"
+    }
+  },
+  {
+    "osm_id": 5611187249,
+    "osm_type": "node",
+    "type_amenity": "drinking_water",
+    "nom": "",
+    "latitude": 48.2866411,
+    "longitude": -4.460015,
+    "tags": {
+      "amenity": "drinking_water"
+    }
+  },
+  {
+    "osm_id": 5696914358,
+    "osm_type": "node",
+    "type_amenity": "yes",
+    "nom": "",
+    "latitude": 48.2364548,
+    "longitude": -4.4762437,
+    "tags": {
+      "building": "bunker",
+      "historic": "yes",
+      "military": "bunker"
+    }
+  },
+  {
+    "osm_id": 5696914364,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "",
+    "latitude": 48.2373103,
+    "longitude": -4.4774456,
+    "tags": {
+      "archaeological_site": "megalith",
+      "description": "Dynamité en 1942 ou 1943 car utilisé comme amer.",
+      "historic": "archaeological_site",
+      "material": "stone;concrete",
+      "megalith_type": "menhir"
+    }
+  },
+  {
+    "osm_id": 6122110221,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2924829,
+    "longitude": -4.5241398,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110222,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2924459,
+    "longitude": -4.5240234,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110223,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2920974,
+    "longitude": -4.5226183,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110224,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2918582,
+    "longitude": -4.5222622,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110225,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2915648,
+    "longitude": -4.5221299,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110226,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2916054,
+    "longitude": -4.5224046,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110227,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2915784,
+    "longitude": -4.5226726,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110228,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2914497,
+    "longitude": -4.522001,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110229,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2913819,
+    "longitude": -4.5219026,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110230,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.2913326,
+    "longitude": -4.521893,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6122110231,
+    "osm_type": "node",
+    "type_amenity": "wreck",
+    "nom": "",
+    "latitude": 48.291338,
+    "longitude": -4.5219557,
+    "tags": {
+      "historic": "wreck",
+      "seamark:type": "wreck"
+    }
+  },
+  {
+    "osm_id": 6179746185,
+    "osm_type": "node",
+    "type_amenity": "cafe",
+    "nom": "Thé à l'ouest",
+    "latitude": 48.2363464,
+    "longitude": -4.4973572,
+    "tags": {
+      "addr:housenumber": "96",
+      "addr:street": "Boulevard de la France Libre",
+      "amenity": "cafe",
+      "indoor_seating": "yes",
+      "name": "Thé à l'ouest",
+      "opening_hours": "Tu-Sa 09:30-18:00; Su 09:30-12:30",
+      "outdoor_seating": "no",
+      "smoking": "no"
+    }
+  },
+  {
+    "osm_id": 6289486900,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Epicerie du Bout du Monde",
+    "latitude": 48.2849501,
+    "longitude": -4.5087538,
+    "tags": {
+      "amenity": "restaurant",
+      "cuisine": "french",
+      "level": "0",
+      "name": "Epicerie du Bout du Monde",
+      "opening_hours": "Tu-Su 12:00-13:30; Jul-Aug Tu-Su 12:00-14:00; Jul-Aug Fr-Sa 19:00-21:00",
+      "outdoor_seating": "yes",
+      "toilets": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 6490968985,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2859651,
+    "longitude": -4.5062938,
+    "tags": {
+      "amenity": "toilets",
+      "fee": "no"
+    }
+  },
+  {
+    "osm_id": 6723101597,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2644161,
+    "longitude": -4.4965169,
+    "tags": {
+      "historic": "wayside_cross"
+    }
+  },
+  {
+    "osm_id": 6723101600,
+    "osm_type": "node",
+    "type_amenity": "ruins",
+    "nom": "Ancienne Chapelle Saint-Jean Leïdez",
+    "latitude": 48.2647179,
+    "longitude": -4.4966698,
+    "tags": {
+      "historic": "ruins",
+      "name": "Ancienne Chapelle Saint-Jean Leïdez",
+      "name:br": "Chapel Kozh Sant-Yann",
+      "source:name:br": "proper translation",
+      "url": "https://www.presqu-ile-de-crozon.com/crozon-morgat/cr-chapelle-saint-jean-leidez-001.php"
+    }
+  },
+  {
+    "osm_id": 6738045169,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "Fourn’ile du Kador",
+    "latitude": 48.2247231,
+    "longitude": -4.5041296,
+    "tags": {
+      "brand": "Banette",
+      "brand:wikidata": "Q2882405",
+      "brand:wikipedia": "fr:Banette (entreprise)",
+      "indoor_seating": "yes",
+      "name": "Fourn’ile du Kador",
+      "opening_hours": "Nov-Mar Mo-Su,PH 07:00-13:30,15:30-18:30; Apr-Oct Mo-Su 07:00-19:00; Sep-Jun We off",
+      "outdoor_seating": "yes",
+      "shop": "bakery",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 6738111923,
+    "osm_type": "node",
+    "type_amenity": "cafe",
+    "nom": "Café du port",
+    "latitude": 48.2244848,
+    "longitude": -4.5031547,
+    "tags": {
+      "amenity": "cafe",
+      "indoor_seating": "yes",
+      "name": "Café du port",
+      "outdoor_seating": "yes"
+    }
+  },
+  {
+    "osm_id": 7826071185,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "L'escale gourmande",
+    "latitude": 48.2472033,
+    "longitude": -4.4902555,
+    "tags": {
+      "amenity": "restaurant",
+      "cuisine": "crepe;fish_and_chips;ice_cream;local;pancake;regional;savory_pancakes",
+      "name": "L'escale gourmande"
+    }
+  },
+  {
+    "osm_id": 7839020319,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "La Bolée",
+    "latitude": 48.2259544,
+    "longitude": -4.5043477,
+    "tags": {
+      "addr:city": "Morgat",
+      "addr:housenumber": "48",
+      "addr:postcode": "29160",
+      "addr:street": "Boulevard de la Plage",
+      "amenity": "restaurant",
+      "check_date:opening_hours": "2025-03-15",
+      "cuisine": "crepe",
+      "description": "Crêpes aux farines biologique de Pont-l'Abbé",
+      "diet:vegetarian": "yes",
+      "name": "La Bolée",
+      "opening_hours": "12:00-21:00",
+      "opening_hours:signed": "no",
+      "organic": "yes",
+      "ref:FR:NAF": "56.10A",
+      "ref:FR:SIREN": "907530729",
+      "ref:FR:SIRET": "90753072900025",
+      "source": "INSEE - 2025-07"
+    }
+  },
+  {
+    "osm_id": 8042608817,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.24694,
+    "longitude": -4.5025988,
+    "tags": {
+      "amenity": "toilets",
+      "charge": "0.20 EUR",
+      "fee": "no"
+    }
+  },
+  {
+    "osm_id": 8418579014,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "Alignement de Ty ar C'huré",
+    "latitude": 48.2131199,
+    "longitude": -4.5135878,
+    "tags": {
+      "alt_name": "Kercolleoc'h",
+      "archaeological_site": "megalith",
+      "ele": "75",
+      "heritage": "2",
+      "heritage:operator": "mhs",
+      "historic": "archaeological_site",
+      "historic:civilization": "prehistoric",
+      "historic:era": "neolithic",
+      "historic:period": "stone-age",
+      "megalith_type": "alignment",
+      "mhs:inscription_date": "1862",
+      "name": "Alignement de Ty ar C'huré",
+      "ref:megalithic.co.uk": "8832",
+      "ref:mhs": "PA00089898",
+      "ref:t4t35.fr": "6824"
+    }
+  },
+  {
+    "osm_id": 8448519150,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "Menhir de Crozon",
+    "latitude": 48.2472071,
+    "longitude": -4.5031044,
+    "tags": {
+      "archaeological_site": "megalith",
+      "historic": "archaeological_site",
+      "historic:civilization": "prehistoric",
+      "historic:era": "neolithic",
+      "historic:period": "stone-age",
+      "megalith_type": "menhir",
+      "name": "Menhir de Crozon",
+      "ref:megalithic.co.uk": "44743",
+      "ref:t4t35.fr": "30581"
+    }
+  },
+  {
+    "osm_id": 8458675398,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "Menhir",
+    "latitude": 48.2035996,
+    "longitude": -4.5215101,
+    "tags": {
+      "archaeological_site": "megalith",
+      "historic": "archaeological_site",
+      "historic:civilization": "prehistoric",
+      "historic:era": "neolithic",
+      "historic:period": "stone-age",
+      "megalith_type": "menhir",
+      "name": "Menhir",
+      "ref:t4t35.fr": "30743"
+    }
+  },
+  {
+    "osm_id": 8491362100,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "Menhir de Tromel (B)",
+    "latitude": 48.2275507,
+    "longitude": -4.5378648,
+    "tags": {
+      "archaeological_site": "megalith",
+      "historic": "archaeological_site",
+      "historic:civilization": "prehistoric",
+      "historic:era": "neolithic",
+      "historic:period": "stone-age",
+      "megalith_type": "menhir",
+      "name": "Menhir de Tromel (B)",
+      "ref:t4t35.fr": "30579"
+    }
+  },
+  {
+    "osm_id": 8493501538,
+    "osm_type": "node",
+    "type_amenity": "archaeological_site",
+    "nom": "Alignement de Fort de Landaoudec",
+    "latitude": 48.2694086,
+    "longitude": -4.4833216,
+    "tags": {
+      "archaeological_site": "megalith",
+      "historic": "archaeological_site",
+      "historic:civilization": "prehistoric",
+      "historic:era": "neolithic",
+      "historic:period": "stone-age",
+      "megalith_type": "alignment",
+      "name": "Alignement de Fort de Landaoudec",
+      "name:br": "Steudad Kreñvlec'h Landaoudeg",
+      "ref:megalithic.co.uk": "8825",
+      "ref:t4t35.fr": "6830",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 8736047461,
+    "osm_type": "node",
+    "type_amenity": "castle",
+    "nom": "Manoir de Goandour",
+    "latitude": 48.2556699,
+    "longitude": -4.5058983,
+    "tags": {
+      "castle_type": "manor",
+      "historic": "castle",
+      "name": "Manoir de Goandour",
+      "name:br": "Maner Gwandour",
+      "place": "isolated_dwelling",
+      "source": "DGFiP2010",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 8993430604,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2364472,
+    "longitude": -4.4890722,
+    "tags": {
+      "amenity": "toilets",
+      "fee": "no",
+      "wheelchair": "no"
+    }
+  },
+  {
+    "osm_id": 9104142304,
+    "osm_type": "node",
+    "type_amenity": "attraction",
+    "nom": "Sud-Aviation SA321 Super Frelon",
+    "latitude": 48.2828862,
+    "longitude": -4.4563373,
+    "tags": {
+      "name": "Sud-Aviation SA321 Super Frelon",
+      "tourism": "attraction",
+      "wikipedia": "fr:Sud-Aviation SA321 Super Frelon"
+    }
+  },
+  {
+    "osm_id": 9255787317,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Cantine et canons",
+    "latitude": 48.2247282,
+    "longitude": -4.5046828,
+    "tags": {
+      "amenity": "restaurant",
+      "name": "Cantine et canons"
+    }
+  },
+  {
+    "osm_id": 9332129663,
+    "osm_type": "node",
+    "type_amenity": "memorial",
+    "nom": "",
+    "latitude": 48.2465024,
+    "longitude": -4.4897819,
+    "tags": {
+      "artist_name": "KERVÉVAN Michel sculpteur",
+      "historic": "memorial",
+      "inscription": "Aux Glorieux Enfants de Crozon Morts pour la Patrie - Ô vous qui passez ne nous oubliez jamais",
+      "memorial": "stele",
+      "ref:FR:MemorialGenWeb": "31509",
+      "source": "cadastre-dgi-fr",
+      "war_memorial": "yes",
+      "wikidata": "Q136052351"
+    }
+  },
+  {
+    "osm_id": 9352585036,
+    "osm_type": "node",
+    "type_amenity": "ship",
+    "nom": "",
+    "latitude": 48.2303303,
+    "longitude": -4.5020019,
+    "tags": {
+      "description": "Hélice Porte Hélicoptère Jeanne d'Arc",
+      "historic": "ship"
+    }
+  },
+  {
+    "osm_id": 9352585038,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.2304482,
+    "longitude": -4.5017846,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 9389668711,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "Matéo Lagadic artisant pâtissier - glacier",
+    "latitude": 48.2380663,
+    "longitude": -4.4959446,
+    "tags": {
+      "addr:housenumber": "82",
+      "addr:postcode": "29160",
+      "addr:street": "Boulevard de la France Libre",
+      "check_date": "2025-08-02",
+      "internet_access": "wlan",
+      "internet_access:fee": "customers",
+      "name": "Matéo Lagadic artisant pâtissier - glacier",
+      "opening_hours": "Tu-Sa 06:30-20:00; Su 07:00-19:00; Jun-Aug: Mo 06:30-20:00",
+      "operator": "Matéo Lagadic",
+      "pastry": "yes",
+      "shop": "bakery",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 9553006761,
+    "osm_type": "node",
+    "type_amenity": "supermarket",
+    "nom": "La Vie Claire",
+    "latitude": 48.2382675,
+    "longitude": -4.4961007,
+    "tags": {
+      "brand": "La Vie Claire",
+      "brand:wikidata": "Q3213589",
+      "name": "La Vie Claire",
+      "opening_hours": "Mo 10:00-19:00; Tu-Sa 09:00-19:00; Su 09:00-12:30",
+      "organic": "only",
+      "phone": "+33 2 98 81 06 99",
+      "shop": "supermarket",
+      "website": "https://magasins.lavieclaire.com/lavieclaire/fr/store/france/bretagne/finistere/crozon/crozon/12904"
+    }
+  },
+  {
+    "osm_id": 9680689841,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.2713561,
+    "longitude": -4.4850832,
+    "tags": {
+      "information": "board",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 9806136946,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "La criée",
+    "latitude": 48.2260717,
+    "longitude": -4.5043821,
+    "tags": {
+      "amenity": "restaurant",
+      "check_date": "2024-08-08",
+      "indoor_seating": "yes",
+      "name": "La criée",
+      "outdoor_seating": "no"
+    }
+  },
+  {
+    "osm_id": 10003968118,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2036415,
+    "longitude": -4.5280069,
+    "tags": {
+      "access": "yes",
+      "amenity": "toilets",
+      "fee": "no",
+      "female": "yes",
+      "male": "yes",
+      "toilets:handwashing": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 10033755034,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "La Cale",
+    "latitude": 48.2920989,
+    "longitude": -4.4591594,
+    "tags": {
+      "addr:city": "Lanvéoc",
+      "addr:housenumber": "56",
+      "addr:postcode": "29160",
+      "addr:street": "Rue de la Grève",
+      "amenity": "restaurant",
+      "indoor_seating": "yes",
+      "name": "La Cale",
+      "outdoor_seating": "yes",
+      "phone": "+33 2 98 17 30 84",
+      "ref:FR:NAF": "56.30Z",
+      "ref:FR:SIREN": "815111919",
+      "ref:FR:SIRET": "81511191900016",
+      "source": "INSEE - 2025-07",
+      "website": "www.restaurant-la-cale.fr"
+    }
+  },
+  {
+    "osm_id": 10047396124,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2234695,
+    "longitude": -4.4997732,
+    "tags": {
+      "access": "yes",
+      "amenity": "toilets",
+      "changing_table": "no",
+      "disabled": "yes",
+      "fee": "no",
+      "toilets:disposal": "flush",
+      "unisex": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 10142652417,
+    "osm_type": "node",
+    "type_amenity": "attraction",
+    "nom": "Cimetière de bateaux",
+    "latitude": 48.2919691,
+    "longitude": -4.5220479,
+    "tags": {
+      "addr:street": "Chemin du Trezhig",
+      "name": "Cimetière de bateaux",
+      "tourism": "attraction"
+    }
+  },
+  {
+    "osm_id": 10178278811,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.255912,
+    "longitude": -4.5313684,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10178323480,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2848068,
+    "longitude": -4.5156549,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10178330208,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2225584,
+    "longitude": -4.5232046,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180125466,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2356211,
+    "longitude": -4.5036281,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180125481,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2479239,
+    "longitude": -4.4468624,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180164660,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2487159,
+    "longitude": -4.4585861,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180164881,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2635359,
+    "longitude": -4.5005951,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10180170188,
+    "osm_type": "node",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2832795,
+    "longitude": -4.4703502,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross",
+      "material": "stone",
+      "religion": "christian",
+      "source": "IGN - 2022-06"
+    }
+  },
+  {
+    "osm_id": 10293221620,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2462742,
+    "longitude": -4.4896036,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 10308493788,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.2077511,
+    "longitude": -4.5135092,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 11077755357,
+    "osm_type": "node",
+    "type_amenity": "milestone",
+    "nom": "",
+    "latitude": 48.2866824,
+    "longitude": -4.461337,
+    "tags": {
+      "description": "Panneau Neuhaus - Japy",
+      "est_start_date": "1930",
+      "historic": "milestone",
+      "inscription": "V.O. 2 Poulmic Aviation 4k Finistère",
+      "note": "panneau en tôle"
+    }
+  },
+  {
+    "osm_id": 11584237894,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.2207402,
+    "longitude": -4.4947117,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 12181992977,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "L'atelier du pain",
+    "latitude": 48.2869362,
+    "longitude": -4.4623911,
+    "tags": {
+      "name": "L'atelier du pain",
+      "shop": "bakery"
+    }
+  },
+  {
+    "osm_id": 12478508989,
+    "osm_type": "node",
+    "type_amenity": "memorial",
+    "nom": "Plaque commémorative \"Tante Yvonne\"",
+    "latitude": 48.2355782,
+    "longitude": -4.5035906,
+    "tags": {
+      "historic": "memorial",
+      "memorial": "plaque",
+      "memorial:conflict": "WW2",
+      "name": "Plaque commémorative \"Tante Yvonne\"",
+      "ref:FR:MemorialGenWeb": "114788",
+      "war_memorial": "yes"
+    }
+  },
+  {
+    "osm_id": 12590251713,
+    "osm_type": "node",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2487868,
+    "longitude": -4.4890205,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 12612597705,
+    "osm_type": "node",
+    "type_amenity": "viewpoint",
+    "nom": "",
+    "latitude": 48.2369202,
+    "longitude": -4.4786209,
+    "tags": {
+      "tourism": "viewpoint"
+    }
+  },
+  {
+    "osm_id": 12666735543,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Crozon - Kraozon",
+    "latitude": 48.2255233,
+    "longitude": -4.504076,
+    "tags": {
+      "board_type": "history",
+      "information": "board",
+      "name": "Crozon - Kraozon",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12666741208,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.2254732,
+    "longitude": -4.5040638,
+    "tags": {
+      "board_type": "notice",
+      "information": "board",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12666771714,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Grottes marines de la presq'île de Crozon",
+    "latitude": 48.2245291,
+    "longitude": -4.4996713,
+    "tags": {
+      "board_type": "geology",
+      "information": "board",
+      "name": "Grottes marines de la presq'île de Crozon",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12666786020,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Morgat au rythme de la pêche",
+    "latitude": 48.2244175,
+    "longitude": -4.5025752,
+    "tags": {
+      "board_type": "history",
+      "information": "board",
+      "name": "Morgat au rythme de la pêche",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12666834767,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.2334982,
+    "longitude": -4.4985276,
+    "tags": {
+      "information": "map",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12666895770,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Site de l'Île Vierge",
+    "latitude": 48.2038269,
+    "longitude": -4.5273497,
+    "tags": {
+      "board_type": "notice",
+      "information": "board",
+      "name": "Site de l'Île Vierge",
+      "operator": "Conservatoire du Littoral",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12667014663,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "Office de tourisme",
+    "latitude": 48.2334743,
+    "longitude": -4.4985713,
+    "tags": {
+      "addr:city": "Crozon",
+      "addr:postcode": "29160",
+      "addr:street": "Boulevard de la France Libre",
+      "check_date": "2025-04-13",
+      "information": "office",
+      "name": "Office de tourisme",
+      "opening_hours": "Jun Su-Th 09:30-12:30,14:00-18:00; Jul-Aug Mo-Sa 09:00-12:30,14:30-19:00; Jul-Aug Su 14:30-18:30; Sep Su-Th 09:30-12:30,14:00-18:00",
+      "tourism": "information",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 12667016427,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.2334363,
+    "longitude": -4.4985846,
+    "tags": {
+      "information": "map",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12667681739,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.23356,
+    "longitude": -4.4979436,
+    "tags": {
+      "access": "yes",
+      "amenity": "toilets",
+      "fee": "no",
+      "female": "yes",
+      "male": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 12669549510,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.2223964,
+    "longitude": -4.4955122,
+    "tags": {
+      "board_type": "notice",
+      "information": "board",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12670178092,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.2038646,
+    "longitude": -4.5281654,
+    "tags": {
+      "information": "yes",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12670255165,
+    "osm_type": "node",
+    "type_amenity": "restaurant",
+    "nom": "Racines",
+    "latitude": 48.2382764,
+    "longitude": -4.4965035,
+    "tags": {
+      "addr:housenumber": "83",
+      "addr:street": "Boulevard de la France Libre",
+      "amenity": "restaurant",
+      "name": "Racines",
+      "ref:FR:NAF": "56.10A",
+      "ref:FR:SIREN": "912266350",
+      "ref:FR:SIRET": "91226635000012",
+      "source": "INSEE - 2025-08"
+    }
+  },
+  {
+    "osm_id": 12777036136,
+    "osm_type": "node",
+    "type_amenity": "information",
+    "nom": "",
+    "latitude": 48.2477213,
+    "longitude": -4.493163,
+    "tags": {
+      "information": "map",
+      "tourism": "information"
+    }
+  },
+  {
+    "osm_id": 12777040407,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2478736,
+    "longitude": -4.4926431,
+    "tags": {
+      "access": "yes",
+      "amenity": "toilets",
+      "unisex": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 12777060297,
+    "osm_type": "node",
+    "type_amenity": "bakery",
+    "nom": "Boulangerie Pâtisserie Yhuel",
+    "latitude": 48.2477993,
+    "longitude": -4.4912651,
+    "tags": {
+      "addr:city": "Crozon",
+      "addr:postcode": "29160",
+      "addr:street": "Rue de la Gare",
+      "name": "Boulangerie Pâtisserie Yhuel",
+      "shop": "bakery"
+    }
+  },
+  {
+    "osm_id": 12851738299,
+    "osm_type": "node",
+    "type_amenity": "convenience",
+    "nom": "Conserverie la Belle-Iloise",
+    "latitude": 48.2253616,
+    "longitude": -4.504719,
+    "tags": {
+      "name": "Conserverie la Belle-Iloise",
+      "shop": "convenience"
+    }
+  },
+  {
+    "osm_id": 12990283436,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2366025,
+    "longitude": -4.5173365,
+    "tags": {
+      "access": "private",
+      "amenity": "toilets"
+    }
+  },
+  {
+    "osm_id": 12990283511,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2377457,
+    "longitude": -4.5179286,
+    "tags": {
+      "amenity": "toilets"
+    }
+  },
+  {
+    "osm_id": 12999452358,
+    "osm_type": "node",
+    "type_amenity": "convenience",
+    "nom": "U Express",
+    "latitude": 48.2259516,
+    "longitude": -4.5061084,
+    "tags": {
+      "brand": "U Express",
+      "brand:wikidata": "Q2529029",
+      "name": "U Express",
+      "opening_hours": "Mo-Sa 08:00-20:00; Su 08:30-13:30",
+      "shop": "convenience",
+      "supermarket": "yes",
+      "supermarket:FR": "supermarché",
+      "website": "https://www.magasins-u.com/magasin/uexpress-crozon.m38226"
+    }
+  },
+  {
+    "osm_id": 13077634001,
+    "osm_type": "node",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2351792,
+    "longitude": -4.4462804,
+    "tags": {
+      "amenity": "toilets",
+      "toilets:disposal": "dry_toilet"
+    }
+  },
+  {
+    "osm_id": 25590397,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Traezh Morgad",
+    "latitude": 48.2292232,
+    "longitude": -4.5012121,
+    "tags": {
+      "name": "Traezh Morgad",
+      "name:br": "Traezh Morgad",
+      "name:fr": "Plage de Morgat",
+      "natural": "beach",
+      "source:name:br": "ofis publik ar brezhoneg"
+    }
+  },
+  {
+    "osm_id": 36819224,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Batterie du Kador",
+    "latitude": 48.2199478,
+    "longitude": -4.4962074,
+    "tags": {
+      "historic": "fort",
+      "name": "Batterie du Kador"
+    }
+  },
+  {
+    "osm_id": 39230310,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Camping les Pins",
+    "latitude": 48.2366613,
+    "longitude": -4.5181824,
+    "tags": {
+      "addr:street": "Route de Dinan",
+      "caravans": "yes",
+      "drinking_water": "yes",
+      "internet_access": "wlan",
+      "name": "Camping les Pins",
+      "phone": "+33298166096",
+      "picnic_table": "yes",
+      "playground": "yes",
+      "power_supply": "yes",
+      "sanitary_dump_station": "yes",
+      "shower": "yes",
+      "stars": "3",
+      "swimming_pool": "yes",
+      "tents": "yes",
+      "toilets": "yes",
+      "tourism": "camp_site",
+      "website": "https://www.camping-crozon-lespins.com/"
+    }
+  },
+  {
+    "osm_id": 53978799,
+    "osm_type": "way",
+    "type_amenity": "restaurant",
+    "nom": "Le Moulin du Chat",
+    "latitude": 48.2849488,
+    "longitude": -4.5097546,
+    "tags": {
+      "amenity": "restaurant",
+      "building": "yes",
+      "cuisine": "crepe",
+      "name": "Le Moulin du Chat"
+    }
+  },
+  {
+    "osm_id": 53978937,
+    "osm_type": "way",
+    "type_amenity": "building",
+    "nom": "Maison Tertu",
+    "latitude": 48.2867346,
+    "longitude": -4.5078299,
+    "tags": {
+      "building": "yes",
+      "historic": "building",
+      "name": "Maison Tertu",
+      "name:br": "Ti Tertu",
+      "ref:mhs": "IA29004092",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 53978995,
+    "osm_type": "way",
+    "type_amenity": "building",
+    "nom": "",
+    "latitude": 48.286208,
+    "longitude": -4.5067712,
+    "tags": {
+      "building": "yes",
+      "description": "Ancienne auberge, Tour du Fret",
+      "historic": "building",
+      "ref:mhs": "IA29004086"
+    }
+  },
+  {
+    "osm_id": 53978996,
+    "osm_type": "way",
+    "type_amenity": "tower",
+    "nom": "Tour du Fret",
+    "latitude": 48.2861336,
+    "longitude": -4.5068542,
+    "tags": {
+      "building": "yes",
+      "historic": "tower",
+      "man_made": "tower",
+      "name": "Tour du Fret",
+      "ref:mhs": "IA29004086",
+      "start_date": "1882",
+      "tower:type": "defensive"
+    }
+  },
+  {
+    "osm_id": 53979122,
+    "osm_type": "way",
+    "type_amenity": "building",
+    "nom": "Villa Le Joncour",
+    "latitude": 48.2896008,
+    "longitude": -4.5118396,
+    "tags": {
+      "building": "yes",
+      "historic": "building",
+      "name": "Villa Le Joncour",
+      "ref:mhs": "IA29004093"
+    }
+  },
+  {
+    "osm_id": 53979748,
+    "osm_type": "way",
+    "type_amenity": "information",
+    "nom": "Office de Tourisme",
+    "latitude": 48.2478076,
+    "longitude": -4.4929689,
+    "tags": {
+      "addr:city": "Crozon",
+      "addr:postcode": "29160",
+      "addr:street": "Boulevard de Pralognan",
+      "building": "train_station",
+      "information": "office",
+      "internet_access": "wlan",
+      "name": "Office de Tourisme",
+      "name:br": "Ti an Douristed",
+      "source": "DGFiP2010",
+      "source:name:br": "proper translation",
+      "tourism": "information",
+      "website": "https://www.crozon-tourisme.bzh/"
+    }
+  },
+  {
+    "osm_id": 53982512,
+    "osm_type": "way",
+    "type_amenity": "supermarket",
+    "nom": "Centre Commercial E.Leclerc",
+    "latitude": 48.2519846,
+    "longitude": -4.4730692,
+    "tags": {
+      "brand": "Centre Commercial E.Leclerc",
+      "brand:wikidata": "Q1273376",
+      "brand:wikipedia": "fr:E.Leclerc",
+      "building": "retail",
+      "name": "Centre Commercial E.Leclerc",
+      "name:br": "Kreizenn-genwerzh E. Leclerc",
+      "opening_hours": "Mo-Mi 08:30-19:30,Do 08:30-20:00, Fr-Sa 08:30-19:30",
+      "operator": "E. Leclerc",
+      "shop": "supermarket",
+      "source": "cadastre-dgi-fr source : PaysDeBrest - 20100331",
+      "source:name:br": "proper translation",
+      "toilets:wheelchair": "yes",
+      "website": "https://www.e.leclerc/mag/e-leclerc-crozon",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 53982523,
+    "osm_type": "way",
+    "type_amenity": "fuel",
+    "nom": "Station Service E. Leclerc",
+    "latitude": 48.2507025,
+    "longitude": -4.4725271,
+    "tags": {
+      "amenity": "fuel",
+      "brand": "E.Leclerc",
+      "brand:wikidata": "Q1273376",
+      "brand:wikipedia": "fr:E.Leclerc",
+      "building": "yes",
+      "compressed_air": "yes",
+      "fuel:diesel": "yes",
+      "fuel:e10": "yes",
+      "fuel:e85": "yes",
+      "fuel:octane_95": "yes",
+      "hgv:lanes": "yes",
+      "name": "Station Service E. Leclerc",
+      "name:br": "Porzh-servij E. Leclerc",
+      "opening_hours": "24/7",
+      "operator": "E. Leclerc",
+      "ref:FR:prix-carburants": "29160003",
+      "shop": "gas",
+      "source": "cadastre-dgi-fr source : PaysDeBrest - 20100331",
+      "source:name:br": "proper translation",
+      "toilets": "yes",
+      "vending": "fuel",
+      "vending_machine": "fuel",
+      "wall": "no"
+    }
+  },
+  {
+    "osm_id": 53985770,
+    "osm_type": "way",
+    "type_amenity": "manor",
+    "nom": "Manoir de Trébéron",
+    "latitude": 48.2405252,
+    "longitude": -4.4468378,
+    "tags": {
+      "building": "yes",
+      "historic": "manor",
+      "name": "Manoir de Trébéron",
+      "source": "cadastre-dgi-fr source : PaysDeBrest - 20100331"
+    }
+  },
+  {
+    "osm_id": 53985795,
+    "osm_type": "way",
+    "type_amenity": "toilets",
+    "nom": "",
+    "latitude": 48.2387619,
+    "longitude": -4.4619946,
+    "tags": {
+      "amenity": "toilets",
+      "building": "yes",
+      "source": "cadastre-dgi-fr source : PaysDeBrest - 20100331"
+    }
+  },
+  {
+    "osm_id": 53986718,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Corps de Garde n°3",
+    "latitude": 48.2348833,
+    "longitude": -4.4961613,
+    "tags": {
+      "building": "yes",
+      "historic": "fort",
+      "name": "Corps de Garde n°3",
+      "source": "DGFiP2010"
+    }
+  },
+  {
+    "osm_id": 53987972,
+    "osm_type": "way",
+    "type_amenity": "supermarket",
+    "nom": "ALDI",
+    "latitude": 48.2469805,
+    "longitude": -4.4958704,
+    "tags": {
+      "brand": "ALDI",
+      "brand:wikidata": "Q41171373",
+      "building": "retail",
+      "name": "ALDI",
+      "shop": "supermarket",
+      "source": "DGFiP2010",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 53988537,
+    "osm_type": "way",
+    "type_amenity": "house",
+    "nom": "Villa Ker Ar Bruck",
+    "latitude": 48.2324512,
+    "longitude": -4.4998393,
+    "tags": {
+      "building": "yes",
+      "heritage": "2",
+      "heritage:operator": "mhs",
+      "historic": "house",
+      "mhs:inscription_date": "2004-01-26",
+      "name": "Villa Ker Ar Bruck",
+      "ref:mhs": "PA29000041",
+      "source": "DGFiP2010",
+      "source:heritage": "data.gouv.fr, Ministère de la Culture - 2016",
+      "start_date": "C19",
+      "wikidata": "Q22996341",
+      "wikipedia": "fr:Villa Ker ar Bruck"
+    }
+  },
+  {
+    "osm_id": 53989566,
+    "osm_type": "way",
+    "type_amenity": "pharmacy",
+    "nom": "Pharmacie du Kador",
+    "latitude": 48.2254119,
+    "longitude": -4.5063629,
+    "tags": {
+      "amenity": "pharmacy",
+      "building": "yes",
+      "dispensing": "yes",
+      "healthcare": "pharmacy",
+      "name": "Pharmacie du Kador",
+      "name:br": "Apotikerezh ar Gador",
+      "ref:FR:FINESS": "290011667",
+      "source": "cadastre-dgi-fr source : Direction Générale des Finances Publiques - Cadastre. Mise à jour : 2017",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 53990322,
+    "osm_type": "way",
+    "type_amenity": "yes",
+    "nom": "Phare du Kador",
+    "latitude": 48.2195726,
+    "longitude": -4.4968181,
+    "tags": {
+      "building": "yes",
+      "man_made": "lighthouse",
+      "name": "Phare du Kador",
+      "name:br": "Tour-tan ar Gador",
+      "source": "cadastre-dgi-fr source : PaysDeBrest - 20100331",
+      "source:name:br": "proper translation",
+      "wikidata": "Q3378315"
+    }
+  },
+  {
+    "osm_id": 53994373,
+    "osm_type": "way",
+    "type_amenity": "pharmacy",
+    "nom": "Pharmacie Le Roux",
+    "latitude": 48.2834225,
+    "longitude": -4.4709224,
+    "tags": {
+      "amenity": "pharmacy",
+      "building": "yes",
+      "dispensing": "yes",
+      "healthcare": "pharmacy",
+      "name": "Pharmacie Le Roux",
+      "ref:FR:FINESS": "290014398",
+      "source": "Celtipharm - 10/2014"
+    }
+  },
+  {
+    "osm_id": 53994731,
+    "osm_type": "way",
+    "type_amenity": "restaurant",
+    "nom": "Restaurant de la Cale",
+    "latitude": 48.2920817,
+    "longitude": -4.4591136,
+    "tags": {
+      "amenity": "restaurant",
+      "building": "yes",
+      "cuisine": "french",
+      "indoor_seating": "yes",
+      "name": "Restaurant de la Cale",
+      "outdoor_seating": "yes"
+    }
+  },
+  {
+    "osm_id": 53995999,
+    "osm_type": "way",
+    "type_amenity": "cafe",
+    "nom": "Café des voyageurs",
+    "latitude": 48.2863347,
+    "longitude": -4.4611697,
+    "tags": {
+      "addr:city": "Lanvéoc",
+      "addr:housenumber": "7",
+      "addr:postcode": "29160",
+      "addr:street": "Rue du Tal-ar-Groas",
+      "amenity": "cafe",
+      "building": "yes",
+      "name": "Café des voyageurs"
+    }
+  },
+  {
+    "osm_id": 115155032,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2450521,
+    "longitude": -4.4892686,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 123210300,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Camping de Gwel Kaer",
+    "latitude": 48.2811848,
+    "longitude": -4.5015753,
+    "tags": {
+      "addr:street": "Port du Fret",
+      "capacity": "100",
+      "caravans": "yes",
+      "dog": "yes",
+      "drinking_water": "yes",
+      "name": "Camping de Gwel Kaer",
+      "name:br": "Tachenn-gampiñ Gwel Kaer",
+      "phone": "+33 2 98 27 61 06",
+      "shower": "yes",
+      "source:name:br": "proper translation",
+      "stars": "2",
+      "tents": "yes",
+      "toilets": "yes",
+      "tourism": "camp_site",
+      "website": "https://www.camping-crozon-bretagne.com/"
+    }
+  },
+  {
+    "osm_id": 123385637,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2864941,
+    "longitude": -4.505871,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 123393165,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Camping de la Presqu'île",
+    "latitude": 48.2492203,
+    "longitude": -4.4990952,
+    "tags": {
+      "addr:street": "Boulevard de Pralognan",
+      "caravans": "yes",
+      "email": "contact@camping-pen-ar-menez.fr",
+      "name": "Camping de la Presqu'île",
+      "name:br": "Tachenn-gampiñ ar C'hourenez",
+      "phone": "+33 2 98 27 12 36",
+      "source:name:br": "proper translation",
+      "stars": "2",
+      "swimming_pool": "yes",
+      "tents": "yes",
+      "tourism": "camp_site",
+      "washing_machine": "yes",
+      "website": "https://www.camping-presquile-de-crozon.fr/"
+    }
+  },
+  {
+    "osm_id": 123398469,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2252988,
+    "longitude": -4.5071366,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "ref": "P4"
+    }
+  },
+  {
+    "osm_id": 123399313,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Camping les Bruyères",
+    "latitude": 48.2217311,
+    "longitude": -4.5217902,
+    "tags": {
+      "addr:street": "Le Bouis",
+      "caravans": "yes",
+      "name": "Camping les Bruyères",
+      "phone": "+33603651923",
+      "stars": "3",
+      "swimming_pool": "yes",
+      "tents": "yes",
+      "tourism": "camp_site",
+      "website": "https://www.camping-bruyeres-crozon.com/"
+    }
+  },
+  {
+    "osm_id": 123757511,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.293336,
+    "longitude": -4.5179506,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 126248337,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage du Portzic",
+    "latitude": 48.2356733,
+    "longitude": -4.4898592,
+    "tags": {
+      "name": "Plage du Portzic",
+      "name:br": "Traezh ar Porzhig",
+      "natural": "beach",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 130206988,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2922874,
+    "longitude": -4.5260211,
+    "tags": {
+      "natural": "beach",
+      "source": "Survey; Bing Sat"
+    }
+  },
+  {
+    "osm_id": 131787506,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Les pieds dans l'eau",
+    "latitude": 48.2855511,
+    "longitude": -4.5289504,
+    "tags": {
+      "caravans": "yes",
+      "name": "Les pieds dans l'eau",
+      "phone": "+33 6 20 32 71 38",
+      "stars:-201707": "4",
+      "tents": "yes",
+      "tourism": "camp_site",
+      "website": "https://www.campingcrozon.com/"
+    }
+  },
+  {
+    "osm_id": 131790026,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Camping Cap-Ouest",
+    "latitude": 48.2928117,
+    "longitude": -4.4599183,
+    "tags": {
+      "addr:city": "Lanvéoc",
+      "addr:housenumber": "57",
+      "addr:postcode": "29160",
+      "addr:street": "Rue de la Grève",
+      "caravans": "yes",
+      "name": "Camping Cap-Ouest",
+      "phone": "+33 2 98 23 64 21",
+      "stars": "2",
+      "tents": "yes",
+      "tourism": "camp_site",
+      "website": "https://www.camping-cap-ouest.com"
+    }
+  },
+  {
+    "osm_id": 151239730,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.25016,
+    "longitude": -4.5027038,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 151239731,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2479748,
+    "longitude": -4.491912,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 177688814,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.296132,
+    "longitude": -4.5160379,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 178599983,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Place de la Mairie",
+    "latitude": 48.2861372,
+    "longitude": -4.461605,
+    "tags": {
+      "amenity": "parking",
+      "name": "Place de la Mairie",
+      "name:br": "Plasenn an Ti-Kêr",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 179917320,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2910997,
+    "longitude": -4.461397,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface",
+      "surface": "grass"
+    }
+  },
+  {
+    "osm_id": 180633468,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage de l'Aber",
+    "latitude": 48.2330544,
+    "longitude": -4.4423246,
+    "tags": {
+      "name": "Plage de l'Aber",
+      "name:br": "Traezh an Aber (Ar Soudennoù)",
+      "name:fr": "Plage de l'Aber",
+      "natural": "beach",
+      "source:name:br": "ofis publik ar brezhoneg",
+      "surface": "sand",
+      "tidal": "yes"
+    }
+  },
+  {
+    "osm_id": 180633470,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "Plage de Postolonnec",
+    "latitude": 48.2385394,
+    "longitude": -4.4651521,
+    "tags": {
+      "name": "Plage de Postolonnec",
+      "name:br": "Traezh Porzh al Leoneg",
+      "natural": "beach",
+      "source:name:br": "ofis publik ar brezhoneg"
+    }
+  },
+  {
+    "osm_id": 180764224,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2457112,
+    "longitude": -4.4929632,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764226,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2483431,
+    "longitude": -4.4888233,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "no",
+      "operator": "Lidl",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 180764227,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2483172,
+    "longitude": -4.4914867,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764229,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2477295,
+    "longitude": -4.4884947,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764235,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2449378,
+    "longitude": -4.4940174,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764245,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2473777,
+    "longitude": -4.4887468,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764246,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2470222,
+    "longitude": -4.4995065,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764247,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.247517,
+    "longitude": -4.4983532,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 180764249,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2488405,
+    "longitude": -4.4865394,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764251,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2471044,
+    "longitude": -4.496202,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764254,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2470383,
+    "longitude": -4.4982432,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 180764268,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2480171,
+    "longitude": -4.4881259,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 180764269,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2471178,
+    "longitude": -4.4892229,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 182135522,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Fort de Lanveoc",
+    "latitude": 48.2929944,
+    "longitude": -4.4620771,
+    "tags": {
+      "barrier": "wall",
+      "historic": "fort",
+      "landuse": "military",
+      "name": "Fort de Lanveoc",
+      "name:br": "Kreñvlec'h Lañveog",
+      "source:name:br": "ofis publik ar brezhoneg"
+    }
+  },
+  {
+    "osm_id": 220025850,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2945311,
+    "longitude": -4.5187281,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 233164286,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2839963,
+    "longitude": -4.5360869,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface",
+      "source": "Bing 2012"
+    }
+  },
+  {
+    "osm_id": 233164289,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2847766,
+    "longitude": -4.5369727,
+    "tags": {
+      "natural": "beach",
+      "source": "survey;Bing 2012"
+    }
+  },
+  {
+    "osm_id": 233165644,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2909245,
+    "longitude": -4.5152585,
+    "tags": {
+      "natural": "beach",
+      "source": "survey;Bing 2012"
+    }
+  },
+  {
+    "osm_id": 233166630,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2853103,
+    "longitude": -4.5079321,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "source": "survey;Bing 2012"
+    }
+  },
+  {
+    "osm_id": 246375143,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2834048,
+    "longitude": -4.4700274,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 253774398,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Fort de Crozon",
+    "latitude": 48.2496828,
+    "longitude": -4.5028793,
+    "tags": {
+      "description": "ceinture de forts année 1883-1886 , fort , caserne , batterie , corps de garde",
+      "historic": "fort",
+      "name": "Fort de Crozon",
+      "name:br": "Kreñvlec'h Kraozon",
+      "ref:mhs": "IA29001546",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 253775091,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Réduit de Landaoudec",
+    "latitude": 48.2710195,
+    "longitude": -4.4843047,
+    "tags": {
+      "barrier": "retaining_wall",
+      "historic": "fort",
+      "name": "Réduit de Landaoudec",
+      "name:br": "Kreñvlec'h Landaoudeg",
+      "source:name:br": "ofis publik ar brezhoneg"
+    }
+  },
+  {
+    "osm_id": 253807286,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Tour Modèle du Kador",
+    "latitude": 48.2212766,
+    "longitude": -4.4951447,
+    "tags": {
+      "building": "yes",
+      "historic": "fort",
+      "name": "Tour Modèle du Kador"
+    }
+  },
+  {
+    "osm_id": 253807287,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Batterie Basse du Kador",
+    "latitude": 48.2207257,
+    "longitude": -4.4949401,
+    "tags": {
+      "historic": "fort",
+      "name": "Batterie Basse du Kador"
+    }
+  },
+  {
+    "osm_id": 253860074,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Batterie de Postollonec",
+    "latitude": 48.2382413,
+    "longitude": -4.4711472,
+    "tags": {
+      "historic": "fort",
+      "name": "Batterie de Postollonec",
+      "name:br": "Strollad-kanolioù Porzh al Leoneg",
+      "source:name:br": "proper translation"
+    }
+  },
+  {
+    "osm_id": 253861138,
+    "osm_type": "way",
+    "type_amenity": "fort",
+    "nom": "Ancienne batterie de Rulianec",
+    "latitude": 48.23476,
+    "longitude": -4.495866,
+    "tags": {
+      "historic": "fort",
+      "name": "Ancienne batterie de Rulianec"
+    }
+  },
+  {
+    "osm_id": 254688998,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2930152,
+    "longitude": -4.4577878,
+    "tags": {
+      "natural": "beach"
+    }
+  },
+  {
+    "osm_id": 279747687,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2334913,
+    "longitude": -4.4990965,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "capacity": "33",
+      "fee": "no",
+      "parking": "surface",
+      "ref": "P1",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 279747688,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2342353,
+    "longitude": -4.4986385,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "street_side",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 286346795,
+    "osm_type": "way",
+    "type_amenity": "wayside_cross",
+    "nom": "",
+    "latitude": 48.2575373,
+    "longitude": -4.4579612,
+    "tags": {
+      "denomination": "catholic",
+      "historic": "wayside_cross"
+    }
+  },
+  {
+    "osm_id": 296732664,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2917133,
+    "longitude": -4.4568853,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no"
+    }
+  },
+  {
+    "osm_id": 303504880,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2011736,
+    "longitude": -4.5141467,
+    "tags": {
+      "natural": "beach",
+      "source": "survey"
+    }
+  },
+  {
+    "osm_id": 303518794,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2163068,
+    "longitude": -4.502624,
+    "tags": {
+      "natural": "beach",
+      "source": "BDOrtho IGN"
+    }
+  },
+  {
+    "osm_id": 324867753,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2258071,
+    "longitude": -4.5071612,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 324867754,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2257821,
+    "longitude": -4.5062754,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "yes",
+      "operator": "Corsaire",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 324867755,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2257982,
+    "longitude": -4.5058751,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 326915101,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2361738,
+    "longitude": -4.4818648,
+    "tags": {
+      "natural": "beach",
+      "source": "Mapbox"
+    }
+  },
+  {
+    "osm_id": 361779281,
+    "osm_type": "way",
+    "type_amenity": "bakery",
+    "nom": "Marie Blachère",
+    "latitude": 48.2504063,
+    "longitude": -4.471727,
+    "tags": {
+      "brand": "Marie Blachère",
+      "brand:wikidata": "Q62082410",
+      "building": "yes",
+      "name": "Marie Blachère",
+      "shop": "bakery"
+    }
+  },
+  {
+    "osm_id": 481422755,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2253652,
+    "longitude": -4.5066824,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "capacity": "5",
+      "capacity:disabled": "2",
+      "capacity:parent": "no",
+      "capacity:women": "no",
+      "fee": "no",
+      "park_ride": "no",
+      "parking": "surface",
+      "supervised": "no",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 481422757,
+    "osm_type": "way",
+    "type_amenity": "caravan_site",
+    "nom": "Aire Crozon - Morgat",
+    "latitude": 48.2252403,
+    "longitude": -4.5083054,
+    "tags": {
+      "bbq": "no",
+      "capacity": "20",
+      "caravan_site": "motorhome_stopover",
+      "caravan_site:type": "village",
+      "caravans": "no",
+      "charge": "15.34 EUR",
+      "dog": "leashed",
+      "fee": "yes",
+      "internet_access": "wlan",
+      "internet_access:fee": "no",
+      "maxlength": "9",
+      "name": "Aire Crozon - Morgat",
+      "network": "CAMPING-CAR PARK",
+      "opening_hours": "24/7",
+      "operator": "CampingCarPark.com",
+      "power_supply": "yes",
+      "power_supply:capacity": "20",
+      "power_supply:fee": "no",
+      "power_supply:maxcurrent": "6",
+      "sanitary_dump_station": "yes",
+      "seasonal": "no",
+      "surface": "asphalt",
+      "tents": "no",
+      "toilets": "yes",
+      "tourism": "caravan_site",
+      "trailer": "no",
+      "water_point": "yes",
+      "water_point:fee": "no",
+      "water_supply": "yes",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 481422765,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2240128,
+    "longitude": -4.4994914,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "check_date": "2022-09-22",
+      "fee": "yes",
+      "lit": "yes",
+      "park_ride": "no",
+      "parking": "surface",
+      "supervised": "no"
+    }
+  },
+  {
+    "osm_id": 498370998,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2234808,
+    "longitude": -4.5187477,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 498371140,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2230171,
+    "longitude": -4.5207658,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 498371146,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2244435,
+    "longitude": -4.5186459,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 505899365,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2836931,
+    "longitude": -4.4640384,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 520578942,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2396019,
+    "longitude": -4.4647087,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 520579031,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2396277,
+    "longitude": -4.4641823,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 520579636,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2394219,
+    "longitude": -4.4638529,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 543606801,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2685407,
+    "longitude": -4.5118167,
+    "tags": {
+      "amenity": "parking",
+      "capacity:disabled": "1"
+    }
+  },
+  {
+    "osm_id": 633972106,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2904473,
+    "longitude": -4.453374,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 633973640,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2915858,
+    "longitude": -4.4457756,
+    "tags": {
+      "natural": "beach",
+      "surface": "pebblestone"
+    }
+  },
+  {
+    "osm_id": 633985990,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2923605,
+    "longitude": -4.4590112,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 633985991,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2924942,
+    "longitude": -4.4591322,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 662428448,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2496245,
+    "longitude": -4.4720518,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 662428451,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2504919,
+    "longitude": -4.4715567,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 668312494,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2252359,
+    "longitude": -4.5060099,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "fixme": "access?",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 668312498,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2249208,
+    "longitude": -4.5060733,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "yes",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 730185071,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2475617,
+    "longitude": -4.4955073,
+    "tags": {
+      "access": "permissive",
+      "amenity": "parking",
+      "capacity": "7",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 730185072,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2475994,
+    "longitude": -4.4951463,
+    "tags": {
+      "access": "permissive",
+      "amenity": "parking",
+      "capacity": "6",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 772750322,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.238794,
+    "longitude": -4.4621628,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 779082605,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2683433,
+    "longitude": -4.5087129,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "capacity:disabled": "1",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 779082660,
+    "osm_type": "way",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.286765,
+    "longitude": -4.5071824,
+    "tags": {
+      "natural": "beach"
+    }
+  },
+  {
+    "osm_id": 780953114,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2365694,
+    "longitude": -4.4886799,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 781603592,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2459571,
+    "longitude": -4.4873558,
+    "tags": {
+      "amenity": "parking",
+      "capacity": "32"
+    }
+  },
+  {
+    "osm_id": 781603603,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "P2",
+    "latitude": 48.2277677,
+    "longitude": -4.5053169,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "name": "P2",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 781603622,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2458124,
+    "longitude": -4.4954185,
+    "tags": {
+      "amenity": "parking",
+      "capacity:disabled": "2"
+    }
+  },
+  {
+    "osm_id": 783301105,
+    "osm_type": "way",
+    "type_amenity": "attraction",
+    "nom": "Labyrinthe",
+    "latitude": 48.2345186,
+    "longitude": -4.5190971,
+    "tags": {
+      "attraction": "maze",
+      "name": "Labyrinthe",
+      "tourism": "attraction"
+    }
+  },
+  {
+    "osm_id": 785468172,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2871547,
+    "longitude": -4.4643431,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 785468230,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2879703,
+    "longitude": -4.4645691,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 847557600,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2230175,
+    "longitude": -4.4965088,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 847557601,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2226914,
+    "longitude": -4.4954621,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 848380768,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2049463,
+    "longitude": -4.5272835,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "capacity": "50",
+      "fee": "no",
+      "operator": "commune de Crozon",
+      "operator:type": "public",
+      "parking": "surface",
+      "surface": "compacted"
+    }
+  },
+  {
+    "osm_id": 848380769,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2041859,
+    "longitude": -4.5276181,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 851781623,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2279242,
+    "longitude": -4.5081933,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 953166577,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2509658,
+    "longitude": -4.4708397,
+    "tags": {
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 984742393,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2772579,
+    "longitude": -4.4430811,
+    "tags": {
+      "access": "private",
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 984885802,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2962432,
+    "longitude": -4.5136828,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 984918717,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "bus",
+    "latitude": 48.2938453,
+    "longitude": -4.5240821,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "name": "bus"
+    }
+  },
+  {
+    "osm_id": 1005629566,
+    "osm_type": "way",
+    "type_amenity": "supermarket",
+    "nom": "Lidl",
+    "latitude": 48.2502032,
+    "longitude": -4.4702002,
+    "tags": {
+      "brand": "Lidl",
+      "brand:wikidata": "Q151954",
+      "building": "retail",
+      "name": "Lidl",
+      "opening_hours": "Mo-Sa 08:30-20:00,08:30-12:15",
+      "operator": "Lidl",
+      "shop": "supermarket"
+    }
+  },
+  {
+    "osm_id": 1011096074,
+    "osm_type": "way",
+    "type_amenity": "caravan_site",
+    "nom": "Aire Crozon - Poulpatré",
+    "latitude": 48.247628,
+    "longitude": -4.4796641,
+    "tags": {
+      "bbq": "no",
+      "caravan_site": "motorhome_stopover",
+      "caravan_site:type": "village",
+      "caravans": "no",
+      "charge": "15.34 EUR",
+      "dog": "leashed",
+      "fee": "yes",
+      "internet_access": "wlan",
+      "internet_access:fee": "no",
+      "maxlength": "9",
+      "name": "Aire Crozon - Poulpatré",
+      "network": "CAMPING-CAR PARK",
+      "opening_hours": "24/7",
+      "operator": "CAMPING-CAR PARK",
+      "power_supply": "yes",
+      "power_supply:capacity": "22",
+      "power_supply:fee": "no",
+      "power_supply:maxcurrent": "6",
+      "sanitary_dump_station": "yes",
+      "seasonal": "no",
+      "tents": "no",
+      "tourism": "caravan_site",
+      "trailer": "no",
+      "water_point": "yes",
+      "water_point:fee": "no",
+      "website": "https://www.campingcarpark.com/fr_FR/sejour/aire-etape-camping-car/bretagne/29-finistere/crozon-poulpatre"
+    }
+  },
+  {
+    "osm_id": 1017989622,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2384232,
+    "longitude": -4.4964508,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1017989623,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2381299,
+    "longitude": -4.4964517,
+    "tags": {
+      "amenity": "parking",
+      "capacity": "4"
+    }
+  },
+  {
+    "osm_id": 1017989624,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2381202,
+    "longitude": -4.4963052,
+    "tags": {
+      "amenity": "parking",
+      "capacity": "4",
+      "capacity:disabled": "4",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1017989625,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2379958,
+    "longitude": -4.4961639,
+    "tags": {
+      "amenity": "parking",
+      "capacity": "6",
+      "parking": "street_side"
+    }
+  },
+  {
+    "osm_id": 1053402085,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2711387,
+    "longitude": -4.4851049,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1053402086,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2716196,
+    "longitude": -4.4851646,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1068336051,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2257415,
+    "longitude": -4.5055526,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1095082394,
+    "osm_type": "way",
+    "type_amenity": "camp_site",
+    "nom": "Lodg'ing Nature camp",
+    "latitude": 48.2919804,
+    "longitude": -4.460948,
+    "tags": {
+      "addr:street": "Rue du Voelaz",
+      "email": "crozon@lodg-ing.com",
+      "name": "Lodg'ing Nature camp",
+      "opening_hours": "Mo-Su 08:00-20:00",
+      "phone": "+33 6 83 92 62 45",
+      "tourism": "camp_site",
+      "website": "https://www.lodg-ing.com/fr/presquile-de-crozon/"
+    }
+  },
+  {
+    "osm_id": 1098936250,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2256448,
+    "longitude": -4.5148981,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "parking": "surface",
+      "source": "BDOrtho IGN"
+    }
+  },
+  {
+    "osm_id": 1098936251,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2252217,
+    "longitude": -4.5143576,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "parking": "surface",
+      "source": "BDOrtho IGN"
+    }
+  },
+  {
+    "osm_id": 1098936252,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2249054,
+    "longitude": -4.5146983,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "parking": "surface",
+      "source": "BDOrtho IGN"
+    }
+  },
+  {
+    "osm_id": 1098936253,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.224935,
+    "longitude": -4.5149985,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "parking": "surface",
+      "source": "BDOrtho IGN"
+    }
+  },
+  {
+    "osm_id": 1098936254,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2238129,
+    "longitude": -4.5187874,
+    "tags": {
+      "access": "private",
+      "amenity": "parking",
+      "source": "BDOrtho IGN"
+    }
+  },
+  {
+    "osm_id": 1114884948,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2036088,
+    "longitude": -4.5284299,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre;mise à jour : 2010"
+    }
+  },
+  {
+    "osm_id": 1125621895,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2463726,
+    "longitude": -4.4895274,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1125621896,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.24641,
+    "longitude": -4.4892521,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "capacity": "5",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1167358491,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.237938,
+    "longitude": -4.4970174,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1168958265,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "Parking Maison de Tourisme",
+    "latitude": 48.2475413,
+    "longitude": -4.4945914,
+    "tags": {
+      "amenity": "parking",
+      "capacity": "20",
+      "maxstay": "48 hours",
+      "name": "Parking Maison de Tourisme"
+    }
+  },
+  {
+    "osm_id": 1168958266,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2476446,
+    "longitude": -4.4947736,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1168958267,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2476955,
+    "longitude": -4.4943532,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1168958268,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2474193,
+    "longitude": -4.4945046,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1168958269,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.247304,
+    "longitude": -4.49436,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1192217909,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2851754,
+    "longitude": -4.5076206,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1196455940,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2500156,
+    "longitude": -4.4702896,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "fee": "no",
+      "operator": "Lidl",
+      "operator:type": "private",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 1214812719,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2066781,
+    "longitude": -4.526826,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "surface": "ground"
+    }
+  },
+  {
+    "osm_id": 1281760740,
+    "osm_type": "way",
+    "type_amenity": "caravan_site",
+    "nom": "Aire Crozon, Le Fret",
+    "latitude": 48.2842693,
+    "longitude": -4.5100364,
+    "tags": {
+      "bbq": "no",
+      "capacity": "16",
+      "caravan_site": "motorhome_stopover",
+      "caravan_site:type": "beach",
+      "caravans": "no",
+      "charge": "15.34 EUR",
+      "dog": "leashed",
+      "fee": "yes",
+      "internet_access": "wlan",
+      "internet_access:fee": "no",
+      "maxlength": "9",
+      "name": "Aire Crozon, Le Fret",
+      "network": "CAMPING-CAR PARK",
+      "opening_hours": "24/7",
+      "operator": "CAMPING-CAR PARK",
+      "power_supply": "yes",
+      "power_supply:fee": "no",
+      "power_supply:maxcurrent": "6",
+      "seasonal": "no",
+      "tents": "no",
+      "tourism": "caravan_site",
+      "trailer": "no",
+      "website": "https://www.campingcarpark.com/fr_FR/sejour/aire-etape-camping-car/bretagne/29-finistere/crozon-le-fret"
+    }
+  },
+  {
+    "osm_id": 1302904382,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2372849,
+    "longitude": -4.4785352,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "street_side"
+    }
+  },
+  {
+    "osm_id": 1315878739,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2368566,
+    "longitude": -4.5206218,
+    "tags": {
+      "amenity": "parking"
+    }
+  },
+  {
+    "osm_id": 1367808921,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2336111,
+    "longitude": -4.4979167,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "surface": "gravel"
+    }
+  },
+  {
+    "osm_id": 1377993656,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2355197,
+    "longitude": -4.4981644,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "no",
+      "parking": "surface",
+      "surface": "compacted"
+    }
+  },
+  {
+    "osm_id": 1379414309,
+    "osm_type": "way",
+    "type_amenity": "shelter",
+    "nom": "",
+    "latitude": 48.2508427,
+    "longitude": -4.4915485,
+    "tags": {
+      "amenity": "shelter",
+      "building": "yes"
+    }
+  },
+  {
+    "osm_id": 1379414310,
+    "osm_type": "way",
+    "type_amenity": "shelter",
+    "nom": "",
+    "latitude": 48.2510273,
+    "longitude": -4.4916023,
+    "tags": {
+      "amenity": "shelter",
+      "building": "yes"
+    }
+  },
+  {
+    "osm_id": 1379414312,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2517244,
+    "longitude": -4.491528,
+    "tags": {
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1380088078,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2482804,
+    "longitude": -4.492211,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 1381261339,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2351913,
+    "longitude": -4.4960166,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 1381261340,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2353408,
+    "longitude": -4.4961003,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 1381261341,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2350764,
+    "longitude": -4.4963691,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1382559089,
+    "osm_type": "way",
+    "type_amenity": "shelter",
+    "nom": "",
+    "latitude": 48.2791814,
+    "longitude": -4.5003433,
+    "tags": {
+      "amenity": "shelter",
+      "bench": "no",
+      "bin": "no",
+      "building": "yes",
+      "lit": "no",
+      "lockable": "no",
+      "shelter_type": "public_transport",
+      "wheelchair": "yes"
+    }
+  },
+  {
+    "osm_id": 1413555661,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2373308,
+    "longitude": -4.5190776,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "orientation": "perpendicular",
+      "parking": "street_side"
+    }
+  },
+  {
+    "osm_id": 1424888475,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2249753,
+    "longitude": -4.5058483,
+    "tags": {
+      "access": "yes",
+      "amenity": "parking",
+      "fee": "yes",
+      "parking": "surface"
+    }
+  },
+  {
+    "osm_id": 1433546874,
+    "osm_type": "way",
+    "type_amenity": "parking",
+    "nom": "",
+    "latitude": 48.2480244,
+    "longitude": -4.4784803,
+    "tags": {
+      "access": "customers",
+      "amenity": "parking",
+      "operator": "FC cuir l'Atelier",
+      "operator:type": "private",
+      "parking": "surface",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "osm_id": 2667320,
+    "osm_type": "relation",
+    "type_amenity": "beach",
+    "nom": "",
+    "latitude": 48.2866495,
+    "longitude": -4.4862443,
+    "tags": {
+      "natural": "beach",
+      "type": "multipolygon"
+    }
+  }
+]

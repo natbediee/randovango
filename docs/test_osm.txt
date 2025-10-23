@@ -1,0 +1,7 @@
+[out:json][timeout:25];
+area["name"="Plougonvelin"]["boundary"="administrative"]->.a;
+(
+  // Get all ways (roads, coastlines, etc.) within the area
+  way(area.a);
+);
+out geom;

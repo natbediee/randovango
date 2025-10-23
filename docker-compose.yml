@@ -1,0 +1,39 @@
+services:
+  mongo:
+    container_name: mongodb
+    image: mongo
+    restart: always
+    ports:
+      - 27017:27017
+    env_file:
+      - .env
+    volumes:
+      - ./storage/mongodb:/data/db
+    networks:
+      - randovango
+  db:
+    image: mysql
+    container_name: db_randovango
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PSWD}
+    volumes:
+      - ./storage/mysql:/var/lib/mysql
+    restart: always
+    networks:
+      - randovango
+  
+  adminer:
+    image: adminer
+    container_name: adminer_randovango
+    restart: always
+    ports:
+      - ${ADMINER_PORT}:8080
+    networks:
+      - randovango
+
+networks:
+  randovango:
+    driver: bridge

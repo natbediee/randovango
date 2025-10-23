@@ -1,0 +1,1415 @@
+/* =============================================
+   RANDOVANGO - CSS MASTER UNIFIÉ
+   ============================================= */
+
+/* ===== VARIABLES CSS ===== */
+:root {
+    --blue: #4B6F8E;
+    --blue-dark: #2E4A6B;
+    --blue-light: #6A8CAF;
+    --gray-100: #FAFAFA;
+    --gray-200: #F5F5F5;
+    --gray-300: #E0E0E0;
+    --gray-500: #757575;
+    --white: #FFFFFF;
+    --green: #4CAF50;
+    --orange: #FF9800;
+    --red: #F44336;
+    --shadow: 0 2px 10px rgba(0,0,0,0.1);
+    --shadow-hover: 0 4px 20px rgba(0,0,0,0.15);
+    --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* ===== RESET ET BASE ===== */
+* { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
+}
+
+body {
+    font-family: var(--font-main);
+    background: var(--gray-100);
+    color: var(--blue-dark);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== HEADER GLOBAL ===== */
+.header {
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-300);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.logo:hover {
+    transform: scale(1.05);
+}
+
+.logo-img { 
+    height: 65px; 
+    width: auto;
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.15));
+    transition: all 0.3s ease;
+}
+
+.logo:hover .logo-img {
+    filter: drop-shadow(0 5px 12px rgba(0,0,0,0.25));
+}
+
+.logo span,
+.brand-text {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--blue);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.logo:hover span {
+    color: var(--blue-dark, #1e40af);
+}
+
+/* ===== NAVIGATION ===== */
+.nav-tabs {
+    display: flex;
+    gap: 0.5rem;
+    background: var(--gray-200);
+    padding: 0.5rem;
+    border-radius: 12px;
+}
+
+.nav-tab {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: transparent;
+    color: var(--blue);
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.nav-tab:hover {
+    background: rgba(75, 111, 142, 0.1);
+}
+
+.nav-tab.active {
+    background: var(--blue);
+    color: var(--white);
+    box-shadow: 0 2px 8px rgba(75, 111, 142, 0.3);
+}
+
+/* ===== LAYOUT ===== */
+.main-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+/* ===== BOUTONS ===== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: var(--blue);
+    color: var(--white);
+}
+
+.btn-primary:hover {
+    background: var(--blue-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(75, 111, 142, 0.3);
+}
+
+.btn-white {
+    background: var(--white);
+    color: var(--blue);
+    border: 2px solid var(--blue);
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(75, 111, 142, 0.2);
+}
+
+.btn-white:hover {
+    background: var(--blue);
+    color: var(--white);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(75, 111, 142, 0.3);
+}
+
+.btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+/* Les badges utilisent maintenant les styles .hiking-stats .stat existants */
+
+/* Sections des spots */
+.spots-section {
+    margin: 2rem 0;
+}
+
+.spots-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.spot-card {
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s;
+    background: var(--white);
+}
+
+.spot-card:hover {
+    border-color: var(--blue);
+    box-shadow: var(--shadow-hover);
+}
+
+.spot-card.selected {
+    border-color: var(--green);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+/* Grille 3 colonnes pour les spots */
+.spot-content-grid {
+    display: grid;
+    grid-template-columns: 200px 1fr 150px;
+    gap: 2rem;
+    align-items: start;
+}
+
+/* Colonne gauche : Type + Vérification */
+.spot-left {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Colonne centre : Infos principales */
+.spot-center {
+    flex: 1;
+}
+
+.spot-center h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--blue);
+    font-size: 1.25rem;
+}
+
+/* Colonne droite : Actions */
+.spot-right {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    justify-content: flex-start;
+}
+
+/* Styles communs pour le contenu */
+.spot-description {
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.spot-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.spot-features .feature {
+    background: var(--gray-100);
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.spot-features .feature.disabled {
+    background: var(--gray-200);
+    color: var(--gray-500);
+    text-decoration: line-through;
+}
+
+.spot-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* Services - Étape 4 */
+.services-categories {
+    margin-bottom: 2rem;
+}
+
+.category-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+}
+
+.category-tab {
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    border-radius: 25px;
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    color: var(--gray-600);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.category-tab:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+
+.category-tab.active {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: var(--white);
+    box-shadow: 0 4px 15px rgba(75, 111, 142, 0.3);
+}
+
+.category-tab i {
+    font-size: 1rem;
+}
+
+.services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.service-card {
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s;
+    background: var(--white);
+}
+
+.service-card:hover {
+    border-color: var(--blue);
+    box-shadow: var(--shadow-hover);
+}
+
+.service-card.selected {
+    border-color: var(--green);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+/* Section des services sélectionnés */
+.selected-services {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    border: 2px solid var(--blue);
+    border-radius: 12px;
+    background: rgba(33, 150, 243, 0.05);
+}
+
+.selected-services h3 {
+    margin: 0 0 1rem 0;
+    color: var(--blue);
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.selected-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.selected-service-item {
+    padding: 0.75rem;
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.selected-service-item .service-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.selected-service-item .remove-btn {
+    background: var(--red);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.selected-service-item .remove-btn:hover {
+    background: #d32f2f;
+}
+
+/* Grille 3 colonnes pour les services */
+.service-content-grid {
+    display: grid;
+    grid-template-columns: 200px 1fr 150px;
+    gap: 2rem;
+    align-items: start;
+}
+
+/* Colonne gauche : Type + Vérification */
+.service-left {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Colonne centre : Infos principales */
+.service-center {
+    flex: 1;
+}
+
+.service-center h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--blue);
+    font-size: 1.25rem;
+}
+
+/* Colonne droite : Actions */
+.service-right {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    justify-content: flex-start;
+}
+
+.service-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* Responsive pour petits écrans */
+@media (max-width: 768px) {
+    .spot-content-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .spot-left {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    
+    .spot-right {
+        flex-direction: row;
+    }
+    
+    .services-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .service-content-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .service-left {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    
+    .service-right {
+        flex-direction: row;
+    }
+}
+
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+}
+
+/* ===== PLANIFICATEUR MINIMUM ===== */
+.planning-stepper {
+    background: var(--white);
+    padding: 2rem;
+    margin: 2rem 0;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    position: relative !important;
+}
+
+/* Logo dans stepper */
+.stepper-logo {
+    position: absolute;
+    top: 50%;
+    left: 1.5rem;
+    transform: translateY(-50%);
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    backdrop-filter: blur(10px);
+}
+
+.logo-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--blue);
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.logo-image {
+    height: 45px;
+    width: auto;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.2));
+    width: auto;
+    object-fit: contain;
+}
+
+/* Bouton connexion stepper */
+.stepper-login {
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    transform: translateY(-50%);
+    z-index: 10;
+}
+
+.user-menu {
+    display: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Stepper steps */
+.stepper-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.step-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    color: var(--gray-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s;
+}
+
+.step.active .step-circle {
+    background: var(--blue);
+    color: white;
+}
+
+.step.completed .step-circle {
+    background: var(--green);
+    color: white;
+}
+
+.step-label {
+    font-size: 0.875rem;
+    color: var(--gray-500);
+    font-weight: 500;
+}
+
+.step-line {
+    width: 80px;
+    height: 2px;
+    background: var(--gray-300);
+    margin: 0 1rem;
+    transition: all 0.3s;
+}
+
+.step-line.completed {
+    background: var(--green);
+}
+
+/* ===== NAVIGATION ===== */
+.planning-navigation {
+    background: var(--white);
+    padding: 1.5rem 2rem;
+    margin: 0.5rem 0 2rem 0;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.navigation-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.navigation-buttons.navigation-right {
+    justify-content: flex-end;
+}
+
+.navigation-buttons.navigation-left {
+    justify-content: flex-start;
+}
+
+.navigation-buttons.navigation-center {
+    justify-content: center;
+}
+
+/* ===== CONTENU PLANIFICATEUR ===== */
+.planning-content {
+    background: var(--white);
+    padding: 2rem;
+    margin: 2rem 0;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.step-section {
+    padding: 2rem;
+}
+
+.step-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.step-header h2 {
+    color: var(--blue);
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+.step-header p {
+    color: var(--gray-500);
+    font-size: 1.1rem;
+}
+
+/* Cards */
+.card {
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.card:hover {
+    border-color: var(--blue);
+    box-shadow: var(--shadow-hover);
+}
+
+.card.selected {
+    border-color: var(--blue);
+    background: rgba(75, 111, 142, 0.05);
+}
+
+/* ===== HERO SECTIONS ===== */
+.hero-section {
+    position: relative;
+    height: 250px;
+    overflow: hidden;
+    margin: 0;
+    border-radius: 0;
+}
+
+/* ===== HERO SECTION PLANIFICATEUR ===== */
+.hero-planificateur {
+    position: relative;
+    height: 250px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 3rem;
+    margin: 0;
+    border-radius: 0;
+}
+
+.hero-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+}
+
+.hero-background {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.hero-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(75, 111, 142, 0.8), rgba(46, 79, 107, 0.6));
+    z-index: 1;
+}
+
+.hero-content {
+    position: relative;
+    text-align: center;
+    color: var(--white);
+    z-index: 3;
+    padding: 2rem;
+}
+
+/* Logo avec fond blanc dans hero section - petit carré */
+.hero-logo-container {
+    position: absolute;
+    top: 1rem;
+    left: 10rem;
+    z-index: 1000;
+    width: 210px;
+    height: 220px;
+}
+
+.hero-logo-white {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 0.2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.hero-logo-white:hover {
+    transform: translateY(2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}
+
+.hero-logo-img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    display: block;
+    object-fit: contain;
+}
+
+.hero-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.hero-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ===== DURATION SECTION ===== */
+.duration-section {
+    background: var(--white);
+    padding: 2rem;
+    border-radius: 12px;
+    margin: 2rem 0;
+    box-shadow: var(--shadow);
+}
+
+.duration-section h3 {
+    color: var(--blue);
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.duration-section p {
+    margin: 0 0 1.5rem 0;
+    color: var(--gray-600);
+}
+
+.duration-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.duration-card {
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.duration-card:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+}
+
+.duration-card.active {
+    border-color: var(--blue);
+    background: rgba(33, 150, 243, 0.05);
+}
+
+.duration-card.active::after {
+    content: '✓';
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    color: var(--blue);
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.duration-number {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--blue);
+    margin-bottom: 0.5rem;
+}
+
+.duration-number input {
+    width: 60px;
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--blue);
+    border: none;
+    text-align: center;
+    background: transparent;
+}
+
+.duration-number input:focus {
+    outline: none;
+    background: rgba(33, 150, 243, 0.1);
+    border-radius: 4px;
+}
+
+.duration-label {
+    font-size: 1rem;
+    color: var(--gray-600);
+    margin-bottom: 0.25rem;
+}
+
+.duration-desc {
+    font-size: 0.875rem;
+    color: var(--gray-500);
+    font-style: italic;
+}
+
+/* ===== WEATHER SECTION ===== */
+.weather-section {
+    background: var(--white);
+    padding: 2rem;
+    border-radius: 12px;
+    margin: 2rem 0 0.5rem 0;
+    box-shadow: var(--shadow);
+}
+
+.weather-section h3 {
+    color: var(--blue-dark);
+    margin: 0 0 0.5rem 0;
+    text-align: left;
+}
+
+.weather-section p {
+    color: var(--gray-600);
+    margin: 0 0 1.5rem 0;
+    font-size: 0.95rem;
+}
+
+.weather-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+}
+
+.weather-day {
+    background: var(--gray-100);
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.weather-day:hover {
+    background: var(--white);
+    border-color: var(--blue);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+}
+
+.weather-day.good-weather {
+    background: rgba(76, 175, 80, 0.1);
+    border-color: var(--green);
+}
+
+.weather-day.bad-weather {
+    background: rgba(244, 67, 54, 0.1);
+    border-color: var(--red);
+}
+
+.day-name {
+    font-weight: 600;
+    color: var(--blue);
+    margin-bottom: 0.5rem;
+}
+
+.weather-icon {
+    font-size: 2rem;
+    margin: 0.5rem 0;
+}
+
+.temperatures {
+    margin: 0.5rem 0;
+}
+
+.temp-max {
+    font-weight: bold;
+    color: var(--blue-dark);
+}
+
+.temp-min {
+    color: var(--gray-500);
+    margin-left: 0.5rem;
+}
+
+.weather-desc {
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+/* ===== VILLE SÉLECTIONNÉE ===== */
+.selected-city {
+    margin: 2rem 0;
+    text-align: center;
+}
+
+.city-header h3 {
+    color: var(--blue);
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.city-header p {
+    color: var(--gray-500);
+    margin-bottom: 1rem;
+}
+
+.city-stats {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--blue);
+}
+
+/* ===== SEARCH ===== */
+.search-container {
+    margin: 2rem 0;
+    text-align: center;
+}
+
+.search-input-group {
+    display: flex;
+    align-items: center;
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.search-input-group i {
+    padding: 1rem;
+    color: var(--blue);
+    background: var(--gray-100);
+}
+
+.search-input {
+    flex: 1;
+    border: none;
+    padding: 1rem;
+    font-size: 1rem;
+}
+
+.search-input:focus {
+    outline: none;
+}
+
+/* ===== LAYOUT RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 1.8rem;
+    }
+    
+    .hero-subtitle {
+        font-size: 1rem;
+    }
+    
+    /* Logo adapté pour mobile - bandeau complet */
+    .logo-img {
+        height: 80px;
+    }
+    
+    .hero-logo-container {
+        top: 100px;
+        left: 400px;
+        right: 100px;
+        padding: 0 1rem;
+    }
+    
+    .hero-logo-white {
+        padding: 0.75rem;
+        border-radius: 0 0 16px 16px;
+    }
+    
+    .hero-logo-img {
+        height: 200px;
+    }
+    
+    .step-section {
+        padding: 2rem;
+    }
+    
+    .step-header h2 {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .logo-image {
+        max-height: 50px;
+        min-height: 35px;
+    }
+    
+    .stepper-logo {
+        left: 0.5rem;
+    }
+    
+    .stepper-login {
+        right: 0.5rem;
+    }
+    
+    .step-section {
+        padding: 1.5rem;
+    }
+}
+
+/* ===== ÉTAPE 2 - RANDONNÉES ===== */
+.hiking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.hiking-card {
+    border: 2px solid var(--gray-300);
+    border-radius: 15px;
+    padding: 1.5rem;
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.hiking-card:hover {
+    border-color: var(--blue);
+    box-shadow: 0 4px 15px rgba(75, 111, 142, 0.1);
+}
+
+.hiking-card.selected {
+    border-color: var(--green);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+.hiking-status {
+    flex-shrink: 0;
+}
+
+.status-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.status-badge.verified {
+    background: rgba(76, 175, 80, 0.1);
+    color: var(--green);
+}
+
+.status-badge.pending {
+    background: rgba(255, 152, 0, 0.1);
+    color: var(--orange);
+}
+
+.hiking-info {
+    flex: 1;
+}
+
+.hiking-info h3 {
+    color: var(--blue);
+    margin-bottom: 0.5rem;
+}
+
+.hiking-description {
+    color: var(--gray-500);
+    margin-bottom: 1rem;
+}
+
+.hiking-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.hiking-stats .stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    background: var(--gray-100);
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    color: var(--blue-dark);
+    font-weight: 500;
+}
+
+.hiking-stats .stat i {
+    font-size: 1rem;
+    color: var(--blue);
+}
+
+.difficulty-facile {
+    color: var(--green) !important;
+}
+
+.difficulty-moyen {
+    color: var(--orange) !important;
+}
+
+.difficulty-difficile {
+    color: var(--red) !important;
+}
+
+/* Badges spécifiques pour les stats */
+.hiking-stats .stat.distance {
+    background: rgba(75, 111, 142, 0.1);
+    color: var(--blue);
+}
+
+.hiking-stats .stat.duration {
+    background: rgba(255, 152, 0, 0.1);
+    color: var(--orange);
+}
+
+.hiking-stats .stat.difficulty-facile {
+    background: rgba(76, 175, 80, 0.1);
+    color: var(--green);
+}
+
+.hiking-stats .stat.difficulty-moyen {
+    background: rgba(255, 152, 0, 0.1);
+    color: var(--orange);
+}
+
+.hiking-stats .stat.difficulty-difficile {
+    background: rgba(244, 67, 54, 0.1);
+    color: var(--red);
+}
+
+/* Filtres de randonnées et d'hébergement */
+.hiking-filters,
+.accommodation-filters {
+    display: flex;
+    flex-direction: row;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--white);
+    border-radius: 30px;
+    padding: 0.75rem 1.5rem;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--gray-200);
+}
+
+.filter-group label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--blue-dark);
+    margin-right: 0.5rem;
+    white-space: nowrap;
+}
+
+.filter-btn {
+    background: transparent;
+    border: none;
+    padding: 0.5rem 1.2rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    color: var(--gray-500);
+    white-space: nowrap;
+    font-size: 0.9rem;
+    min-width: 65px;
+    text-align: center;
+}
+
+.filter-btn:hover {
+    background: var(--gray-100);
+    color: var(--blue);
+    transform: translateY(-1px);
+}
+
+.filter-btn.active {
+    background: var(--blue);
+    color: var(--white);
+    box-shadow: 0 3px 12px rgba(75, 111, 142, 0.4);
+    transform: translateY(-1px);
+}
+
+
+
+.no-hiking-option {
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    transition: all 0.3s;
+    text-align: center;
+}
+
+.no-hiking-option:hover {
+    border-color: var(--blue);
+    box-shadow: var(--shadow-hover);
+}
+
+.no-hiking-option.selected {
+    border-color: var(--green);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+/* Option pas de spot */
+.no-spot-option {
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    transition: all 0.3s;
+    text-align: center;
+}
+
+.no-spot-option:hover {
+    border-color: var(--blue);
+    box-shadow: var(--shadow-hover);
+}
+
+.no-spot-option.selected {
+    border-color: var(--green);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+/* Option aucun service */
+.no-service-option {
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    transition: all 0.3s;
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.no-service-option:hover {
+    border-color: var(--blue);
+    box-shadow: var(--shadow-hover);
+}
+
+.no-service-option.selected {
+    border-color: var(--green);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+/* Boutons généraux */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border: 2px solid transparent;
+    border-radius: 25px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background: var(--blue);
+    color: var(--white);
+    border-color: var(--blue);
+}
+
+.btn-primary:hover {
+    background: var(--blue-dark);
+    border-color: var(--blue-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(75, 111, 142, 0.3);
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--blue);
+    border-color: var(--blue);
+}
+
+.btn-outline:hover {
+    background: var(--blue);
+    color: var(--white);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(75, 111, 142, 0.2);
+}
+
+.hiking-actions {
+    display: flex;
+    gap: 1rem;
+    flex-direction: column;
+}
+
+/* Navigation avec boutons multiples */
+.navigation-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--blue);
+    border: 2px solid var(--blue);
+}
+
+.btn-outline:hover {
+    background: var(--blue);
+    color: var(--white);
+}
+
+@media (min-width: 1200px) {
+    .logo-image {
+        max-height: 100px;
+        min-height: 60px;
+    }
+}

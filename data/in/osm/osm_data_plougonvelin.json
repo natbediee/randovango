@@ -1,0 +1,4616 @@
+{
+    "version": 0.6,
+    "generator": "Overpass API 0.7.62.8 e802775f",
+    "osm3s": {
+        "timestamp_osm_base": "2025-10-23T07:47:00Z",
+        "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+    },
+    "elements": [
+        {
+            "type": "node",
+            "id": 279021910,
+            "lat": 48.3405821,
+            "lon": -4.7183567,
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Parking de la Mairie",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "node",
+            "id": 299319137,
+            "lat": 48.3677403,
+            "lon": -4.759171,
+            "tags": {
+                "access": "yes",
+                "amenity": "drinking_water",
+                "fee": "no",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 542575330,
+            "lat": 48.3315309,
+            "lon": -4.7281582,
+            "tags": {
+                "amenity": "parking",
+                "name": "Keruynan",
+                "name:br": "Keriunan",
+                "parking": "surface",
+                "source:name:br": "ofis publik ar brezhoneg"
+            }
+        },
+        {
+            "type": "node",
+            "id": 560173599,
+            "lat": 48.3476513,
+            "lon": -4.729335,
+            "tags": {
+                "historic": "wayside_shrine",
+                "name": "Saint-Jean",
+                "name:br": "Sant Yann",
+                "place": "locality"
+            }
+        },
+        {
+            "type": "node",
+            "id": 582223754,
+            "lat": 48.3423116,
+            "lon": -4.7231542,
+            "tags": {
+                "addr:city": "Plougonvelin",
+                "addr:postcode": "29217",
+                "addr:street": "Rue du Stade",
+                "amenity": "fuel",
+                "brand": "Intermarché",
+                "brand:wikidata": "Q3153200",
+                "brand:wikipedia": "fr:Intermarché",
+                "compressed_air": "yes",
+                "fuel:diesel": "yes",
+                "fuel:e10": "yes",
+                "fuel:e85": "yes",
+                "fuel:octane_98": "yes",
+                "name": "Intermarché",
+                "opening_hours": "24/7",
+                "operator": "Groupement des Mousquetaires",
+                "ref:FR:prix-carburants": "29217001",
+                "shop": "convenience;gas",
+                "source": "Ministère de l'Economie, de l'Industrie et du Numérique - 03/2020",
+                "vending": "fuel",
+                "vending_machine": "fuel"
+            }
+        },
+        {
+            "type": "node",
+            "id": 582686784,
+            "lat": 48.355028,
+            "lon": -4.6883261,
+            "tags": {
+                "historic": "monument",
+                "name": "Stèle du Cosquer"
+            }
+        },
+        {
+            "type": "node",
+            "id": 582689659,
+            "lat": 48.3533891,
+            "lon": -4.6945628,
+            "tags": {
+                "historic": "wayside_cross",
+                "name": "Statue de Sainte-Anne"
+            }
+        },
+        {
+            "type": "node",
+            "id": 677979769,
+            "lat": 48.346788,
+            "lon": -4.7042747,
+            "tags": {
+                "information": "office",
+                "name": "Office du Tourisme",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 902366315,
+            "lat": 48.3419148,
+            "lon": -4.7177221,
+            "tags": {
+                "addr:city": "Plougonvelin",
+                "addr:postcode": "29217",
+                "addr:street": "Rue Saint-Yves",
+                "amenity": "pharmacy",
+                "dispensing": "yes",
+                "healthcare": "pharmacy",
+                "name": "Pharmacie Rivoalen",
+                "opening_hours": "Mo-Fr 09:00-12:30,14:00-19:30; Sa 09:00-12:30",
+                "ref:FR:FINESS": "290011048",
+                "source": "Le ministère des solidarités et de la santé - 08/2018",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 907225803,
+            "lat": 48.345087,
+            "lon": -4.7047468,
+            "tags": {
+                "amenity": "restaurant",
+                "name": "Le Plez'Hir",
+                "ref:FR:SIRET": "92838422100018"
+            }
+        },
+        {
+            "type": "node",
+            "id": 964949446,
+            "lat": 48.3411436,
+            "lon": -4.7187249,
+            "tags": {
+                "name": "Au Rdv des 4 Saisons",
+                "ref:FR:SIRET": "47778307000022",
+                "shop": "convenience"
+            }
+        },
+        {
+            "type": "node",
+            "id": 967166484,
+            "lat": 48.3454199,
+            "lon": -4.7043046,
+            "tags": {
+                "amenity": "restaurant",
+                "name": "La Cabane",
+                "opening_hours": "Tu-Fr 11:00-15:00, 17:30-22:00; Sa 11:00-22:00; Su 11:00-19:00",
+                "ref:FR:SIRET": "98247488400011"
+            }
+        },
+        {
+            "type": "node",
+            "id": 967166493,
+            "lat": 48.344607,
+            "lon": -4.7080604,
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "node",
+            "id": 967182591,
+            "lat": 48.3419667,
+            "lon": -4.7169868,
+            "tags": {
+                "addr:city": "Plougonvelin",
+                "addr:street": "Rue Saint-Yves",
+                "amenity": "restaurant",
+                "name": "Bar le Pêcheur",
+                "ref:FR:SIRET": "32900559900017"
+            }
+        },
+        {
+            "type": "node",
+            "id": 996806843,
+            "lat": 48.3395541,
+            "lon": -4.702223,
+            "tags": {
+                "amenity": "toilets",
+                "fee": "no"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1230988123,
+            "lat": 48.3369413,
+            "lon": -4.697581,
+            "tags": {
+                "historic": "ruins",
+                "name": "Fort de Bertheaume",
+                "name:br": "Kastell Perzell",
+                "source:name:br": "ofis publik ar brezhoneg",
+                "wikidata": "Q541130"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1267427211,
+            "lat": 48.328793,
+            "lon": -4.7591992,
+            "tags": {
+                "information": "guidepost",
+                "name": "Informations",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1269704883,
+            "lat": 48.329598,
+            "lon": -4.7642015,
+            "tags": {
+                "historic": "ruins",
+                "man_made": "dovecote",
+                "name": "Pigeonnier de St Mathieu"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1272482687,
+            "lat": 48.3459392,
+            "lon": -4.7047992,
+            "tags": {
+                "amenity": "restaurant",
+                "name": "La Crêperie de la Plage"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1272482688,
+            "lat": 48.3457077,
+            "lon": -4.7048417,
+            "tags": {
+                "addr:city": "Plougonvelin",
+                "addr:postcode": "29217",
+                "addr:street": "Boulevard de la Mer",
+                "name": "Boulangerie de la Plage",
+                "opening_hours": "Mo,We-Sa 06:45-13:00,15:00-19:30; Su 06:45-19:30",
+                "phone": "+33298380085",
+                "shop": "bakery"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1272482690,
+            "lat": 48.3451504,
+            "lon": -4.7046416,
+            "tags": {
+                "amenity": "cafe",
+                "name": "Le Cap'Ouest",
+                "ref:FR:SIRET": "89531704800018"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1272497703,
+            "lat": 48.3748805,
+            "lon": -4.7476133,
+            "tags": {
+                "amenity": "restaurant",
+                "name": "Embruns et Mistral"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1277382847,
+            "lat": 48.3379117,
+            "lon": -4.7098544,
+            "tags": {
+                "historic": "archaeological_site",
+                "name": "Nécropole néolithique"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1277382868,
+            "lat": 48.3368607,
+            "lon": -4.7111078,
+            "tags": {
+                "height": "20m",
+                "historic": "boundary_stone",
+                "man_made": "tower",
+                "name": "Vieil Amer Balise Nord",
+                "tower:type": "communication"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1277446730,
+            "lat": 48.3326079,
+            "lon": -4.7087364,
+            "tags": {
+                "height": "20",
+                "historic": "boundary_stone",
+                "man_made": "tower",
+                "name": "Vieil Amer Balise Sud",
+                "tower:type": "communication"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1277446751,
+            "lat": 48.3327744,
+            "lon": -4.7110033,
+            "tags": {
+                "historic": "boundary_stone",
+                "name": "Borne marine VIII"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1290484761,
+            "lat": 48.3547741,
+            "lon": -4.6742733,
+            "tags": {
+                "addr:city": "Locmaria-Plouzané",
+                "addr:postcode": "29280",
+                "addr:street": "Boulevard de l'Océan",
+                "amenity": "restaurant",
+                "delivery": "no",
+                "name": "Mille Sabords",
+                "opening_hours": "Tu-Su 10:00-24:00",
+                "phone": "+33 2 98 48 50 96",
+                "takeaway": "yes",
+                "website": "https://mille-sabords-restaurant-brasserie.business.site/",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1290532405,
+            "lat": 48.354859,
+            "lon": -4.6744889,
+            "tags": {
+                "access": "yes",
+                "amenity": "toilets",
+                "changing_table": "no",
+                "fee": "no",
+                "survey:date": "2025-05-30",
+                "toilets:disposal": "flush",
+                "unisex": "yes",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1293797557,
+            "lat": 48.3559345,
+            "lon": -4.6784005,
+            "tags": {
+                "access": "yes",
+                "amenity": "toilets",
+                "check_date": "2023-08-15",
+                "fee": "no"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1331310794,
+            "lat": 48.3817115,
+            "lon": -4.7618694,
+            "tags": {
+                "historic": "ruins",
+                "name": "Ancienne Ferme d'Illien",
+                "place": "locality",
+                "ref:FR:FANTOIR": "29201B026S"
+            }
+        },
+        {
+            "type": "node",
+            "id": 1579743579,
+            "lat": 48.346446,
+            "lon": -4.7057165,
+            "tags": {
+                "access": "private",
+                "amenity": "parking",
+                "name": "Le domaine de Bertheaume",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2087678283,
+            "lat": 48.3388639,
+            "lon": -4.7275199,
+            "tags": {
+                "amenity": "restaurant",
+                "name": "L'Archipel",
+                "source": "survey",
+                "website": "https://www.hoteldularge.com/restaurant-bar/"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598784710,
+            "lat": 48.3459039,
+            "lon": -4.748047,
+            "tags": {
+                "description": "encuvement pour 280mm (disparu)",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598784717,
+            "lat": 48.3464867,
+            "lon": -4.7550776,
+            "tags": {
+                "description": "encuvement pour 280mm (disparu)",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598784725,
+            "lat": 48.3466864,
+            "lon": -4.7521593,
+            "tags": {
+                "description": "Encuvement pour 280mm",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598784728,
+            "lat": 48.3471276,
+            "lon": -4.7489147,
+            "tags": {
+                "description": "Soute à munition",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598784729,
+            "lat": 48.3353572,
+            "lon": -4.7626578,
+            "tags": {
+                "bunker_type": "blockhouse",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598917332,
+            "lat": 48.3471426,
+            "lon": -4.7534575,
+            "tags": {
+                "historic": "yes",
+                "military": "bunker",
+                "name": "SK Munition bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598917347,
+            "lat": 48.3458344,
+            "lon": -4.7509071,
+            "tags": {
+                "description": "bunker abri",
+                "historic": "yes",
+                "military": "bunker",
+                "name": "M151"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598917350,
+            "lat": 48.3454207,
+            "lon": -4.7508078,
+            "tags": {
+                "description": "Soute à munitions",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598917363,
+            "lat": 48.3456881,
+            "lon": -4.7498717,
+            "tags": {
+                "description": "Soute à munition",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598934180,
+            "lat": 48.3474458,
+            "lon": -4.7500033,
+            "tags": {
+                "description": "abri",
+                "historic": "yes",
+                "military": "bunker",
+                "name": "R621"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598934185,
+            "lat": 48.3461517,
+            "lon": -4.7477555,
+            "tags": {
+                "description": "soute à munitions",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598934189,
+            "lat": 48.3475031,
+            "lon": -4.7471816,
+            "tags": {
+                "description": "Abri flak",
+                "historic": "yes",
+                "military": "bunker",
+                "name": "L409"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2598934194,
+            "lat": 48.3469683,
+            "lon": -4.7499979,
+            "tags": {
+                "description": "abri infirmerie",
+                "historic": "yes",
+                "military": "bunker",
+                "name": "R639"
+            }
+        },
+        {
+            "type": "node",
+            "id": 2675737005,
+            "lat": 48.3564373,
+            "lon": -4.7662653,
+            "tags": {
+                "access": "customers",
+                "amenity": "parking",
+                "fee": "yes",
+                "lit": "yes",
+                "parking": "surface",
+                "source": "Bing",
+                "surface": "asphalt"
+            }
+        },
+        {
+            "type": "node",
+            "id": 3880895272,
+            "lat": 48.3812188,
+            "lon": -4.7477414,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "religion": "christian"
+            }
+        },
+        {
+            "type": "node",
+            "id": 4173297793,
+            "lat": 48.3314904,
+            "lon": -4.7683895,
+            "tags": {
+                "amenity": "toilets",
+                "check_date": "2023-08-20",
+                "fee": "no",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 4226844839,
+            "lat": 48.3627409,
+            "lon": -4.7665295,
+            "tags": {
+                "name": "Passerelle",
+                "tourism": "viewpoint"
+            }
+        },
+        {
+            "type": "node",
+            "id": 4226844840,
+            "lat": 48.3631648,
+            "lon": -4.7662838,
+            "tags": {
+                "board_type": "wildlife",
+                "check_date": "2023-08-08",
+                "information": "board",
+                "name": "La végétation de la ria",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 5594192798,
+            "lat": 48.3534039,
+            "lon": -4.6845905,
+            "tags": {
+                "historic": "memorial",
+                "material": "stone",
+                "memorial": "stone",
+                "name": "batterie de Toul al Logot"
+            }
+        },
+        {
+            "type": "node",
+            "id": 5643609227,
+            "lat": 48.3382319,
+            "lon": -4.6996271,
+            "tags": {
+                "amenity": "toilets"
+            }
+        },
+        {
+            "type": "node",
+            "id": 5709167021,
+            "lat": 48.3329324,
+            "lon": -4.7663739,
+            "tags": {
+                "historic": "wayside_cross",
+                "name": "Le Gibet des Moines",
+                "name:br": "An Div Groaz",
+                "source:name:br": "ofis publik ar brezhoneg"
+            }
+        },
+        {
+            "type": "node",
+            "id": 5881211349,
+            "lat": 48.3407189,
+            "lon": -4.7194728,
+            "tags": {
+                "name": "Laot",
+                "ref:FR:SIRET": "81028950400013",
+                "shop": "bakery",
+                "source": "survey",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 5881243645,
+            "lat": 48.3403139,
+            "lon": -4.7199073,
+            "tags": {
+                "amenity": "toilets",
+                "fee": "no",
+                "source": "survey"
+            }
+        },
+        {
+            "type": "node",
+            "id": 5881243646,
+            "lat": 48.3402872,
+            "lon": -4.7199905,
+            "tags": {
+                "historic": "memorial",
+                "source": "survey"
+            }
+        },
+        {
+            "type": "node",
+            "id": 5881243647,
+            "lat": 48.3412766,
+            "lon": -4.7186433,
+            "tags": {
+                "addr:housenumber": "6",
+                "addr:street": "Rue Pen ar Bed",
+                "amenity": "restaurant",
+                "contact:housenumber": "6",
+                "contact:phone": "+33 2 98 02 68 25",
+                "contact:street": "Rue Pen ar Bed",
+                "cuisine": "pizza",
+                "delivery": "yes",
+                "name": "Ti Mad Eo",
+                "opening_hours": "Mo, Tu 19:00-21:30; Th-Sa 19:00-22:00; Su 18:00-22:00",
+                "ref:FR:SIRET": "85223576100016",
+                "takeaway": "yes",
+                "website": "timadeo.com"
+            }
+        },
+        {
+            "type": "node",
+            "id": 6332766674,
+            "lat": 48.3596616,
+            "lon": -4.7512032,
+            "tags": {
+                "historic": "wayside_cross"
+            }
+        },
+        {
+            "type": "node",
+            "id": 6390260721,
+            "lat": 48.3730455,
+            "lon": -4.7362108,
+            "tags": {
+                "historic": "wayside_cross"
+            }
+        },
+        {
+            "type": "node",
+            "id": 6390260722,
+            "lat": 48.3710535,
+            "lon": -4.7363173,
+            "tags": {
+                "historic": "wayside_cross"
+            }
+        },
+        {
+            "type": "node",
+            "id": 6390260723,
+            "lat": 48.3689396,
+            "lon": -4.7343897,
+            "tags": {
+                "historic": "wayside_cross"
+            }
+        },
+        {
+            "type": "node",
+            "id": 8546001229,
+            "lat": 48.3296964,
+            "lon": -4.7594268,
+            "tags": {
+                "historic": "cannon"
+            }
+        },
+        {
+            "type": "node",
+            "id": 8546001230,
+            "lat": 48.3297166,
+            "lon": -4.759334,
+            "tags": {
+                "historic": "cannon"
+            }
+        },
+        {
+            "type": "node",
+            "id": 9015275817,
+            "lat": 48.3337257,
+            "lon": -4.7516209,
+            "tags": {
+                "name": "Jardin du Vaéré",
+                "name:en": "Vaere's Garden",
+                "opening_hours": "24/7",
+                "tourism": "attraction"
+            }
+        },
+        {
+            "type": "node",
+            "id": 9535086294,
+            "lat": 48.3687914,
+            "lon": -4.734784,
+            "tags": {
+                "addr:city": "Trébabu",
+                "addr:postcode": "29217",
+                "addr:street": "Keravel",
+                "amenity": "restaurant",
+                "bar": "yes",
+                "brewery": "yes",
+                "name": "Restaurant KerLan's",
+                "outdoor_seating": "yes",
+                "phone": "+33 229021556",
+                "reservation": "recommended",
+                "website": "https://kerlans.bzh/",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 9893672046,
+            "lat": 48.3617726,
+            "lon": -4.7674883,
+            "tags": {
+                "amenity": "drinking_water",
+                "fee": "no",
+                "man_made": "water_tap",
+                "wheelchair": "no"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10010792447,
+            "lat": 48.3404839,
+            "lon": -4.7197243,
+            "tags": {
+                "amenity": "cafe",
+                "name": "L'univers",
+                "opening_hours": "fermé le mardi après-midi",
+                "outdoor_seating": "yes",
+                "ref:FR:SIRET": "83054799800013"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10141426384,
+            "lat": 48.3388382,
+            "lon": -4.7368693,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10141445488,
+            "lat": 48.3429001,
+            "lon": -4.7630601,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10141479704,
+            "lat": 48.3381858,
+            "lon": -4.7449615,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10141486515,
+            "lat": 48.3389956,
+            "lon": -4.7418596,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10180333540,
+            "lat": 48.3383183,
+            "lon": -4.7183508,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10180336984,
+            "lat": 48.3530748,
+            "lon": -4.7178136,
+            "tags": {
+                "historic": "wayside_shrine",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10180337564,
+            "lat": 48.3399789,
+            "lon": -4.7197203,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10180342201,
+            "lat": 48.3466753,
+            "lon": -4.7329233,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10180358515,
+            "lat": 48.34814,
+            "lon": -4.7473932,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10180361061,
+            "lat": 48.3646179,
+            "lon": -4.7445562,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10185996779,
+            "lat": 48.380576,
+            "lon": -4.712137,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186000023,
+            "lat": 48.3582593,
+            "lon": -4.7073722,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186005720,
+            "lat": 48.3747351,
+            "lon": -4.6729058,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186007751,
+            "lat": 48.3660637,
+            "lon": -4.6925435,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186008381,
+            "lat": 48.3757392,
+            "lon": -4.7484021,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186023741,
+            "lat": 48.3739051,
+            "lon": -4.7089817,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186026249,
+            "lat": 48.3854655,
+            "lon": -4.7008169,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186030036,
+            "lat": 48.3869953,
+            "lon": -4.7154294,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186059531,
+            "lat": 48.3849833,
+            "lon": -4.7621262,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186067828,
+            "lat": 48.3894615,
+            "lon": -4.762564,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10186164298,
+            "lat": 48.3913659,
+            "lon": -4.7480325,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10188954508,
+            "lat": 48.3833465,
+            "lon": -4.6751081,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10188967622,
+            "lat": 48.3908136,
+            "lon": -4.6707741,
+            "tags": {
+                "denomination": "catholic",
+                "historic": "wayside_cross",
+                "material": "stone",
+                "name": "Croaz ar Go",
+                "religion": "christian",
+                "source": "IGN - 2022-06"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10982267297,
+            "lat": 48.3787619,
+            "lon": -4.7597734,
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "capacity": "5",
+                "fee": "no",
+                "parking": "surface",
+                "surface": "gravel"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10982267298,
+            "lat": 48.3797269,
+            "lon": -4.7597316,
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface",
+                "surface": "gravel"
+            }
+        },
+        {
+            "type": "node",
+            "id": 10982300467,
+            "lat": 48.3642059,
+            "lon": -4.7659354,
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface",
+                "surface": "gravel"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11044673206,
+            "lat": 48.3352778,
+            "lon": -4.7509484,
+            "tags": {
+                "historic": "monument",
+                "name": "Jardin du Vaéré"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11111487840,
+            "lat": 48.3679477,
+            "lon": -4.7573788,
+            "tags": {
+                "access": "customers",
+                "amenity": "toilets",
+                "toilets:disposal": "flush",
+                "unisex": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11111487841,
+            "lat": 48.3665132,
+            "lon": -4.7599696,
+            "tags": {
+                "access": "customers",
+                "amenity": "toilets",
+                "toilets:disposal": "flush",
+                "unisex": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11111487842,
+            "lat": 48.3657394,
+            "lon": -4.7597579,
+            "tags": {
+                "access": "customers",
+                "amenity": "toilets",
+                "toilets:disposal": "flush"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11111487844,
+            "lat": 48.3676977,
+            "lon": -4.7583576,
+            "tags": {
+                "access": "customers",
+                "amenity": "toilets",
+                "toilets:disposal": "flush",
+                "unisex": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11111487845,
+            "lat": 48.365693,
+            "lon": -4.7593868,
+            "tags": {
+                "access": "customers",
+                "amenity": "toilets",
+                "toilets:disposal": "flush"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11131978695,
+            "lat": 48.367715,
+            "lon": -4.7592014,
+            "tags": {
+                "access": "yes",
+                "amenity": "toilets",
+                "changing_table": "no",
+                "fee": "no",
+                "toilets:disposal": "flush",
+                "unisex": "yes",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11132003636,
+            "lat": 48.3325001,
+            "lon": -4.7679544,
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11173766092,
+            "lat": 48.3604444,
+            "lon": -4.7629581,
+            "tags": {
+                "amenity": "restaurant",
+                "cuisine": "fish;french",
+                "name": "Le Hangar du Pecheur"
+            }
+        },
+        {
+            "type": "node",
+            "id": 11207272771,
+            "lat": 48.3280387,
+            "lon": -4.7617099,
+            "tags": {
+                "source": "IGN - 2022-06",
+                "tourism": "viewpoint"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12073476625,
+            "lat": 48.3463871,
+            "lon": -4.7623396,
+            "tags": {
+                "amenity": "drinking_water",
+                "check_date": "2024-07-19",
+                "fee": "no"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12174944715,
+            "lat": 48.346988,
+            "lon": -4.7509126,
+            "tags": {
+                "building": "bunker",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12174944724,
+            "lat": 48.3466484,
+            "lon": -4.75084,
+            "tags": {
+                "building": "bunker",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12309339602,
+            "lat": 48.3616785,
+            "lon": -4.7672275,
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12309352801,
+            "lat": 48.361377,
+            "lon": -4.7668724,
+            "tags": {
+                "amenity": "toilets",
+                "fee": "no",
+                "wheelchair": "limited"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12709521423,
+            "lat": 48.3542833,
+            "lon": -4.6727739,
+            "tags": {
+                "description": "Plaque poême \"Mer d'Iroise\"",
+                "historic": "memorial",
+                "information": "terminal",
+                "memorial": "stone",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12709872839,
+            "lat": 48.3300757,
+            "lon": -4.7524276,
+            "tags": {
+                "board_type": "history",
+                "information": "board",
+                "name": "Mémoires d'Iroise",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12712841720,
+            "lat": 48.3371683,
+            "lon": -4.6998045,
+            "tags": {
+                "tourism": "viewpoint"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12712846709,
+            "lat": 48.3370238,
+            "lon": -4.7007525,
+            "tags": {
+                "tourism": "viewpoint"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12809504936,
+            "lat": 48.3559955,
+            "lon": -4.6788145,
+            "tags": {
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12809504940,
+            "lat": 48.3560191,
+            "lon": -4.6787961,
+            "tags": {
+                "hiking": "yes",
+                "information": "guidepost",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12809536957,
+            "lat": 48.3546186,
+            "lon": -4.6758151,
+            "tags": {
+                "tourism": "viewpoint"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12809536966,
+            "lat": 48.3547607,
+            "lon": -4.6736232,
+            "tags": {
+                "information": "map",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12809638686,
+            "lat": 48.3395339,
+            "lon": -4.7024813,
+            "tags": {
+                "information": "map",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12875469131,
+            "lat": 48.3546099,
+            "lon": -4.6737161,
+            "tags": {
+                "information": "board",
+                "survey:date": "2025-05-30",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12973267697,
+            "lat": 48.3568335,
+            "lon": -4.7673523,
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "yes",
+                "name": "Parking Kennedy",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "node",
+            "id": 12973381863,
+            "lat": 48.3568504,
+            "lon": -4.7672506,
+            "tags": {
+                "amenity": "toilets",
+                "changing_table": "no",
+                "fee": "no",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "node",
+            "id": 13045458401,
+            "lat": 48.3833466,
+            "lon": -4.7621684,
+            "tags": {
+                "amenity": "toilets",
+                "opening_hours": "Mo-Su 10:00-21:00"
+            }
+        },
+        {
+            "type": "node",
+            "id": 13045561301,
+            "lat": 48.3840241,
+            "lon": -4.7638574,
+            "tags": {
+                "board_type": "nature",
+                "information": "board",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "node",
+            "id": 13056332337,
+            "lat": 48.3282449,
+            "lon": -4.7608254,
+            "tags": {
+                "board_type": "history",
+                "information": "board",
+                "name": "Hissez haut!",
+                "tourism": "information"
+            }
+        },
+        {
+            "type": "way",
+            "id": 27269238,
+            "center": {
+                "lat": 48.3669679,
+                "lon": -4.7606417
+            },
+            "nodes": [
+                299319331,
+                299319332,
+                299319333,
+                299319335,
+                2184146442,
+                299319331
+            ],
+            "tags": {
+                "amenity": "parking",
+                "name": "Blancs sablons P5",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 29329952,
+            "center": {
+                "lat": 48.3741394,
+                "lon": -4.7554267
+            },
+            "nodes": [
+                322666703,
+                322666714,
+                322666704,
+                3727912301,
+                3727912302,
+                322666705,
+                3727912303,
+                322666706,
+                322666707,
+                322666708,
+                322666713,
+                322666718,
+                322666715,
+                322666703
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Blancs sablons P1",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 29329962,
+            "center": {
+                "lat": 48.3829312,
+                "lon": -4.7618196
+            },
+            "nodes": [
+                322666966,
+                12192948493,
+                12192948494,
+                12192948495,
+                4621963708,
+                12192948496,
+                12423046276,
+                322666969,
+                322666973,
+                4621963706,
+                322666966
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Parking de la Plage d'Illien",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 43910433,
+            "center": {
+                "lat": 48.3416656,
+                "lon": -4.7193866
+            },
+            "nodes": [
+                559167165,
+                12809669729,
+                577288700,
+                559167173,
+                187250460,
+                559167172,
+                559167171,
+                559167170,
+                559167168,
+                577288701,
+                559167159,
+                559167166,
+                559167165
+            ],
+            "tags": {
+                "amenity": "parking",
+                "name": "Place Général de Gaulle",
+                "name:br": "Plasenn Jeneral de Gaulle",
+                "source:name:br": "proper translation"
+            }
+        },
+        {
+            "type": "way",
+            "id": 44145228,
+            "center": {
+                "lat": 48.3404051,
+                "lon": -4.7022101
+            },
+            "nodes": [
+                560857482,
+                560857488,
+                560857489,
+                560857490,
+                560857492,
+                1862701232,
+                560857493,
+                560857494,
+                560857481,
+                7603350577,
+                560857480,
+                560857483,
+                560857484,
+                560857485,
+                560857486,
+                560857487,
+                560857491,
+                560857482
+            ],
+            "tags": {
+                "addr:street": "Route de Perzel",
+                "caravans": "yes",
+                "name": "Les Terrasses de Bertheaume",
+                "stars": "3",
+                "tents": "yes",
+                "tourism": "camp_site",
+                "website": "https://www.camping-brest.com/"
+            }
+        },
+        {
+            "type": "way",
+            "id": 44150827,
+            "center": {
+                "lat": 48.3374276,
+                "lon": -4.706912
+            },
+            "nodes": [
+                560904473,
+                1293841830,
+                1293841834,
+                1293841805,
+                1293841818,
+                560904479,
+                560904485,
+                560904487,
+                560904492,
+                560904494,
+                12247124473,
+                560904495,
+                12247124474,
+                560904508,
+                12247124472,
+                560904497,
+                560904499,
+                560904501,
+                560904503,
+                560904483,
+                2599436949,
+                2599436948,
+                560904477,
+                560904473
+            ],
+            "tags": {
+                "caravan_site": "motorhome_stopover",
+                "caravan_site:type": "coastal",
+                "charge": "10.20 EUR",
+                "fee": "yes",
+                "name": "Aire de camping-cars de Bertheaume-Plougonvelin",
+                "name:br": "Leur kirri-kampiñ Perzell",
+                "power_supply": "yes",
+                "power_supply:capacity": "50",
+                "power_supply:fee": "no",
+                "sanitary_dump_station": "yes",
+                "seasonal": "no",
+                "shower": "yes",
+                "source:name:br": "proper translation",
+                "toilets": "yes",
+                "tourism": "caravan_site",
+                "water_point": "yes",
+                "water_point:charge": "2 EUR",
+                "water_point:fee": "yes",
+                "website": "https://www.iroise-bretagne.bzh/hebergement/aire-de-camping-cars-de-bertheaume-plougonvelin/"
+            }
+        },
+        {
+            "type": "way",
+            "id": 44215796,
+            "center": {
+                "lat": 48.3550057,
+                "lon": -4.6883902
+            },
+            "nodes": [
+                561552310,
+                582686782,
+                582686777,
+                561552318,
+                561552324,
+                561552302,
+                582686781,
+                561552310
+            ],
+            "tags": {
+                "amenity": "parking",
+                "name": "Place des FFI",
+                "name:br": "Plasenn an FFI",
+                "source:name:br": "proper translation"
+            }
+        },
+        {
+            "type": "way",
+            "id": 45396706,
+            "center": {
+                "lat": 48.3403993,
+                "lon": -4.7199966
+            },
+            "nodes": [
+                187250489,
+                1325505162,
+                1325522482,
+                577286330,
+                577286329,
+                1325505160,
+                577288694,
+                577288697,
+                1325505161,
+                577288692,
+                187250489
+            ],
+            "tags": {
+                "amenity": "parking",
+                "name": "Place de l'Église",
+                "name:br": "Plasenn an Iliz",
+                "source:name:br": "proper translation"
+            }
+        },
+        {
+            "type": "way",
+            "id": 45585800,
+            "center": {
+                "lat": 48.3438438,
+                "lon": -4.7212503
+            },
+            "nodes": [
+                581264674,
+                581264680,
+                581264681,
+                581264683,
+                581264675,
+                581264676,
+                581264677,
+                581264678,
+                581264679,
+                581264669,
+                581264672,
+                581264673,
+                581264674
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "carpool": "designated",
+                "name": "Kéraudy",
+                "name:br": "Keraodi",
+                "parking": "surface",
+                "ref:FR:BNCLC": "29190-C-001",
+                "source:name:br": "proper translation",
+                "surface": "asphalt"
+            }
+        },
+        {
+            "type": "way",
+            "id": 45750252,
+            "center": {
+                "lat": 48.3546711,
+                "lon": -4.6908281
+            },
+            "nodes": [
+                582687709,
+                582687715,
+                582699081,
+                582699080,
+                582687716,
+                614683839,
+                614683841,
+                582687717,
+                582687718,
+                582687719,
+                582687721,
+                582687722,
+                582687723,
+                582687724,
+                582687726,
+                582687727,
+                582687707,
+                582687709
+            ],
+            "tags": {
+                "name": "Grève de Porski",
+                "natural": "beach"
+            }
+        },
+        {
+            "type": "way",
+            "id": 51560911,
+            "center": {
+                "lat": 48.3395999,
+                "lon": -4.7014221
+            },
+            "nodes": [
+                1659543203,
+                4041922311,
+                4041922309,
+                666371694,
+                3727925498,
+                1659543200,
+                659408288,
+                4041922320,
+                4041922322,
+                4041922321,
+                3727931121,
+                4041922305,
+                3727932235,
+                3727932234,
+                3727932233,
+                2142845980,
+                5370029754,
+                2142845985,
+                4041922326,
+                4041922328,
+                28222341,
+                4041922330,
+                666371716,
+                659376223,
+                659376231,
+                4041922331,
+                13014382922,
+                666266642,
+                666266639,
+                1659543203
+            ],
+            "tags": {
+                "alt_name": "Plage du Perzel;Plage de Bertheaume",
+                "name": "Plage du Perzel ou de Bertheaume",
+                "name:br": "Aod Perzell",
+                "natural": "beach",
+                "source:name:br": "ofis publik ar brezhoneg",
+                "surface": "sand"
+            }
+        },
+        {
+            "type": "way",
+            "id": 51571045,
+            "center": {
+                "lat": 48.3493438,
+                "lon": -4.6989067
+            },
+            "nodes": [
+                611915920,
+                666291130,
+                4041872201,
+                4041872199,
+                4041872198,
+                4041872200,
+                4041872202,
+                4041872203,
+                611915902,
+                611915777,
+                611915759,
+                611915772,
+                611915769,
+                666392166,
+                666392145,
+                28222360,
+                28222362,
+                666392146,
+                666392140,
+                666392142,
+                666392133,
+                666392136,
+                666392143,
+                666392147,
+                666392168,
+                28222363,
+                666392169,
+                666392170,
+                666392172,
+                666392173,
+                666392149,
+                666392150,
+                666392152,
+                666392153,
+                666392155,
+                666392156,
+                666392157,
+                666392161,
+                666392163,
+                28222366,
+                677979783,
+                8725381748,
+                666392165,
+                666291109,
+                666392175,
+                28222367,
+                666291108,
+                28222369,
+                666291107,
+                28222371,
+                28222373,
+                666401692,
+                666401693,
+                666401694,
+                666401695,
+                611915930,
+                666401696,
+                666401698,
+                666401699,
+                28222380,
+                666401700,
+                666401701,
+                611915938,
+                611915935,
+                666401702,
+                666401704,
+                666401703,
+                666401705,
+                666401706,
+                666401707,
+                666401708,
+                611915933,
+                611915932,
+                666401709,
+                666401710,
+                666401711,
+                666401712,
+                666401713,
+                666401714,
+                611915944,
+                666401715,
+                666401717,
+                666401716,
+                666401718,
+                666401719,
+                666401720,
+                666291153,
+                666401721,
+                666401722,
+                666401723,
+                666401724,
+                666401725,
+                666401726,
+                666401727,
+                666291154,
+                666401728,
+                666401729,
+                611915942,
+                666401730,
+                28222382,
+                28222383,
+                666401732,
+                666401731,
+                28222384,
+                666291161,
+                28222385,
+                666401733,
+                666401734,
+                666401737,
+                666291168,
+                666401735,
+                666291167,
+                666291166,
+                666448109,
+                666448113,
+                666401736,
+                28222386,
+                666448117,
+                666448116,
+                666448119,
+                666448122,
+                666448120,
+                666448123,
+                666448125,
+                666448126,
+                666448128,
+                666448129,
+                666448131,
+                666448132,
+                666448139,
+                666448140,
+                666448142,
+                668086597,
+                666448144,
+                596517384,
+                11730316799,
+                666448145,
+                596517392,
+                666448147,
+                28222389,
+                28222392,
+                596517396,
+                666448150,
+                666448149,
+                666448152,
+                666448153,
+                666448155,
+                666448157,
+                666448158,
+                666448161,
+                666448159,
+                666448181,
+                666448164,
+                666448166,
+                659540164,
+                666291172,
+                666291164,
+                659540166,
+                659540167,
+                666291156,
+                659540150,
+                659540152,
+                659540145,
+                659540146,
+                659540142,
+                659540143,
+                659540135,
+                659540136,
+                659540137,
+                659540129,
+                659540130,
+                659540131,
+                13014383073,
+                659540133,
+                611915920
+            ],
+            "tags": {
+                "name": "Plage du Trez-Hir",
+                "name:br": "Aod Traezh Hir",
+                "natural": "beach",
+                "source:name:br": "ofis publik ar brezhoneg",
+                "surface": "sand"
+            }
+        },
+        {
+            "type": "way",
+            "id": 53673097,
+            "center": {
+                "lat": 48.3629754,
+                "lon": -4.7487662
+            },
+            "nodes": [
+                677821297,
+                677821299,
+                677821301,
+                677821303,
+                677821305,
+                677821307,
+                677821309,
+                677821311,
+                677821313,
+                677821315,
+                677821317,
+                677821319,
+                677821321,
+                677821323,
+                677821325,
+                677821327,
+                677821329,
+                677821331,
+                677821334,
+                677821335,
+                677821337,
+                677821339,
+                677821340,
+                677821342,
+                677821297
+            ],
+            "tags": {
+                "building": "yes",
+                "historic": "castle",
+                "name": "Château de Kerjean-Mol",
+                "ref:mhs": "IA29002820",
+                "wikidata": "Q58643250"
+            }
+        },
+        {
+            "type": "way",
+            "id": 53673141,
+            "center": {
+                "lat": 48.3725368,
+                "lon": -4.7375085
+            },
+            "nodes": [
+                677821992,
+                677821993,
+                677821995,
+                677821997,
+                677821999,
+                677822001,
+                677822003,
+                677822005,
+                677822007,
+                677822009,
+                677822011,
+                677821992
+            ],
+            "tags": {
+                "building": "yes",
+                "historic": "castle",
+                "name": "Château de Kermorvan-Névé",
+                "ref:mhs": "IA29002821"
+            }
+        },
+        {
+            "type": "way",
+            "id": 53691199,
+            "center": {
+                "lat": 48.343154,
+                "lon": -4.7229064
+            },
+            "nodes": [
+                677997388,
+                677997389,
+                677997394,
+                677997399,
+                677997383,
+                677997400,
+                677997388
+            ],
+            "tags": {
+                "addr:city": "Plougonvelin",
+                "addr:postcode": "29217",
+                "addr:street": "Rue du Stade",
+                "brand": "Intermarché Super",
+                "brand:wikidata": "Q98278038",
+                "building": "retail",
+                "name": "Intermarché Super",
+                "opening_hours": "Mo-Sa 08:45-19:45; Su 09:00-12:30",
+                "operator": "Groupement des Mousquetaires",
+                "shop": "supermarket",
+                "source": "cadastre-dgi-fr source : PaysDeBrest - 20100329"
+            }
+        },
+        {
+            "type": "way",
+            "id": 53715265,
+            "center": {
+                "lat": 48.3425227,
+                "lon": -4.7635371
+            },
+            "nodes": [
+                678160066,
+                678160067,
+                678160068,
+                678160069,
+                678160070,
+                678160071,
+                678160072,
+                678160073,
+                678160074,
+                678160066
+            ],
+            "tags": {
+                "building": "yes",
+                "height": "17",
+                "man_made": "lighthouse",
+                "name": "Phare de Lochrist",
+                "ref:FR:ANFR": "1478946",
+                "source": "ANFR 08/2019;cadastre-dgi-fr source : PaysDeBrest - 20100329",
+                "wikidata": "Q71254350"
+            }
+        },
+        {
+            "type": "way",
+            "id": 93324987,
+            "center": {
+                "lat": 48.3427827,
+                "lon": -4.7211673
+            },
+            "nodes": [
+                968104802,
+                968104804,
+                968104806,
+                968104807,
+                968104808,
+                968104809,
+                968104798,
+                1082032964,
+                968104802
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 105776246,
+            "center": {
+                "lat": 48.3652145,
+                "lon": -4.7671515
+            },
+            "nodes": [
+                1217988211,
+                832520989,
+                10864112226,
+                10864112224,
+                3299368473,
+                12264532872,
+                3299368474,
+                3299368475,
+                2860728097,
+                3299368464,
+                10864112217,
+                10864112225,
+                1217988261,
+                1217988247,
+                1217988211
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Blancs sablons P6",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 112156382,
+            "center": {
+                "lat": 48.3394486,
+                "lon": -4.726531
+            },
+            "nodes": [
+                1275683533,
+                1275683535,
+                1275683534,
+                1275683538,
+                1275683539,
+                1275683536,
+                11782691127,
+                1275683537,
+                1275683540,
+                11782691126,
+                1275683542,
+                11782691125,
+                1275683533
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 112310863,
+            "center": {
+                "lat": 48.3391204,
+                "lon": -4.7030182
+            },
+            "nodes": [
+                1276877272,
+                1276877279,
+                1276877268,
+                1276877271,
+                1276877276,
+                1276877280,
+                1276877269,
+                1276877274,
+                1276877272
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Parking à bateaux",
+                "name:br": "Parklec'h Bigi",
+                "parking": "surface",
+                "source:name:br": "proper translation"
+            }
+        },
+        {
+            "type": "way",
+            "id": 114189888,
+            "center": {
+                "lat": 48.34151,
+                "lon": -4.7256481
+            },
+            "nodes": [
+                1293791763,
+                1293797575,
+                1293791746,
+                1293787186,
+                1293791761,
+                1293791748,
+                1244318567,
+                1293791763
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 114190749,
+            "center": {
+                "lat": 48.3393203,
+                "lon": -4.7286648
+            },
+            "nodes": [
+                1293797542,
+                1293797549,
+                1293797543,
+                1293797544,
+                1293797542
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 114190751,
+            "center": {
+                "lat": 48.3417969,
+                "lon": -4.727142
+            },
+            "nodes": [
+                1293797576,
+                1293797558,
+                1293797554,
+                5829102993,
+                3623951834,
+                1293797568,
+                1293797576
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 114191062,
+            "center": {
+                "lat": 48.3388979,
+                "lon": -4.7278373
+            },
+            "nodes": [
+                1293801514,
+                1293801518,
+                1293801517,
+                1293801515,
+                1293801520,
+                1293801509,
+                1297700209,
+                1293801536,
+                1293801538,
+                1293801514
+            ],
+            "tags": {
+                "access": "customers",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 131663149,
+            "center": {
+                "lat": 48.3562895,
+                "lon": -4.6702878
+            },
+            "nodes": [
+                2406166809,
+                2406166811,
+                1448813627,
+                1448813629,
+                1448813631,
+                6153939646,
+                1448813634,
+                6153939645,
+                1448813635,
+                1448813636,
+                1448813637,
+                1448813640,
+                1448813642,
+                1448813643,
+                9087964107,
+                9087964106,
+                1448813641,
+                2857688202,
+                1448813638,
+                1448813632,
+                1448813628,
+                1290487205,
+                2406166809
+            ],
+            "tags": {
+                "addr:city": "Locmaria-Plouzané",
+                "addr:postcode": "29280",
+                "addr:street": "Plage de Portez",
+                "capacity": "100",
+                "caravans": "yes",
+                "dog": "yes",
+                "email": "camping-portez@locmaria-plouzane.fr",
+                "internet_access": "no",
+                "name": "Camping municipal de Portez",
+                "name:br": "Tachenn-gampiñ kêr Portez",
+                "phone": "+33 2 98 48 49 85",
+                "source:name:br": "proper translation",
+                "stars": "2",
+                "tents": "yes",
+                "tourism": "camp_site",
+                "website": "http://camping-portez.fr/"
+            }
+        },
+        {
+            "type": "way",
+            "id": 131663523,
+            "center": {
+                "lat": 48.3454536,
+                "lon": -4.7419848
+            },
+            "nodes": [
+                1448819545,
+                1448819546,
+                1448819547,
+                1448819550,
+                1448819549,
+                1448819544,
+                1448819545
+            ],
+            "tags": {
+                "addr:city": "Plougonvelin",
+                "addr:postcode": "29217",
+                "addr:street": "Kéryel",
+                "capacity:tents": "16",
+                "caravans": "yes",
+                "check_date": "2024-07-23",
+                "email": "domainedekeryel@gmail.com",
+                "fee": "yes",
+                "mobile": "+33 2 98 48 33 35",
+                "name": "Domaine de Kéryel",
+                "phone": "+33 7 83 200 201",
+                "shower": "yes",
+                "stars": "3",
+                "tents": "yes",
+                "toilets": "yes",
+                "tourism": "camp_site",
+                "website": "https://domainedekeryel.fr/"
+            }
+        },
+        {
+            "type": "way",
+            "id": 131663820,
+            "center": {
+                "lat": 48.3665761,
+                "lon": -4.7586806
+            },
+            "nodes": [
+                1448824186,
+                1448824185,
+                1448824183,
+                1448824179,
+                1448824177,
+                1448824174,
+                1448824167,
+                1448824164,
+                1448824169,
+                1448824171,
+                1448824166,
+                1448824162,
+                1448824158,
+                1448824151,
+                1448824150,
+                1448824146,
+                1448824149,
+                1448824148,
+                1448824147,
+                1448824157,
+                1448824160,
+                1448824176,
+                12817957295,
+                12817957298,
+                1990224037,
+                1990237110,
+                11730090950,
+                1448824181,
+                12905379358,
+                1448824186
+            ],
+            "tags": {
+                "addr:city": "Le Conquet",
+                "addr:postcode": "29217",
+                "addr:street": "Route de Kermorvan",
+                "capacity:pitches": "235",
+                "caravans": "yes",
+                "internet_access": "wlan",
+                "internet_access:fee": "yes",
+                "name": "Camping les Blancs Sablons",
+                "name:br": "Tachenn-gampiñ Gwendraezh",
+                "nudism": "no",
+                "phone": "+33 2 98 36 07 91",
+                "sanitary_dump_station": "customers",
+                "stars": "2",
+                "tents": "yes",
+                "tourism": "camp_site",
+                "website": "https://www.camping-blancs-sablons.com",
+                "wheelchair": "designated"
+            }
+        },
+        {
+            "type": "way",
+            "id": 134893086,
+            "center": {
+                "lat": 48.3707585,
+                "lon": -4.7705215
+            },
+            "nodes": [
+                4947879783,
+                527321021,
+                527321023,
+                527321025,
+                527321027,
+                527321030,
+                527321034,
+                527321036,
+                527321038,
+                527321040,
+                527321042,
+                527321044,
+                911573997,
+                4947866115,
+                4947866114,
+                4947866113,
+                4947866112,
+                4947866111,
+                4947866110,
+                4947866109,
+                4947866332,
+                4947866331,
+                4947866330,
+                4947866329,
+                4947866328,
+                4947866327,
+                4947866326,
+                4947866325,
+                4947866324,
+                4947866323,
+                4947866322,
+                4947873835,
+                4947873829,
+                4947873826,
+                4947873420,
+                4947866320,
+                4947866319,
+                4947866318,
+                4947866317,
+                4947866316,
+                4947866315,
+                4947866314,
+                4947879783
+            ],
+            "tags": {
+                "name": "Plage des Blancs Sablons",
+                "natural": "beach",
+                "surface": "sand"
+            }
+        },
+        {
+            "type": "way",
+            "id": 171981963,
+            "center": {
+                "lat": 48.3484269,
+                "lon": -4.70403
+            },
+            "nodes": [
+                1829401138,
+                1829401136,
+                3138997763,
+                1829401135,
+                1829401137,
+                1829401133,
+                1829401130,
+                1829401138
+            ],
+            "tags": {
+                "amenity": "parking",
+                "name": "Place de Trez Hir",
+                "name:br": "Plasenn Traezh Hir",
+                "parking": "surface",
+                "source:name:br": "proper translation"
+            }
+        },
+        {
+            "type": "way",
+            "id": 202316417,
+            "center": {
+                "lat": 48.347577,
+                "lon": -4.7090532
+            },
+            "nodes": [
+                2122841408,
+                2122841413,
+                2122841415,
+                2122841406,
+                2122841399,
+                2122841390,
+                2122841384,
+                2122841378,
+                2122841364,
+                2122841361,
+                2122841354,
+                2122841353,
+                2122841342,
+                2122841338,
+                2122841333,
+                2122841316,
+                2122841324,
+                2122841328,
+                2122841343,
+                2122841345,
+                2122841346,
+                2122841347,
+                2122841349,
+                2122841359,
+                2122841369,
+                2122841387,
+                2122841394,
+                2122841397,
+                2122841404,
+                2122841408
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 202332191,
+            "center": {
+                "lat": 48.347156,
+                "lon": -4.7047823
+            },
+            "nodes": [
+                2122982286,
+                12809633004,
+                12809633003,
+                4691162262,
+                2122982305,
+                2122982308,
+                2122982306,
+                2122982309,
+                2122982307,
+                4691162260,
+                4691162255,
+                2122982295,
+                2122982286
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 203440403,
+            "center": {
+                "lat": 48.3720632,
+                "lon": -4.7541553
+            },
+            "nodes": [
+                2134565446,
+                2134565434,
+                2134565427,
+                2134565440,
+                2134565446
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Blancs sablons P2",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 204274510,
+            "center": {
+                "lat": 48.3430194,
+                "lon": -4.7011931
+            },
+            "nodes": [
+                611915835,
+                611915845,
+                611915844,
+                666392199,
+                666392198,
+                666392189,
+                659532261,
+                659532262,
+                659532256,
+                666392180,
+                666392186,
+                659532258,
+                4845862687,
+                659532254,
+                611915825,
+                611915835
+            ],
+            "tags": {
+                "name": "Grève de Poull serp dite grève des Curés",
+                "natural": "beach",
+                "surface": "sand",
+                "wheelchair": "no"
+            }
+        },
+        {
+            "type": "way",
+            "id": 232249635,
+            "center": {
+                "lat": 48.3553173,
+                "lon": -4.6721512
+            },
+            "nodes": [
+                1290487205,
+                2406166809,
+                2406166805,
+                2406166808,
+                2406166810,
+                1290487205
+            ],
+            "tags": {
+                "addr:city": "Locmaria-Plouzané",
+                "addr:postcode": "29280",
+                "caravan_site": "motorhome_stopover",
+                "caravan_site:type": "beach",
+                "charge": "5 EUR",
+                "dog": "yes",
+                "fee": "yes",
+                "name": "Aire de Camping Car de Portez",
+                "power_supply": "yes",
+                "power_supply:fee": "yes",
+                "sanitary_dump_station": "yes",
+                "tourism": "caravan_site"
+            }
+        },
+        {
+            "type": "way",
+            "id": 235223600,
+            "center": {
+                "lat": 48.3475368,
+                "lon": -4.7693347
+            },
+            "nodes": [
+                2432976758,
+                2432976754,
+                2432976752,
+                2432976744,
+                2432976746,
+                2432976745,
+                2432976743,
+                2432976747,
+                2432976751,
+                2432976748,
+                2432976750,
+                2432976753,
+                2432976755,
+                2432976756,
+                2432976757,
+                2432976758
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Parking de Porsliogan",
+                "name:br": "Parklec'h Porzh Liogan",
+                "source": "Bing",
+                "source:name:br": "proper translation"
+            }
+        },
+        {
+            "type": "way",
+            "id": 254043112,
+            "center": {
+                "lat": 48.3281858,
+                "lon": -4.7616263
+            },
+            "nodes": [
+                2598771099,
+                2598771106,
+                2598771105,
+                2598771100,
+                2598771112,
+                2598771102,
+                2598771103,
+                2598771107,
+                2598771099
+            ],
+            "tags": {
+                "building": "bunker",
+                "bunker_type": "pillbox",
+                "historic": "yes",
+                "military": "bunker",
+                "name": "Blockhaus de la Casquette"
+            }
+        },
+        {
+            "type": "way",
+            "id": 254043113,
+            "center": {
+                "lat": 48.3294725,
+                "lon": -4.7571713
+            },
+            "nodes": [
+                2598771110,
+                2598771111,
+                2598771104,
+                2598771109,
+                2598771101,
+                2598771108,
+                2598771110
+            ],
+            "tags": {
+                "historic": "fort",
+                "name": "Batterie des Rospects",
+                "name:br": "Batiri ar Rospeg",
+                "source:name:br": "proper translation"
+            }
+        },
+        {
+            "type": "way",
+            "id": 254044730,
+            "center": {
+                "lat": 48.3465947,
+                "lon": -4.750793
+            },
+            "nodes": [
+                2598784719,
+                2598784702,
+                2598784701,
+                2598784704,
+                2598784711,
+                2598784706,
+                2598784719
+            ],
+            "tags": {
+                "historic": "fort",
+                "name": "Batterie Graf Spee (Keringar)"
+            }
+        },
+        {
+            "type": "way",
+            "id": 254108195,
+            "center": {
+                "lat": 48.3780635,
+                "lon": -4.7093315
+            },
+            "nodes": [
+                2599307981,
+                2599307984,
+                2599307989,
+                2599307983,
+                2599307981
+            ],
+            "tags": {
+                "historic": "fort",
+                "name": "Batterie de Kergounan - 4/AR343"
+            }
+        },
+        {
+            "type": "way",
+            "id": 254119685,
+            "center": {
+                "lat": 48.3377321,
+                "lon": -4.6985712
+            },
+            "nodes": [
+                2599384567,
+                2599384562,
+                2599384532,
+                4041961619,
+                4041961618,
+                4041961610,
+                4041961607,
+                4041961606,
+                4041961608,
+                4041961609,
+                4041961615,
+                4041961620,
+                2599384603,
+                2599384583,
+                2599384577,
+                2599384591,
+                2599384567
+            ],
+            "tags": {
+                "historic": "fort",
+                "name": "Fort de Bertheaume",
+                "name:br": "Kastell Perzell",
+                "source:name:br": "ofis publik ar brezhoneg"
+            }
+        },
+        {
+            "type": "way",
+            "id": 254122162,
+            "center": {
+                "lat": 48.3371818,
+                "lon": -4.7021931
+            },
+            "nodes": [
+                2599403269,
+                2599403149,
+                2599403283,
+                2599403207,
+                2599403269
+            ],
+            "tags": {
+                "historic": "fort",
+                "name": "Batterie Basse de 95mm"
+            }
+        },
+        {
+            "type": "way",
+            "id": 254122173,
+            "center": {
+                "lat": 48.3373316,
+                "lon": -4.7077131
+            },
+            "nodes": [
+                2599403152,
+                2599403139,
+                2599403175,
+                2599403196,
+                2599403152
+            ],
+            "tags": {
+                "historic": "fort",
+                "name": "Batterie haute de 270mm"
+            }
+        },
+        {
+            "type": "way",
+            "id": 254122174,
+            "center": {
+                "lat": 48.3370374,
+                "lon": -4.6974986
+            },
+            "nodes": [
+                2599403200,
+                2599403238,
+                4041961613,
+                2599403254,
+                2599403129,
+                2599403114,
+                4041961614,
+                2599403304,
+                2599403317,
+                2599403302,
+                2599403111,
+                2599403151,
+                2599403160,
+                2599403195,
+                2599403156,
+                2599403220,
+                4041961612,
+                2599403168,
+                2599403284,
+                2599403263,
+                2599403191,
+                2599403240,
+                2599403125,
+                2599403251,
+                2599403245,
+                2599403243,
+                2599403203,
+                2599403200
+            ],
+            "tags": {
+                "barrier": "retaining_wall",
+                "historic": "fort",
+                "landuse": "meadow",
+                "name": "Fort de Bertheaume",
+                "name:br": "Kastell Perzell",
+                "source:name:br": "ofis publik ar brezhoneg"
+            }
+        },
+        {
+            "type": "way",
+            "id": 255271852,
+            "center": {
+                "lat": 48.354324,
+                "lon": -4.6741082
+            },
+            "nodes": [
+                28222437,
+                2609773376,
+                2609773381,
+                2609773379,
+                4041872556,
+                2609773380,
+                2609773377,
+                2609773375,
+                7658814841,
+                2609773378,
+                2609773374,
+                2609773372,
+                28222445,
+                28222443,
+                28222441,
+                28222439,
+                28222438,
+                28222437
+            ],
+            "tags": {
+                "name": "Plage de Portez",
+                "name:br": "Aod Portez",
+                "name:fr": "Plage de Portez",
+                "natural": "beach",
+                "source:name:br": "ofis publik ar brezhoneg",
+                "surface": "sand"
+            }
+        },
+        {
+            "type": "way",
+            "id": 255271853,
+            "center": {
+                "lat": 48.3556932,
+                "lon": -4.6798488
+            },
+            "nodes": [
+                2609773387,
+                4041872610,
+                4041872611,
+                4041872612,
+                4041872613,
+                4041872615,
+                2609773389,
+                2609773391,
+                4041872617,
+                4041872618,
+                4041872616,
+                2609773390,
+                4041872614,
+                2609773388,
+                666465634,
+                2609773382,
+                28222428,
+                28222427,
+                702476725,
+                666448296,
+                614683995,
+                9367300881,
+                614683991,
+                2609773387
+            ],
+            "tags": {
+                "name": "Plage de Porsmilin",
+                "name:br": "Aod Porzh Milin",
+                "natural": "beach",
+                "source:name:br": "proper translation",
+                "surface": "sand"
+            }
+        },
+        {
+            "type": "way",
+            "id": 255661194,
+            "center": {
+                "lat": 48.3661767,
+                "lon": -4.762816
+            },
+            "nodes": [
+                2613321087,
+                2613321101,
+                2613321081,
+                2613321085,
+                2613321110,
+                2613321087
+            ],
+            "tags": {
+                "barrier": "retaining_wall",
+                "historic": "fort",
+                "name": "Redoute Intermédiaire"
+            }
+        },
+        {
+            "type": "way",
+            "id": 276904406,
+            "center": {
+                "lat": 48.3583782,
+                "lon": -4.7627023
+            },
+            "nodes": [
+                2814620889,
+                6440518146,
+                515592497,
+                2814620896,
+                2814623311,
+                515592496,
+                2814623319,
+                2814623321,
+                515592495,
+                2814623323,
+                2814623324,
+                11739513271,
+                2814623325,
+                2814623315,
+                12134374256,
+                12134374255,
+                2814620889
+            ],
+            "tags": {
+                "amenity": "parking",
+                "fee": "yes",
+                "name": "Parking des Îles",
+                "name:br": "Parklec'h an Enezeier",
+                "parking": "surface",
+                "source:name:br": "proper translation"
+            }
+        },
+        {
+            "type": "way",
+            "id": 281787843,
+            "center": {
+                "lat": 48.3554665,
+                "lon": -4.6731857
+            },
+            "nodes": [
+                2406166805,
+                519070718,
+                519070717,
+                6401407946,
+                519070708,
+                6401407945,
+                2857688205,
+                6401407943,
+                2857688206,
+                6401407942,
+                2857688207,
+                2857688208,
+                6401407941,
+                1448813628,
+                1290487205,
+                2406166810,
+                2406166808,
+                2406166805
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface",
+                "supervised": "no",
+                "surface": "gravel;grass"
+            }
+        },
+        {
+            "type": "way",
+            "id": 301227686,
+            "center": {
+                "lat": 48.3414971,
+                "lon": -4.7096565
+            },
+            "nodes": [
+                3053255168,
+                3053253795,
+                3053253796,
+                3053253797,
+                3053253798,
+                3053253799,
+                3053255133,
+                3053251532,
+                3053255168
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 308631784,
+            "center": {
+                "lat": 48.3485413,
+                "lon": -4.7027122
+            },
+            "nodes": [
+                3138997762,
+                3138997758,
+                3138997753,
+                3138997760,
+                3138997761,
+                3138997762
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 322941822,
+            "center": {
+                "lat": 48.382751,
+                "lon": -4.7644666
+            },
+            "nodes": [
+                911569657,
+                11134000428,
+                11134000429,
+                11134000430,
+                11134000431,
+                11134000432,
+                11134000433,
+                11134000434,
+                3297352324,
+                3297352296,
+                11134000437,
+                11134000435,
+                3297352315,
+                11134000436,
+                3297352321,
+                3297352328,
+                911582713,
+                3297352292,
+                911586365,
+                3297352330,
+                3297352356,
+                3297355464,
+                3297355469,
+                911567200,
+                4947866116,
+                4947866117,
+                4043822888,
+                4043823891,
+                10696811155,
+                527321066,
+                527321069,
+                527321071,
+                527321073,
+                4947866422,
+                10696811156,
+                4947866421,
+                10696811157,
+                4947866120,
+                10696811158,
+                4947866119,
+                4947866118,
+                11134000427,
+                911569657
+            ],
+            "tags": {
+                "name": "Plage d'Illien",
+                "name:br": "Traezhenn Ilien",
+                "natural": "beach",
+                "source:name:br": "proper translation",
+                "surface": "sand"
+            }
+        },
+        {
+            "type": "way",
+            "id": 323143521,
+            "center": {
+                "lat": 48.3681741,
+                "lon": -4.7595371
+            },
+            "nodes": [
+                3299368549,
+                3299368506,
+                3299368551,
+                3299368552,
+                3299368553,
+                3299368554,
+                3299368555,
+                3299368526,
+                3299368529,
+                3299368465,
+                3299368549
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Blancs sablons P4",
+                "parking": "surface",
+                "source": "Mapbox",
+                "surface": "gravel"
+            }
+        },
+        {
+            "type": "way",
+            "id": 323693135,
+            "center": {
+                "lat": 48.3503813,
+                "lon": -4.7006061
+            },
+            "nodes": [
+                3304712255,
+                3304712256,
+                3304712257,
+                3304712260,
+                3304712259,
+                3304712261,
+                3304712262,
+                3304712263,
+                3304712255
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface",
+                "source": "Mapbox"
+            }
+        },
+        {
+            "type": "way",
+            "id": 368955370,
+            "center": {
+                "lat": 48.3379518,
+                "lon": -4.7010905
+            },
+            "nodes": [
+                3727923476,
+                3727923477,
+                3727923478,
+                3727923479,
+                3727923480,
+                3727923481,
+                3727923482,
+                3727923483,
+                3727923484,
+                3727923486,
+                3727923485,
+                3727923476
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 368955781,
+            "center": {
+                "lat": 48.3393499,
+                "lon": -4.7021568
+            },
+            "nodes": [
+                3727931115,
+                3727931116,
+                3727931117,
+                3727931118,
+                3727931119,
+                4041922291,
+                4041922302,
+                3727931120,
+                3727931121,
+                4041922305,
+                3727932235,
+                3727932234,
+                3727932233,
+                2142845980,
+                3727931122,
+                2142845985,
+                3727931115
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 368955782,
+            "center": {
+                "lat": 48.3392977,
+                "lon": -4.70214
+            },
+            "nodes": [
+                2667607962,
+                2667607958,
+                3727931123,
+                1276877276,
+                3727931124,
+                3727932225,
+                3727932226,
+                3727932227,
+                4041922294,
+                4041922301,
+                28222340,
+                4041922314,
+                4041922312,
+                4041922308,
+                4041922299,
+                4041922289,
+                3727932228,
+                3727932229,
+                3727932230,
+                3727932231,
+                4041922325,
+                3727932232,
+                2667607962
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 396834494,
+            "center": {
+                "lat": 48.3453691,
+                "lon": -4.7641113
+            },
+            "nodes": [
+                3996778778,
+                3996778780,
+                3996778779,
+                3996778777,
+                3996778778
+            ],
+            "tags": {
+                "basin": "retention",
+                "historic": "lavoir",
+                "landuse": "basin",
+                "name": "Lavoir Lochrist",
+                "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2016 + Bing"
+            }
+        },
+        {
+            "type": "way",
+            "id": 401782729,
+            "center": {
+                "lat": 48.3544593,
+                "lon": -4.6880292
+            },
+            "nodes": [
+                4041872567,
+                4041872566,
+                4041872559,
+                4041872558,
+                4041872557,
+                4041872549,
+                4041872539,
+                4041872546,
+                4041872552,
+                4041872560,
+                4041872563,
+                4041872567
+            ],
+            "tags": {
+                "natural": "beach",
+                "tidal": "yes"
+            }
+        },
+        {
+            "type": "way",
+            "id": 401782731,
+            "center": {
+                "lat": 48.3545089,
+                "lon": -4.6879857
+            },
+            "nodes": [
+                4041872546,
+                4041872547,
+                4041872551,
+                4041872555,
+                4041872561,
+                4041872565,
+                4041872570,
+                4041872575,
+                4041872581,
+                4041872577,
+                4041872576,
+                4041872573,
+                4041872568,
+                4041872574,
+                4041872569,
+                4041872566,
+                4041872567,
+                4041872563,
+                614683894,
+                4041872560,
+                4041872552,
+                4041872546
+            ],
+            "tags": {
+                "natural": "beach"
+            }
+        },
+        {
+            "type": "way",
+            "id": 401782734,
+            "center": {
+                "lat": 48.355288,
+                "lon": -4.6798738
+            },
+            "nodes": [
+                2609773387,
+                4041872604,
+                4041872594,
+                4041872596,
+                4041872597,
+                4041872598,
+                4041872595,
+                4041872592,
+                4041872587,
+                4041872591,
+                4041872600,
+                4041872603,
+                4041872607,
+                4041872609,
+                4041872606,
+                4041872605,
+                666465634,
+                2609773382,
+                28222428,
+                28222427,
+                702476725,
+                666448296,
+                614683995,
+                9367300881,
+                614683991,
+                2609773387
+            ],
+            "tags": {
+                "natural": "beach",
+                "surface": "sand",
+                "tidal": "yes"
+            }
+        },
+        {
+            "type": "way",
+            "id": 401782735,
+            "center": {
+                "lat": 48.3540668,
+                "lon": -4.6906786
+            },
+            "nodes": [
+                582687709,
+                911573977,
+                4041872553,
+                4041872540,
+                4041872534,
+                4041872524,
+                4041872517,
+                4041872511,
+                4041872507,
+                4041872497,
+                4041872487,
+                4041872461,
+                4041872452,
+                4041872464,
+                4041872474,
+                4041872473,
+                4041872468,
+                4041872494,
+                4041872509,
+                4041872519,
+                4041872526,
+                4041872527,
+                4041872531,
+                4041872538,
+                614683867,
+                28222400,
+                582699080,
+                582699081,
+                582687715,
+                582687709
+            ],
+            "tags": {
+                "natural": "beach",
+                "tidal": "yes"
+            }
+        },
+        {
+            "type": "way",
+            "id": 401782736,
+            "center": {
+                "lat": 48.3538884,
+                "lon": -4.6739718
+            },
+            "nodes": [
+                2609773376,
+                4041872554,
+                4041872541,
+                4041872533,
+                4041872523,
+                4041872515,
+                4041872508,
+                4041872503,
+                4041872492,
+                4041872484,
+                4041872471,
+                4041872467,
+                4041872470,
+                4041872476,
+                4041872453,
+                4041872432,
+                4041872427,
+                4041872440,
+                4041872455,
+                4041872486,
+                4041872495,
+                4041872506,
+                4041872514,
+                4041872518,
+                28222445,
+                28222443,
+                28222441,
+                28222439,
+                28222438,
+                28222437,
+                2609773376
+            ],
+            "tags": {
+                "natural": "beach",
+                "tidal": "yes"
+            }
+        },
+        {
+            "type": "way",
+            "id": 401782743,
+            "center": {
+                "lat": 48.349328,
+                "lon": -4.6979298
+            },
+            "nodes": [
+                4041872407,
+                4041872415,
+                4041872417,
+                4041872426,
+                4041872434,
+                666448167,
+                666448166,
+                659540164,
+                666291172,
+                666291164,
+                659540166,
+                659540167,
+                666291156,
+                659540150,
+                659540152,
+                659540145,
+                659540146,
+                659540142,
+                659540143,
+                659540135,
+                659540136,
+                659540137,
+                659540129,
+                659540130,
+                659540131,
+                13014383073,
+                659540133,
+                611915920,
+                666291130,
+                4041872201,
+                4041872199,
+                4041872198,
+                4041872200,
+                4041872202,
+                4041872203,
+                611915902,
+                4041872204,
+                4041872205,
+                4041872206,
+                4041872207,
+                4041872208,
+                8721839414,
+                4041872209,
+                4041872210,
+                4041872211,
+                4041872212,
+                4041872213,
+                4041872214,
+                4041872215,
+                4041872216,
+                4041872217,
+                4041872218,
+                4041872220,
+                4041872221,
+                4041872223,
+                4041872228,
+                4041872225,
+                4041872224,
+                4041872226,
+                4041872227,
+                4041872232,
+                4041872236,
+                4041872241,
+                4041872240,
+                4041872239,
+                4041872237,
+                4041872234,
+                4041872235,
+                4041872238,
+                4041872242,
+                4041872243,
+                4041872244,
+                4041872245,
+                4041872246,
+                4041872247,
+                4041872248,
+                4041872249,
+                4041872251,
+                4041872252,
+                4041872274,
+                4041872288,
+                4041872394,
+                4041872402,
+                4041872407
+            ],
+            "tags": {
+                "natural": "beach",
+                "tidal": "yes"
+            }
+        },
+        {
+            "type": "way",
+            "id": 401787258,
+            "center": {
+                "lat": 48.3398427,
+                "lon": -4.7003206
+            },
+            "nodes": [
+                4041922343,
+                4041922341,
+                4041922340,
+                4041922339,
+                4041922338,
+                4041922337,
+                4041922335,
+                4041922334,
+                659376231,
+                4041922331,
+                13014382922,
+                666266642,
+                666266639,
+                1659543203,
+                4041922311,
+                4041922309,
+                4041922304,
+                659408300,
+                4041922323,
+                4041922324,
+                4041922327,
+                4041922329,
+                4041922332,
+                4041922333,
+                4041922336,
+                4041922342,
+                4041922343
+            ],
+            "tags": {
+                "natural": "beach",
+                "tidal": "yes"
+            }
+        },
+        {
+            "type": "way",
+            "id": 621795308,
+            "center": {
+                "lat": 48.3668798,
+                "lon": -4.7469013
+            },
+            "nodes": [
+                5873983323,
+                5873983324,
+                5873983325,
+                5873983326,
+                5873983323
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "parking": "surface",
+                "surface": "ground"
+            }
+        },
+        {
+            "type": "way",
+            "id": 621795329,
+            "center": {
+                "lat": 48.3606365,
+                "lon": -4.744023
+            },
+            "nodes": [
+                5873983371,
+                5873983372,
+                5873983373,
+                5873983374,
+                5873983371
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 621795330,
+            "center": {
+                "lat": 48.3597303,
+                "lon": -4.7427725
+            },
+            "nodes": [
+                5873983375,
+                5873983376,
+                5873983377,
+                5873983378,
+                5873983375
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 623889796,
+            "center": {
+                "lat": 48.3529868,
+                "lon": -4.7186715
+            },
+            "nodes": [
+                5891272577,
+                5891272576,
+                5891272575,
+                5891272574,
+                5891272573,
+                5891272572,
+                5891272571,
+                5891272570,
+                5891272569,
+                5891272568,
+                5891272567,
+                5891272577
+            ],
+            "tags": {
+                "access": "customers",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 683448296,
+            "center": {
+                "lat": 48.3529147,
+                "lon": -4.6688113
+            },
+            "nodes": [
+                6401474464,
+                6401474463,
+                6401474462,
+                6401474461,
+                6401474460,
+                6401474459,
+                6401474458,
+                6401474464
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 683921674,
+            "center": {
+                "lat": 48.3633163,
+                "lon": -4.671252
+            },
+            "nodes": [
+                6406672852,
+                6406672851,
+                6406672850,
+                6406672849,
+                6406672852
+            ],
+            "tags": {
+                "access": "customers",
+                "amenity": "parking",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 684572566,
+            "center": {
+                "lat": 48.355853,
+                "lon": -4.6786335
+            },
+            "nodes": [
+                6414040397,
+                6414040396,
+                519070820,
+                7263212843,
+                6414040394,
+                6414040397
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "capacity": "7",
+                "capacity:disabled": "4",
+                "fee": "no",
+                "parking": "surface",
+                "surface": "asphalt"
+            }
+        },
+        {
+            "type": "way",
+            "id": 684572568,
+            "center": {
+                "lat": 48.3560286,
+                "lon": -4.6786061
+            },
+            "nodes": [
+                6414040402,
+                7651226839,
+                7651226841,
+                7651226842,
+                6414040398,
+                6414040402
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "capacity": "13",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 685459285,
+            "center": {
+                "lat": 48.3582506,
+                "lon": -4.6770812
+            },
+            "nodes": [
+                6423603104,
+                6423603103,
+                6423603102,
+                6423603101,
+                6423603100,
+                6423603099,
+                6423603098,
+                6423603097,
+                6423603096,
+                6423603104
+            ],
+            "tags": {
+                "access": "private",
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 685459286,
+            "center": {
+                "lat": 48.3560387,
+                "lon": -4.6771469
+            },
+            "nodes": [
+                6423603116,
+                6423603115,
+                6423603114,
+                6423603113,
+                6423603112,
+                6423603111,
+                6423603110,
+                6423603109,
+                6423603108,
+                6423603107,
+                6423603106,
+                6423603105,
+                6423603116
+            ],
+            "tags": {
+                "access": "private",
+                "amenity": "parking",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 685459287,
+            "center": {
+                "lat": 48.3570925,
+                "lon": -4.6760057
+            },
+            "nodes": [
+                6423603129,
+                6423603128,
+                6423603127,
+                6423603126,
+                6423603125,
+                6423603124,
+                6423603123,
+                6423603122,
+                6423603121,
+                6423603120,
+                6423603119,
+                6423603129
+            ],
+            "tags": {
+                "access": "private",
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 687054060,
+            "center": {
+                "lat": 48.3361764,
+                "lon": -4.7056572
+            },
+            "nodes": [
+                6440521498,
+                6440521499,
+                6440521500,
+                6440521501,
+                6440521502,
+                6440521503,
+                6440521504,
+                6440521505,
+                6440521506,
+                6440521507,
+                6440521508,
+                6440521509,
+                6440521498
+            ],
+            "tags": {
+                "natural": "beach"
+            }
+        },
+        {
+            "type": "way",
+            "id": 760653512,
+            "center": {
+                "lat": 48.3308938,
+                "lon": -4.7599285
+            },
+            "nodes": [
+                7105838466,
+                11200464635,
+                560054027,
+                560054026,
+                12899724532,
+                12899724534,
+                560054025,
+                2142845748,
+                12899724533,
+                3469238077,
+                560054020,
+                560054019,
+                7105838466
+            ],
+            "tags": {
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Rospects",
+                "park_ride": "no",
+                "parking": "surface",
+                "surface": "grass"
+            }
+        },
+        {
+            "type": "way",
+            "id": 814995806,
+            "center": {
+                "lat": 48.347447,
+                "lon": -4.7038319
+            },
+            "nodes": [
+                7612733055,
+                7612733054,
+                7612733053,
+                7612733052,
+                7612733055
+            ],
+            "tags": {
+                "amenity": "toilets",
+                "building": "yes",
+                "fee": "no",
+                "source": "cadastre-dgi-fr source : Direction Générale des Finances Publiques - Cadastre. Mise à jour : 2020",
+                "unisex": "yes",
+                "wheelchair": "yes"
+            }
+        },
+        {
+            "type": "way",
+            "id": 886405805,
+            "center": {
+                "lat": 48.3315483,
+                "lon": -4.7680447
+            },
+            "nodes": [
+                8242341125,
+                8242341124,
+                8242341123,
+                8242341122,
+                8242341121,
+                8242341120,
+                11200473629,
+                8242341125
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 932305757,
+            "center": {
+                "lat": 48.3480536,
+                "lon": -4.7064704
+            },
+            "nodes": [
+                8642573534,
+                8642573535,
+                8642573536,
+                8642573537,
+                8642573538,
+                8642573539,
+                8642573534
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 982792501,
+            "center": {
+                "lat": 48.3549828,
+                "lon": -4.6714436
+            },
+            "nodes": [
+                9087964042,
+                9087964040,
+                9087964050,
+                9087964023,
+                9087964044,
+                9087964043,
+                9087964042
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1000279416,
+            "center": {
+                "lat": 48.3575902,
+                "lon": -4.6783938
+            },
+            "nodes": [
+                9233052969,
+                9233052968,
+                9233052967,
+                9233052966,
+                9233052965,
+                9233052964,
+                11939515130,
+                9233052963,
+                519070824,
+                2198449758,
+                9233052962,
+                9233052969
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1110712241,
+            "center": {
+                "lat": 48.3429129,
+                "lon": -4.7012754
+            },
+            "nodes": [
+                10161664559,
+                10161664560,
+                10161664561,
+                10161664562,
+                10161664559
+            ],
+            "tags": {
+                "lifeguard": "no",
+                "name": "plage des trois curés",
+                "natural": "beach",
+                "surface": "sand"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1168186271,
+            "center": {
+                "lat": 48.3712406,
+                "lon": -4.7536783
+            },
+            "nodes": [
+                10864128473,
+                10864128472,
+                10864128471,
+                10864128470,
+                10864128469,
+                525148084,
+                10864128468,
+                10864128467,
+                10864128466,
+                10982309516,
+                10864128465,
+                10982309515,
+                10982309514,
+                10982309513,
+                10982309512,
+                10982309511,
+                10982309510,
+                10864128464,
+                10864128463,
+                10864128462,
+                10864128461,
+                10864128460,
+                10864128473
+            ],
+            "tags": {
+                "access": "yes",
+                "amenity": "parking",
+                "fee": "no",
+                "name": "Blancs sablons P3",
+                "parking": "surface"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1204024495,
+            "center": {
+                "lat": 48.3349268,
+                "lon": -4.7590315
+            },
+            "nodes": [
+                11159741129,
+                11159741130,
+                11159741134,
+                11159741124,
+                11159741123,
+                11159741131,
+                11159741120,
+                11159741133,
+                11159741129
+            ],
+            "tags": {
+                "alt_name": "Le deux amers de Plougonvellin",
+                "building": "yes",
+                "historic": "yes",
+                "name": "2 pignons de Kéravel",
+                "tourism": "attraction"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1204024496,
+            "center": {
+                "lat": 48.3349727,
+                "lon": -4.7588954
+            },
+            "nodes": [
+                11159741128,
+                11159741126,
+                11159741125,
+                11159741132,
+                11159741121,
+                11159741122,
+                11159741127,
+                11159741119,
+                11159741128
+            ],
+            "tags": {
+                "alt_name": "Le deux amers de Plougonvellin",
+                "building": "yes",
+                "historic": "yes",
+                "name": "2 pignons de Kéravel",
+                "tourism": "attraction"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1205835799,
+            "center": {
+                "lat": 48.3605915,
+                "lon": -4.7628496
+            },
+            "nodes": [
+                11174306121,
+                11174306120,
+                11174306119,
+                11174306118,
+                11174306123,
+                11174306122,
+                11174306121
+            ],
+            "tags": {
+                "access": "customers",
+                "amenity": "parking",
+                "ref": "Le Hangar du Pecheur"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1208860121,
+            "center": {
+                "lat": 48.3347697,
+                "lon": -4.7620059
+            },
+            "nodes": [
+                11200534236,
+                11200534235,
+                5604441494,
+                11200534234,
+                11200534233,
+                11200534232,
+                11200534231,
+                11200534236
+            ],
+            "tags": {
+                "access": "customers",
+                "amenity": "parking",
+                "parking": "surface",
+                "surface": "asphalt"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1315337323,
+            "center": {
+                "lat": 48.3473677,
+                "lon": -4.7511979
+            },
+            "nodes": [
+                12174944711,
+                12174944712,
+                12174944713,
+                12174944714,
+                12174944711
+            ],
+            "tags": {
+                "building": "bunker",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1315337331,
+            "center": {
+                "lat": 48.3467292,
+                "lon": -4.7498935
+            },
+            "nodes": [
+                12174952650,
+                12174952651,
+                12174952652,
+                12174952653,
+                12174952650
+            ],
+            "tags": {
+                "amenity": "shelter",
+                "building": "yes"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1315337332,
+            "center": {
+                "lat": 48.3459637,
+                "lon": -4.7485539
+            },
+            "nodes": [
+                12174952654,
+                12174952655,
+                12174952656,
+                12174952657,
+                12174952658,
+                12174952659,
+                12174952654
+            ],
+            "tags": {
+                "building": "bunker",
+                "historic": "yes",
+                "military": "bunker"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1383706987,
+            "center": {
+                "lat": 48.3499432,
+                "lon": -4.7610462
+            },
+            "nodes": [
+                12811121792,
+                12811121793,
+                12811121794,
+                12811121795,
+                12811121792
+            ],
+            "tags": {
+                "historic": "lavoir"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1384439384,
+            "center": {
+                "lat": 48.3671662,
+                "lon": -4.7600261
+            },
+            "nodes": [
+                12817957295,
+                12817957300,
+                12817957296,
+                12817957297,
+                12817957298,
+                12817957295
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1384439387,
+            "center": {
+                "lat": 48.3675844,
+                "lon": -4.7594483
+            },
+            "nodes": [
+                12817968010,
+                12817968011,
+                12817968012,
+                12817968013,
+                12817968010
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "way",
+            "id": 1442826334,
+            "center": {
+                "lat": 48.3683745,
+                "lon": -4.7356795
+            },
+            "nodes": [
+                13239037226,
+                13239037227,
+                13239037228,
+                13239037229,
+                13239037230,
+                13239037226
+            ],
+            "tags": {
+                "amenity": "parking"
+            }
+        },
+        {
+            "type": "relation",
+            "id": 1812815,
+            "center": {
+                "lat": 48.3787813,
+                "lon": -4.7637119
+            },
+            "members": [
+                {
+                    "type": "way",
+                    "ref": 134893093,
+                    "role": "outer"
+                },
+                {
+                    "type": "way",
+                    "ref": 134893088,
+                    "role": "outer"
+                },
+                {
+                    "type": "way",
+                    "ref": 134893091,
+                    "role": "outer"
+                },
+                {
+                    "type": "way",
+                    "ref": 134887222,
+                    "role": "outer"
+                },
+                {
+                    "type": "way",
+                    "ref": 134893089,
+                    "role": "outer"
+                }
+            ],
+            "tags": {
+                "area": "yes",
+                "name": "Plage de Perzic",
+                "name:br": "Traezhenn Perzig",
+                "natural": "beach",
+                "note": "Plage naturiste",
+                "nudism": "yes",
+                "source:name:br": "proper translation",
+                "type": "multipolygon"
+            }
+        },
+        {
+            "type": "relation",
+            "id": 2393603,
+            "center": {
+                "lat": 48.3694118,
+                "lon": -4.7596397
+            },
+            "members": [
+                {
+                    "type": "way",
+                    "ref": 53715392,
+                    "role": "outer"
+                },
+                {
+                    "type": "way",
+                    "ref": 53715431,
+                    "role": "inner"
+                }
+            ],
+            "tags": {
+                "access": "permit",
+                "building": "yes",
+                "historic": "fort",
+                "name": "Fort Saint-Louis",
+                "type": "multipolygon"
+            }
+        },
+        {
+            "type": "relation",
+            "id": 2393604,
+            "center": {
+                "lat": 48.3854115,
+                "lon": -4.7632461
+            },
+            "members": [
+                {
+                    "type": "way",
+                    "ref": 53682605,
+                    "role": "outer"
+                },
+                {
+                    "type": "way",
+                    "ref": 53682604,
+                    "role": "inner"
+                }
+            ],
+            "tags": {
+                "building": "house",
+                "heritage": "3",
+                "heritage:operator": "mhs",
+                "historic": "building",
+                "mhs:inscription_date": "1996-05-21",
+                "name": "Maison Quéré",
+                "ref:mhs": "PA29000008",
+                "source:heritage": "data.gouv.fr, Ministère de la Culture - 2016",
+                "start_date": "C20",
+                "type": "multipolygon",
+                "wikidata": "Q22996313"
+            }
+        },
+        {
+            "type": "relation",
+            "id": 4501033,
+            "center": {
+                "lat": 48.3652416,
+                "lon": -4.7675922
+            },
+            "members": [
+                {
+                    "type": "way",
+                    "ref": 323143532,
+                    "role": "outer"
+                },
+                {
+                    "type": "way",
+                    "ref": 323143533,
+                    "role": "inner"
+                }
+            ],
+            "tags": {
+                "building": "yes",
+                "historic": "fort",
+                "name": "Redoute des Blancs-Sablons",
+                "type": "multipolygon"
+            }
+        }
+    ]
+}

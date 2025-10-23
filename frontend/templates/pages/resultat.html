@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% set current_step = 5 %}
+
+{% block title %}Résultat - Votre Plan Van Life - RandoVanGo{% endblock %}
+
+{% block hero_subtitle %}Votre plan van life{% endblock %}
+
+{% block planning_content %}
+<div class="step-section">
+    <div class="step-header">
+        <h2>📋 Récapitulatif du voyage</h2>
+    </div>
+
+    <!-- Tableau récapitulatif -->
+    <div class="plan-table">
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>Jour</th>
+                    <th>Ville</th>
+                    <th>Activité</th>
+                    <th>Hébergement</th>
+                    <th>Services</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr id="day1-row">
+                    <td><strong>Jour 1</strong></td>
+                    <td id="city-cell">Plougonvelin</td>
+                    <td id="activity-cell">Randonnée sélectionnée</td>
+                    <td id="accommodation-cell">Spot sélectionné</td>
+                    <td id="services-cell">Services sélectionnés</td>
+                </tr>
+                <!-- Les autres jours seront ajoutés ici -->
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block navigation %}
+<div class="navigation-buttons">
+    <a href="{{ url_for('planificateur_etape4') }}" class="btn btn-outline">
+        <i class="fas fa-arrow-left"></i>
+        Étape précédente
+    </a>
+    
+    <button class="btn btn-primary btn-large" onclick="planifierJour2()">
+        <i class="fas fa-plus-circle"></i>
+        Planifier jour 2
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2rem 0;
+    background: var(--white);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.results-table th,
+.results-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.results-table th {
+    background: var(--blue);
+    color: var(--white);
+    font-weight: 600;
+}
+
+.results-table tr:hover {
+    background: var(--gray-50);
+}
+
+.plan-table {
+    margin: 2rem 0;
+}
+</style>
+
+<script>
+// Remplir le tableau avec les sélections
+document.addEventListener('DOMContentLoaded', function() {
+    // Récupérer les sélections depuis localStorage
+    const selectedHiking = localStorage.getItem('selectedHiking');
+    const selectedSpot = localStorage.getItem('selectedSpot');
+    const selectedServices = localStorage.getItem('selectedServices');
+    
+    // Remplir les cellules du tableau
+    const activityCell = document.getElementById('activity-cell');
+    const accommodationCell = document.getElementById('accommodation-cell');
+    const servicesCell = document.getElementById('services-cell');
+    
+    // Activité
+    if (selectedHiking === 'no-hiking') {
+        activityCell.textContent = 'Pas de randonnée - Détente';
+    } else if (selectedHiking) {
+        activityCell.textContent = `Randonnée ${selectedHiking}`;
+    } else {
+        activityCell.textContent = 'Randonnée sélectionnée';
+    }
+    
+    // Hébergement
+    if (selectedSpot === 'autre_hebergement') {
+        accommodationCell.textContent = 'Autre hébergement';
+    } else if (selectedSpot) {
+        accommodationCell.textContent = `Spot ${selectedSpot}`;
+    } else {
+        accommodationCell.textContent = 'Spot sélectionné';
+    }
+    
+    // Services
+    if (selectedServices === 'aucun_service') {
+        servicesCell.textContent = 'Aucun service';
+    } else if (selectedServices) {
+        servicesCell.textContent = selectedServices;
+    } else {
+        servicesCell.textContent = 'Services sélectionnés';
+    }
+});
+
+function planifierJour2() {
+    // Sauvegarder que le jour 1 est terminé
+    localStorage.setItem('completed_days', '1');
+    
+    // Rediriger vers l'étape 1 pour planifier le jour 2
+    window.location.href = '/etape1';
+}
+</script>
+{% endblock %}
