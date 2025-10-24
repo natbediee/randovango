@@ -5,34 +5,19 @@ import os
 import json
 import time 
 import sys 
-import logging
+from backend.utils.logger_util import LoggerUtil
+from backend.utils.service_utils import ServiceUtil
 
 from pathlib import Path
-from dotenv import load_dotenv
 
 
 ROOT = Path(__file__).resolve().parents[3]
-load_dotenv(ROOT / ".env")
+ServiceUtil.load_env()
 
-# Création du dossier logs si nécessaire
-log_folder = ROOT / "logs"
-os.makedirs(log_folder, exist_ok=True)
-
-# Configuration du logging
-logging.basicConfig(
-    level=logging.DEBUG,  # Niveau de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Affiche les logs dans la console
-        logging.FileHandler(log_folder / "api_wikidata.log", mode='a', encoding='utf-8')  # Sauvegarde dans un fichier log
-    ]
-)
-
-# Réduction des logs pour les requêtes HTTP
-logging.getLogger("urllib3").setLevel(logging.WARNING)
+logger = LoggerUtil.get_logger("api_wikidata")
 
 # Chemin vers data/in
-DATA_IN = ROOT / os.getenv("DATA_IN") / "wikidata"
+DATA_IN = ROOT / ServiceUtil.get_env("DATA_IN") / "wikidata"
 
 def fetch_wikidata_data(city):
     """
@@ -40,7 +25,7 @@ def fetch_wikidata_data(city):
     agrégations (GROUP BY) pour simplifier les données et obtenir tous les types
     (types) et labels (itemLabel) corrects en une seule ligne par POI.
     """
-    logging.info(f"Lancement de l'extraction Wikidata pour : {city}")
+    logger.info(f"Lancement de l'extraction Wikidata pour : {city}")
     
     # --- Requête SPARQL ---
     sparql_query = f"""
@@ -113,7 +98,7 @@ def fetch_wikidata_data(city):
             data = response.json()
             
             if not data.get('results', {}).get('bindings'):
-                logging.warning(f"AVERTISSEMENT : La requête a réussi, mais 0 POI a été trouvé autour de {city}.")
+                logger.warning(f"AVERTISSEMENT : La requête a réussi, mais 0 POI a été trouvé autour de {city}.")
                 return 
 
             # --- Sauvegarde du JSON brut ---
@@ -126,21 +111,21 @@ def fetch_wikidata_data(city):
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
                 
-            logging.info(f"Données Wikidata sauvegardées : {file_path} ({len(data['results']['bindings'])} POI)")
+            logger.info(f"Données Wikidata sauvegardées : {file_path} ({len(data['results']['bindings'])} POI)")
             return file_path
             
         except requests.exceptions.HTTPError as e:
             if response.status_code == 504 and attempt < MAX_RETRIES - 1:
-                logging.warning(f"Erreur 504, tentative de réessai dans 5 secondes ({attempt + 1}/{MAX_RETRIES})...")
+                logger.warning(f"Erreur 504, tentative de réessai dans 5 secondes ({attempt + 1}/{MAX_RETRIES})...")
                 time.sleep(5)
                 continue
-            logging.error(f"Erreur HTTP {response.status_code}: {e}")
+            logger.error(f"Erreur HTTP {response.status_code}: {e}")
             raise Exception(f"Erreur HTTP {response.status_code}: {e}")
         
         except requests.exceptions.RequestException as e:
-             raise Exception(f"Erreur de connexion : {e}")
+            raise Exception(f"Erreur de connexion : {e}")
         except Exception as e:
-             raise Exception(f"Erreur de traitement des données : {e}")
+            raise Exception(f"Erreur de traitement des données : {e}")
 
 
 # ----------------------------------------------------------------------

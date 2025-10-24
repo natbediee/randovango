@@ -1,30 +1,20 @@
+import os
 import requests
 import json
-import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
-import logging
 
+from backend.utils.service_utils import ServiceUtil
+from backend.utils.logger_util import LoggerUtil
 from backend.utils.geo_utils import get_coordinates_for_city
 
-ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(ROOT / "backend/etl/extraction"))
 
-load_dotenv(ROOT / ".env")
-
-# Configuration du logging
-logging.basicConfig(
-    level=logging.DEBUG,  # Niveau de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Affiche les logs dans la console
-        logging.FileHandler(ROOT / "logs/api_osm.log", mode='a', encoding='utf-8')  # Sauvegarde dans un fichier log
-    ]
-)
+logger = LoggerUtil.get_logger("api_osm")
 
 # Chemin vers data/in
-DATA_IN = ROOT / os.getenv("DATA_IN") / "osm"
+
+ROOT_PATH = Path(__file__).resolve().parents[3]
+DATA_IN = ROOT_PATH / ServiceUtil.get_env("DATA_IN") / "osm"
 
 def fetch_osm_data(city: str) -> str:
     """
@@ -32,20 +22,20 @@ def fetch_osm_data(city: str) -> str:
     Les données sont filtrées pour les points d'intérêt pertinents.
     Utilise une approche robuste avec recherche par bounding box.
     """
-    logging.info(f"Lancement de l'extraction OSM via Overpass pour '{city}'...")
+    logger.info(f"Lancement de l'extraction OSM via Overpass pour '{city}'...")
     
     # Normalisation du nom de la ville
     city_normalized = city.strip()
     
     # 1. Obtenir les coordonnées de la ville
-    logging.info(f"Recherche des coordonnées pour '{city_normalized}'...")
+    logger.info(f"Recherche des coordonnées pour '{city_normalized}'...")
     latitude, longitude = get_coordinates_for_city(city_normalized)
     
     if latitude is None or longitude is None:
-        logging.error(f"Impossible de trouver les coordonnées pour '{city_normalized}'")
+        logger.error(f"Impossible de trouver les coordonnées pour '{city_normalized}'")
         return None
     
-    logging.info(f"Coordonnées trouvées : {latitude}, {longitude}")
+    logger.info(f"Coordonnées trouvées : {latitude}, {longitude}")
     
     # 2. Créer une bounding box autour de la ville (environ 5km de rayon)
     # Approximation : 1 degré de latitude ≈ 111 km
@@ -58,7 +48,7 @@ def fetch_osm_data(city: str) -> str:
         'east': longitude + radius_deg
     }
     
-    logging.info(f"Bounding box : {bbox} (rayon ~5-6 km)")
+    logger.info(f"Bounding box : {bbox} (rayon ~5-6 km)")
     
     # 3. Requête Overpass QL utilisant la bounding box
     # Récupère un large éventail de POI, le filtrage se fera en transformation
@@ -101,7 +91,7 @@ def fetch_osm_data(city: str) -> str:
     
     for server_url in overpass_servers:
         try:
-            logging.info(f"Tentative de connexion au serveur : {server_url}")
+            logger.info(f"Tentative de connexion au serveur : {server_url}")
             response = requests.post(server_url, data={'data': overpass_query}, timeout=90)
             response.raise_for_status()
             
@@ -109,52 +99,52 @@ def fetch_osm_data(city: str) -> str:
             
             # Vérifier si la réponse contient des éléments
             elements = response_data.get('elements', [])
-            logging.info(f"Nombre d'éléments trouvés : {len(elements)}")
+            logger.info(f"Nombre d'éléments trouvés : {len(elements)}")
             
             if len(elements) == 0:
-                logging.warning(f"Aucun élément trouvé pour '{city}' avec le serveur {server_url}")
+                logger.warning(f"Aucun élément trouvé pour '{city}' avec le serveur {server_url}")
                 # On continue avec ce résultat même s'il est vide
             else:
-                logging.info(f"✅ Succès : {len(elements)} POI trouvés pour '{city}'")
+                logger.info(f"Succès : {len(elements)} POI trouvés pour '{city}'")
             
             # Si on arrive ici, la requête a réussi (même si vide)
             break
             
         except requests.exceptions.Timeout:
             last_error = f"Timeout pour le serveur {server_url}"
-            logging.warning(last_error)
+            logger.warning(last_error)
             continue
         except requests.exceptions.RequestException as e:
             last_error = f"Erreur de connexion au serveur {server_url} : {e}"
-            logging.warning(last_error)
+            logger.warning(last_error)
             continue
         except json.JSONDecodeError as e:
             last_error = f"Erreur de décodage JSON depuis {server_url} : {e}"
-            logging.warning(last_error)
+            logger.warning(last_error)
             continue
     
     # Si aucun serveur n'a fonctionné
     if response_data is None:
-        logging.error(f"ÉCHEC DE L'EXTRACTION OSM : Tous les serveurs ont échoué. Dernière erreur : {last_error}")
+        logger.error(f"ÉCHEC DE L'EXTRACTION OSM : Tous les serveurs ont échoué. Dernière erreur : {last_error}")
         return None
     
     try:
         # 3. Sauvegarder le JSON brut (dans data/in)
         output_folder = DATA_IN
         os.makedirs(output_folder, exist_ok=True)
-        
+
         filename = f'osm_data_{city_normalized.replace(" ", "_")}.json'
         file_path = os.path.join(output_folder, filename)
-        
+
         # S'assurer que le fichier est sauvegardé avec un encodage correct
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(response_data, f, indent=4, ensure_ascii=False)
-            
-        logging.info(f"Données OSM sauvegardées : {file_path}")
+
+        logger.info(f"Données OSM sauvegardées : {file_path}")
         return file_path
-        
+
     except Exception as e:
-        logging.error(f"ERREUR LORS DE LA SAUVEGARDE OSM : {e}")
+        logger.error(f"ERREUR LORS DE LA SAUVEGARDE OSM : {e}")
         return None
 
 # --- Bloc de Lancement en Ligne de Commande ---
@@ -168,4 +158,4 @@ if __name__ == "__main__":
     city_to_scrape = sys.argv[1]
     
     fetch_osm_data(city_to_scrape)
-    print("\n✅ Processus OSM terminé.")
+    print("\nProcessus OSM terminé.")

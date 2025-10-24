@@ -1,33 +1,24 @@
-import logging
 from pathlib import Path
 import requests
-from backend.utils.path_utils import add_etl_paths
+
+from backend.utils.logger_util import LoggerUtil
 from backend.etl.load.load_meteo import insert_weather_data
 from backend.utils.geo_utils import get_coordinates_for_city
-from backend.utils.mysql_utils import connect_mysql
+from backend.utils.mysql_utils import MySQLUtils
 
 ROOT = Path(__file__).resolve().parents[3]
-add_etl_paths(ROOT)
 
-# Configuration du logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(ROOT / "logs/api_meteo.log", mode='a', encoding='utf-8')
-    ]
-)
+logger = LoggerUtil.get_logger("api_meteo")
 
 # --- Fonction d'Extraction Météo (Paramétrée par Coordonnées) ---
-def get_or_create_city(city_name, latitude, longitude):
+def get_or_create_city(city_name, latitude, longitude) -> int:
     """
     Récupère l'ID de la ville depuis la table cities, ou la crée si elle n'existe pas.
     
     Returns:
         int: L'ID de la ville dans la table cities
     """
-    cnx = connect_mysql()
+    cnx = MySQLUtils.connect()
     cursor = cnx.cursor()
     
     # Vérifier si la ville existe
@@ -36,7 +27,7 @@ def get_or_create_city(city_name, latitude, longitude):
     
     if result:
         city_id = result[0]
-        logging.info(f"Ville {city_name} trouvée avec ID={city_id}")
+        logger.info(f"Ville {city_name} trouvée avec ID={city_id}")
     else:
         # Créer la ville
         cursor.execute(
@@ -45,27 +36,27 @@ def get_or_create_city(city_name, latitude, longitude):
         )
         cnx.commit()
         city_id = cursor.lastrowid
-        logging.info(f"Ville {city_name} créée avec ID={city_id}")
+    logger.info(f"Ville {city_name} créée avec ID={city_id}")
     
     cursor.close()
     cnx.close()
     return city_id
 
 
-def fetch_weather_data(city):
+def fetch_weather_data(city) -> bool | None:
     """
     Récupère les données météo pour une ville donnée via l'API Open-Meteo.
     """
 
-    logging.info(f"Recherche des coordonnées pour {city}")
+    logger.info(f"Recherche des coordonnées pour {city}")
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
     latitude, longitude = get_coordinates_for_city(city)
 
     if latitude is None or longitude is None:
-        logging.warning(f"Impossible de trouver les coordonnées pour {city}")
+        logger.warning(f"Impossible de trouver les coordonnées pour {city}")
         return None
 
-    logging.info(f"Coordonnées trouvées: {latitude}, {longitude}")
+    logger.info(f"Coordonnées trouvées: {latitude}, {longitude}")
     
     # Récupérer ou créer l'entrée de la ville dans la base
     city_id = get_or_create_city(city, latitude, longitude)
@@ -87,7 +78,7 @@ def fetch_weather_data(city):
     }
 
     try:
-        logging.info("Appel de l'API météo...")
+        logger.info("Appel de l'API météo...")
         response = requests.get(BASE_URL, params=params)
         response.raise_for_status()
         data = response.json()
@@ -109,26 +100,26 @@ def fetch_weather_data(city):
             )
             weather_list.append(weather_tuple)
 
-        logging.info(f"{len(weather_list)} jours de prévisions récupérés")
+        logger.info(f"{len(weather_list)} jours de prévisions récupérés")
         # Appel direct à l'insertion en base
         insert_weather_data(weather_list)
-        logging.info(f"Données météo insérées en base pour {city}")
+        logger.info(f"Données météo insérées en base pour {city}")
         return True
 
     except requests.exceptions.RequestException as e:
-        logging.error(f"Échec de l'extraction API météo : {e}")
+        logger.error(f"Échec de l'extraction API météo : {e}")
         return None
 
 if __name__ == "__main__":
-    logging.info("[MAIN] Bloc main exécuté")
+    logger.info("[MAIN] Bloc main exécuté")
     print("[MAIN] Bloc main exécuté")
     import sys
     if len(sys.argv) < 2:
         print("Usage: python meteo.py <nom_de_la_ville>")
-        logging.warning("Usage: python meteo.py <nom_de_la_ville>")
+        logger.warning("Usage: python meteo.py <nom_de_la_ville>")
         sys.exit(1)
     city = sys.argv[1]
-    logging.info(f"[MAIN] Ville demandée: {city}")
+    logger.info(f"[MAIN] Ville demandée: {city}")
     print(f"[MAIN] Ville demandée: {city}")
     fetch_weather_data(city)
 

@@ -3,13 +3,12 @@ from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import ConnectionFailure
 
-from backend.utils.service_util import ServiceUtil
+from backend.utils.service_utils import ServiceUtil
 
-DATABASE_NAME = "randovango"
+DATABASE_NAME = ServiceUtil.get_env("DATABASE_NAME ")
 
 class ServiceMongo:
-    """Static class for handling MongoDB."""
-
+    """Static clas"s for handling MongoDB."""
     client: MongoClient = None
 
     @classmethod

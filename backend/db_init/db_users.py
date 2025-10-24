@@ -3,7 +3,7 @@ import sqlite3
 
 from pathlib import Path
 from passlib.hash import bcrypt
-from backend.utils.service_util import ServiceUtil
+from backend.utils.service_utils import ServiceUtil
 
 ROOT = Path(__file__).resolve().parents[2]
 ServiceUtil.load_env()

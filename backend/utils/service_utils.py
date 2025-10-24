@@ -6,8 +6,10 @@ class ServiceUtil:
 
     @staticmethod
     def load_env() -> None:
-        """Load environment file."""
-        load_dotenv(".env")
+        """Load environment file and log if missing."""
+        from pathlib import Path
+        env_path = Path(".env")
+        load_dotenv(str(env_path))
 
     @staticmethod
     def get_env(var: str, default: str = "") -> str:
