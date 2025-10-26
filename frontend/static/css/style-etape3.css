@@ -1,0 +1,112 @@
+/* =============================
+   STYLES ÉTAPE 3 - SPOT NUIT
+   ============================= */
+
+/* ===== SPOTS (ÉTAPE 3) =====
+   Styles pour la liste et les cartes de spots (page étape 3 : nuit)
+*/
+.spots-section {
+    margin: 2rem 0;
+}
+
+.spots-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.spot-card {
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s;
+    background: var(--white);
+}
+
+.spot-card:hover {
+    border-color: var(--blue);
+    box-shadow: var(--shadow-hover);
+}
+
+.spot-card.selected {
+    border-color: var(--green);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+.spot-content-grid {
+    display: grid;
+    grid-template-columns: 200px 1fr 150px;
+    gap: 2rem;
+    align-items: start;
+}
+
+.spot-left {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.spot-center {
+    flex: 1;
+}
+
+.spot-center h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--blue);
+    font-size: 1.25rem;
+}
+
+.spot-right {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    justify-content: flex-start;
+}
+
+.spot-description {
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.spot-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.spot-features .feature {
+    background: var(--gray-100);
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.spot-features .feature.disabled {
+    background: var(--gray-200);
+    color: var(--gray-500);
+    text-decoration: line-through;
+}
+
+.spot-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .spot-content-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    .spot-left {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    .spot-right {
+        flex-direction: row;
+    }
+}

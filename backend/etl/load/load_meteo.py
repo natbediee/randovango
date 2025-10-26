@@ -1,16 +1,24 @@
 
 from backend.utils.mysql_utils import MySQLUtils
+from backend.utils.service_utils import ServiceUtil
 
-def insert_weather_data(data) -> None:
+def load_weather_data(data, city) -> None:
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor()
+    city_id = ServiceUtil.get_city_id(cursor, city)
+    if city_id is None:
+        print(f"Ville {city} absente de la base. Aucune donnée météo insérée.")
+        cursor.close()
+        MySQLUtils.disconnect(cnx)
+        return
     # Filtrer les tuples déjà présents (city_id, date)
     filtered_data = []
     for row in data:
-        city_id, date = row[0], row[1]
+        date = row[0]
         cursor.execute("SELECT 1 FROM weather WHERE city_id = %s AND date = %s", (city_id, date))
         if cursor.fetchone() is None:
-            filtered_data.append(row)
+            # On recompose le tuple avec city_id devant
+            filtered_data.append((city_id, *row))
     if filtered_data:
         sql = ("""
             INSERT INTO weather (

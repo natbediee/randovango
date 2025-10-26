@@ -1,8 +1,19 @@
 /* =============================================
-   RANDOVANGO - CSS MASTER UNIFIÉ
-   ============================================= */
+    RANDOVANGO - CSS MASTER UNIFIÉ
+    =============================================
+    Ce fichier regroupe tous les styles principaux du site RandoVanGo.
+    Chaque section est commentée avec la page ou le composant concerné.
+    Pages principales :
+      - Etape 1 : Choix de la ville
+      - Etape 2 : Choix de la randonnée
+      - Etape 3 : Choix du spot nuit
+      - Etape 4 : Choix des services
+      - Carte générale, navigation, header, etc.
+*/
 
-/* ===== VARIABLES CSS ===== */
+/* ===== VARIABLES CSS =====
+    Variables globales utilisées sur tout le site
+*/
 :root {
     --blue: #4B6F8E;
     --blue-dark: #2E4A6B;
@@ -20,7 +31,9 @@
     --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
-/* ===== RESET ET BASE ===== */
+/* ===== RESET ET BASE =====
+    Réinitialisation et styles de base pour toutes les pages
+*/
 * { 
     margin: 0; 
     padding: 0; 
@@ -37,7 +50,9 @@ body {
     flex-direction: column;
 }
 
-/* ===== HEADER GLOBAL ===== */
+/* ===== HEADER GLOBAL =====
+    Bandeau supérieur, logo, navigation principale (toutes pages)
+*/
 .header {
     background: var(--white);
     border-bottom: 1px solid var(--gray-300);
@@ -86,7 +101,9 @@ body {
     color: var(--blue-dark, #1e40af);
 }
 
-/* ===== NAVIGATION ===== */
+/* ===== NAVIGATION =====
+    Onglets de navigation principaux (toutes pages)
+*/
 .nav-tabs {
     display: flex;
     gap: 0.5rem;
@@ -120,7 +137,9 @@ body {
     box-shadow: 0 2px 8px rgba(75, 111, 142, 0.3);
 }
 
-/* ===== LAYOUT ===== */
+/* ===== LAYOUT =====
+    Conteneurs principaux, centrage du contenu (toutes pages)
+*/
 .main-content {
     max-width: 1200px;
     margin: 0 auto;
@@ -133,7 +152,9 @@ body {
     padding: 0 2rem;
 }
 
-/* ===== BOUTONS ===== */
+/* ===== BOUTONS =====
+    Styles des boutons principaux, secondaires, petits, etc. (toutes pages)
+*/
 .btn {
     display: inline-flex;
     align-items: center;
@@ -179,9 +200,10 @@ body {
     font-size: 0.875rem;
 }
 
-/* Les badges utilisent maintenant les styles .hiking-stats .stat existants */
 
-/* Sections des spots */
+/* ===== SPOTS (ÉTAPE 3) =====
+    Styles pour la liste et les cartes de spots (page étape 3 : nuit)
+*/
 .spots-section {
     margin: 2rem 0;
 }
@@ -279,7 +301,9 @@ body {
     font-weight: 500;
 }
 
-/* Services - Étape 4 */
+/* ===== SERVICES (ÉTAPE 4) =====
+    Styles pour la sélection de services (page étape 4)
+*/
 .services-categories {
     margin-bottom: 2rem;
 }
@@ -442,7 +466,9 @@ body {
     font-weight: 500;
 }
 
-/* Responsive pour petits écrans */
+/* ===== RESPONSIVE =====
+    Adaptations pour tablettes et mobiles (toutes pages)
+*/
 @media (max-width: 768px) {
     .spot-content-grid {
         grid-template-columns: 1fr;
@@ -482,7 +508,10 @@ body {
     font-size: 1.1rem;
 }
 
-/* ===== PLANIFICATEUR MINIMUM ===== */
+/* ===== STEPPER & PLANIFICATEUR =====
+    Styles pour le stepper (étapes du parcours) et le contenu principal du planificateur
+    Présent sur toutes les pages du parcours
+*/
 .planning-stepper {
     background: var(--white);
     padding: 2rem;
@@ -654,7 +683,10 @@ body {
     font-size: 1.1rem;
 }
 
-/* Cards */
+/* ===== CARDS GÉNÉRIQUES =====
+    Styles de base pour toutes les cartes sélectionnables (ville, randonnée, spot, service, etc.)
+    Utilisé sur toutes les étapes
+*/
 .card {
     background: var(--white);
     border: 2px solid var(--gray-300);
@@ -674,7 +706,9 @@ body {
     background: rgba(75, 111, 142, 0.05);
 }
 
-/* ===== HERO SECTIONS ===== */
+/* ===== HERO SECTIONS =====
+    Bandeaux visuels en haut de page (accueil, planificateur, etc.)
+*/
 .hero-section {
     position: relative;
     height: 250px;
@@ -683,7 +717,9 @@ body {
     border-radius: 0;
 }
 
-/* ===== HERO SECTION PLANIFICATEUR ===== */
+/* ===== HERO SECTION PLANIFICATEUR =====
+    Bandeau visuel spécifique au planificateur
+*/
 .hero-planificateur {
     position: relative;
     height: 250px;
@@ -783,7 +819,9 @@ body {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-/* ===== DURATION SECTION ===== */
+/* ===== DURATION SECTION =====
+    Bloc de sélection de la durée du séjour (étape 1)
+*/
 .duration-section {
     background: var(--white);
     padding: 2rem;
@@ -879,7 +917,9 @@ body {
     font-style: italic;
 }
 
-/* ===== WEATHER SECTION ===== */
+/* ===== WEATHER SECTION =====
+    Bloc météo 7 jours (étape 1)
+*/
 .weather-section {
     background: var(--white);
     padding: 2rem;
@@ -963,7 +1003,9 @@ body {
     color: var(--gray-500);
 }
 
-/* ===== VILLE SÉLECTIONNÉE ===== */
+/* ===== VILLE SÉLECTIONNÉE =====
+    Bloc affichant la ville choisie (étape 1)
+*/
 .selected-city {
     margin: 2rem 0;
     text-align: center;
@@ -994,7 +1036,9 @@ body {
     color: var(--blue);
 }
 
-/* ===== SEARCH ===== */
+/* ===== SEARCH =====
+    Barre de recherche de ville (étape 1)
+*/
 .search-container {
     margin: 2rem 0;
     text-align: center;
@@ -1028,7 +1072,9 @@ body {
     outline: none;
 }
 
-/* ===== LAYOUT RESPONSIVE ===== */
+/* ===== LAYOUT RESPONSIVE =====
+    Adaptations supplémentaires pour petits écrans (toutes pages)
+*/
 @media (max-width: 768px) {
     .hero-title {
         font-size: 1.8rem;
@@ -1087,7 +1133,9 @@ body {
     }
 }
 
-/* ===== ÉTAPE 2 - RANDONNÉES ===== */
+/* ===== RANDONNÉES (ÉTAPE 2) =====
+    Styles pour la liste et les cartes de randonnées (page étape 2)
+*/
 .hiking-list {
     display: flex;
     flex-direction: column;
@@ -1212,7 +1260,9 @@ body {
     color: var(--red);
 }
 
-/* Filtres de randonnées et d'hébergement */
+/* ===== FILTRES (ÉTAPE 2 & 3) =====
+    Filtres pour randonnées et spots (étapes 2 et 3)
+*/
 .hiking-filters,
 .accommodation-filters {
     display: flex;
@@ -1293,7 +1343,9 @@ body {
     background: rgba(76, 175, 80, 0.05);
 }
 
-/* Option pas de spot */
+/* ===== OPTIONS SPÉCIALES =====
+    Styles pour les options "pas de rando", "pas de spot", "aucun service" (étapes 2, 3, 4)
+*/
 .no-spot-option {
     background: var(--white);
     border: 2px solid var(--gray-300);
@@ -1339,7 +1391,9 @@ body {
     background: rgba(76, 175, 80, 0.05);
 }
 
-/* Boutons généraux */
+/* ===== BOUTONS GÉNÉRAUX (RAPPEL) =====
+    Styles additionnels pour les boutons (toutes pages)
+*/
 .btn {
     display: inline-flex;
     align-items: center;

@@ -48,7 +48,11 @@
             </div>
         </div>
     </div>
-
+     <!-- Carte interactive -->
+    <div class="map-page-container" style="margin: 2rem 0;">
+        <h3 class="map-title">Visualisation sur la carte</h3>
+        <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
+    </div>
     <!-- Météo 7 jours -->
     <div class="weather-section">
         <h3>🌤️ Météo à Plougonvelin - Prochains jours</h3>
@@ -170,140 +174,4 @@
         <i class="fas fa-arrow-right"></i>
     </a>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-// JavaScript minimal pour la recherche de ville
-document.addEventListener('DOMContentLoaded', function() {
-    const searchBtn = document.getElementById('searchBtn');
-    const citySearch = document.getElementById('citySearch');
-    
-    searchBtn.addEventListener('click', function() {
-        const cityName = citySearch.value || 'Plougonvelin';
-        // Ici on appellerait l'API FastAPI pour récupérer les données de la ville
-        console.log('Recherche de:', cityName);
-        
-        // Simulation de mise à jour (sera remplacé par l'API)
-        document.querySelector('.selected-city h3').textContent = '📍 ' + cityName;
-    });
-    
-    // Géolocalisation
-    document.getElementById('geolocateBtn').addEventListener('click', function() {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(function(position) {
-                console.log('Position:', position.coords.latitude, position.coords.longitude);
-                // Ici on appellerait l'API pour récupérer la ville la plus proche
-                alert('Géolocalisation réussie! (Fonctionnalité à implémenter)');
-            });
-        } else {
-            alert('Géolocalisation non supportée par ce navigateur');
-        }
-    });
-
-    // Sélection de durée
-    document.querySelectorAll('.duration-card').forEach(card => {
-        card.addEventListener('click', function() {
-            // Retirer la classe active de toutes les cartes
-            document.querySelectorAll('.duration-card').forEach(c => c.classList.remove('active'));
-            // Ajouter la classe active à la carte cliquée
-            this.classList.add('active');
-            
-            const days = this.getAttribute('data-days');
-            if (days === 'custom') {
-                const input = this.querySelector('#customDays');
-                if (input) {
-                    input.focus();
-                }
-            }
-            
-            // Sauvegarder la sélection
-            if (days !== 'custom') {
-                localStorage.setItem('trip_duration', days);
-                updateNavigationText(days);
-            }
-        });
-    });
-
-    // Gestion de la durée personnalisée
-    const customInput = document.getElementById('customDays');
-    if (customInput) {
-        customInput.addEventListener('input', function() {
-            const days = parseInt(this.value);
-            if (days >= 1 && days <= 30) {
-                localStorage.setItem('trip_duration', days);
-                updateNavigationText(days);
-            }
-        });
-    }
-
-    function updateNavigationText(days) {
-        const navigationBtn = document.querySelector('.navigation-buttons .btn-primary');
-        if (navigationBtn) {
-            if (days == 1) {
-                navigationBtn.innerHTML = 'Planifier cette journée <i class="fas fa-arrow-right"></i>';
-            } else {
-                navigationBtn.innerHTML = `Planifier ces ${days} jours <i class="fas fa-arrow-right"></i>`;
-            }
-        }
-    }
-
-    // Interaction météo pour aider la décision
-    document.querySelectorAll('.weather-day').forEach((day, index) => {
-        day.addEventListener('click', function() {
-            const dayName = this.querySelector('.day-name').textContent;
-            const isGoodWeather = this.classList.contains('good-weather');
-            const isBadWeather = this.classList.contains('bad-weather');
-            
-            let suggestion = '';
-            if (isGoodWeather) {
-                suggestion = `${dayName} : Parfait pour une randonnée ! 🥾`;
-            } else if (isBadWeather) {
-                suggestion = `${dayName} : Jour de pluie, idéal pour visiter des sites couverts ou se reposer 🏛️`;
-            } else {
-                suggestion = `${dayName} : Temps variable, activités flexibles recommandées 🤔`;
-            }
-            
-            // Suggérer une durée basée sur la météo
-            if (index <= 1 && !isBadWeather) {
-                suggestion += '\n💡 Suggestion: Profitez de ces beaux jours pour un court séjour (1-2 jours)';
-            } else if (index >= 5 && isGoodWeather) {
-                suggestion += '\n💡 Suggestion: Beau temps en fin de semaine, parfait pour un long séjour !';
-            }
-            
-            // Afficher la suggestion
-            const existingTooltip = document.querySelector('.weather-tooltip');
-            if (existingTooltip) existingTooltip.remove();
-            
-            const tooltip = document.createElement('div');
-            tooltip.className = 'weather-tooltip';
-            tooltip.textContent = suggestion;
-            tooltip.style.cssText = `
-                position: fixed;
-                background: var(--blue);
-                color: white;
-                padding: 1rem;
-                border-radius: 8px;
-                box-shadow: var(--shadow-hover);
-                z-index: 1000;
-                max-width: 300px;
-                font-size: 0.9rem;
-                white-space: pre-line;
-            `;
-            
-            document.body.appendChild(tooltip);
-            
-            const rect = this.getBoundingClientRect();
-            tooltip.style.left = Math.min(rect.left, window.innerWidth - tooltip.offsetWidth - 20) + 'px';
-            tooltip.style.top = (rect.top - tooltip.offsetHeight - 10) + 'px';
-            
-            setTimeout(() => tooltip.remove(), 3000);
-        });
-    });
-
-    // Initialiser avec la sélection par défaut (2 jours)
-    localStorage.setItem('trip_duration', '2');
-    updateNavigationText(2);
-});
-</script>
 {% endblock %}

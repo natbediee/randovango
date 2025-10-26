@@ -33,28 +33,8 @@ def transform_p4n(df: pd.DataFrame) -> pd.DataFrame:
         df['note'] = df['Note_Avis']
     df['note'] = df['note'].astype(str).str.extract(r'([\d\.,]+)(?=/5)')[0]
 
-    # Colonnes finales (URL conservée en première colonne, city à la fin)
-    if 'city' in df.columns:
-        cols = ['URL_fiche', 'p4n_id', 'Nom_Place', 'latitude', 'longitude', 'Type_Place', 'note', 'Services', 'Description', 'city']
-    else:
-        cols = ['URL_fiche', 'p4n_id', 'Nom_Place', 'latitude', 'longitude', 'Type_Place', 'note', 'Services', 'Description']
+    # Colonnes finales
+    cols = ['URL_fiche', 'p4n_id', 'Nom_Place', 'latitude', 'longitude', 'Type_Place', 'note', 'Services', 'Description']
     df_out = df[cols].drop_duplicates(subset=['p4n_id']).reset_index(drop=True)
     logger.info(f"DataFrame transformé: shape={df_out.shape}, colonnes={df_out.columns.tolist()}")
     return df_out
-
-# Exemple d'utilisation
-if __name__ == "__main__":
-    import sys
-    import os
-    if len(sys.argv) < 2:
-        print("Usage: python3 transform_p4n.py <csv_path>")
-        sys.exit(1)
-    csv_path = sys.argv[1]
-    if not os.path.exists(csv_path):
-        print(f"Fichier introuvable: {csv_path}")
-        sys.exit(1)
-    df = pd.read_csv(csv_path, sep=';', encoding='utf-8')
-    df_transformed = transform_p4n(df)
-    out_path = csv_path.replace('.csv', '_transformed.csv')
-    df_transformed.to_csv(out_path, sep=';', index=False, encoding='utf-8')
-    print(f"Fichier transformé sauvegardé: {out_path}")

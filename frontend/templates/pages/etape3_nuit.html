@@ -27,7 +27,11 @@
             <button class="filter-btn" data-filter="camping-car">Aire de camping-car</button>
         </div>
     </div>
-
+    <!-- Carte interactive -->
+    <div class="map-page-container" style="margin: 2rem 0;">
+        <h3 class="map-title">Visualisation sur la carte</h3>
+        <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
+    </div>
     <!-- Spots de bivouac -->
     <div class="spots-section" id="spotsSection" style="display: none;">
         <h3>Spots disponibles près de votre randonnée</h3>
@@ -160,103 +164,4 @@
         <i class="fas fa-arrow-right"></i>
     </a>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-// Gestion des filtres d'hébergement
-document.addEventListener('DOMContentLoaded', function() {
-    // Adapter le contenu si pas de randonnée
-    const selectedHiking = localStorage.getItem('selectedHiking');
-    if (selectedHiking === 'no-hiking') {
-        const stepHeader = document.querySelector('.step-header p');
-        stepHeader.textContent = 'Choisissez votre hébergement pour cette journée détente et découverte';
-        
-        const stepTitle = document.querySelector('.step-header h2');
-        stepTitle.textContent = '🌙 Jour 1 : Où dormir après cette journée détente ?';
-    }
-    
-    const filterBtns = document.querySelectorAll('.filter-btn');
-    const spotCards = document.querySelectorAll('.spot-card');
-    
-    // Gestion des filtres
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            // Retirer active de tous les boutons du même groupe
-            const group = this.parentElement;
-            group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            
-            // Afficher la section des spots si un filtre spécifique est sélectionné
-            const filterValue = this.getAttribute('data-filter');
-            if (filterValue !== 'all') {
-                document.getElementById('spotsSection').style.display = 'block';
-            }
-        });
-    });
-    
-    // Auto-afficher les spots
-    document.getElementById('spotsSection').style.display = 'block';
-});
-
-function selectSpot(spotId) {
-    // Marquer le spot comme sélectionné
-    document.querySelectorAll('.spot-card').forEach(card => card.classList.remove('selected'));
-    document.querySelector(`[onclick="selectSpot(${spotId})"]`).closest('.spot-card').classList.add('selected');
-    
-    // Désélectionner l'option "autre hébergement"
-    const noSpotOption = document.querySelector('.no-spot-option');
-    if (noSpotOption) {
-        noSpotOption.classList.remove('selected');
-    }
-    
-    // Sauvegarder le choix dans localStorage
-    localStorage.setItem('selectedSpot', spotId);
-    
-    // Afficher la météo nocturne
-    const nightWeather = document.getElementById('nightWeather');
-    if (nightWeather) {
-        nightWeather.style.display = 'block';
-    }
-    
-    // Afficher le bouton suivant
-    const nextBtn = document.getElementById('nextStepBtn');
-    if (nextBtn) {
-        nextBtn.style.display = 'block';
-    }
-}
-
-function selectNoSpot() {
-    // Désélectionner tous les spots
-    document.querySelectorAll('.spot-card').forEach(card => card.classList.remove('selected'));
-    
-    // Marquer l'option "autre hébergement" comme sélectionnée
-    const noSpotOption = document.querySelector('.no-spot-option');
-    if (noSpotOption) {
-        noSpotOption.classList.add('selected');
-    }
-    
-    // Sauvegarder le choix dans localStorage
-    localStorage.setItem('selectedSpot', 'autre_hebergement');
-    
-    // Masquer la météo nocturne (pas nécessaire pour un hébergement alternatif)
-    const nightWeather = document.getElementById('nightWeather');
-    if (nightWeather) {
-        nightWeather.style.display = 'none';
-    }
-    
-    // Afficher le bouton suivant
-    const nextBtn = document.getElementById('nextStepBtn');
-    if (nextBtn) {
-        nextBtn.style.display = 'block';
-    }
-}
-
-function showSpotMap(spotId) {
-    // Ouvrir la vue cartographique avec la randonnée choisie + l'emplacement du bivouac
-    const selectedHiking = localStorage.getItem('selectedHiking') || '1';
-    const mapUrl = `/map/spot/${spotId}?hiking=${selectedHiking}`;
-    window.open(mapUrl, '_blank', 'width=1200,height=800');
-}
-</script>
 {% endblock %}

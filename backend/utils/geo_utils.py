@@ -10,13 +10,6 @@ logger = logging.getLogger(__name__)
 def get_coordinates_for_city(city_name, country="France"):
     """
     Géocodage direct: obtient la latitude et la longitude d'une ville.
-    
-    Args:
-        city_name (str): Nom de la ville
-        country (str): Pays (par défaut "France")
-    
-    Returns:
-        tuple: (latitude, longitude) ou (None, None) si non trouvé
     """
     try:
         geolocator = Nominatim(user_agent="randovango-geocoder-v1")
@@ -37,14 +30,6 @@ def get_coordinates_for_city(city_name, country="France"):
 def get_city_from_coordinates(latitude, longitude, language='fr'):
     """
     Géocodage inversé: obtient le nom de la ville à partir de coordonnées GPS.
-    
-    Args:
-        latitude (float): Latitude
-        longitude (float): Longitude
-        language (str): Langue pour les résultats (par défaut 'fr')
-    
-    Returns:
-        str: Nom de la ville ou None si non trouvé
     """
     try:
         geolocator = Nominatim(user_agent="randovango-geocoder-v1")

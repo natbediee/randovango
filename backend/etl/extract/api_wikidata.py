@@ -1,27 +1,13 @@
-# Fichier : src/extraction/wikidata_extractor.py
 
 import requests
-import os
-import json
 import time 
-import sys 
 from backend.utils.logger_util import LoggerUtil
-from backend.utils.service_utils import ServiceUtil
-
-from pathlib import Path
-
-
-ROOT = Path(__file__).resolve().parents[3]
-ServiceUtil.load_env()
 
 logger = LoggerUtil.get_logger("api_wikidata")
 
-# Chemin vers data/in
-DATA_IN = ROOT / ServiceUtil.get_env("DATA_IN") / "wikidata"
-
-def fetch_wikidata_data(city):
+def extract_wikidata(city) -> dict:
     """
-    Récupère les POI dans un rayon de 10 km autour de la ville, en utilisant des
+    Récupère les POI dans un rayon de 5 km autour de la ville, en utilisant des
     agrégations (GROUP BY) pour simplifier les données et obtenir tous les types
     (types) et labels (itemLabel) corrects en une seule ligne par POI.
     """
@@ -43,12 +29,12 @@ def fetch_wikidata_data(city):
                  wdt:P31/wdt:P279* wd:Q484170 ; # Commune de France
                  wdt:P625 ?center .
 
-          # 2. POI dans un rayon de 10 km (recherche géographique)
+          # 2. POI dans un rayon de 5 km (recherche géographique)
           ?item wdt:P625 ?coord .
           SERVICE wikibase:around {{
             ?item wdt:P625 ?loc .
             bd:serviceParam wikibase:center ?center .
-            bd:serviceParam wikibase:radius "10" .
+            bd:serviceParam wikibase:radius "5" .
           }}
 
           # 3. Types visés (incluant les sous-classes)
@@ -56,7 +42,6 @@ def fetch_wikidata_data(city):
             wd:Q570116  # Phare
             wd:Q23397   # Plage
             wd:Q57821   # Fort
-            wd:Q16970   # Monument
             wd:Q839954  # Phare (répétition mais utile pour la robustesse)
             wd:Q4989906 # Site naturel / Géosite (ajouté pour la côte)
             wd:Q49899   # Église / Chapelle
@@ -96,23 +81,11 @@ def fetch_wikidata_data(city):
             response.raise_for_status() 
 
             data = response.json()
-            
             if not data.get('results', {}).get('bindings'):
                 logger.warning(f"AVERTISSEMENT : La requête a réussi, mais 0 POI a été trouvé autour de {city}.")
-                return 
-
-            # --- Sauvegarde du JSON brut ---
-            output_folder = DATA_IN
-            os.makedirs(output_folder, exist_ok=True)
-            
-            filename = f'wikidata_data_{city.replace(" ", "_")}.json'
-            file_path = os.path.join(output_folder, filename)
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=4, ensure_ascii=False)
-                
-            logger.info(f"Données Wikidata sauvegardées : {file_path} ({len(data['results']['bindings'])} POI)")
-            return file_path
+                return None
+            logger.info(f"Données Wikidata extraites pour {city} ({len(data['results']['bindings'])} POI)")
+            return data
             
         except requests.exceptions.HTTPError as e:
             if response.status_code == 504 and attempt < MAX_RETRIES - 1:
@@ -126,31 +99,3 @@ def fetch_wikidata_data(city):
             raise Exception(f"Erreur de connexion : {e}")
         except Exception as e:
             raise Exception(f"Erreur de traitement des données : {e}")
-
-
-# ----------------------------------------------------------------------
-# BLOC DE LANCEMENT DIRECT (MAIN)
-# ----------------------------------------------------------------------
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Erreur: Veuillez spécifier le nom de la ville à rechercher.")
-        print('Usage: python3 wikidata_extractor.py "Nom de la Ville"')
-        sys.exit(1)
-
-    city_raw = sys.argv[1]
-    city_to_search = city_raw.title()  # Normalisation pour correspondre au Label Wikidata
-
-    try:
-        os.makedirs(os.path.join('data_input', 'raw'), exist_ok=True)
-
-        print("\n=======================================================")
-        print(f"Lancement de l'extraction Wikidata pour la ville: {city_to_search}")
-        print("=======================================================")
-
-        fetch_wikidata_data(city_to_search)
-        print("\nExtraction Wikidata terminée.")
-
-    except Exception as e:
-        print("\nÉCHEC FATAL : L'extraction Wikidata n'a pas réussi.")
-        print(f"Détail de l'erreur : {e}")

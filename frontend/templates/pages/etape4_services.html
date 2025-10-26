@@ -12,7 +12,11 @@
         <h2>🛠️ Jour 1 : Services pour compléter votre journée</h2>
         <p>Ajoutez les commerces et équipements utiles pour réussir cette première journée</p>
     </div>
-
+    <!-- Carte interactive -->
+    <div class="map-page-container" style="margin: 2rem 0;">
+        <h3 class="map-title">Visualisation sur la carte</h3>
+        <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
+    </div>
     <!-- Catégories de services -->
     <div class="services-categories">
         <div class="category-tabs">
@@ -272,97 +276,4 @@
         <i class="fas fa-check-circle"></i>
     </a>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-// JavaScript pour la gestion des services
-document.addEventListener('DOMContentLoaded', function() {
-    // Adapter le contenu selon les choix précédents
-    const selectedHiking = localStorage.getItem('selectedHiking');
-    const selectedSpot = localStorage.getItem('selectedSpot');
-    
-    if (selectedHiking === 'no-hiking') {
-        const stepTitle = document.querySelector('.step-header h2');
-        stepTitle.textContent = '🛠️ Jour 1 : Services pour votre journée détente';
-    }
-    
-    if (selectedSpot === 'autre_hebergement') {
-        const stepSubtitle = document.querySelector('.step-header p');
-        stepSubtitle.textContent = 'Ajoutez les services utiles pendant votre séjour';
-    }
-    
-    const categoryTabs = document.querySelectorAll('.category-tab');
-    const serviceGrids = document.querySelectorAll('.services-grid');
-    let selectedServices = [];
-    
-    // Gestion des onglets
-    categoryTabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-            const category = this.dataset.category;
-            
-            // Mettre à jour les onglets
-            categoryTabs.forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-            
-            // Afficher la bonne grille
-            serviceGrids.forEach(grid => {
-                grid.style.display = grid.id === category ? 'block' : 'none';
-            });
-        });
-    });
-});
-
-function selectService(serviceId) {
-    // Désélectionner l'option "aucun service"
-    const noServiceOption = document.querySelector('.no-service-option');
-    if (noServiceOption) {
-        noServiceOption.classList.remove('selected');
-    }
-    
-    // Ajouter le service à la liste
-    const selectedServices = document.getElementById('selectedServices');
-    const selectedList = document.getElementById('selectedList');
-    const nextBtn = document.getElementById('nextStepBtn');
-    
-    // Créer l'élément service sélectionné
-    const serviceElement = document.createElement('div');
-    serviceElement.className = 'selected-service-item';
-    serviceElement.innerHTML = `
-        <span class="service-name">✅ ${serviceId}</span>
-        <button class="btn btn-outline btn-sm" onclick="removeService('${serviceId}')">Retirer</button>
-    `;
-    
-    selectedList.appendChild(serviceElement);
-    selectedServices.style.display = 'block';
-    nextBtn.style.display = 'block';
-}
-
-function removeService(serviceId) {
-    // Retirer le service (à implémenter)
-    console.log('Retirer service:', serviceId);
-}
-
-function selectNoService() {
-    // Marquer l'option "aucun service" comme sélectionnée
-    const noServiceOption = document.querySelector('.no-service-option');
-    noServiceOption.classList.add('selected');
-    
-    // Vider la liste des services sélectionnés
-    const selectedList = document.getElementById('selectedList');
-    const selectedServices = document.getElementById('selectedServices');
-    selectedList.innerHTML = '';
-    selectedServices.style.display = 'none';
-    
-    // Sauvegarder le choix dans localStorage
-    localStorage.setItem('selectedServices', 'aucun_service');
-    
-    // Afficher le bouton suivant
-    document.getElementById('nextStepBtn').style.display = 'block';
-}
-
-function showServiceDetails(serviceId) {
-    alert('Détails du service: ' + serviceId + ' (Modal à implémenter)');
-}
-</script>
 {% endblock %}

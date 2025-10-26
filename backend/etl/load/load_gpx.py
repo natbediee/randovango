@@ -12,9 +12,6 @@ logger = LoggerUtil.get_logger("gpx")
 ServiceUtil.load_env()
 mysql_conn = MySQLUtils.connect()
 
-INPUT = ServiceUtil.get_env('DATA_GPX', 'data/in/gpx')
-
-
 def load_gpx_data(data, gpx_path):
     """
     Charge les données GPX transformées dans MongoDB et MySQL, puis archive le fichier.
@@ -100,7 +97,7 @@ def load_gpx_data(data, gpx_path):
 
     # --- Archivage ---
     import shutil
-    archive_dir = os.path.join(ROOT, 'data', 'archive', 'gpx')
+    archive_dir = os.path.join(ROOT, 'data', 'archive')
     os.makedirs(archive_dir, exist_ok=True)
     archive_path = os.path.join(archive_dir, fname)
     shutil.move(gpx_path, archive_path)

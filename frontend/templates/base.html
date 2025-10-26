@@ -7,6 +7,18 @@
     
     <!-- CSS Master unifié (TEST) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles-master.css') }}">
+    {#
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style-commun.css') }}">
+    {% if request.endpoint == 'planificateur_etape1' %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape1.css') }}">
+    {% elif request.endpoint == 'planificateur_etape2' %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape2.css') }}">
+    {% elif request.endpoint == 'planificateur_etape3' %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape3.css') }}">
+    {% elif request.endpoint == 'planificateur_etape4' %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape4.css') }}">
+    {% endif %}
+    #}
     
     <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -188,6 +200,18 @@
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {#
+    <script src="{{ url_for('static', filename='js/commun.js') }}"></script>
+    {% if request.endpoint == 'planificateur_etape1' %}
+        <script src="{{ url_for('static', filename='js/etapes/etape1.js') }}"></script>
+    {% elif request.endpoint == 'planificateur_etape2' %}
+        <script src="{{ url_for('static', filename='js/etapes/etape2.js') }}"></script>
+    {% elif request.endpoint == 'planificateur_etape3' %}
+        <script src="{{ url_for('static', filename='js/etapes/etape3.js') }}"></script>
+    {% elif request.endpoint == 'planificateur_etape4' %}
+        <script src="{{ url_for('static', filename='js/etapes/etape4.js') }}"></script>
+    {% endif %}
+    #}
     {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,7 +1,5 @@
-import os
 import requests
 import json
-import sys
 from pathlib import Path
 
 from backend.utils.service_utils import ServiceUtil
@@ -16,7 +14,7 @@ logger = LoggerUtil.get_logger("api_osm")
 ROOT_PATH = Path(__file__).resolve().parents[3]
 DATA_IN = ROOT_PATH / ServiceUtil.get_env("DATA_IN") / "osm"
 
-def fetch_osm_data(city: str) -> str:
+def extract_osm(city: str) -> dict:
     """
     Récupère les POI d'OSM pour la ville donnée via l'API Overpass.
     Les données sont filtrées pour les points d'intérêt pertinents.
@@ -26,7 +24,6 @@ def fetch_osm_data(city: str) -> str:
     
     # Normalisation du nom de la ville
     city_normalized = city.strip()
-    
     # 1. Obtenir les coordonnées de la ville
     logger.info(f"Recherche des coordonnées pour '{city_normalized}'...")
     latitude, longitude = get_coordinates_for_city(city_normalized)
@@ -127,35 +124,6 @@ def fetch_osm_data(city: str) -> str:
     if response_data is None:
         logger.error(f"ÉCHEC DE L'EXTRACTION OSM : Tous les serveurs ont échoué. Dernière erreur : {last_error}")
         return None
-    
-    try:
-        # 3. Sauvegarder le JSON brut (dans data/in)
-        output_folder = DATA_IN
-        os.makedirs(output_folder, exist_ok=True)
+    logger.info(f"Données OSM extraites pour {city_normalized} ({len(response_data.get('elements', []))} POI)")
+    return response_data
 
-        filename = f'osm_data_{city_normalized.replace(" ", "_")}.json'
-        file_path = os.path.join(output_folder, filename)
-
-        # S'assurer que le fichier est sauvegardé avec un encodage correct
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(response_data, f, indent=4, ensure_ascii=False)
-
-        logger.info(f"Données OSM sauvegardées : {file_path}")
-        return file_path
-
-    except Exception as e:
-        logger.error(f"ERREUR LORS DE LA SAUVEGARDE OSM : {e}")
-        return None
-
-# --- Bloc de Lancement en Ligne de Commande ---
-
-if __name__ == "__main__":
-    
-    if len(sys.argv) < 2:
-        print('Usage: python3 osm_extractor.py "Nom de la Ville"')
-        sys.exit(1)
-    
-    city_to_scrape = sys.argv[1]
-    
-    fetch_osm_data(city_to_scrape)
-    print("\nProcessus OSM terminé.")

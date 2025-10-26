@@ -30,7 +30,11 @@
             <button class="filter-btn" data-filter="long">> 4h</button>
         </div>
     </div>
-
+    <!-- Carte interactive -->
+    <div class="map-page-container" style="margin: 2rem 0;">
+        <h3 class="map-title">Visualisation sur la carte</h3>
+        <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
+    </div>
     <!-- Liste des randonnées -->
     <div class="hiking-list">
         <!-- Randonnée 1 -->
@@ -169,62 +173,4 @@
         <i class="fas fa-arrow-right"></i>
     </a>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-// Gestion simple des filtres et sélection
-document.addEventListener('DOMContentLoaded', function() {
-    const filterBtns = document.querySelectorAll('.filter-btn');
-    const hikingCards = document.querySelectorAll('.hiking-card');
-    const nextStepBtn = document.getElementById('nextStepBtn');
-    
-    // Filtres
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            // Retirer active de tous les boutons du même groupe
-            const group = this.parentElement;
-            group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-        });
-    });
-});
-
-// Sélection d'une randonnée
-function selectHiking(id) {
-    // Marquer comme sélectionnée
-    document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
-    document.querySelector(`[onclick="selectHiking(${id})"]`).closest('.hiking-card').classList.add('selected');
-    
-    // Désélectionner la carte "pas de rando"
-    document.getElementById('noHikingCard').classList.remove('selected');
-    
-    // Mémoriser la randonnée sélectionnée pour l'étape 3
-    localStorage.setItem('selectedHiking', id);
-    
-    // Afficher le bouton suivant
-    document.getElementById('nextStepBtn').style.display = 'block';
-}
-
-// Sélection de "pas de randonnée"
-function selectNoHiking() {
-    // Désélectionner toutes les randonnées
-    document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
-    
-    // Marquer la carte "pas de rando" comme sélectionnée
-    document.getElementById('noHikingCard').classList.add('selected');
-    
-    // Mémoriser le choix
-    localStorage.setItem('selectedHiking', 'no-hiking');
-    
-    // Afficher le bouton suivant
-    document.getElementById('nextStepBtn').style.display = 'block';
-}
-
-function showHikingMap(id) {
-    // Ouvrir la vue cartographique avec la trace GPX de la randonnée
-    const mapUrl = `/map/randonnee/${id}`;
-    window.open(mapUrl, '_blank', 'width=1200,height=800');
-}
-</script>
 {% endblock %}
