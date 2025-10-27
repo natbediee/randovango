@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Body, HTTPException, Query
 from utils.mysql_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
-from api.models.villes import VilleList, MeteoResponse
+from api.models.villes import VilleList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.geo_utils import get_bounding_box
 from typing import List
@@ -13,9 +13,6 @@ router = APIRouter()
 def get_city_stats(cursor, latitude, longitude, user_role, distance_km=5):
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(latitude, longitude, distance_km)
     # Randonnées vérifiées
-    print("""
-        SELECT COUNT(*) as count FROM hikes WHERE verifie = 1 AND start_latitude BETWEEN %s AND %s AND start_longitude BETWEEN %s AND %s
-    """, (min_lat, max_lat, min_lon, max_lon))
     cursor.execute("""
         SELECT COUNT(*) as count FROM hikes WHERE verifie = 1 AND start_latitude BETWEEN %s AND %s AND start_longitude BETWEEN %s AND %s
     """, (min_lat, max_lat, min_lon, max_lon))
@@ -107,38 +104,50 @@ def get_ville_list(user_role: str = "user", distance_km: float = Query(5, descri
     return villes
 
 
-@router.get("/ville/{ville_id}/meteo", response_model=MeteoResponse)
-def get_meteo(ville_id: int):
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    cursor.execute("SELECT name FROM cities WHERE id = %s", (ville_id,))
-    row = cursor.fetchone()
-    if not row:
+@router.post("/create_plan")
+def create_plan(
+    ville_id: int = Body(...),
+    duree_jours: int = Body(...),
+    user_token: str = Body(None),
+    user_id: int = Body(None)
+):
+    """Créer un nouveau plan (trip_plans + jours vides pour l'étape 1)"""
+    # On doit avoir soit user_id (connecté), soit user_token (invité)
+    if user_id is None and (user_token is None or user_token.strip() == ""):
+        raise HTTPException(status_code=400, detail="Un identifiant utilisateur ou un jeton invité est requis.")
+    # Si user_id est None, on met 0 (pour invités)
+    if user_id is None:
+        user_id_to_insert = 0
+    else:
+        user_id_to_insert = user_id
+    # Si user_token est None, on met None (pour connectés)
+    user_token_to_insert = user_token if user_token else None
+    try:
+        cnx = MySQLUtils.connect()
+        cursor = cnx.cursor()
+        from datetime import date
+        today = date.today()
+        insert_plan = """
+            INSERT INTO trip_plans (start_date, duration_days, city_id, user_token, user_id, created_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
+        """
+        print(today, duree_jours, ville_id, user_token_to_insert, user_id_to_insert)
+        cursor.execute(insert_plan, (today, duree_jours, ville_id, user_token_to_insert, user_id_to_insert))
+        plan_id = cursor.lastrowid
+        insert_day = """
+            INSERT INTO trip_days (trip_plan_id, day_number, hike_id, spot_id)
+            VALUES (%s, %s, NULL, NULL)
+        """
+        for day_num in range(1, duree_jours + 1):
+            cursor.execute(insert_day, (plan_id, day_num))
+        cnx.commit()
         cursor.close()
         MySQLUtils.disconnect(cnx)
-        raise HTTPException(status_code=404, detail="Ville inconnue")
-    city_name = row['name']
-    cursor.execute("SELECT * FROM weather WHERE city_id = %s ORDER BY date ASC", (ville_id,))
-    meteo = cursor.fetchall()
-    # Conversion vers le modèle MeteoForecast (picto à calculer selon weather_code)
-    forecasts = []
-    for m in meteo:
-        forecasts.append({
-            "date": m["date"],
-            "temp_max": m["temp_max_c"],
-            "temp_min": m["temp_min_c"],
-            "weather_code": m["weather_code"],
-            "picto": meteo_code_to_picto(m["weather_code"]),
-            "precipitation_sum": m.get("precipitation_mm", 0.0),
-            "wind_speed_max": m.get("wind_max_kmh", 0.0)
-        })
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
-    return {"ville": city_name, "forecasts": forecasts, "updated_at": None}
+        return {"plan_id": plan_id, "message": "Plan créé avec succès."}
+    except Exception as e:
+        if 'cnx' in locals():
+            cnx.rollback()
+            MySQLUtils.disconnect(cnx)
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la création du plan : {str(e)}")
 
-# A DEVELOPPER
-@router.post("/create_plan")
-def create_plan(data: dict = Body(...)):
-    #plan_id = insert_or_update_plan(None, data)
-    pass  # À implémenter
 

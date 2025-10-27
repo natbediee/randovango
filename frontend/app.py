@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 
 app = Flask(__name__)
 app.secret_key = 'randovango-secret-key-change-in-production'
+API_BASE = 'http://fastapi_backend:8000'
 
 # Configuration
 app.config['STATIC_FOLDER'] = 'static'
@@ -21,7 +22,7 @@ def etape1():
     """Étape 1 - Choix de la ville"""
     # Appel à l'API FastAPI pour récupérer la liste des villes
     try:
-        api_url = 'http://fastapi_backend:8000/api/etape1/villes?user_role=admin'
+        api_url = f'{API_BASE}/api/etape1/villes?user_role=admin'
         response = requests.get(api_url, timeout=5)
         response.raise_for_status()
         villes = response.json()
@@ -29,6 +30,16 @@ def etape1():
         villes = []
         print(f"Erreur lors de l'appel à l'API FastAPI: {e}")
     return render_template('pages/etape1_ville.html', villes=villes)
+
+# Proxy route pour relayer le POST vers le backend FastAPI
+@app.route('/api/etape1/create_plan', methods=['POST'])
+def proxy_create_plan():
+    backend_url = f'{API_BASE}/api/etape1/create_plan'
+    try:
+        resp = requests.post(backend_url, json=request.get_json(), timeout=10)
+        return (resp.content, resp.status_code, resp.headers.items())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/etape2')
 def etape2():
@@ -50,48 +61,18 @@ def resultat():
     """Résultat final du planning"""
     return render_template('pages/resultat.html')
 
-@app.route('/api/search')
-def search():
-    """API de recherche pour l'assistant van"""
-    query = request.args.get('q', '')
-    category = request.args.get('category', 'all')
-    
-    # Ici vous pourrez appeler votre backend FastAPI
-    # Pour l'instant, retourne des données mock
-    
-    return jsonify({
-        'query': query,
-        'category': category,
-        'results': [],
-        'status': 'success'
-    })
-
-@app.route('/api/weather')
-def weather():
-    """API météo"""
-    # Ici vous appellerez votre service météo
-    return jsonify({
-        'temperature': 15,
-        'condition': 'partly-cloudy',
-        'description': 'Partiellement nuageux'
-    })
-
 @app.route('/login', methods=['POST'])
 def login():
-    """Gestion de la connexion"""
+    """Connexion utilisateur"""
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
-    
     # Authentification simple pour demo
     if email == 'admin@test.com' and password == 'password123':
-        session['user'] = {
-            'email': email,
-            'name': 'Administrateur'
-        }
+        session['user'] = {'email': email}
         return jsonify({'status': 'success', 'message': 'Connexion réussie'})
-    
-    return jsonify({'status': 'error', 'message': 'Email ou mot de passe incorrect'}), 401
+    else:
+        return jsonify({'status': 'error', 'message': 'Identifiants invalides'}), 401
 
 @app.route('/logout', methods=['POST'])
 def logout():

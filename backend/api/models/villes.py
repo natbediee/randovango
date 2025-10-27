@@ -3,7 +3,7 @@ Modèles Pydantic pour les villes et la météo
 """
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import date
 
 class VilleStats(BaseModel):
     """Statistiques d'une ville"""
@@ -32,15 +32,3 @@ class VilleList(BaseModel):
     country: Optional[str] = None
     stats: VilleStats
     meteo: Optional[List[MeteoForecast]] = []
-
-class MeteoResponse(BaseModel):
-    """Réponse pour la météo d'une ville"""
-    ville: str
-    forecasts: List[MeteoForecast]
-    updated_at: datetime
-
-class MeteoRefreshRequest(BaseModel):
-    """Réponse pour le déclenchement d'un ETL météo"""
-    status: str = "processing"
-    ville: str
-    job_id: str
