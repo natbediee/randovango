@@ -193,8 +193,11 @@ window.showSpotMap = function(spotId) {
     window.open(mapUrl, '_blank', 'width=1200,height=800');
 };
 // Initialisation Leaflet sur toutes les pages avec une div #map
+// SAUF sur étape1 qui gère sa propre carte
 document.addEventListener('DOMContentLoaded', function() {
-    if (typeof L !== 'undefined' && document.getElementById('map')) {
+    const citySelect = document.getElementById('citySelect');
+    // Ne pas initialiser si on est sur la page étape1 (qui a un citySelect)
+    if (typeof L !== 'undefined' && document.getElementById('map') && !citySelect) {
         var map = L.map('map').setView([48.3833, -4.7708], 11);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,

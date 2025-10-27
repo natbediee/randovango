@@ -20,6 +20,8 @@ class LoggerUtil:
 
             # File handler
             log_path = Path("logs") / f"{name}.log"
+            # Création automatique du dossier logs si absent
+            log_path.parent.mkdir(parents=True, exist_ok=True)
             file_handler = logging.FileHandler(log_path, mode='a', encoding='utf-8')
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)

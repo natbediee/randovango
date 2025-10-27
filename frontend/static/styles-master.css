@@ -772,7 +772,7 @@ body {
 .hero-logo-container {
     position: absolute;
     top: 1rem;
-    left: 10rem;
+    left: 2rem;
     z-index: 1000;
     width: 210px;
     height: 220px;
@@ -968,6 +968,11 @@ body {
     border-color: var(--green);
 }
 
+.weather-day.acceptable-weather {
+    background: rgba(255, 152, 0, 0.1);
+    border-color: var(--orange);
+}
+
 .weather-day.bad-weather {
     background: rgba(244, 67, 54, 0.1);
     border-color: var(--red);
@@ -1001,6 +1006,38 @@ body {
 .weather-desc {
     font-size: 0.875rem;
     color: var(--gray-500);
+}
+
+.weather-advice {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+}
+
+.weather-day.good-weather .weather-advice {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--green);
+}
+
+.weather-day.acceptable-weather .weather-advice {
+    background: rgba(255, 152, 0, 0.15);
+    color: var(--orange);
+}
+
+.weather-day.bad-weather .weather-advice {
+    background: rgba(244, 67, 54, 0.15);
+    color: var(--red);
+}
+
+.weather-advice i {
+    font-size: 0.85rem;
 }
 
 /* ===== VILLE SÉLECTIONNÉE =====

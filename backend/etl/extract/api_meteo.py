@@ -1,7 +1,7 @@
 import requests
 
-from backend.utils.logger_util import LoggerUtil
-from backend.utils.geo_utils import get_coordinates_for_city
+from utils.logger_util import LoggerUtil
+from utils.geo_utils import get_coordinates_for_city
 
 logger = LoggerUtil.get_logger("api_meteo")
 

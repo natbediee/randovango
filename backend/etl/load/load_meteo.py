@@ -1,6 +1,6 @@
 
-from backend.utils.mysql_utils import MySQLUtils
-from backend.utils.service_utils import ServiceUtil
+from utils.mysql_utils import MySQLUtils
+from utils.service_utils import ServiceUtil
 
 def load_weather_data(data, city) -> None:
     cnx = MySQLUtils.connect()

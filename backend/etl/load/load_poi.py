@@ -1,6 +1,6 @@
 import pandas as pd
-from backend.utils.mysql_utils import MySQLUtils
-from backend.utils.service_utils import ServiceUtil, SERVICE_CATEGORY_LABEL_MAP
+from utils.mysql_utils import MySQLUtils
+from utils.service_utils import ServiceUtil, SERVICE_CATEGORY_LABEL_MAP
 
 def insert_service_and_link(cursor, poi_id, type_value):
     """

@@ -1,3 +1,4 @@
+import requests
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 
 
@@ -11,31 +12,41 @@ app.config['TEMPLATES_FOLDER'] = 'templates'
 @app.route('/')
 def index():
     """Page d'accueil - Redirection vers le planificateur"""
-    return redirect(url_for('planificateur_etape1'))
+    return redirect(url_for('etape1'))
 
-# ===== PLANIFICATEUR PRINCIPAL =====
+# ===== PLANIFICATEUR PRINCIPAL ====
+
 @app.route('/etape1')
-def planificateur_etape1():
+def etape1():
     """Étape 1 - Choix de la ville"""
-    return render_template('pages/etape1_ville.html')
+    # Appel à l'API FastAPI pour récupérer la liste des villes
+    try:
+        api_url = 'http://fastapi_backend:8000/api/etape1/villes?user_role=admin'
+        response = requests.get(api_url, timeout=5)
+        response.raise_for_status()
+        villes = response.json()
+    except Exception as e:
+        villes = []
+        print(f"Erreur lors de l'appel à l'API FastAPI: {e}")
+    return render_template('pages/etape1_ville.html', villes=villes)
 
 @app.route('/etape2')
-def planificateur_etape2():
+def etape2():
     """Étape 2 - Choix de la randonnée"""
     return render_template('pages/etape2_randonnee.html')
 
 @app.route('/etape3')
-def planificateur_etape3():
+def etape3():
     """Étape 3 - Choix de la nuit"""
     return render_template('pages/etape3_nuit.html')
 
 @app.route('/etape4')
-def planificateur_etape4():
+def etape4():
     """Étape 4 - Services et POI"""
     return render_template('pages/etape4_services.html')
 
 @app.route('/resultat')
-def planificateur_resultat():
+def resultat():
     """Résultat final du planning"""
     return render_template('pages/resultat.html')
 

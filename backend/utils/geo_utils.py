@@ -1,11 +1,46 @@
-"""
-Utilitaires de géocodage (direct et inversé) utilisant Nominatim (OpenStreetMap).
-"""
+
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import logging
+from math import radians, cos
 
 logger = logging.getLogger(__name__)
+
+def get_admin_info_from_coordinates(latitude, longitude, language='fr'):
+    """
+    Retourne (department, region, country) à partir de coordonnées GPS via Nominatim.
+    """
+    try:
+        geolocator = Nominatim(user_agent="randovango-geocoder-v1")
+        location = geolocator.reverse(f"{latitude}, {longitude}", language=language)
+        if location and location.raw.get('address'):
+            address = location.raw['address']
+            department = address.get('state_district') or address.get('county')
+            region = address.get('state')
+            country = address.get('country')
+            return department, region, country
+        else:
+            logger.warning(f"Aucun résultat admin pour les coordonnées ({latitude}, {longitude})")
+            return None, None, None
+    except (GeocoderTimedOut, GeocoderServiceError) as e:
+        logger.error(f"Erreur admin geocoding pour ({latitude}, {longitude}): {e}")
+        return None, None, None
+
+def get_bounding_box(latitude, longitude, distance_km):
+    """
+    Calcule une bounding box autour d'un point (latitude, longitude) pour une distance donnée (en km).
+    Retourne (min_lat, min_lon, max_lat, max_lon)
+    """
+    # Rayon de la Terre en km
+    lat = radians(latitude)
+    # Latitude min/max
+    min_lat = latitude - (distance_km / 111.32)
+    max_lat = latitude + (distance_km / 111.32)
+    # Longitude min/max (corrigé par la latitude)
+    delta_lon = distance_km / (111.32 * cos(lat))
+    min_lon = longitude - delta_lon
+    max_lon = longitude + delta_lon
+    return min_lat, min_lon, max_lat, max_lon
 
 def get_coordinates_for_city(city_name, country="France"):
     """

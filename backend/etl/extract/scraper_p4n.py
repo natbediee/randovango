@@ -5,16 +5,13 @@ import pandas as pd
 from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service 
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
-
-
-from backend.utils.logger_util import LoggerUtil
-from backend.utils.service_utils import ServiceUtil
-from backend.utils.geo_utils import get_coordinates_for_city
+from utils.logger_util import LoggerUtil
+from utils.service_utils import ServiceUtil
+from utils.geo_utils import get_coordinates_for_city
 
 ROOT = Path(__file__).resolve().parents[3]
 ServiceUtil.load_env()
@@ -25,7 +22,8 @@ logger = LoggerUtil.get_logger("scraper_p4n")
 DATA_IN = ROOT / ServiceUtil.get_env("DATA_IN") / "p4n"
 
 # --- CONFIGURATION FIXE ---
-CHROME_BINARY_PATH = '/usr/bin/google-chrome' 
+CHROME_BINARY_PATH = '/usr/bin/chromium'  # Pour Docker : Chromium Debian
+CHROMEDRIVER_PATH = '/usr/bin/chromedriver'      # Pour Docker : chromedriver Debian
 BASE_SEARCH_URL = "https://park4night.com/fr/search" 
 ZOOM_LEVEL = 15 # Niveau de zoom par défaut pour un affichage local
 # ---
@@ -116,16 +114,13 @@ def run_p4n_scraper(city_name, is_headless=True, save_csv=False) -> pd.DataFrame
 
     driver = None
     scraped_data = []
-    
     try:
-        # Configuration des options du navigateur Chrome
+        # Configuration des options du navigateur Chrome/Chromium
         options = webdriver.ChromeOptions()
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--user-data-dir=/tmp/selenium_chrome_profile')
-
-        # NOTE : Commenté pour laisser ChromeDriverManager trouver le binaire.
-        # options.binary_location = CHROME_BINARY_PATH
+        options.binary_location = CHROME_BINARY_PATH
 
         if is_headless:
             options.add_argument('--headless')
@@ -133,7 +128,8 @@ def run_p4n_scraper(city_name, is_headless=True, save_csv=False) -> pd.DataFrame
         else:
             logger.info("Mode Visuel activé (Avec interface graphique, pour débogage).")
 
-        service = Service(ChromeDriverManager().install())
+        # Utilise le chromedriver installé dans le conteneur Docker
+        service = Service(CHROMEDRIVER_PATH)
         driver = webdriver.Chrome(service=service, options=options)
 
         # 2. Accès direct à la page de résultats
@@ -214,25 +210,3 @@ def run_p4n_scraper(city_name, is_headless=True, save_csv=False) -> pd.DataFrame
     finally:
         if driver:
             driver.quit()
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print('Usage: python3 scraper_p4n.py "Nom de la Ville" [--debug | --show]')
-        sys.exit(1)
-
-    city_to_scrape = sys.argv[1]
-
-    # Mode par défaut : headless (sans interface)
-    run_in_headless = True
-
-    if len(sys.argv) > 2:
-        option = sys.argv[2].lower()
-        if option in ['--show', 'show']:
-            run_in_headless = False
-            print(f"Mode visuel ({option}) détecté : le navigateur sera visible.")
-
-    print("------------------------------------------------------")
-    print(f"Lancement du scraping pour la ville : {city_to_scrape}")
-    # Lancement manuel : sauvegarde CSV activée
-    df = run_p4n_scraper(city_to_scrape, run_in_headless, save_csv=True)
-    print("Scraping terminé")

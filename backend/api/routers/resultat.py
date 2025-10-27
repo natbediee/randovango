@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-from backend.utils.mysql_utils import MySQLUtils
+from utils.mysql_utils import MySQLUtils
 
 router = APIRouter()
 

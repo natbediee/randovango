@@ -1,7 +1,7 @@
 import mysql.connector
-from backend.utils.mysql_utils import MySQLUtils
+from utils.mysql_utils import MySQLUtils
 from mysql.connector import Error
-from backend.utils.service_utils import ServiceUtil
+from utils.service_utils import ServiceUtil
 
 ServiceUtil.load_env()
 
@@ -51,7 +51,10 @@ def init_database():
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
                 latitude FLOAT NOT NULL,
-                longitude FLOAT NOT NULL
+                longitude FLOAT NOT NULL,
+                department VARCHAR(255),
+                region VARCHAR(255),
+                country VARCHAR(255)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 2. table sources
@@ -193,6 +196,7 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 city_id INT NOT NULL,
                 user_token VARCHAR(64),
+                user_id INT,
                 FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,

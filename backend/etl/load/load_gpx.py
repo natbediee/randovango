@@ -1,10 +1,11 @@
 import os
 from pathlib import Path
 
-from backend.utils.mongo_utils import MongoUtils
-from backend.utils.logger_util import LoggerUtil
-from backend.utils.service_utils import ServiceUtil
-from backend.utils.mysql_utils import MySQLUtils
+from utils.mongo_utils import MongoUtils
+from utils.logger_util import LoggerUtil
+from utils.service_utils import ServiceUtil
+from utils.mysql_utils import MySQLUtils
+from utils.geo_utils import get_admin_info_from_coordinates
 
 ROOT = Path(__file__).resolve().parents[3]
 logger = LoggerUtil.get_logger("gpx")
@@ -39,13 +40,15 @@ def load_gpx_data(data, gpx_path):
         city_id = result[0]
         logger.info(f"Ville {city_name} trouvée avec ID={city_id}")
     else:
+        # Récupérer infos admin
+        department, region, country = get_admin_info_from_coordinates(start_lat, start_lon)
         cursor.execute(
-            "INSERT INTO cities (name, latitude, longitude) VALUES (%s, %s, %s)",
-            (city_name, start_lat, start_lon)
+            "INSERT INTO cities (name, latitude, longitude, department, region, country) VALUES (%s, %s, %s, %s, %s, %s)",
+            (city_name, start_lat, start_lon, department, region, country)
         )
         mysql_conn.commit()
         city_id = cursor.lastrowid
-        logger.info(f"Ville {city_name} créée avec ID={city_id}")
+        logger.info(f"Ville {city_name} créée avec ID={city_id}, {department}, {region}, {country}")
     cursor.close()
 
     # --- Gestion de la source ---
@@ -73,13 +76,19 @@ def load_gpx_data(data, gpx_path):
     gpxtrace_id = cursor.lastrowid
 
 
-    # --- Insertion MongoDB  ---
+
+    # --- Lecture du contenu GPX brut ---
+    with open(gpx_path, 'r', encoding='utf-8') as f:
+        gpx_content = f.read()
+
+    # --- Insertion MongoDB avec le contenu brut ---
     trace_doc = {
         "name": data['name'],
         "points": data['points'],
         "waypoints": data['waypoints'],
         "filename": fname,
-        "hike_mysql_id": gpxtrace_id
+        "hike_mysql_id": gpxtrace_id,
+        "gpx_content": gpx_content
     }
     mongo_result = gpx_collection.insert_one(trace_doc)
     id_mongo = str(mongo_result.inserted_id)
@@ -95,14 +104,13 @@ def load_gpx_data(data, gpx_path):
     logger.info(f'Loaded: {fname} (MySQL id={gpxtrace_id}, Mongo id={id_mongo})')
     print(f'Loaded: {fname} (MySQL id={gpxtrace_id}, Mongo id={id_mongo})')
 
-    # --- Archivage ---
-    import shutil
-    archive_dir = os.path.join(ROOT, 'data', 'archive')
-    os.makedirs(archive_dir, exist_ok=True)
-    archive_path = os.path.join(archive_dir, fname)
-    shutil.move(gpx_path, archive_path)
-    logger.info(f"Fichier déplacé vers: {archive_path}")
-    print(f"Fichier déplacé vers archive: {archive_path}")
+    # --- Suppression du fichier source après traitement ---
+    try:
+        os.remove(gpx_path)
+        logger.info(f"Fichier supprimé : {gpx_path}")
+        print(f"Fichier supprimé : {gpx_path}")
+    except Exception as e:
+        logger.warning(f"Erreur lors de la suppression du fichier {gpx_path} : {e}")
 
     return city_name if city_name else None
 

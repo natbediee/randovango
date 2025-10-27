@@ -1,7 +1,7 @@
-
 import requests
 import time 
-from backend.utils.logger_util import LoggerUtil
+
+from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("api_wikidata")
 

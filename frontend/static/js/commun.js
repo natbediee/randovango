@@ -29,8 +29,13 @@ function selectCard({
 
 // Initialisation Leaflet sur toutes les pages avec une div #map
 // (affichage de la carte OpenStreetMap si présent)
+// NOTE: DÉSACTIVÉ - Chaque page gère sa propre carte
+/*
 document.addEventListener('DOMContentLoaded', function() {
-    if (typeof L !== 'undefined' && document.getElementById('map')) {
+    // Ne pas initialiser la carte si on est sur une page du planificateur (etape1, etape2, etc.)
+    const isPlanningPage = window.location.pathname.match(/\/etape[1-4]/);
+    
+    if (typeof L !== 'undefined' && document.getElementById('map') && !isPlanningPage) {
         var map = L.map('map').setView([48.3833, -4.7708], 11);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
@@ -40,3 +45,4 @@ document.addEventListener('DOMContentLoaded', function() {
             .bindPopup('Plougonvelin');
     }
 });
+*/

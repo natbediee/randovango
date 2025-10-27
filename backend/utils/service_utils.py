@@ -1,8 +1,6 @@
 import os
 from dotenv import load_dotenv
 
-
-
  # Mapping OSM/Wikidata type -> label lisible (pour affichage front)
 SERVICE_CATEGORY_LABEL_MAP = {
     'fuel': 'Station-service',

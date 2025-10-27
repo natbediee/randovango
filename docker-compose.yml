@@ -1,6 +1,6 @@
 services:
   mongo:
-    container_name: mongodb
+    container_name: mongo_randovango
     image: mongo
     restart: always
     ports:
@@ -36,6 +36,40 @@ services:
       - ${ADMINER_PORT}:8080
     networks:
       - randovango
+
+  backend:
+    container_name: fastapi_backend
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    volumes:
+      - ./backend:/usr/src/app
+      - ./.env:/usr/src/app/.env
+      - ./data:/usr/src/app/data
+    ports:
+      - "8000:8000"
+    networks:
+      - randovango
+    depends_on:
+      mongo:
+        condition: service_started
+      db_randovango:
+        condition: service_started
+
+  frontend:
+    container_name: flask_frontend
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    volumes:
+      - ./frontend:/usr/src/app
+      - ./.env:/usr/src/app/.env
+    ports:
+      - "5000:5000"
+    networks:
+      - randovango
+    depends_on:
+      - backend
 
 networks:
   randovango:

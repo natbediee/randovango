@@ -1,7 +1,7 @@
 import math
 import os
 import gpxpy
-from backend.utils.geo_utils import get_city_from_coordinates
+from utils.geo_utils import get_city_from_coordinates
 
 def extract_points(gpx):
 	"""Extrait la liste des points (lat, lon, ele) de toutes les traces du GPX."""

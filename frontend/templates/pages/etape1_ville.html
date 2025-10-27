@@ -14,40 +14,57 @@
     </div>
 
     <!-- Recherche de ville -->
+
     <div class="search-container">
         <div class="search-input-group">
             <i class="fas fa-map-marker-alt"></i>
-            <input type="text" id="citySearch" placeholder="Rechercher une ville... (ex: Plougonvelin)" class="search-input" value="Plougonvelin">
-            <button class="btn btn-primary" id="searchBtn">
-                Rechercher
-            </button>
+            <select id="citySelect" class="search-input">
+                {% for ville in villes %}
+                    <option value="{{ ville.id }}" 
+                            data-lat="{{ ville.latitude }}" 
+                            data-lon="{{ ville.longitude }}" 
+                            data-name="{{ ville.name }}" 
+                            data-dept="{{ ville.department or '' }}" 
+                            data-country="{{ ville.country or '' }}" 
+                            data-rando="{{ ville.stats.randonnees }}" 
+                            data-spots="{{ ville.stats.spots }}" 
+                            data-poi="{{ ville.stats.poi }}"
+                            data-meteo='{{ ville.meteo | tojson }}'>
+                        {{ ville.name }}
+                    </option>
+                {% endfor %}
+            </select>
         </div>
-    
     </div>
 
     <!-- Ville sélectionnée -->
     <div class="selected-city" id="selectedCity">
         <div class="card selected">
             <div class="city-header">
-                <h3>Plougonvelin</h3>
-                <p>Finistère, Bretagne - France</p>
+                <h3 id="cityName">{{ villes[0].name if villes else '' }}</h3>
+                                <p id="cityDept">
+                                    {{ villes[0].department if villes else '' }}
+                                    {% if villes and villes[0].region %} - {{ villes[0].region }}{% endif %}
+                                    {% if villes and villes[0].country %} - {{ villes[0].country }}{% endif %}
+                                </p>
             </div>
             <div class="city-stats">
                 <div class="stat-item">
                     <i class="fas fa-hiking"></i>
-                    <span>11 randonnées</span>
+                    <span id="cityRando">{{ villes[0].stats.randonnees if villes else 0 }} randonnées</span>
                 </div>
                 <div class="stat-item">
                     <i class="fas fa-bed"></i>
-                    <span>23 spots nuit</span>
+                    <span id="citySpots">{{ villes[0].stats.spots if villes else 0 }} spots nuit</span>
                 </div>
                 <div class="stat-item">
                     <i class="fas fa-map-pin"></i>
-                    <span>156 points d'intérêt</span>
+                    <span id="cityServices">{{ villes[0].stats.poi if villes else 0 }} points d'intérêt</span>
                 </div>
             </div>
         </div>
     </div>
+
      <!-- Carte interactive -->
     <div class="map-page-container" style="margin: 2rem 0;">
         <h3 class="map-title">Visualisation sur la carte</h3>
@@ -55,78 +72,52 @@
     </div>
     <!-- Météo 7 jours -->
     <div class="weather-section">
-        <h3>🌤️ Météo à Plougonvelin - Prochains jours</h3>
+        <h3 id="weatherTitle">🌤️ Météo à {{ villes[0].name if villes else '' }} - Prochains jours</h3>
         <p>Consultez les prévisions locales pour choisir la durée idéale de votre séjour</p>
-        <div class="weather-grid">
-            <div class="weather-day good-weather">
-                <div class="day-name">Aujourd'hui</div>
-                <div class="weather-icon">☀️</div>
-                <div class="temperatures">
-                    <span class="temp-max">18°</span>
-                    <span class="temp-min">12°</span>
+        <div class="weather-grid" id="weatherGrid">
+            {% if villes and villes[0].meteo %}
+                {% for forecast in villes[0].meteo %}
+                <div class="weather-day {% if forecast.weather_code < 45 %}good-weather{% elif forecast.weather_code <= 65 %}acceptable-weather{% else %}bad-weather{% endif %}">
+                    <div class="day-name">{% if loop.index == 1 %}Aujourd'hui{% else %}Jour {{ loop.index }}{% endif %}</div>
+                    <div class="weather-icon">
+                        <img src="/static/images/wheather/{{ forecast.picto }}.png" alt="{{ forecast.picto }}" style="width: 100%; max-width: 80px; height: auto;">
+                    </div>
+                    <div class="temperatures">
+                        <span class="temp-max">{{ forecast.temp_max|round|int }}°</span>
+                        <span class="temp-min">{{ forecast.temp_min|round|int }}°</span>
+                    </div>
+                    <div class="weather-details">
+                        {% if forecast.precipitation_sum > 0 %}
+                        <div class="weather-info">
+                            <i class="fas fa-tint"></i> {{ forecast.precipitation_sum|round(1) }} mm
+                        </div>
+                        {% endif %}
+                        {% if forecast.wind_speed_max > 0 %}
+                        <div class="weather-info">
+                            <i class="fas fa-wind"></i> {{ forecast.wind_speed_max|round|int }} km/h
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="weather-advice">
+                        {% if forecast.picto == 'sun' %}
+                            <i class="fas fa-check-circle"></i> Parfait pour randonner
+                        {% elif forecast.picto == 'storm' %}
+                            <i class="fas fa-exclamation-triangle"></i> Éviter les randos
+                        {% elif forecast.picto == 'rain' or forecast.picto == 'snow' %}
+                            <i class="fas fa-info-circle"></i> Équipements conseillés
+                        {% elif forecast.picto == 'fog' %}
+                            <i class="fas fa-eye-slash"></i> Avec prudence
+                        {% elif forecast.picto == 'cloud' %}
+                            <i class="fas fa-cloud"></i> Conditions correctes
+                        {% elif forecast.picto == 'indisponible' %}
+                            <i class="fas fa-question-circle"></i> Météo indisponible
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="weather-desc">Parfait pour randonner</div>
-            </div>
-            
-            <div class="weather-day good-weather">
-                <div class="day-name">Demain</div>
-                <div class="weather-icon">⛅</div>
-                <div class="temperatures">
-                    <span class="temp-max">16°</span>
-                    <span class="temp-min">10°</span>
-                </div>
-                <div class="weather-desc">Correct</div>
-            </div>
-            
-            <div class="weather-day bad-weather">
-                <div class="day-name">Mercredi</div>
-                <div class="weather-icon">🌧️</div>
-                <div class="temperatures">
-                    <span class="temp-max">14°</span>
-                    <span class="temp-min">8°</span>
-                </div>
-                <div class="weather-desc">Éviter les randos</div>
-            </div>
-            
-            <div class="weather-day good-weather">
-                <div class="day-name">Jeudi</div>
-                <div class="weather-icon">☀️</div>
-                <div class="temperatures">
-                    <span class="temp-max">19°</span>
-                    <span class="temp-min">13°</span>
-                </div>
-                <div class="weather-desc">Idéal</div>
-            </div>
-            
-            <div class="weather-day">
-                <div class="day-name">Vendredi</div>
-                <div class="weather-icon">⛅</div>
-                <div class="temperatures">
-                    <span class="temp-max">17°</span>
-                    <span class="temp-min">11°</span>
-                </div>
-                <div class="weather-desc">Variable</div>
-            </div>
-            
-            <div class="weather-day good-weather">
-                <div class="day-name">Samedi</div>
-                <div class="weather-icon">☀️</div>
-                <div class="temperatures">
-                    <span class="temp-max">20°</span>
-                    <span class="temp-min">14°</span>
-                </div>
-                <div class="weather-desc">Parfait</div>
-            </div>
-            
-            <div class="weather-day good-weather">
-                <div class="day-name">Dimanche</div>
-                <div class="weather-icon">🌤️</div>
-                <div class="temperatures">
-                    <span class="temp-max">18°</span>
-                    <span class="temp-min">12°</span>
-                </div>
-                <div class="weather-desc">Très bien</div>
-            </div>
+                {% endfor %}
+            {% else %}
+                <p>Aucune donnée météo disponible</p>
+            {% endif %}
         </div>
     </div>
 
@@ -165,11 +156,177 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Met à jour la fiche ville et la carte à la sélection
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 Script démarré');
+        const select = document.getElementById('citySelect');
+        if (!select) {
+            console.error('❌ citySelect non trouvé');
+            return;
+        }
+        console.log('✅ citySelect trouvé');
+        
+        // Variables locales pour la carte et le marker
+        let cityMap = null;
+        let cityMarker = null;
+        
+        // Initialisation de la carte Leaflet sur la première ville
+        const mapElement = document.getElementById('map');
+        if (window.L && mapElement && !mapElement._leaflet_id) {
+            console.log('🗺️ Initialisation de la carte');
+            const opt = select.options[select.selectedIndex];
+            const lat = parseFloat(opt.getAttribute('data-lat'));
+            const lon = parseFloat(opt.getAttribute('data-lon'));
+            console.log('📍 Position initiale:', lat, lon);
+            
+            console.log('🆕 Création de la carte');
+            cityMap = L.map('map').setView([lat, lon], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(cityMap);
+            
+            // Ajoute le marker initial
+            cityMarker = L.marker([lat, lon]).addTo(cityMap);
+            console.log('✅ Carte initialisée');
+        } else {
+            console.error('❌ Leaflet ou map div non trouvé, ou carte déjà initialisée');
+        }
+        
+        select.addEventListener('change', function() {
+            console.log('🔄 Changement de ville détecté');
+            const opt = select.options[select.selectedIndex];
+            const cityName = opt.getAttribute('data-name');
+            console.log('📍 Nouvelle ville:', cityName);
+            document.getElementById('cityName').textContent = cityName;
+            let dept = opt.getAttribute('data-dept') || '';
+            let country = opt.getAttribute('data-country') || '';
+            document.getElementById('cityDept').textContent = dept + (country ? ' - ' + country : '');
+            document.getElementById('cityRando').textContent = opt.getAttribute('data-rando') + ' randonnées';
+            document.getElementById('citySpots').textContent = opt.getAttribute('data-spots') + ' spots nuit';
+            document.getElementById('cityServices').textContent = opt.getAttribute('data-poi') + " points d'intérêt";
+            
+            // Mise à jour du titre météo
+            document.getElementById('weatherTitle').textContent = '🌤️ Météo à ' + cityName + ' - Prochains jours';
+            
+            // Mise à jour des prévisions météo
+            let meteoData = [];
+            try {
+                const meteoStr = opt.getAttribute('data-meteo');
+                console.log('📊 Données météo brutes:', meteoStr);
+                meteoData = JSON.parse(meteoStr);
+                console.log('✅ Météo parsée:', meteoData.length, 'jours');
+            } catch (e) {
+                console.error('❌ Erreur parsing météo:', e.message);
+                console.error('❌ Données brutes:', opt.getAttribute('data-meteo'));
+            }
+            const weatherGrid = document.getElementById('weatherGrid');
+            weatherGrid.innerHTML = '';
+            
+            if (meteoData && meteoData.length > 0) {
+                const daysOfWeek = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                const months = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
+                meteoData.forEach((forecast, index) => {
+                    const date = new Date(forecast.date);
+                    const dayOfWeek = daysOfWeek[date.getDay()];
+                    const dayNum = date.getDate();
+                    const month = months[date.getMonth()];
+                    const dayName = index === 0 ? "Aujourd'hui" : `${dayOfWeek} ${dayNum} ${month}`;
+                    
+                    // Application des classes CSS selon le weather_code
+                    let weatherClass = '';
+                    if (forecast.weather_code < 45) {
+                        weatherClass = 'good-weather';
+                    } else if (forecast.weather_code <= 65) {
+                        weatherClass = 'acceptable-weather';
+                    } else {
+                        weatherClass = 'bad-weather';
+                    }
+                    
+                    // Message de conseil selon le picto
+                    let adviceMessage = '';
+                    let adviceIcon = '';
+                    if (forecast.picto === 'sun') {
+                        adviceIcon = '<i class="fas fa-check-circle"></i>';
+                        adviceMessage = 'Parfait pour randonner';
+                    } else if (forecast.picto === 'storm') {
+                        adviceIcon = '<i class="fas fa-exclamation-triangle"></i>';
+                        adviceMessage = 'Éviter les randos';
+                    } else if (forecast.picto === 'rain' || forecast.picto === 'snow') {
+                        adviceIcon = '<i class="fas fa-info-circle"></i>';
+                        adviceMessage = 'Équipements conseillés';
+                    } else if (forecast.picto === 'fog') {
+                        adviceIcon = '<i class="fas fa-eye-slash"></i>';
+                        adviceMessage = 'Avec prudence';
+                    } else if (forecast.picto === 'cloud') {
+                        adviceIcon = '<i class="fas fa-cloud"></i>';
+                        adviceMessage = 'Conditions correctes';
+                    } else if (forecast.picto === 'indisponible') {
+                        adviceIcon = '<i class="fas fa-question-circle"></i>';
+                        adviceMessage = 'Météo indisponible';
+                    }
+                    
+                    const dayDiv = document.createElement('div');
+                    dayDiv.className = 'weather-day ' + weatherClass;
+                    dayDiv.innerHTML = `
+                        <div class="day-name">${dayName}</div>
+                        <div class="weather-icon">
+                            <img src="/static/images/wheather/${forecast.picto}.png" alt="${forecast.picto}" style="width: 100%; max-width: 80px; height: auto;">
+                        </div>
+                        <div class="temperatures">
+                            <span class="temp-max">${Math.round(forecast.temp_max)}°</span>
+                            <span class="temp-min">${Math.round(forecast.temp_min)}°</span>
+                        </div>
+                        <div class="weather-details">
+                            ${forecast.precipitation_sum > 0 ? `<div class="weather-info"><i class="fas fa-tint"></i> ${forecast.precipitation_sum.toFixed(1)} mm</div>` : ''}
+                            ${forecast.wind_speed_max > 0 ? `<div class="weather-info"><i class="fas fa-wind"></i> ${Math.round(forecast.wind_speed_max)} km/h</div>` : ''}
+                        </div>
+                        <div class="weather-advice">
+                            ${adviceIcon} ${adviceMessage}
+                        </div>
+                    `;
+                    weatherGrid.appendChild(dayDiv);
+                });
+            } else {
+                weatherGrid.innerHTML = '<p>Aucune donnée météo disponible</p>';
+            }
+            
+            // Centrer la carte sur la nouvelle ville et déplacer le marker
+            console.log('🔍 cityMap existe?', !!cityMap, 'Leaflet existe?', !!window.L);
+            if (cityMap && window.L) {
+                const lat = parseFloat(opt.getAttribute('data-lat'));
+                const lon = parseFloat(opt.getAttribute('data-lon'));
+                console.log('🗺️ Coordonnées extraites:', lat, lon, 'valides?', !isNaN(lat) && !isNaN(lon));
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    console.log('🗺️ Mise à jour de la carte vers:', lat, lon);
+                    // Déplacer la vue de la carte
+                    cityMap.setView([lat, lon], 12);
+                    console.log('✅ setView effectué');
+                    // Supprime l'ancien marker s'il existe
+                    if (cityMarker) {
+                        console.log('🗑️ Suppression ancien marker');
+                        cityMap.removeLayer(cityMarker);
+                    }
+                    // Ajoute le nouveau marker
+                    console.log('📍 Ajout nouveau marker');
+                    cityMarker = L.marker([lat, lon]).addTo(cityMap);
+                    console.log('✅ Carte mise à jour complètement');
+                } else {
+                    console.error('❌ Coordonnées invalides');
+                }
+            } else {
+                console.error('❌ Carte non disponible - cityMap:', !!cityMap, 'Leaflet:', !!window.L);
+            }
+        });
+    });
+</script>
+
 {% endblock %}
 
 {% block navigation %}
 <div class="navigation-buttons navigation-right">
-    <a href="{{ url_for('planificateur_etape2') }}" class="btn btn-primary btn-large">
+    <a href="{{ url_for('etape2') }}" class="btn btn-primary btn-large">
         Planifier ces 2 jours
         <i class="fas fa-arrow-right"></i>
     </a>

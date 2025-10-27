@@ -3,7 +3,7 @@ from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import ConnectionFailure
 
-from backend.utils.service_utils import ServiceUtil
+from utils.service_utils import ServiceUtil
 
 DATABASE_NAME = ServiceUtil.get_env("DATABASE_NAME ")
 

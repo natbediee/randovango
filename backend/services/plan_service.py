@@ -1,4 +1,4 @@
-from backend.utils.mysql_utils import MySQLUtils
+from utils.mysql_utils import MySQLUtils
 
 # plans(plan_id INT PRIMARY KEY AUTO_INCREMENT, ville_id INT, randonnee_id INT, nuit_id INT, services JSON, etape INT)
 

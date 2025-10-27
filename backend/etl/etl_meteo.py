@@ -1,6 +1,6 @@
-from backend.utils.logger_util import LoggerUtil
-from backend.etl.extract.api_meteo import extract_weather_data
-from backend.etl.load.load_meteo import load_weather_data
+from utils.logger_util import LoggerUtil
+from etl.extract.api_meteo import extract_weather_data
+from etl.load.load_meteo import load_weather_data
 
 def run_meteo_etl(city_name: str) -> dict:
     logger = LoggerUtil.get_logger("etl_meteo")

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, Body
-from backend.services.plan_service import insert_or_update_plan
+from services.plan_service import insert_or_update_plan
 
 router = APIRouter()
 

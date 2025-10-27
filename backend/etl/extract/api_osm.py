@@ -2,9 +2,9 @@ import requests
 import json
 from pathlib import Path
 
-from backend.utils.service_utils import ServiceUtil
-from backend.utils.logger_util import LoggerUtil
-from backend.utils.geo_utils import get_coordinates_for_city
+from utils.service_utils import ServiceUtil
+from utils.logger_util import LoggerUtil
+from utils.geo_utils import get_coordinates_for_city
 
 
 logger = LoggerUtil.get_logger("api_osm")

@@ -1,7 +1,7 @@
 import json
-from backend.etl.extract.api_wikidata import extract_wikidata
-from backend.etl.transform.transform_wikidata import transform_wikidata
-from backend.etl.load.load_poi import load_wikidata_poi
+from etl.extract.api_wikidata import extract_wikidata
+from etl.transform.transform_wikidata import transform_wikidata
+from etl.load.load_poi import load_wikidata_poi
 
 CITY = "Le Conquet"
 

@@ -1,7 +1,7 @@
 import json
-from backend.etl.extract.api_osm import extract_osm
-from backend.etl.transform.transform_osm import transform_osm
-from backend.etl.load.load_poi import load_osm_poi
+from etl.extract.api_osm import extract_osm
+from etl.transform.transform_osm import transform_osm
+from etl.load.load_poi import load_osm_poi
 
 CITY = "Plougonvelin"
 

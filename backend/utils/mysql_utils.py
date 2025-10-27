@@ -1,7 +1,7 @@
 import mysql.connector
 from dotenv import load_dotenv
 from pathlib import Path
-from backend.utils.service_utils import ServiceUtil
+from utils.service_utils import ServiceUtil
 
 ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT/".env")

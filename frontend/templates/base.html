@@ -9,13 +9,13 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles-master.css') }}">
     {#
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style-commun.css') }}">
-    {% if request.endpoint == 'planificateur_etape1' %}
+    {% if request.endpoint == 'etape1' %}
         <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape1.css') }}">
-    {% elif request.endpoint == 'planificateur_etape2' %}
+    {% elif request.endpoint == 'etape2' %}
         <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape2.css') }}">
-    {% elif request.endpoint == 'planificateur_etape3' %}
+    {% elif request.endpoint == 'etape3' %}
         <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape3.css') }}">
-    {% elif request.endpoint == 'planificateur_etape4' %}
+    {% elif request.endpoint == etape4' %}
         <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape4.css') }}">
     {% endif %}
     #}
@@ -28,13 +28,13 @@
 </head>
 <body>
     <!-- Header -->
-    {% if request.endpoint not in ['planificateur_etape1', 'planificateur_etape2', 'planificateur_etape3', 'planificateur_etape4', 'planificateur_resultat'] %}
+    {% if request.endpoint not in ['etape1', 'etape2', 'etape3', 'etape4', 'resultat'] %}
     <header class="header">
         <div class="logo">
             <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="logo-img">
         </div>
         <nav class="nav-tabs">
-            <a href="{{ url_for('planificateur_etape1') }}" class="nav-tab">
+            <a href="{{ url_for('etape1') }}" class="nav-tab">
                 <i class="fas fa-map-marker-alt"></i>
                 Planificateur
             </a>
@@ -63,7 +63,7 @@
 
     <!-- Main Container -->
     <div class="main-container">
-        {% if request.endpoint in ['planificateur_etape1', 'planificateur_etape2', 'planificateur_etape3', 'planificateur_etape4', 'planificateur_resultat'] %}
+        {% if request.endpoint in ['etape1', 'etape2', 'etape3', 'etape4', 'resultat'] %}
             <!-- PLANIFICATEUR SECTION -->
             <!-- Hero Section Unifiée pour le Planificateur -->
             <div class="page-header">
@@ -93,6 +93,7 @@
                         <i class="fas fa-user-plus"></i>
                         Connexion Contributeur
                     </button>
+                </div>
                     <div id="userMenu" class="user-menu hidden">
                         <div class="user-info">
                             <i class="fas fa-user-circle"></i>
@@ -200,18 +201,18 @@
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    {#
     <script src="{{ url_for('static', filename='js/commun.js') }}"></script>
-    {% if request.endpoint == 'planificateur_etape1' %}
-        <script src="{{ url_for('static', filename='js/etapes/etape1.js') }}"></script>
-    {% elif request.endpoint == 'planificateur_etape2' %}
+    
+    <!-- Scripts spécifiques aux étapes -->
+    {# Étape 1 a son script inline dans le template #}
+    {% if request.endpoint == 'etape2' %}
         <script src="{{ url_for('static', filename='js/etapes/etape2.js') }}"></script>
-    {% elif request.endpoint == 'planificateur_etape3' %}
+    {% elif request.endpoint == 'etape3' %}
         <script src="{{ url_for('static', filename='js/etapes/etape3.js') }}"></script>
-    {% elif request.endpoint == 'planificateur_etape4' %}
+    {% elif request.endpoint == 'etape4' %}
         <script src="{{ url_for('static', filename='js/etapes/etape4.js') }}"></script>
     {% endif %}
-    #}
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>

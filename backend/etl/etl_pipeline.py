@@ -1,18 +1,18 @@
 
-from backend.utils.mysql_utils import MySQLUtils
-from backend.etl.extract.scraper_p4n import run_p4n_scraper
-from backend.etl.transform.transform_p4n import transform_p4n
-from backend.etl.load.load_p4n import load_p4n_to_mysql
-from backend.etl.extract.api_osm import extract_osm
-from backend.etl.extract.api_wikidata import extract_wikidata
-from backend.etl.transform.transform_osm import transform_osm
-from backend.etl.transform.transform_wikidata import transform_wikidata
-from backend.etl.load.load_poi import load_osm_poi,load_wikidata_poi
-from backend.utils.logger_util import LoggerUtil
-from backend.etl.load.load_gpx import load_gpx_data
-from backend.etl.extract.api_meteo import extract_weather_data
-from backend.etl.load.load_meteo import load_weather_data
-from backend.etl.extract.gpx import extract_gpx_file
+from utils.mysql_utils import MySQLUtils
+from etl.extract.scraper_p4n import run_p4n_scraper
+from etl.transform.transform_p4n import transform_p4n
+from etl.load.load_p4n import load_p4n_to_mysql
+from etl.extract.api_osm import extract_osm
+from etl.extract.api_wikidata import extract_wikidata
+from etl.transform.transform_osm import transform_osm
+from etl.transform.transform_wikidata import transform_wikidata
+from etl.load.load_poi import load_osm_poi,load_wikidata_poi
+from utils.logger_util import LoggerUtil
+from etl.load.load_gpx import load_gpx_data
+from etl.extract.api_meteo import extract_weather_data
+from etl.load.load_meteo import load_weather_data
+from etl.extract.gpx import extract_gpx_file
 
 
 logger = LoggerUtil.get_logger("etl_pipeline")

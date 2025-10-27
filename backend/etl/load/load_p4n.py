@@ -1,8 +1,8 @@
 import pandas as pd
 
-from backend.utils.logger_util import LoggerUtil
-from backend.utils.service_utils import ServiceUtil
-from backend.utils.mysql_utils import MySQLUtils
+from utils.logger_util import LoggerUtil
+from utils.service_utils import ServiceUtil
+from utils.mysql_utils import MySQLUtils
 
 def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     """

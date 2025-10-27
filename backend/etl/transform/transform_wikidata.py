@@ -1,4 +1,4 @@
-from backend.utils.logger_util import LoggerUtil
+from utils.logger_util import LoggerUtil
 import pandas as pd
 
 logger = LoggerUtil.get_logger("transform_wikidata")
