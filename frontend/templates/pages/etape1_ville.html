@@ -156,7 +156,18 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block navigation %}
+<div class="navigation-buttons navigation-right">
+    <button id="planButton" class="btn btn-primary btn-large">
+        Planifier ces 2 jours
+        <i class="fas fa-arrow-right"></i>
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
     // Gestion dynamique de la sélection de ville avec carte et météo
     document.addEventListener('DOMContentLoaded', function() {
@@ -372,10 +383,30 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Erreur lors de la création du plan');
+                    const text = await response.text();
+                    console.error('create_plan response not ok', response.status, text);
+                    throw new Error('Erreur lors de la création du plan: ' + response.status);
                 }
 
-                const data = await response.json();
+                // Récupérer la réponse texte et tenter un parse JSON robuste
+                const text = await response.text();
+                let data = null;
+                try {
+                    data = text ? JSON.parse(text) : null;
+                } catch (e) {
+                    console.error('Impossible de parser la réponse JSON du create_plan:', e, 'raw:', text);
+                    throw new Error('Réponse serveur invalide');
+                }
+
+                console.log('create_plan response data:', data);
+
+                if (!data || !data.plan_id) {
+                    console.error('Aucun plan_id retourné par create_plan:', data);
+                    alert('La création du plan a échoué : réponse inattendue du serveur.');
+                    planButton.disabled = false;
+                    updatePlanButton();
+                    return;
+                }
 
                 // Stocker le plan_id et rediriger vers l'étape 2
                 localStorage.setItem('planId', data.plan_id);
@@ -390,14 +421,4 @@
         }
     });
 </script>
-
-{% endblock %}
-
-{% block navigation %}
-<div class="navigation-buttons navigation-right">
-    <button id="planButton" class="btn btn-primary btn-large">
-        Planifier ces 2 jours
-        <i class="fas fa-arrow-right"></i>
-    </button>
-</div>
 {% endblock %}

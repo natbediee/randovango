@@ -1,10 +1,15 @@
+
 import requests
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-
 
 app = Flask(__name__)
 app.secret_key = 'randovango-secret-key-change-in-production'
 API_BASE = 'http://fastapi_backend:8000'
+
+# Route GET pour afficher la page de login contributeur
+@app.route('/login', methods=['GET'])
+def login():
+    return render_template('pages/login.html')
 
 # Configuration
 app.config['STATIC_FOLDER'] = 'static'
@@ -61,18 +66,15 @@ def resultat():
     """Résultat final du planning"""
     return render_template('pages/resultat.html')
 
-@app.route('/login', methods=['POST'])
-def login():
-    """Connexion utilisateur"""
-    data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-    # Authentification simple pour demo
-    if email == 'admin@test.com' and password == 'password123':
-        session['user'] = {'email': email}
-        return jsonify({'status': 'success', 'message': 'Connexion réussie'})
-    else:
-        return jsonify({'status': 'error', 'message': 'Identifiants invalides'}), 401
+@app.route('/api/login', methods=['POST'])
+def login_api():
+    """Proxy login utilisateur vers FastAPI"""
+    backend_url = f'{API_BASE}/api/login'
+    try:
+        resp = requests.post(backend_url, json=request.get_json(), timeout=10)
+        return (resp.content, resp.status_code, resp.headers.items())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/logout', methods=['POST'])
 def logout():

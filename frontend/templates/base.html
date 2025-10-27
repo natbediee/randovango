@@ -1,33 +1,15 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-        <meta charset="UTF-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}RandoVanGo{% endblock %}</title>
     
-    <!-- CSS Master unifié (TEST) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles-master.css') }}">
-    {#
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style-commun.css') }}">
-    {% if request.endpoint == 'etape1' %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape1.css') }}">
-    {% elif request.endpoint == 'etape2' %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape2.css') }}">
-    {% elif request.endpoint == 'etape3' %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape3.css') }}">
-    {% elif request.endpoint == etape4' %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/style-etape4.css') }}">
-    {% endif %}
-    #}
-    
-    <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 </head>
 <body>
-    <!-- Header -->
     {% if request.endpoint not in ['etape1', 'etape2', 'etape3', 'etape4', 'resultat'] %}
     <header class="header">
         <div class="logo">
@@ -35,182 +17,153 @@
         </div>
         <nav class="nav-tabs">
             <a href="{{ url_for('etape1') }}" class="nav-tab">
-                <i class="fas fa-map-marker-alt"></i>
-                Planificateur
+                <i class="fas fa-map-marker-alt"></i> Planificateur
             </a>
         </nav>
-        
         <div class="status-bar">
             <div class="user-section">
-                <button id="loginBtn" class="btn btn-primary">
-                    <i class="fas fa-sign-in-alt"></i>
-                    Se connecter
-                </button>
-                <div id="userMenu" class="user-menu hidden">
-                    <div class="user-info">
-                        <i class="fas fa-user-circle"></i>
-                        <span id="userName">Utilisateur</span>
-                    </div>
-                    <button id="logoutBtn" class="btn btn-outline">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Se déconnecter
-                    </button>
-                </div>
+                <form id="headerLoginForm" class="header-login-form" style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="text" id="headerLogin" class="form-input" placeholder="Login" required style="max-width: 140px;">
+                    <input type="password" id="headerLoginPassword" class="form-input" placeholder="Mot de passe" required style="max-width: 110px;">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-sign-in-alt"></i> Connexion</button>
+                </form>
+                <div id="headerLoginError" class="alert alert-danger" style="display:none; margin-top: 0.25rem; font-size: 0.9em;"></div>
             </div>
         </div>
     </header>
     {% endif %}
-
-    <!-- Main Container -->
+    
     <div class="main-container">
         {% if request.endpoint in ['etape1', 'etape2', 'etape3', 'etape4', 'resultat'] %}
-            <!-- PLANIFICATEUR SECTION -->
-            <!-- Hero Section Unifiée pour le Planificateur -->
             <div class="page-header">
                 <div class="hero-section">
                     <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
                     <div class="hero-overlay"></div>
-                    
-                    <!-- Logo sur la gauche avec fond blanc -->
                     <div class="hero-logo-container">
                         <div class="hero-logo-white">
                             <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
                         </div>
                     </div>
-                    
                     <div class="hero-content">
-                        <h1 class="hero-title">Planificateur RandoVanGo </h1>
+                        <h1 class="hero-title">Planificateur RandoVanGo</h1>
                         <p class="hero-subtitle">{% block hero_subtitle %}Organisez votre aventure en 4 étapes{% endblock %}</p>
+                    </div>
+                    
+                    <!-- Formulaire de connexion flottant en bas à droite -->
+                    <div id="floatingLogin" style="position: absolute; bottom: 20px; right: 20px; z-index: 1000; background: rgba(255,255,255,0.98); padding: 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 400px;">
+                        <div class="stepper-login" style="position: static !important; transform: none !important;">
+                            <form id="stepperLoginForm" class="stepper-login-form" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <input type="text" id="stepperLogin" class="form-input" placeholder="Login" required style="width: 100%;">
+                                <input type="password" id="stepperLoginPassword" class="form-input" placeholder="Mot de passe" required style="width: 100%;">
+                                <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-sign-in-alt"></i> Connexion Contributeur</button>
+                            </form>
+                            <div id="stepperLoginError" class="alert alert-danger" style="display:none; margin-top: 0.5rem; font-size: 0.85em;"></div>
+                        </div>
+                        <div id="userMenu" class="user-menu hidden" style="margin-top: 0.5rem;">
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch;">
+                                <div class="user-info" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f0f0f0; border-radius: 4px;">
+                                    <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
+                                    <span id="userName" style="font-weight: 500;">Contributeur</span>
+                                </div>
+                                <button id="logoutBtn" class="btn btn-outline btn-sm" style="width: 100%;"><i class="fas fa-sign-out-alt"></i> Se déconnecter</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Stepper de progression -->
+            
             <div class="planning-stepper">
-                <!-- Bouton de connexion dans le stepper -->
-                <div class="stepper-login">
-                    <button id="loginBtn" class="btn btn-white btn-sm">
-                        <i class="fas fa-user-plus"></i>
-                        Connexion Contributeur
-                    </button>
-                </div>
-                    <div id="userMenu" class="user-menu hidden">
-                        <div class="user-info">
-                            <i class="fas fa-user-circle"></i>
-                            <span id="userName">Contributeur</span>
-                        </div>
-                        <button id="logoutBtn" class="btn btn-white btn-sm">
-                            <i class="fas fa-sign-out-alt"></i>
-                            Se déconnecter
-                        </button>
-                    </div>
-                </div>
                 <div class="stepper-container">
                     <div class="step {% if current_step >= 1 %}active{% endif %} {% if current_step > 1 %}completed{% endif %}">
-                        <div class="step-circle">
-                            {% if current_step > 1 %}✓{% else %}1{% endif %}
-                        </div>
+                        <div class="step-circle">{% if current_step > 1 %}✓{% else %}1{% endif %}</div>
                         <div class="step-label">Ville</div>
                     </div>
-                    
                     <div class="step-line {% if current_step > 1 %}completed{% endif %}"></div>
-                    
                     <div class="step {% if current_step >= 2 %}active{% endif %} {% if current_step > 2 %}completed{% endif %}">
-                        <div class="step-circle">
-                            {% if current_step > 2 %}✓{% else %}2{% endif %}
-                        </div>
+                        <div class="step-circle">{% if current_step > 2 %}✓{% else %}2{% endif %}</div>
                         <div class="step-label">Randonnée</div>
                     </div>
-                    
                     <div class="step-line {% if current_step > 2 %}completed{% endif %}"></div>
-                    
                     <div class="step {% if current_step >= 3 %}active{% endif %} {% if current_step > 3 %}completed{% endif %}">
-                        <div class="step-circle">
-                            {% if current_step > 3 %}✓{% else %}3{% endif %}
-                        </div>
+                        <div class="step-circle">{% if current_step > 3 %}✓{% else %}3{% endif %}</div>
                         <div class="step-label">Nuit</div>
                     </div>
-                    
                     <div class="step-line {% if current_step > 3 %}completed{% endif %}"></div>
-                    
                     <div class="step {% if current_step >= 4 %}active{% endif %} {% if current_step > 4 %}completed{% endif %}">
-                        <div class="step-circle">
-                            {% if current_step > 4 %}✓{% else %}4{% endif %}
-                        </div>
+                        <div class="step-circle">{% if current_step > 4 %}✓{% else %}4{% endif %}</div>
                         <div class="step-label">Services</div>
                     </div>
-                    
                     <div class="step-line {% if current_step > 4 %}completed{% endif %}"></div>
-                    
                     <div class="step {% if current_step >= 5 %}active{% endif %} {% if current_step > 5 %}completed{% endif %}">
-                        <div class="step-circle">
-                            {% if current_step > 5 %}✓{% else %}📋{% endif %}
-                        </div>
+                        <div class="step-circle">{% if current_step > 5 %}✓{% else %}📋{% endif %}</div>
                         <div class="step-label">Résultat</div>
                     </div>
                 </div>
             </div>
-
-            <!-- Contenu spécifique à chaque étape -->
-            <div class="planning-content">
-                {% block planning_content %}{% endblock %}
-            </div>
-
-            <!-- Navigation entre étapes -->
-            <div class="planning-navigation">
-                {% block navigation %}{% endblock %}
-            </div>
+            
+            <div class="planning-content">{% block planning_content %}{% endblock %}</div>
+            <div class="planning-navigation">{% block navigation %}{% endblock %}</div>
         {% else %}
-            <!-- AUTRES PAGES (non-planificateur) -->
             {% block content %}{% endblock %}
         {% endif %}
     </div>
 
-    <!-- Login Modal -->
-    <div id="loginModal" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">
-                    <i class="fas fa-sign-in-alt"></i>
-                    Connexion
-                </h2>
-                <button class="close-btn" onclick="closeLoginModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <form onsubmit="handleLogin(event)">
-                <div class="form-group">
-                    <label class="form-label">Email</label>
-                    <input type="email" id="loginEmail" class="form-input" placeholder="admin@test.com" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Mot de passe</label>
-                    <input type="password" id="loginPassword" class="form-input" placeholder="password123" required>
-                </div>
-                <button type="submit" class="btn btn-primary btn-full">
-                    <i class="fas fa-sign-in-alt"></i>
-                    Se connecter
-                </button>
-            </form>
-            <div class="text-center text-muted" style="margin-top: 1rem; font-size: 0.875rem;">
-                Demo: admin@test.com / password123
-            </div>
-        </div>
-    </div>
-
-    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- <script src="{{ url_for('static', filename='js/main.js') }}"></script> -->
+    {% if request.endpoint == 'etape2' %}<script src="{{ url_for('static', filename='js/etapes/etape2.js') }}"></script>{% endif %}
+    {% if request.endpoint == 'etape3' %}<script src="{{ url_for('static', filename='js/etapes/etape3.js') }}"></script>{% endif %}
+    {% if request.endpoint == 'etape4' %}<script src="{{ url_for('static', filename='js/etapes/etape4.js') }}"></script>{% endif %}
     
-    <!-- Scripts spécifiques aux étapes -->
-    {# Étape 1 a son script inline dans le template #}
-    {% if request.endpoint == 'etape2' %}
-        <script src="{{ url_for('static', filename='js/etapes/etape2.js') }}"></script>
-    {% elif request.endpoint == 'etape3' %}
-        <script src="{{ url_for('static', filename='js/etapes/etape3.js') }}"></script>
-    {% elif request.endpoint == 'etape4' %}
-        <script src="{{ url_for('static', filename='js/etapes/etape4.js') }}"></script>
-    {% endif %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const headerLoginForm = document.getElementById('headerLoginForm');
+        const headerLoginError = document.getElementById('headerLoginError');
+        if (headerLoginForm) {
+            headerLoginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                headerLoginError.style.display = 'none';
+                const login = document.getElementById('headerLogin').value;
+                const password = document.getElementById('headerLoginPassword').value;
+                try {
+                    const response = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login, password }) });
+                    const data = await response.json();
+                    if (response.ok && data.status === 'success') {
+                        location.reload();
+                    } else {
+                        headerLoginError.textContent = data.message || 'Erreur de connexion';
+                        headerLoginError.style.display = 'inline-block';
+                    }
+                } catch (err) {
+                    headerLoginError.textContent = 'Erreur réseau ou serveur';
+                    headerLoginError.style.display = 'inline-block';
+                }
+            });
+        }
+        
+        const stepperLoginForm = document.getElementById('stepperLoginForm');
+        const stepperLoginError = document.getElementById('stepperLoginError');
+        if (stepperLoginForm) {
+            stepperLoginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                stepperLoginError.style.display = 'none';
+                const login = document.getElementById('stepperLogin').value;
+                const password = document.getElementById('stepperLoginPassword').value;
+                try {
+                    const response = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login, password }) });
+                    const data = await response.json();
+                    if (response.ok && data.status === 'success') {
+                        location.reload();
+                    } else {
+                        stepperLoginError.textContent = data.message || 'Erreur de connexion';
+                        stepperLoginError.style.display = 'inline-block';
+                    }
+                } catch (err) {
+                    stepperLoginError.textContent = 'Erreur réseau ou serveur';
+                    stepperLoginError.style.display = 'inline-block';
+                }
+            });
+        }
+    });
+    </script>
     
     {% block scripts %}{% endblock %}
 </body>
