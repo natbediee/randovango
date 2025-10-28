@@ -10,13 +10,13 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 </head>
 <body>
-    {% if request.endpoint not in ['etape1', 'etape2', 'etape3', 'etape4', 'resultat'] %}
+    {% if request.endpoint not in ['step1', 'step2', 'step3', 'step4', result] %}
     <header class="header">
         <div class="logo">
             <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="logo-img">
         </div>
         <nav class="nav-tabs">
-            <a href="{{ url_for('etape1') }}" class="nav-tab">
+            <a href="{{ url_for('step1') }}" class="nav-tab">
                 <i class="fas fa-map-marker-alt"></i> Planificateur
             </a>
         </nav>
@@ -34,7 +34,7 @@
     {% endif %}
     
     <div class="main-container">
-        {% if request.endpoint in ['etape1', 'etape2', 'etape3', 'etape4', 'resultat'] %}
+        {% if request.endpoint in ['step1', 'step2', 'step3', 'step4', 'result'] %}
             <div class="page-header">
                 <div class="hero-section">
                     <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
@@ -109,10 +109,10 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    {% if request.endpoint == 'etape2' %}<script src="{{ url_for('static', filename='js/etapes/etape2.js') }}"></script>{% endif %}
-    {% if request.endpoint == 'etape3' %}<script src="{{ url_for('static', filename='js/etapes/etape3.js') }}"></script>{% endif %}
-    {% if request.endpoint == 'etape4' %}<script src="{{ url_for('static', filename='js/etapes/etape4.js') }}"></script>{% endif %}
-    
+    {% if request.endpoint == 'step2' %}<script src="{{ url_for('static', filename='js/steps/step.js') }}"></script>{% endif %}
+    {% if request.endpoint == 'step3' %}<script src="{{ url_for('static', filename='js/steps/step.js') }}"></script>{% endif %}
+    {% if request.endpoint == 'step4' %}<script src="{{ url_for('static', filename='js/steps/step4.js') }}"></script>{% endif %}
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         const headerLoginForm = document.getElementById('headerLoginForm');

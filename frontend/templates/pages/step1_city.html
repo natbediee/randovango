@@ -19,18 +19,18 @@
         <div class="search-input-group">
             <i class="fas fa-map-marker-alt"></i>
             <select id="citySelect" class="search-input">
-                {% for ville in villes %}
-                    <option value="{{ ville.id }}" 
-                            data-lat="{{ ville.latitude }}" 
-                            data-lon="{{ ville.longitude }}" 
-                            data-name="{{ ville.name }}" 
-                            data-dept="{{ ville.department or '' }}" 
-                            data-country="{{ ville.country or '' }}" 
-                            data-rando="{{ ville.stats.randonnees }}" 
-                            data-spots="{{ ville.stats.spots }}" 
-                            data-poi="{{ ville.stats.poi }}"
-                            data-meteo='{{ ville.meteo | tojson }}'>
-                        {{ ville.name }}
+                {% for city in cities %}
+                    <option value="{{ city.id }}" 
+                            data-lat="{{ city.latitude }}" 
+                            data-lon="{{ city.longitude }}" 
+                            data-name="{{ city.name }}" 
+                            data-dept="{{ city.department or '' }}" 
+                            data-country="{{ city.country or '' }}" 
+                            data-hikes="{{ city.stats.hikes }}" 
+                            data-spots="{{ city.stats.spots }}" 
+                            data-poi="{{ city.stats.poi }}"
+                            data-meteo='{{ city.meteo | tojson }}'>
+                        {{ city.name }}
                     </option>
                 {% endfor %}
             </select>
@@ -41,25 +41,25 @@
     <div class="selected-city" id="selectedCity">
         <div class="card selected">
             <div class="city-header">
-                <h3 id="cityName">{{ villes[0].name if villes else '' }}</h3>
-                                <p id="cityDept">
-                                    {{ villes[0].department if villes else '' }}
-                                    {% if villes and villes[0].region %} - {{ villes[0].region }}{% endif %}
-                                    {% if villes and villes[0].country %} - {{ villes[0].country }}{% endif %}
-                                </p>
+                <h3 id="cityName">{{ cities[0].name if cities else '' }}</h3>
+                <p id="cityDept">
+                    {{ cities[0].department if cities else '' }}
+                    {% if cities and cities[0].region %} - {{ cities[0].region }}{% endif %}
+                    {% if cities and cities[0].country %} - {{ cities[0].country }}{% endif %}
+                </p>
             </div>
             <div class="city-stats">
                 <div class="stat-item">
                     <i class="fas fa-hiking"></i>
-                    <span id="cityRando">{{ villes[0].stats.randonnees if villes else 0 }} randonnées</span>
+                    <span id="cityHikes">{{ cities[0].stats.hikes if cities else 0 }} randonnées</span>
                 </div>
                 <div class="stat-item">
                     <i class="fas fa-bed"></i>
-                    <span id="citySpots">{{ villes[0].stats.spots if villes else 0 }} spots nuit</span>
+                    <span id="citySpots">{{ cities[0].stats.spots if cities else 0 }} spots nuit</span>
                 </div>
                 <div class="stat-item">
                     <i class="fas fa-map-pin"></i>
-                    <span id="cityServices">{{ villes[0].stats.poi if villes else 0 }} points d'intérêt</span>
+                    <span id="cityServices">{{ cities[0].stats.poi if cities else 0 }} points d'intérêt</span>
                 </div>
             </div>
         </div>
@@ -72,11 +72,11 @@
     </div>
     <!-- Météo 7 jours -->
     <div class="weather-section">
-        <h3 id="weatherTitle">🌤️ Météo à {{ villes[0].name if villes else '' }} - Prochains jours</h3>
+        <h3 id="weatherTitle">🌤️ Météo à {{ cities[0].name if cities else '' }} - Prochains jours</h3>
         <p>Consultez les prévisions locales pour choisir la durée idéale de votre séjour</p>
         <div class="weather-grid" id="weatherGrid">
-            {% if villes and villes[0].meteo %}
-                {% for forecast in villes[0].meteo %}
+            {% if cities and cities[0].meteo %}
+                {% for forecast in cities[0].meteo %}
                 <div class="weather-day {% if forecast.weather_code < 45 %}good-weather{% elif forecast.weather_code <= 65 %}acceptable-weather{% else %}bad-weather{% endif %}">
                     <div class="day-name">{% if loop.index == 1 %}Aujourd'hui{% else %}Jour {{ loop.index }}{% endif %}</div>
                     <div class="weather-icon">
@@ -202,7 +202,7 @@
             const dept = opt.getAttribute('data-dept') || '';
             const country = opt.getAttribute('data-country') || '';
             document.getElementById('cityDept').textContent = dept + (country ? ' - ' + country : '');
-            document.getElementById('cityRando').textContent = opt.getAttribute('data-rando') + ' randonnées';
+            document.getElementById('cityHikes').textContent = opt.getAttribute('data-hikes') + ' randonnées';
             document.getElementById('citySpots').textContent = opt.getAttribute('data-spots') + ' spots nuit';
             document.getElementById('cityServices').textContent = opt.getAttribute('data-poi') + " points d'intérêt";
             document.getElementById('weatherTitle').textContent = '🌤️ Météo à ' + cityName + ' - Prochains jours';
@@ -369,7 +369,7 @@
                 }
                 const userId = localStorage.getItem('userId') ? parseInt(localStorage.getItem('userId')) : null;
 
-                const response = await fetch('/api/etape1/create_plan', {
+                const response = await fetch('/api/step1/create_plan', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -410,7 +410,7 @@
 
                 // Stocker le plan_id et rediriger vers l'étape 2
                 localStorage.setItem('planId', data.plan_id);
-                window.location.href = "{{ url_for('etape2') }}";
+                window.location.href = "{{ url_for('step2') }}";
 
             } catch (error) {
                 console.error('Erreur:', error);

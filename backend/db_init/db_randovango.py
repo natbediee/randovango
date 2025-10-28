@@ -92,7 +92,7 @@ def init_database():
             """,
             # 5. tables histo scrap par rapport à spots et cities
             """
-            CREATE TABLE IF NOT EXISTS histo_scrapt (
+            CREATE TABLE IF NOT EXISTS histo_scrap (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 spot_id INT NOT NULL,
                 city_id INT NOT NULL,

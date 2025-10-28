@@ -159,7 +159,7 @@ window.selectNoHiking = function() {
     if (nextBtn) nextBtn.style.display = 'block';
 };
 window.showHikingMap = function(id) {
-    const mapUrl = `/map/randonnee/${id}`;
+    const mapUrl = `/map/hikes/${id}`;
     window.open(mapUrl, '_blank', 'width=1200,height=800');
 };
 

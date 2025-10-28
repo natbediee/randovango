@@ -50,9 +50,9 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     # insert_service_sql = "INSERT INTO services (name, category) VALUES (%s, %s)"
     insert_spot_service_sql = "INSERT IGNORE INTO spot_service (spot_id, service_id) VALUES (%s, %s)"
 
-    # Prépare la requête pour histo_scrapt (ou city_spot_scraped)
+    # Prépare la requête pour histo_ (ou city_spot_scraped)
     insert_histo_sql = """
-        INSERT IGNORE INTO histo_scrapt (spot_id, city_id, scraped_at)
+        INSERT IGNORE INTO histo_scrap (spot_id, city_id, scraped_at)
         VALUES (%s, %s, NOW())
     """
    
@@ -90,7 +90,7 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
             service_id = ServiceUtil.get_or_create_service_with_category(cursor, service)
             cursor.execute(insert_spot_service_sql, (spot_id, service_id))
 
-        # 3. Ajout dans histo_scrapt (ou city_spot_scraped) avec la ville principale
+        # 3. Ajout dans histo_scrap (ou city_spot_scraped) avec la ville principale
         cursor.execute(insert_histo_sql, (spot_id, city_id))
 
     conn.commit()

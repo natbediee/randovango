@@ -25,6 +25,6 @@ window.selectNoHiking = function() {
 
 // Affichage de la carte randonnée
 window.showHikingMap = function(id) {
-    const mapUrl = `/map/randonnee/${id}`;
+    const mapUrl = `/map/hikes/${id}`;
     window.open(mapUrl, '_blank', 'width=1200,height=800');
 };

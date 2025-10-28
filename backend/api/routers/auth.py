@@ -7,7 +7,7 @@ from services.authentification import (
     get_user_by_username, get_roles_for_user, insert_auth_log, create_access_token
 )
 
-router = APIRouter(prefix="/auth")
+router = APIRouter()
 
 @router.post("/login", tags=["auth"], name="login")
 async def login(request: Request, body: dict = Body(...)) -> ORJSONResponse:

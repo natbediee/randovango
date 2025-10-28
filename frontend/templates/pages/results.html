@@ -46,7 +46,7 @@
 
 {% block navigation %}
 <div class="navigation-buttons">
-    <a href="{{ url_for('planificateur_etape4') }}" class="btn btn-outline">
+    <a href="{{ url_for('step4') }}" class="btn btn-outline">
         <i class="fas fa-arrow-left"></i>
         Étape précédente
     </a>
@@ -138,7 +138,7 @@ function planifierJour2() {
     localStorage.setItem('completed_days', '1');
     
     // Rediriger vers l'étape 1 pour planifier le jour 2
-    window.location.href = '/etape1';
+    window.location.href = '/step1';
 }
 </script>
 {% endblock %}

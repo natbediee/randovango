@@ -5,9 +5,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import date
 
-class VilleStats(BaseModel):
+class CityStats(BaseModel):
     """Statistiques d'une ville"""
-    randonnees: int = 0
+    hikes: int = 0
     spots: int = 0
     poi: int = 0
 
@@ -21,7 +21,7 @@ class MeteoForecast(BaseModel):
     precipitation_sum: Optional[float] = 0.0
     wind_speed_max: Optional[float] = 0.0
 
-class VilleList(BaseModel):
+class CityList(BaseModel):
     """Liste des villes disponibles"""
     id: int
     name: str
@@ -30,5 +30,5 @@ class VilleList(BaseModel):
     latitude: float
     longitude: float
     country: Optional[str] = None
-    stats: VilleStats
+    stats: CityStats
     meteo: Optional[List[MeteoForecast]] = []

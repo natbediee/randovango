@@ -1,34 +1,31 @@
 from utils.mysql_utils import MySQLUtils
 
-# plans(plan_id INT PRIMARY KEY AUTO_INCREMENT, ville_id INT, randonnee_id INT, nuit_id INT, services JSON, etape INT)
-
 def insert_or_update_plan(plan_id, data):
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor()
-    ville_id = data.get("ville_id")
-    randonnee_id = data.get("randonnee_id")
-    nuit_id = data.get("nuit_id")
+    city_id = data.get("city_id")
+    hike_id = data.get("hike_id")
+    spot_id = data.get("spot_id")
     services = data.get("services")  # Peut être une liste ou un JSON
-    etape = data.get("etape")
 
     if plan_id is None:
         # Création d'un nouveau plan
         cursor.execute(
             """
-            INSERT INTO plans (ville_id, randonnee_id, nuit_id, services, etape)
+            INSERT INTO plans (city_id, hike_id, spot_id, services)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (ville_id, randonnee_id, nuit_id, str(services), etape)
+            (city_id, hike_id, spot_id, str(services))
         )
         plan_id = cursor.lastrowid
     else:
         # Mise à jour d'un plan existant
         cursor.execute(
             """
-            UPDATE plans SET ville_id=%s, randonnee_id=%s, nuit_id=%s, services=%s, etape=%s
+            UPDATE plans SET city_id=%s, hike_id=%s, spot_id=%s, services=%
             WHERE plan_id=%s
             """,
-            (ville_id, randonnee_id, nuit_id, str(services), etape, plan_id)
+            (city_id, hike_id, spot_id, str(services), plan_id)
         )
     cnx.commit()
     cursor.close()

@@ -4,7 +4,7 @@ from services.plan_service import insert_or_update_plan
 router = APIRouter()
 
 @router.get("/services")
-def get_services(ville_id: int = Query(...), randonnee_id: int = Query(...), nuit_id: int = Query(...)):
+def get_services(city_id: int = Query(...), hike_id: int = Query(...), spot_id: int = Query(...)):
     # Retourne les services disponibles
     return [{"id": 200, "categorie": "Ravitaillement", "nom": "Super U"}]
 

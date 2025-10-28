@@ -18,53 +18,53 @@ app.config['TEMPLATES_FOLDER'] = 'templates'
 @app.route('/')
 def index():
     """Page d'accueil - Redirection vers le planificateur"""
-    return redirect(url_for('etape1'))
+    return redirect(url_for('step1'))
 
 # ===== PLANIFICATEUR PRINCIPAL ====
 
-@app.route('/etape1')
-def etape1():
+@app.route('/step1')
+def step1():
     """Étape 1 - Choix de la ville"""
     # Appel à l'API FastAPI pour récupérer la liste des villes
     try:
-        api_url = f'{API_BASE}/api/etape1/villes?user_role=admin'
+        api_url = f'{API_BASE}/api/step1/cities?user_role=admin'
         response = requests.get(api_url, timeout=5)
         response.raise_for_status()
-        villes = response.json()
+        cities = response.json()
     except Exception as e:
-        villes = []
+        cities = []
         print(f"Erreur lors de l'appel à l'API FastAPI: {e}")
-    return render_template('pages/etape1_ville.html', villes=villes)
+    return render_template('pages/step1_city.html', cities=cities)
 
 # Proxy route pour relayer le POST vers le backend FastAPI
-@app.route('/api/etape1/create_plan', methods=['POST'])
+@app.route('/api/step1/create_plan', methods=['POST'])
 def proxy_create_plan():
-    backend_url = f'{API_BASE}/api/etape1/create_plan'
+    backend_url = f'{API_BASE}/api/step1/create_plan'
     try:
         resp = requests.post(backend_url, json=request.get_json(), timeout=10)
         return (resp.content, resp.status_code, resp.headers.items())
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/etape2')
-def etape2():
+@app.route('/step2')
+def step2():
     """Étape 2 - Choix de la randonnée"""
-    return render_template('pages/etape2_randonnee.html')
+    return render_template('pages/step2_hike.html')
 
-@app.route('/etape3')
-def etape3():
+@app.route('/step3')
+def step3():
     """Étape 3 - Choix de la nuit"""
-    return render_template('pages/etape3_nuit.html')
+    return render_template('pages/step3_spot.html')
 
-@app.route('/etape4')
-def etape4():
+@app.route('/step4')
+def step4():
     """Étape 4 - Services et POI"""
-    return render_template('pages/etape4_services.html')
+    return render_template('pages/step4_services.html')
 
-@app.route('/resultat')
-def resultat():
+@app.route('/results')
+def results():
     """Résultat final du planning"""
-    return render_template('pages/resultat.html')
+    return render_template('pages/results.html')
 
 @app.route('/api/login', methods=['POST'])
 def login_api():

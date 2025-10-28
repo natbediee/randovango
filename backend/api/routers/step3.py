@@ -3,10 +3,10 @@ from services.plan_service import insert_or_update_plan
 
 router = APIRouter()
 
-@router.get("/randonnees")
-def get_randonnees(ville_id: int = Query(...)):
-    # Retourne les randonnées pour la ville
-    return [{"id": 10, "nom": "Sentier des Douaniers"}]
+@router.get("/spots")
+def get_spots(city_id: int = Query(...), hike_id: int = Query(...)):
+    # Retourne les spots
+    return [{"id": 100, "type": "Camping", "nom": "Camping de la Plage"}]
 
 @router.put("/update_plan/{plan_id}")
 def update_plan(plan_id: int, data: dict = Body(...)):

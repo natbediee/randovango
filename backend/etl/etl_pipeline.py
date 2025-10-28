@@ -46,7 +46,7 @@ def main():
     def city_already_scraped(city_name):
         conn = MySQLUtils.connect()
         cursor = MySQLUtils.get_cursor(conn)
-        cursor.execute("SELECT COUNT(*) FROM histo_scrapt hs JOIN cities c ON hs.city_id = c.id WHERE c.name = %s", (city_name,))
+        cursor.execute("SELECT COUNT(*) FROM histo_scrap hs JOIN cities c ON hs.city_id = c.id WHERE c.name = %s", (city_name,))
         count = cursor.fetchone()[0]
         cursor.close()
         MySQLUtils.disconnect(conn)

@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Body, HTTPException, Query
 from utils.mysql_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
-from api.models.villes import VilleList
+from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.geo_utils import get_bounding_box
 from typing import List
@@ -16,47 +16,47 @@ def get_city_stats(cursor, latitude, longitude, user_role, distance_km=5):
     cursor.execute("""
         SELECT COUNT(*) as count FROM hikes WHERE verifie = 1 AND start_latitude BETWEEN %s AND %s AND start_longitude BETWEEN %s AND %s
     """, (min_lat, max_lat, min_lon, max_lon))
-    randonnees_verifiees = cursor.fetchone()['count']
+    hikes_verified = cursor.fetchone()['count']
     # Randonnées en attente
     cursor.execute("""
         SELECT COUNT(*) as count FROM hikes WHERE verifie = 0 AND start_latitude BETWEEN %s AND %s AND start_longitude BETWEEN %s AND %s
     """, (min_lat, max_lat, min_lon, max_lon))
-    randonnees_en_attente = cursor.fetchone()['count']
+    hikes_in_waiting = cursor.fetchone()['count']
     # Spots (POI) en attente
     cursor.execute("""
         SELECT COUNT(*) as count FROM spots WHERE verifie = 0 AND latitude BETWEEN %s AND %s AND longitude BETWEEN %s AND %s
     """, (min_lat, max_lat, min_lon, max_lon))
-    spots_en_attente = cursor.fetchone()['count']
+    spots_in_waiting = cursor.fetchone()['count']
     # Spots (POI) vérifiés
     cursor.execute("""
         SELECT COUNT(*) as count FROM spots WHERE verifie = 1 AND latitude BETWEEN %s AND %s AND longitude BETWEEN %s AND %s
     """, (min_lat, max_lat, min_lon, max_lon))
-    spots_verifies = cursor.fetchone()['count']
+    spots_verified = cursor.fetchone()['count']
     # Services (POI) en attente
     cursor.execute("""
         SELECT COUNT(*) AS count FROM poi WHERE verifie = 0 AND latitude BETWEEN %s AND %s AND longitude BETWEEN %s AND %s
     """, (min_lat, max_lat, min_lon, max_lon))
-    poi_en_attente = cursor.fetchone()['count']
+    poi_in_waiting = cursor.fetchone()['count']
     # Services (POI) vérifiés
     cursor.execute("""
         SELECT COUNT(*) AS count FROM poi WHERE verifie = 1 AND latitude BETWEEN %s AND %s AND longitude BETWEEN %s AND %s
     """, (min_lat, max_lat, min_lon, max_lon))
-    poi_verifies = cursor.fetchone()['count']
+    poi_verified = cursor.fetchone()['count']
     if user_role != "user":
-        randonnees=randonnees_en_attente+randonnees_verifiees
-        spots=spots_en_attente+spots_verifies
-        poi=poi_en_attente+poi_verifies
+        hikes=hikes_in_waiting+hikes_verified
+        spots=spots_in_waiting+spots_verified
+        poi=poi_in_waiting+poi_verified
     else:
-        randonnees=randonnees_verifiees
-        spots=spots_verifies
-        poi=poi_verifies
+        hikes=hikes_verified
+        spots=spots_verified
+        poi=poi_verified
     return {
-        "randonnees": randonnees,
+        "hikes": hikes,
         "spots": spots,
         "poi": poi
     }
 
-@router.get("/villes", response_model=List[VilleList])
+@router.get("/cities", response_model=List[CityList])
 def get_ville_list(user_role: str = "user", distance_km: float = Query(5, description="Rayon de recherche en km")):
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor(dictionary=True)
@@ -78,7 +78,7 @@ def get_ville_list(user_role: str = "user", distance_km: float = Query(5, descri
                 print(f"Erreur ETL météo pour {city['name']}: {e}")
     
     cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
-    villes = []
+    cities = []
     for row in cursor.fetchall():
         row["stats"] = get_city_stats(cursor, row["latitude"], row["longitude"], user_role, distance_km)
         
@@ -98,10 +98,10 @@ def get_ville_list(user_role: str = "user", distance_km: float = Query(5, descri
             })
         row["meteo"] = forecasts
         
-        villes.append(row)
+        cities.append(row)
     cursor.close()
     MySQLUtils.disconnect(cnx)
-    return villes
+    return cities
 
 
 @router.post("/create_plan")

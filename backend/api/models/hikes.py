@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 
 
-class RandonneeListItem(BaseModel):
+class HikeListItem(BaseModel):
     """Élément de liste de randonnée"""
     id: int
     name: str
@@ -18,7 +18,7 @@ class RandonneeListItem(BaseModel):
     date_ajout: datetime
 
 
-class RandonneeDetail(BaseModel):
+class HikeDetail(BaseModel):
     """Détails complets d'une randonnée"""
     id: int
     name: str
@@ -36,23 +36,21 @@ class RandonneeDetail(BaseModel):
     commentaire_admin: Optional[str] = None
 
 
-class RandonneeUpload(BaseModel):
+class HikeUpload(BaseModel):
     """Réponse après upload d'une trace GPX"""
     status: str = "processing"
     job_id: str
-    randonnee_id: int
+    hike_id: int
     verifie: int = 0
     message: str
 
 
-class RandonneeValidation(BaseModel):
+class Validation(BaseModel):
     """Validation ou rejet d'une trace par un admin"""
     commentaire: Optional[str] = None
 
 
-class RandonneeValidated(BaseModel):
+class HikeValidated(BaseModel):
     """Réponse après validation d'une trace"""
-    randonnee_id: int
+    hike_id: int
     verifie: int
-    validated_at: datetime
-    commentaire_admin: Optional[str] = None
