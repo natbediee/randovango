@@ -1,14 +1,12 @@
-
-import sqlite3
-
+import sys
 from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+import sqlite3
 from passlib.hash import bcrypt
 from utils.service_utils import ServiceUtil
 
-ROOT = Path(__file__).resolve().parents[2]
 ServiceUtil.load_env()
-DB_PATH = ROOT / "storage" / ServiceUtil.get_env("SQLITE_DB_NAME", "rando_users.sqlite")
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+DB_PATH = Path("/usr/src/storage/rando_users.sqlite")
 ROLES = ["admin", "user", "contributor", "guest"]
 USERS = [
     ("admin", "admin123", 1, ["admin"]),

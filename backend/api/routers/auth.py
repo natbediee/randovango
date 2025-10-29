@@ -1,5 +1,6 @@
 
-from fastapi import APIRouter, Body, Request
+from fastapi import APIRouter, Request, Body
+from api.models.auth import UserLogin
 from fastapi.responses import ORJSONResponse
 from passlib.hash import bcrypt
 from datetime import datetime, timedelta
@@ -10,9 +11,9 @@ from services.authentification import (
 router = APIRouter()
 
 @router.post("/login", tags=["auth"], name="login")
-async def login(request: Request, body: dict = Body(...)) -> ORJSONResponse:
-    username = body.get("username")
-    password = body.get("password")
+async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse:
+    username = body.login
+    password = body.password
     user = get_user_by_username(username)
     if not user or not bcrypt.verify(password or "", user[2]):
         insert_auth_log(user[0] if user else None, username, "failed_login", "/auth/login", 401)
@@ -35,7 +36,7 @@ async def login(request: Request, body: dict = Body(...)) -> ORJSONResponse:
     expires_delta = timedelta(minutes=60)
     token = create_access_token(token_data, expires_delta)
     expires_at = (datetime.utcnow() + expires_delta).isoformat() + "Z"
-    insert_auth_log(user[0], user[1], "login", "/auth/login", 200)
+    insert_auth_log(user[0], user[1], "login", "/auth/login", 200, token=token)
     return ORJSONResponse(
         content={
             "success": True,

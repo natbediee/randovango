@@ -5,3 +5,4 @@ class GPXUploadResponse(BaseModel):
     success: bool
     message: str
     city: Optional[str] = None
+    role: Optional[str] = None

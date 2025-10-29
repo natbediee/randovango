@@ -8,31 +8,33 @@ from utils.mysql_utils import MySQLUtils
 from utils.geo_utils import get_admin_info_from_coordinates
 
 ROOT = Path(__file__).resolve().parents[3]
-logger = LoggerUtil.get_logger("gpx")
+logger = LoggerUtil.get_logger("load_gpx")
 
 ServiceUtil.load_env()
 mysql_conn = MySQLUtils.connect()
 
-def load_gpx_data(data, gpx_path):
+def load_gpx_data(data, gpx_path, verifie=0) -> str:
     """
     Charge les données GPX transformées dans MongoDB et MySQL, puis archive le fichier.
     Retourne le nom de la ville ou None si déjà importé.
+    verifie: 1 si admin, 0 sinon
     """
     fname = os.path.basename(gpx_path)
     MongoUtils.connect()
     gpx_collection = MongoUtils.get_collection("gpx_traces")
     existing = gpx_collection.find_one({"filename": fname})
+    city_name = data.get('city_name')
     if existing:
         logger.info(f"Le fichier {fname} existe déjà dans MongoDB (id={existing.get('_id')}). Ignorer l'import.")
         print(f"Le fichier {fname} a déjà été importé.")
-        return None
+        return city_name if city_name else None
 
     logger.info(f"Import du fichier GPX: {fname}")
 
     start_lat = data['start_lat']
     start_lon = data['start_lon']
     description = data['description']
-    city_name = data.get('city_name')
+    # city_name déjà défini ci-dessus
     cursor = mysql_conn.cursor()
     cursor.execute("SELECT id FROM cities WHERE name = %s", (city_name,))
     result = cursor.fetchone()
@@ -70,7 +72,7 @@ def load_gpx_data(data, gpx_path):
         """INSERT INTO hikes 
            (name, description, start_latitude, start_longitude, distance_km, estimated_duration_h, elevation_gain_m, mongo_id, source_id, city_id, filename, verifie) 
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-        (data['name'], description, start_lat, start_lon, data['distance_km'], data['estimated_duration_h'], data['denivele_m'], None, source_id, city_id, fname, False)
+        (data['name'], description, start_lat, start_lon, data['distance_km'], data['estimated_duration_h'], data['denivele_m'], None, source_id, city_id, fname, verifie)
     )
     mysql_conn.commit()
     gpxtrace_id = cursor.lastrowid

@@ -1,4 +1,5 @@
 
+import threading
 from utils.mysql_utils import MySQLUtils
 from etl.extract.scraper_p4n import run_p4n_scraper
 from etl.transform.transform_p4n import transform_p4n
@@ -12,37 +13,43 @@ from utils.logger_util import LoggerUtil
 from etl.load.load_gpx import load_gpx_data
 from etl.extract.api_meteo import extract_weather_data
 from etl.load.load_meteo import load_weather_data
-from etl.extract.gpx import extract_gpx_file
+from etl.extract.gpx import extract_all_gpx_files
 
 
 logger = LoggerUtil.get_logger("etl_pipeline")
 
-def main():
-    # 1. Import GPX (Mongo + MySQL) et récupération de la ville
-    data, gpx_path, fname = extract_gpx_file()
-    if not data:
-        return
-    # --- Chargement explicite ---
-    city = load_gpx_data(data, gpx_path)
-    if not city:
-        logger.info("[ETL] Aucun nouveau fichier GPX à traiter. Arrêt du pipeline.")
-        return
-    logger.info(f"[ETL] Ville extraite du GPX: {city}")
+# Verrou global pour empêcher plusieurs scrapings P4N en parallèle
+scraping_lock = threading.Lock()
 
-    # 2. Extraction et chargement météo pour la ville
+def scraping_background(city):
+    """Fonction de scraping à exécuter en arrière-plan (thread séparé)"""
+    logger.info(f"[ETL-BG] Début du scraping en arrière-plan pour la ville: {city}")
+    
+    # 1. Extraction OSM (rapide - API)
     try:
-        logger.info(f"[ETL] Extraction météo pour la ville: {city}")
-        weather_data = extract_weather_data(city)
-        if weather_data:
-            load_weather_data(weather_data, city)
-            logger.info(f"[ETL] Données météo chargées pour la ville: {city}")
-        else:
-            logger.warning(f"[ETL] Aucune donnée météo à charger pour la ville: {city}")
+        logger.info(f"[ETL-BG] Extraction OSM pour la ville : {city}")
+        osm_json = extract_osm(city)
+        logger.info("[ETL-BG] Transformation OSM...")
+        df_osm = transform_osm(osm_json, city=city)
+        logger.info("[ETL-BG] Chargement OSM...")
+        load_osm_poi(df_osm=df_osm, city_name=city)
+        logger.info(f"[ETL-BG] OSM chargé pour la ville : {city}")
     except Exception as e:
-        logger.error(f"[ETL] Erreur lors de l'extraction/chargement météo: {e}")
-        return
+        logger.error(f"[ETL-BG] Erreur OSM: {e}")
 
-    # 3. Extraction P4N si la ville n'est pas déjà présente dans city_spot_scraped
+    # 2. Extraction Wikidata (rapide - API)
+    try:
+        logger.info(f"[ETL-BG] Extraction Wikidata pour la ville : {city}")
+        wikidata_json = extract_wikidata(city)
+        logger.info("[ETL-BG] Transformation Wikidata...")
+        df_wiki = transform_wikidata(wikidata_json=wikidata_json, city_name=city)
+        logger.info("[ETL-BG] Chargement Wikidata...")
+        load_wikidata_poi(df_wiki=df_wiki, city_name=city)
+        logger.info(f"[ETL-BG] Wikidata chargé pour la ville : {city}")
+    except Exception as e:
+        logger.error(f"[ETL-BG] Erreur Wikidata: {e}")
+
+    # 3. Extraction P4N en dernier (lent - Selenium ~4min) si la ville n'est pas déjà présente dans histo_scrap
     def city_already_scraped(city_name):
         conn = MySQLUtils.connect()
         cursor = MySQLUtils.get_cursor(conn)
@@ -52,44 +59,63 @@ def main():
         MySQLUtils.disconnect(conn)
         return count > 0
 
-    if city_already_scraped(city):
-        logger.info(f"[ETL] Ville déjà présente dans city_spot_scraped : {city}. Extraction P4N sautée.")
-    else:
+    # Verrou uniquement pour le scraping P4N (Selenium) pour éviter les conflits
+    with scraping_lock:
+        if city_already_scraped(city):
+            logger.info(f"[ETL-BG] Ville déjà présente dans histo_scrap : {city}. Extraction P4N sautée.")
+        else:
+            try:
+                logger.info(f"[ETL-BG] Extraction P4N pour la ville : {city} (scraping long en cours...)")
+                df_p4n = run_p4n_scraper(city, is_headless=True, save_csv=False)
+                if df_p4n is not None:
+                    df_transformed = transform_p4n(df_p4n)
+                    load_p4n_to_mysql(df_transformed, city)
+                    logger.info(f"[ETL-BG] P4N chargé pour la ville : {city}")
+                else:
+                    logger.warning(f"[ETL-BG] Scraping P4N a échoué pour la ville : {city}")
+            except Exception as e:
+                logger.error(f"[ETL-BG] Erreur lors de l'extraction/chargement P4N: {e}")
+
+    logger.info(f"[ETL-BG] Scraping terminé pour la ville: {city}")
+
+def main(user_role="user"):
+
+    # 1. Import GPX (Mongo + MySQL) et récupération de la ville pour chaque fichier
+    gpx_files = extract_all_gpx_files()
+    if not gpx_files:
+        logger.info("[ETL] Aucun fichier GPX à traiter. Arrêt du pipeline.")
+        return None
+
+    results = []
+    for data, gpx_path, fname in gpx_files:
+        verifie = 1 if user_role == "admin" else 0
+        city = load_gpx_data(data, gpx_path, verifie=verifie)
+        if not city:
+            logger.info(f"[ETL] Fichier {fname} ignoré (pas de ville détectée).")
+            continue
+        logger.info(f"[ETL] Ville extraite du GPX: {city}")
+
+        # 2. Extraction et chargement météo pour la ville (rapide)
         try:
-            logger.info(f"[ETL] Extraction P4N pour la ville : {city}")
-            df_p4n = run_p4n_scraper(city, is_headless=True, save_csv=False)
-            if df_p4n is not None:
-                df_transformed = transform_p4n(df_p4n)
-                load_p4n_to_mysql(df_transformed,city)
-                logger.info(f"[ETL] P4N chargé pour la ville : {city}")
+            logger.info(f"[ETL] Extraction météo pour la ville: {city}")
+            weather_data = extract_weather_data(city)
+            if weather_data:
+                load_weather_data(weather_data, city)
+                logger.info(f"[ETL] Données météo chargées pour la ville: {city}")
             else:
-                logger.warning(f"[ETL] Scraping P4N a échoué pour la ville : {city}")
+                logger.warning(f"[ETL] Aucune donnée météo à charger pour la ville: {city}")
         except Exception as e:
-            logger.error(f"[ETL] Erreur lors de l'extraction/chargement P4N: {e}")
+            logger.error(f"[ETL] Erreur lors de l'extraction/chargement météo: {e}")
 
-    # 4. Extraction OSM
-    try:
-        logger.info(f"[ETL] Extraction OSM pour la ville : {city}")
-        osm_json = extract_osm(city)
-        logger.info("[ETL] Transformation OSM...")
-        df_osm = transform_osm(osm_json, city=city)
-        logger.info("[ETL] Chargement OSM...")
-        load_osm_poi(df_osm=df_osm, city_name=city)
-    except Exception as e:
-        logger.error(f"[ETL] Erreur OSM: {e}")
+        # 3. Lancer le scraping en arrière-plan (non bloquant)
+        logger.info(f"[ETL] Lancement du scraping en arrière-plan pour la ville: {city}")
+        threading.Thread(target=scraping_background, args=(city,), daemon=True).start()
+        results.append(city)
 
-    # 5. Extraction Wikidata
-    try:
-        logger.info(f"[ETL] Extraction Wikidata pour la ville : {city}")
-        wikidata_json = extract_wikidata(city)
-        logger.info("[ETL] Transformation Wikidata...")
-        df_wiki = transform_wikidata(wikidata_json=wikidata_json, city_name=city)
-        logger.info("[ETL] Chargement Wikidata...")
-        load_wikidata_poi(df_wiki=df_wiki, city_name=city)
-    except Exception as e:
-        logger.error(f"[ETL] Erreur Wikidata: {e}")
+    # Retourner la liste des villes traitées
+    logger.info(f"[ETL] Pipeline principal terminé. Villes traitées: {results}")
+    return results
 
-    logger.info("[ETL] Pipeline terminé.")
 
 if __name__ == "__main__":
     main()

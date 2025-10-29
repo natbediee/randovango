@@ -1,12 +1,95 @@
 {% extends "base.html" %}
 
-{% set current_step = 1 %}
-
 {% block title %}Étape 1 - Choix de la Ville - RandoVanGo{% endblock %}
 
-{% block hero_subtitle %}Choisissez votre destination pour commencer l'aventure{% endblock %}
+{% block page_content %}
+<div class="main-container">
+    <div class="page-header">
+        <div class="hero-section">
+            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
+            <div class="hero-overlay"></div>
+            <div class="hero-logo-container">
+                <div class="hero-logo-white">
+                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
+                </div>
+            </div>
+            <div class="hero-content">
+                <h1 class="hero-title">Planificateur RandoVanGo</h1>
+                <p class="hero-subtitle">Choisissez votre destination pour commencer l'aventure</p>
+            </div>
+            
+            <!-- Widget d'authentification et upload GPX -->
+            <div id="floatingLogin" style="position: absolute; bottom: 20px; top: 50%; transform: translateY(-50%); right: 20px; z-index: 1000; background: rgba(255,255,255,0.98); padding: 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 400px;min-height: 230px;">
+                <!-- Formulaire de connexion (visible si non connecté) -->
+                <div id="loginForm" class="stepper-login" style="position: static !important; transform: none !important;">
+                    <p style="text-align: center; font-size: 0.9rem; color: #555; margin-bottom: 1rem; padding: 0 0.5rem;">
+                        Pour insérer <br>de nouvelles randonnées !
+                    </p>
+                    <form id="stepperLoginForm" class="stepper-login-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <input type="text" id="stepperLogin" class="form-input" placeholder="Identifiant" required style="width: 100%;">
+                        <input type="password" id="stepperLoginPassword" class="form-input" placeholder="Mot de passe" required style="width: 100%;">
+                        <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-sign-in-alt"></i> Connexion Contributeur</button>
+                    </form>
+                    <div id="stepperLoginError" class="alert alert-danger" style="display:none; margin-top: 0.5rem; font-size: 0.85em;"></div>
+                </div>
+                
+                <!-- Menu utilisateur et upload GPX (visible si connecté) -->
+                <div id="userMenu" class="user-menu" style="display: none;">
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch;">
+                        <div class="user-info" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f0f0f0; border-radius: 4px;">
+                            <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
+                            <span id="userName" style="font-weight: 500;">Contributeur</span>
+                        </div>
+                        <!-- Formulaire d'upload GPX -->
+                        <form id="gpxUploadForm" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 0.2rem;">
+                            <label for="gpxFileInput" class="btn btn-outline" style="margin: 0; cursor: pointer; text-align: center; padding: 0.5rem; font-size: 0.9rem;">
+                                <i class="fas fa-file-upload"></i> Choisir un fichier GPX
+                            </label>
+                            <input type="file" id="gpxFileInput" accept=".gpx" style="display: none;" required>
+                            <div id="fileName" style="font-size: 0.9em; color: #666; text-align: center;  font-weight: 500;"></div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;" disabled id="uploadBtn">
+                                <i class="fas fa-cloud-upload-alt"></i> Envoyer la rando                            </button>
+                        </form>
+                        <div id="gpxUploadError" class="alert alert-danger" style="display:none; padding: 0.75rem; font-size: 0.9em;"></div>
+                        <div id="gpxUploadSuccess" class="alert alert-success" style="display:none; padding: 0.75rem; font-size: 0.9em;"></div>
 
-{% block planning_content %}
+                        <button id="logoutBtn" class="btn btn-outline" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;"><i class="fas fa-sign-out-alt"></i> Se déconnecter</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="planning-stepper">
+        <div class="stepper-container">
+            <div class="step active">
+                <div class="step-circle">1</div>
+                <div class="step-label">Ville</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">2</div>
+                <div class="step-label">Randonnée</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">3</div>
+                <div class="step-label">Nuit</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">4</div>
+                <div class="step-label">Services</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">📋</div>
+                <div class="step-label">Résultat</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="planning-content">
 <div class="step-section">
     <div class="step-header">
         <h2>Planifiez votre séjour RandoVanGo</h2>
@@ -51,7 +134,7 @@
             <div class="city-stats">
                 <div class="stat-item">
                     <i class="fas fa-hiking"></i>
-                    <span id="cityHikes">{{ cities[0].stats.hikes if cities else 0 }} randonnées</span>
+                    <span id="cityHikes">{{ cities[0].stats.hikes if cities else 0 }} {% if cities and cities[0].stats.hikes < 2 %} randonnée {% else %} randonnées {% endif %}</span>
                 </div>
                 <div class="stat-item">
                     <i class="fas fa-bed"></i>
@@ -87,16 +170,15 @@
                         <span class="temp-min">{{ forecast.temp_min|round|int }}°</span>
                     </div>
                     <div class="weather-details">
-                        {% if forecast.precipitation_sum > 0 %}
+                        
                         <div class="weather-info">
                             <i class="fas fa-tint"></i> {{ forecast.precipitation_sum|round(1) }} mm
                         </div>
-                        {% endif %}
-                        {% if forecast.wind_speed_max > 0 %}
+                      
+
                         <div class="weather-info">
                             <i class="fas fa-wind"></i> {{ forecast.wind_speed_max|round|int }} km/h
                         </div>
-                        {% endif %}
                     </div>
                     <div class="weather-advice">
                         {% if forecast.picto == 'sun' %}
@@ -156,21 +238,316 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block navigation %}
-<div class="navigation-buttons navigation-right">
-    <button id="planButton" class="btn btn-primary btn-large">
-        Planifier ces 2 jours
-        <i class="fas fa-arrow-right"></i>
-    </button>
+<div class="planning-navigation">
+    <div class="navigation-buttons navigation-right">
+        <button id="planButton" class="btn btn-primary btn-large">
+            Planifier ces 2 jours
+            <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Gestion dynamique de la sélection de ville avec carte et météo
+    // Gestion de l'authentification et affichage conditionnel
     document.addEventListener('DOMContentLoaded', function() {
+        const loginForm = document.getElementById('loginForm');
+        const userMenu = document.getElementById('userMenu');
+        const stepperLoginForm = document.getElementById('stepperLoginForm');
+        const stepperLoginError = document.getElementById('stepperLoginError');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const gpxUploadForm = document.getElementById('gpxUploadForm');
+        const gpxFileInput = document.getElementById('gpxFileInput');
+        const fileName = document.getElementById('fileName');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const gpxUploadError = document.getElementById('gpxUploadError');
+        const gpxUploadSuccess = document.getElementById('gpxUploadSuccess');
+
+        // Vérifier si le token JWT est expiré (décodage base64, lecture exp)
+        function isJwtExpired(token) {
+            if (!token) return true;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+                if (!payload.exp) return true;
+                // exp est en secondes depuis epoch
+                const now = Math.floor(Date.now() / 1000);
+                return payload.exp < now;
+            } catch (e) {
+                return true;
+            }
+        }
+
+        let token = sessionStorage.getItem('jwtToken');
+        const username = sessionStorage.getItem('username');
+
+        // Si token expiré, on le supprime et on force la déconnexion
+        if (token && isJwtExpired(token)) {
+            sessionStorage.removeItem('jwtToken');
+            sessionStorage.removeItem('username');
+            token = null;
+        }
+
+        if (token && username) {
+            // Utilisateur connecté : afficher le menu utilisateur
+            loginForm.style.display = 'none';
+            userMenu.style.display = 'block';
+            document.getElementById('userName').textContent = username;
+        } else {
+            // Utilisateur non connecté : afficher le formulaire de connexion
+            loginForm.style.display = 'block';
+            userMenu.style.display = 'none';
+        }
+        
+        // Gestion de la connexion
+        if (stepperLoginForm) {
+            stepperLoginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                stepperLoginError.style.display = 'none';
+                const login = document.getElementById('stepperLogin').value;
+                const password = document.getElementById('stepperLoginPassword').value;
+                
+                try {
+                    const response = await fetch('/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: login, password: password })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        // Stocker le token et le nom d'utilisateur
+                        sessionStorage.setItem('jwtToken', data.token);
+                        sessionStorage.setItem('username', data.username);
+                        
+                        // Recharger la page pour afficher le menu utilisateur
+                        location.reload();
+                    } else {
+                        stepperLoginError.textContent = data.message || 'Erreur de connexion';
+                        stepperLoginError.style.display = 'block';
+                    }
+                } catch (err) {
+                    console.error('Erreur connexion:', err);
+                    stepperLoginError.textContent = 'Erreur réseau ou serveur';
+                    stepperLoginError.style.display = 'block';
+                }
+            });
+        }
+        
+        // Gestion de la déconnexion
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', function() {
+                sessionStorage.removeItem('jwtToken');
+                sessionStorage.removeItem('username');
+                location.reload();
+            });
+        }
+        
+        // Gestion de la sélection de fichier GPX
+        if (gpxFileInput) {
+            gpxFileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    fileName.textContent = this.files[0].name;
+                    uploadBtn.disabled = false;
+                } else {
+                    fileName.textContent = '';
+                    uploadBtn.disabled = true;
+                }
+            });
+        }
+        
+        // Gestion de l'upload GPX
+        if (gpxUploadForm) {
+            gpxUploadForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                gpxUploadError.style.display = 'none';
+                gpxUploadSuccess.style.display = 'none';
+                
+                const file = gpxFileInput.files[0];
+                if (!file) {
+                    gpxUploadError.textContent = 'Veuillez sélectionner un fichier';
+                    gpxUploadError.style.display = 'block';
+                    return;
+                }
+                
+                // Vérifier que le token JWT est présent
+                if (!token) {
+                    gpxUploadError.textContent = 'Vous devez être connecté pour uploader un fichier. Veuillez vous reconnecter.';
+                    gpxUploadError.style.display = 'block';
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    uploadBtn.disabled = true;
+                    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Upload en cours...';
+                    // Appel via le proxy Flask (plus propre que http://localhost:8000)
+                    const response = await fetch('/upload_gpx', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: formData
+                    });
+                    
+                    // Parse response safely: si JSON => parse, sinon lire texte brut
+                    let data = null;
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        try {
+                            data = await response.json();
+                        } catch (e) {
+                            console.error('Erreur parsing JSON:', e);
+                            const text = await response.text();
+                            gpxUploadError.textContent = `Réponse serveur non valide (status ${response.status}): ${text}`;
+                            gpxUploadError.style.display = 'block';
+                            uploadBtn.disabled = false;
+                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                            return;
+                        }
+                    } else {
+                        // contenu non-JSON (HTML erreur ou autre)
+                        const text = await response.text();
+                        if (response.ok) {
+                            // succès mais non-JSON: afficher texte brut
+                            gpxUploadSuccess.textContent = text;
+                            gpxUploadSuccess.style.display = 'block';
+                            gpxUploadForm.reset();
+                            fileName.textContent = '';
+                            uploadBtn.disabled = true;
+                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                            setTimeout(() => { location.reload(); }, 2000);
+                            return;
+                        } else {
+                            gpxUploadError.textContent = `Erreur serveur (status ${response.status}): ${text}`;
+                            gpxUploadError.style.display = 'block';
+                            uploadBtn.disabled = false;
+                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                            return;
+                        }
+                    }
+
+                    if (response.ok && data && data.success) {
+                        const cityMsg = data.city ? ` - Ville détectée : ${data.city}. Vous pouvez maintenant la sélectionner dans la liste pour voir les nouveaux résultats.` : '';
+                        gpxUploadSuccess.textContent = data.message + cityMsg;
+                        gpxUploadSuccess.style.display = 'block';
+                        
+                        // Afficher le bouton "Rafraîchir les données"
+                        const refreshDataBtn = document.getElementById('refreshDataBtn');
+                        if (refreshDataBtn) {
+                            refreshDataBtn.style.display = 'block';
+                        }
+                        
+                        // Réinitialiser le formulaire
+                        gpxUploadForm.reset();
+                        fileName.textContent = '';
+                        uploadBtn.disabled = true;
+                        uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                        
+                        // Si une ville est retournée, la sélectionner dans le dropdown (sans rechargement)
+                        if (data.city) {
+                            // Trouver l'option correspondant à la ville
+                            const citySelect = document.getElementById('citySelect');
+                            if (citySelect) {
+                                for (let i = 0; i < citySelect.options.length; i++) {
+                                    if (citySelect.options[i].getAttribute('data-name') === data.city) {
+                                        citySelect.selectedIndex = i;
+                                        // Déclencher l'événement change pour mettre à jour la carte et les infos
+                                        citySelect.dispatchEvent(new Event('change'));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        gpxUploadError.textContent = data.message || 'Erreur lors de l\'upload';
+                        gpxUploadError.style.display = 'block';
+                        uploadBtn.disabled = false;
+                        uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                    }
+                } catch (err) {
+                    console.error('Erreur upload:', err);
+                    gpxUploadError.textContent = 'Erreur réseau ou serveur';
+                    gpxUploadError.style.display = 'block';
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                }
+            });
+        }
+        
+        // Gestion du bouton "Rafraîchir les données"
+        const refreshDataBtn = document.getElementById('refreshDataBtn');
+        if (refreshDataBtn) {
+            refreshDataBtn.addEventListener('click', async function() {
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rafraîchissement...';
+                
+                try {
+                    // Recharger les données de la ville depuis l'API
+                    const userRole = sessionStorage.getItem('jwtToken') ? 'admin' : 'user';
+                    const response = await fetch(`/api/step1/cities?user_role=${userRole}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Erreur lors du rechargement des données');
+                    }
+                    
+                    const cities = await response.json();
+                    
+                    // Mettre à jour le dropdown avec les nouvelles données
+                    const citySelect = document.getElementById('citySelect');
+                    const currentCityName = citySelect.options[citySelect.selectedIndex].getAttribute('data-name');
+                    
+                    // Vider et reconstruire les options
+                    citySelect.innerHTML = '';
+                    cities.forEach((city, index) => {
+                        const option = document.createElement('option');
+                        option.value = city.id;
+                        option.setAttribute('data-lat', city.latitude);
+                        option.setAttribute('data-lon', city.longitude);
+                        option.setAttribute('data-name', city.name);
+                        option.setAttribute('data-dept', city.department || '');
+                        option.setAttribute('data-country', city.country || '');
+                        option.setAttribute('data-hikes', city.stats.hikes);
+                        option.setAttribute('data-spots', city.stats.spots);
+                        option.setAttribute('data-poi', city.stats.poi);
+                        option.setAttribute('data-meteo', JSON.stringify(city.meteo));
+                        option.textContent = city.name;
+                        citySelect.appendChild(option);
+                        
+                        // Resélectionner la ville courante
+                        if (city.name === currentCityName) {
+                            citySelect.selectedIndex = index;
+                        }
+                    });
+                    
+                    // Déclencher l'événement change pour mettre à jour l'affichage
+                    citySelect.dispatchEvent(new Event('change'));
+                    
+                    this.innerHTML = '<i class="fas fa-check"></i> Données rafraîchies !';
+                    setTimeout(() => {
+                        this.style.display = 'none';
+                        this.innerHTML = '<i class="fas fa-sync-alt"></i> Rafraîchir les données';
+                        this.disabled = false;
+                    }, 2000);
+                    
+                } catch (error) {
+                    console.error('Erreur rafraîchissement:', error);
+                    this.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erreur';
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="fas fa-sync-alt"></i> Rafraîchir les données';
+                        this.disabled = false;
+                    }, 2000);
+                }
+            });
+        }
+        
+        // Gestion dynamique de la sélection de ville avec carte et météo
         const select = document.getElementById('citySelect');
         if (!select) return;
         
@@ -196,7 +573,6 @@
         select.addEventListener('change', function() {
             const opt = select.options[select.selectedIndex];
             const cityName = opt.getAttribute('data-name');
-            
             // Mise à jour des informations de la ville
             document.getElementById('cityName').textContent = cityName;
             const dept = opt.getAttribute('data-dept') || '';
@@ -206,10 +582,8 @@
             document.getElementById('citySpots').textContent = opt.getAttribute('data-spots') + ' spots nuit';
             document.getElementById('cityServices').textContent = opt.getAttribute('data-poi') + " points d'intérêt";
             document.getElementById('weatherTitle').textContent = '🌤️ Météo à ' + cityName + ' - Prochains jours';
-            
             // Mise à jour de la météo
             updateWeatherDisplay(opt);
-            
             // Mise à jour de la carte
             updateMap(opt);
         });
@@ -344,19 +718,19 @@
                 e.preventDefault();
                 
                 const selectedOption = select.options[select.selectedIndex];
-                const villeId = selectedOption.value;
+                const cityId = selectedOption.value;
                 
                 // Stocker en localStorage
-                localStorage.setItem('selectedVilleId', villeId);
+                localStorage.setItem('selectedCityId', cityId);
                 localStorage.setItem('selectedDays', selectedDays);
                 
                 // Appeler l'API create_plan
-                createPlan(villeId, selectedDays);
+                createPlan(cityId, selectedDays);
             });
         }
         
         // Fonction pour appeler l'API create_plan
-        async function createPlan(villeId, days) {
+        async function createPlan(cityId, days) {
             try {
                 planButton.disabled = true;
                 planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création du plan...';
@@ -375,8 +749,8 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        ville_id: parseInt(villeId),
-                        duree_jours: days,
+                        city_id: parseInt(cityId),
+                        duration_days: days,
                         user_token: userToken,
                         user_id: userId
                     })

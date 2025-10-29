@@ -1,12 +1,55 @@
 {% extends "base.html" %}
 
-{% set current_step = 2 %}
-
 {% block title %}Étape 2 - Choix de la Randonnée - RandoVanGo{% endblock %}
 
-{% block hero_subtitle %}Sélectionnez votre randonnée préférée{% endblock %}
-
-{% block planning_content %}
+{% block page_content %}
+<div class="main-container">
+    <div class="page-header">
+        <div class="hero-section">
+            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
+            <div class="hero-overlay"></div>
+            <div class="hero-logo-container">
+                <div class="hero-logo-white">
+                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
+                </div>
+            </div>
+            <div class="hero-content">
+                <h1 class="hero-title">Planificateur RandoVanGo</h1>
+                <p class="hero-subtitle">Sélectionnez votre randonnée préférée</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="planning-stepper">
+        <div class="stepper-container">
+            <div class="step completed">
+                <div class="step-circle">✓</div>
+                <div class="step-label">Ville</div>
+            </div>
+            <div class="step-line completed"></div>
+            <div class="step active">
+                <div class="step-circle">2</div>
+                <div class="step-label">Randonnée</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">3</div>
+                <div class="step-label">Nuit</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">4</div>
+                <div class="step-label">Services</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">📋</div>
+                <div class="step-label">Résultat</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="planning-content">
 <div class="planning-step">
     <div class="step-header">
         <h2>🥾 Jour 1 : Choisissez votre randonnée</h2>
@@ -159,18 +202,86 @@
         </button>
     </div>
 </div>
+
+<div class="planning-navigation">
+    <div class="navigation-buttons">
+        <a href="{{ url_for('step1') }}" class="btn btn-outline">
+            <i class="fas fa-arrow-left"></i>
+            Retour à la ville
+        </a>
+
+        <a href="{{ url_for('step3') }}" class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;">
+            Valider la rando et continuer
+            <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+</div>
+
+</div>
 {% endblock %}
 
-{% block navigation %}
-<div class="navigation-buttons">
-    <a href="{{ url_for('step1') }}" class="btn btn-outline">
-        <i class="fas fa-arrow-left"></i>
-        Retour à la ville
-    </a>
-
-    <a href="{{ url_for('step3') }}" class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;">
-        Valider la rando et continuer
-        <i class="fas fa-arrow-right"></i>
-    </a>
-</div>
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialiser la carte Leaflet
+        const mapElement = document.getElementById('map');
+        let hikeMap = null;
+        
+        if (mapElement && window.L && !mapElement._leaflet_id) {
+            // Position par défaut (sera mise à jour avec les données de la ville)
+            hikeMap = L.map('map').setView([48.4, -4.5], 12);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(hikeMap);
+            
+            // Ajouter des marqueurs pour les randonnées (exemple)
+            // TODO: Récupérer les vraies coordonnées depuis l'API
+            const hikingMarkers = [
+                { lat: 48.35, lon: -4.73, name: "Du Minou au Mengant" },
+                { lat: 48.37, lon: -4.75, name: "La pointe des Renards" },
+                { lat: 48.33, lon: -4.70, name: "Le circuit de Porsmilin" }
+            ];
+            
+            hikingMarkers.forEach(marker => {
+                L.marker([marker.lat, marker.lon])
+                    .addTo(hikeMap)
+                    .bindPopup(`<b>${marker.name}</b>`);
+            });
+        }
+        
+        // Gestion des filtres
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        filterButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const group = this.parentElement;
+                group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Filtrer les cartes de randonnées
+                // TODO: Implémenter la logique de filtrage
+            });
+        });
+        
+        // Gestion de la sélection de randonnée
+        window.selectHiking = function(hikingId) {
+            console.log('Randonnée sélectionnée:', hikingId);
+            // Afficher le bouton "Continuer"
+            document.getElementById('nextStepBtn').style.display = 'flex';
+            // TODO: Enregistrer la sélection dans le plan
+        };
+        
+        window.selectNoHiking = function() {
+            console.log('Aucune randonnée sélectionnée');
+            // Afficher le bouton "Continuer"
+            document.getElementById('nextStepBtn').style.display = 'flex';
+            // TODO: Enregistrer l'absence de randonnée dans le plan
+        };
+        
+        window.showHikingMap = function(hikingId) {
+            console.log('Afficher la carte de la randonnée:', hikingId);
+            // TODO: Centrer la carte sur cette randonnée
+        };
+    });
+</script>
 {% endblock %}

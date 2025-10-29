@@ -30,7 +30,7 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
         source_id = cursor.lastrowid
 
     conn = MySQLUtils.connect()
-    cursor = MySQLUtils.get_cursor(conn)
+    cursor = conn.cursor(buffered=True)
 
     # Récupère tous les p4n_id déjà présents dans spots
     cursor.execute("SELECT p4n_id FROM spots")
@@ -43,8 +43,8 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
 
     # Prépare les requêtes
     insert_spot_sql = """
-        INSERT INTO spots (name, description, type, latitude, longitude, p4n_id, rating, url, source_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO spots (name, description, type, latitude, longitude, p4n_id, rating, url, source_id, verifie)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,1)
     """
     # select_service_sql = "SELECT id FROM services WHERE name=%s"
     # insert_service_sql = "INSERT INTO services (name, category) VALUES (%s, %s)"

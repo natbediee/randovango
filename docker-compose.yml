@@ -44,8 +44,10 @@ services:
       dockerfile: Dockerfile.backend
     volumes:
       - ./backend:/usr/src/app
-      - ./.env:/usr/src/app/.env
-      - ./data:/usr/src/app/data
+      - ./.env:/usr/src/.env
+      - ./data:/usr/src/data
+      - ./storage:/usr/src/storage
+      - ./logs:/usr/src/logs
     ports:
       - "8000:8000"
     networks:

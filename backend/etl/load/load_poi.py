@@ -107,8 +107,8 @@ def load_wikidata_poi(df_wiki: pd.DataFrame, city_name: str):
         # Insertion dans poi sans city_id ni type
         cursor.execute(
             """
-            INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, image_url, source_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, image_url, source_id, verifie)
+            VALUES (%s, %s, %s, %s, %s, %s, %s,1)
             """,
             (
                 row.get('wikidata_id'),

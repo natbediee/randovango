@@ -1,18 +1,12 @@
 import requests
 import json
-from pathlib import Path
 
-from utils.service_utils import ServiceUtil
 from utils.logger_util import LoggerUtil
 from utils.geo_utils import get_coordinates_for_city
 
 
 logger = LoggerUtil.get_logger("api_osm")
 
-# Chemin vers data/in
-
-ROOT_PATH = Path(__file__).resolve().parents[3]
-DATA_IN = ROOT_PATH / ServiceUtil.get_env("DATA_IN") / "osm"
 
 def extract_osm(city: str) -> dict:
     """

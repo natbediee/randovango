@@ -19,8 +19,8 @@ class LoggerUtil:
             logger.addHandler(stream_handler)
 
             # File handler
-            log_path = Path("logs") / f"{name}.log"
-            # Création automatique du dossier logs si absent
+            log_path = Path("/usr/src/logs") / f"{name}.log"
+            # Crée automatiquement le dossier logs si absent
             log_path.parent.mkdir(parents=True, exist_ok=True)
             file_handler = logging.FileHandler(log_path, mode='a', encoding='utf-8')
             file_handler.setFormatter(formatter)

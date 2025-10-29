@@ -106,8 +106,8 @@ def get_ville_list(user_role: str = "user", distance_km: float = Query(5, descri
 
 @router.post("/create_plan")
 def create_plan(
-    ville_id: int = Body(...),
-    duree_jours: int = Body(...),
+    city_id: int = Body(...),
+    duration_days: int = Body(...),
     user_token: str = Body(None),
     user_id: int = Body(None)
 ):
@@ -131,14 +131,13 @@ def create_plan(
             INSERT INTO trip_plans (start_date, duration_days, city_id, user_token, user_id, created_at)
             VALUES (%s, %s, %s, %s, %s, NOW())
         """
-        print(today, duree_jours, ville_id, user_token_to_insert, user_id_to_insert)
-        cursor.execute(insert_plan, (today, duree_jours, ville_id, user_token_to_insert, user_id_to_insert))
+        cursor.execute(insert_plan, (today, duration_days, city_id, user_token_to_insert, user_id_to_insert))
         plan_id = cursor.lastrowid
         insert_day = """
             INSERT INTO trip_days (trip_plan_id, day_number, hike_id, spot_id)
             VALUES (%s, %s, NULL, NULL)
         """
-        for day_num in range(1, duree_jours + 1):
+        for day_num in range(1, duration_days + 1):
             cursor.execute(insert_day, (plan_id, day_num))
         cnx.commit()
         cursor.close()

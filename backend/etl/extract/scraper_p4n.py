@@ -11,7 +11,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
+
 from utils.geo_utils import get_coordinates_for_city
+from .p4n_db_utils import p4n_id_exists
 
 ROOT = Path(__file__).resolve().parents[3]
 ServiceUtil.load_env()
@@ -151,35 +153,32 @@ def run_p4n_scraper(city_name, is_headless=True, save_csv=False) -> pd.DataFrame
         RESULT_LIST_ID = "searchmap-list-results"
         wait.until(EC.presence_of_element_located((By.ID, RESULT_LIST_ID)))
 
-        links_elements = driver.find_elements(
-            By.CSS_SELECTOR,
-            f'#{RESULT_LIST_ID} li a[href*="/fr/place/"]'
-        )
 
-        place_urls = []
+        # Nouvelle logique : extraire data-place-id et href, vérifier en base avant scraping
+        card_elements = driver.find_elements(By.CSS_SELECTOR, f'#{RESULT_LIST_ID} li.card-place')
         base_url = "https://park4night.com"
-
-        for link_element in links_elements:
-            href = link_element.get_attribute('href')
-            if href:
-                place_urls.append(href if "http" in href else base_url + href)
-
-        logger.info(f"\n {len(place_urls)} URLs de fiches d'emplacements trouvées.")
-
-        # --- Scraping des Pages Détails (Le reste du processus) ---
-        if not place_urls:
-            logger.warning("Aucun lien trouvé.")
-            return
-
-        logger.info("\n--- Démarrage du Scraping des Fiches Détails ---")
-
-        for url in place_urls:
+        n_total = 0
+        n_skipped = 0
+        n_scraped = 0
+        for card in card_elements:
+            n_total += 1
+            p4n_id = card.get_attribute('data-place-id')
+            link_elem = card.find_element(By.CSS_SELECTOR, 'a[href*="/fr/place/"]')
+            href = link_elem.get_attribute('href')
+            url = href if "http" in href else base_url + href
+            if p4n_id and p4n_id_exists(p4n_id):
+                logger.info(f"Spot déjà en base (p4n_id={p4n_id}), on saute le scraping.")
+                n_skipped += 1
+                continue
+            # Scraper les détails uniquement si nouveau
             data = scrape_place_details(driver, url, wait)
             if 'Erreur' not in data:
-                # Ajoute la ville à chaque ligne
                 data['city'] = city_name
+                data['p4n_id'] = p4n_id
                 scraped_data.append(data)
+                n_scraped += 1
             time.sleep(1)
+        logger.info(f"{n_total} spots trouvés, {n_skipped} déjà en base, {n_scraped} nouveaux scrapés.")
 
         # --- Option de sauvegarde CSV manuelle ---
         if scraped_data:

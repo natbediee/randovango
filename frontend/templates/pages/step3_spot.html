@@ -1,12 +1,56 @@
-{% extends "base.html" %}
 
-{% set current_step = 3 %}
+{% extends "base.html" %}
 
 {% block title %}Étape 3 - Choix de la Nuit - RandoVanGo{% endblock %}
 
-{% block hero_subtitle %}Trouvez l'endroit parfait pour passer la nuit{% endblock %}
-
-{% block planning_content %}
+{% block page_content %}
+<div class="main-container">
+    <div class="page-header">
+        <div class="hero-section">
+            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
+            <div class="hero-overlay"></div>
+            <div class="hero-logo-container">
+                <div class="hero-logo-white">
+                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
+                </div>
+            </div>
+            <div class="hero-content">
+                <h1 class="hero-title">Planificateur RandoVanGo</h1>
+                <p class="hero-subtitle">Trouvez l'endroit parfait pour passer la nuit</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="planning-stepper">
+        <div class="stepper-container">
+            <div class="step completed">
+                <div class="step-circle">✓</div>
+                <div class="step-label">Ville</div>
+            </div>
+            <div class="step-line completed"></div>
+            <div class="step completed">
+                <div class="step-circle">✓</div>
+                <div class="step-label">Randonnée</div>
+            </div>
+            <div class="step-line completed"></div>
+            <div class="step active">
+                <div class="step-circle">3</div>
+                <div class="step-label">Nuit</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">4</div>
+                <div class="step-label">Services</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">📋</div>
+                <div class="step-label">Résultat</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="planning-content">
 <div class="step-section">
     <div class="step-header">
         <h2>🌙 Jour 1 : Où dormir cette nuit ?</h2>
@@ -149,19 +193,22 @@
             Autre hébergement (ami, hôtel, chez soi...)
         </button>
     </div>
+    </div>
 </div>
-{% endblock %}
 
-{% block navigation %}
-<div class="navigation-buttons">
-    <a href="{{ url_for('step2') }}" class="btn btn-outline">
-        <i class="fas fa-arrow-left"></i>
-        Étape précédente
-    </a>
+<div class="planning-navigation">
+    <div class="navigation-buttons">
+        <a href="{{ url_for('step2') }}" class="btn btn-outline">
+            <i class="fas fa-arrow-left"></i>
+            Étape précédente
+        </a>
 
-    <a href="{{ url_for('step4') }}" class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;">
-        Étape suivante : Services
-        <i class="fas fa-arrow-right"></i>
-    </a>
+        <a href="{{ url_for('step4') }}" class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;">
+            Étape suivante : Services
+            <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+</div>
+
 </div>
 {% endblock %}

@@ -8,20 +8,19 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 # ------ Config --------
-ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = ROOT / "db" / "quiz_users.sqlite"
+DB_PATH = Path("/usr/src/storage/rando_users.sqlite")
 
-load_dotenv(ROOT / ".env")
+load_dotenv()
 
 # --- JWT Config ---
-SECRET_KEY = os.getenv("secret_key")
+SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 
-# --- Connexion DB ---
+# --- DB ---
 def connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(str(DB_PATH))
     conn.execute("PRAGMA foreign_keys=ON;")
     return conn
 
@@ -49,12 +48,12 @@ def get_roles_for_user(uid):
         return {row[0] for row in c.execute(sql, (uid,))}
 
 
-def insert_auth_log(user_id, username, action, route, status_code):
+def insert_auth_log(user_id, username, action, route, status_code, token=None):
     with connect() as c:
         c.execute(
-            """INSERT INTO auth_log(user_id, username, action, route, status_code)
-                     VALUES (?,?,?,?,?)""",
-            (user_id, username, action, route, status_code),
+            """INSERT INTO auth_log(user_id, username, action, route, status_code, token)
+                     VALUES (?,?,?,?,?,?)""",
+            (user_id, username, action, route, status_code, token),
         )
         c.commit()
 

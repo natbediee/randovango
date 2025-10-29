@@ -1,3 +1,8 @@
+import sys
+import time
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 import mysql.connector
 from utils.mysql_utils import MySQLUtils
 from mysql.connector import Error
@@ -15,6 +20,28 @@ DB_PSWD = ServiceUtil.get_env("DB_PSWD")
 
 
 def init_database():
+    max_retries = 10
+    retry_delay = 2  # secondes
+    
+    # Attendre que MySQL soit prêt
+    for attempt in range(max_retries):
+        try:
+            test_cnx = mysql.connector.connect(
+                host=DB_HOST,
+                user=DB_ROOT,
+                password=DB_ROOT_PSWD
+            )
+            test_cnx.close()
+            print(f"✓ MySQL est prêt après {attempt + 1} tentative(s)")
+            break
+        except Error as err:
+            if attempt < max_retries - 1:
+                print(f"MySQL pas encore prêt (tentative {attempt + 1}/{max_retries}): {err}")
+                time.sleep(retry_delay)
+            else:
+                print(f"✗ ERREUR: Impossible de se connecter à MySQL après {max_retries} tentatives")
+                sys.exit(1)
+    
     try:
     # 1. Connexion admin pour créer la base et l'utilisateur
         admin_cnx = mysql.connector.connect(
@@ -228,19 +255,30 @@ def init_database():
         user_cnx = MySQLUtils.connect()
         user_cursor = user_cnx.cursor()
         for stmt in statements:
-            user_cursor.execute(stmt)
             try:
-                user_cursor.fetchall()
-            except Exception:
-                pass
-            print("→ OK :", stmt.strip().split()[5])
+                user_cursor.execute(stmt)
+                try:
+                    user_cursor.fetchall()
+                except Exception:
+                    pass
+                print("→ OK :", stmt.strip().split()[5])
+            except Exception as table_err:
+                print(f"✗ [ERREUR SQL] lors de la création: {table_err}\nStatement:\n{stmt}")
+                user_cursor.close()
+                user_cnx.close()
+                sys.exit(1)
         user_cnx.commit()
         user_cursor.close()
         user_cnx.close()
         print("Initialisation de la base terminée avec succès.\n")
+        return True
 
     except Error as err:
-        print(f"[Erreur user] {err}")
+        print(f"✗ [ERREUR MySQL] {err}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"✗ [ERREUR] {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     init_database()
