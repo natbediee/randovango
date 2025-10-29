@@ -41,10 +41,10 @@ async def upload_gpx(
     ext = file.filename.split(".")[-1].lower()
     if ext not in ALLOWED_EXT:
         return GPXUploadResponse(success=False, message=f"Extension non autorisée: {ext}")
-    # Sauvegarde du fichier dans le dossier DATA_IN
-    DATA_IN = Path(ServiceUtil.get_env('DATA_IN', 'data/in')).resolve()
-    DATA_IN.mkdir(parents=True, exist_ok=True)
-    dest_path = DATA_IN / file.filename
+    # Sauvegarde du fichier dans le dossier data (volume Docker)
+    DATA = Path("/usr/src/data")
+    DATA.mkdir(parents=True, exist_ok=True)
+    dest_path = DATA / file.filename
     with open(dest_path, "wb") as f:
         f.write(await file.read())
     # Lancer le pipeline ETL (traitement synchrone)

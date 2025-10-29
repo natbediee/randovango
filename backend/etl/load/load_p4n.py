@@ -9,7 +9,7 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     Charge un DataFrame transformé Park4Night dans la base MySQL.
     La ville utilisée est celle passée explicitement par le pipeline (issue du GPX).
     """
-    logger = LoggerUtil.get_logger(f'load_p4n sur {city}')
+    logger = LoggerUtil.get_logger("load_p4n")
     if not isinstance(df, pd.DataFrame):
         logger.error("Le premier argument doit être un DataFrame transformé (pas de compatibilité CSV).")
         return
@@ -65,7 +65,7 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     if result:
         city_id = result[0]
     else:
-        logger.error(f"Ville {city} absente de la base. Aucune insertion ne sera effectuée.")
+        logger.error(f"Ville '{city}' absente de la base. Aucune insertion ne sera effectuée.")
         return
 
     for _, row in df_new.iterrows():

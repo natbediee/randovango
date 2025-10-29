@@ -13,15 +13,15 @@ from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
 
 from utils.geo_utils import get_coordinates_for_city
-from .p4n_db_utils import p4n_id_exists
+from utils.db_utils import p4n_id_exists
 
-ROOT = Path(__file__).resolve().parents[3]
+
 ServiceUtil.load_env()
 
 logger = LoggerUtil.get_logger("scraper_p4n")
 
-# Chemin vers data/in
-DATA_IN = ROOT / ServiceUtil.get_env("DATA_IN") / "p4n"
+# Chemin vers data à la racine du projet (volume Docker)
+DATA = Path(__file__).resolve().parents[2] / "data"
 
 # --- CONFIGURATION FIXE ---
 CHROME_BINARY_PATH = '/usr/bin/chromium'  # Pour Docker : Chromium Debian
@@ -99,7 +99,7 @@ def scrape_place_details(driver, url, wait) -> dict:
 
 # --- Fonction Principale de Scraping (MODIFIÉE) ---
 
-def run_p4n_scraper(city_name, is_headless=True, save_csv=False) -> pd.DataFrame | None:
+def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.DataFrame | None:
     """
     Obtient les coordonnées de la ville, construit l'URL de recherche Park4Night,
     scrappe les résultats et sauvegarde en CSV en option.
@@ -149,28 +149,39 @@ def run_p4n_scraper(city_name, is_headless=True, save_csv=False) -> pd.DataFrame
         except Exception:
             pass
 
-        # --- Récupération des Liens de Résultats (L'attente critique) ---
+        # --- Récupération des Liens de Résultats (ancienne logique robuste) ---
         RESULT_LIST_ID = "searchmap-list-results"
         wait.until(EC.presence_of_element_located((By.ID, RESULT_LIST_ID)))
-
-
-        # Nouvelle logique : extraire data-place-id et href, vérifier en base avant scraping
-        card_elements = driver.find_elements(By.CSS_SELECTOR, f'#{RESULT_LIST_ID} li.card-place')
+        links_elements = driver.find_elements(
+            By.CSS_SELECTOR,
+            f'#{RESULT_LIST_ID} li a[href*="/fr/place/"]'
+        )
         base_url = "https://park4night.com"
         n_total = 0
         n_skipped = 0
         n_scraped = 0
-        for card in card_elements:
+        place_urls = []
+        for link_element in links_elements:
+            href = link_element.get_attribute('href')
+            if href:
+                url = href if "http" in href else base_url + href
+                place_urls.append(url)
+        if not place_urls:
+            html_path = f"/usr/src/logs/p4n_debug_{city_name.replace(' ', '_')}.html"
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+            logger.warning(f"Aucun spot trouvé pour {city_name}. HTML sauvegardé dans {html_path}")
+        for url in place_urls:
             n_total += 1
-            p4n_id = card.get_attribute('data-place-id')
-            link_elem = card.find_element(By.CSS_SELECTOR, 'a[href*="/fr/place/"]')
-            href = link_elem.get_attribute('href')
-            url = href if "http" in href else base_url + href
+            # Extraire p4n_id depuis l'URL (ex: /fr/place/18293)
+            try:
+                p4n_id = url.split("/fr/place/")[1].split("/")[0]
+            except Exception:
+                p4n_id = None
             if p4n_id and p4n_id_exists(p4n_id):
                 logger.info(f"Spot déjà en base (p4n_id={p4n_id}), on saute le scraping.")
                 n_skipped += 1
                 continue
-            # Scraper les détails uniquement si nouveau
             data = scrape_place_details(driver, url, wait)
             if 'Erreur' not in data:
                 data['city'] = city_name
@@ -185,7 +196,7 @@ def run_p4n_scraper(city_name, is_headless=True, save_csv=False) -> pd.DataFrame
             df = pd.DataFrame(scraped_data)
             if save_csv:
                 if not df.empty:
-                    output_folder = DATA_IN
+                    output_folder = DATA
                     os.makedirs(output_folder, exist_ok=True)
                     csv_file_name = f'p4n_results_{city_name.replace(" ", "_")}.csv'
                     csv_file_path = os.path.join(output_folder, csv_file_name)

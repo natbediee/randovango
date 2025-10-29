@@ -4,7 +4,7 @@ from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("transform_osm")
 
-def transform_osm(osm_json,city) -> pd.DataFrame:
+def transform_osm(osm_json : dict,city : str) -> pd.DataFrame:
     """
     Transforme les données OSM JSON extraites en un DataFrame de POI normalisés pour insertion en base.
     Seuls les POI avec nom, type et coordonnées valides sont conservés.

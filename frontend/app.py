@@ -82,7 +82,7 @@ def login_post():
         
         # Appeler l'API FastAPI auth/login
         resp = requests.post(backend_url, json={
-            'login': data.get('username'),
+            'username': data.get('username'),
             'password': data.get('password')
         }, timeout=10)
         

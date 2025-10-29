@@ -121,7 +121,7 @@ def main():
     - Analyse chaque fichier
     - Sauvegarde le résultat dans un fichier JSON
     """
-    gpx_dir = Path("data/in/gpx")
+    gpx_dir = Path("data")
     gpx_files = list(gpx_dir.glob("*.gpx"))
     print(f"Trouvé {len(gpx_files)} fichiers GPX")
     analyses = []
@@ -131,7 +131,7 @@ def main():
         if result:
             analyses.append(result)
     # Sauvegarde des résultats dans un fichier JSON
-    with open("data/in/gpx_analysis.json", "w", encoding="utf-8") as f:
+    with open("data/gpx_analysis.json", "w", encoding="utf-8") as f:
         json.dump(analyses, f, ensure_ascii=False, indent=2)
     print("Analyse terminée ! Résultats dans data/in/gpx_analysis.json")
 

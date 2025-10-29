@@ -10,7 +10,7 @@ from services.authentification import (
 
 router = APIRouter()
 
-@router.post("/login", tags=["auth"], name="login")
+@router.post("/login", tags=["authentification"], name="login")
 async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse:
     username = body.login
     password = body.password

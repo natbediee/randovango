@@ -17,7 +17,7 @@ class MeteoForecast(BaseModel):
     temp_max: float
     temp_min: float
     weather_code: int
-    picto: str  # Nom du fichier pictogramme (ex: "cloudy.svg")
+    picto: str  # Nom du fichier pictogramme (ex: "cloud")
     precipitation_sum: Optional[float] = 0.0
     wind_speed_max: Optional[float] = 0.0
 

@@ -13,7 +13,7 @@ class HikeListItem(BaseModel):
     distance_km: float
     denivele_m: Optional[int] = 0
     difficulte: Optional[str] = None
-    verifie: int  # 0=en_attente, 1=validee, -1=rejetee
+    verifie: int  # 0=en_attente, 1=validee
     contributeur: Optional[str] = None
     date_ajout: datetime
 

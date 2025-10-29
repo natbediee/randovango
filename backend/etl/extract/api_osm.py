@@ -83,7 +83,7 @@ def extract_osm(city: str) -> dict:
     for server_url in overpass_servers:
         try:
             logger.info(f"Tentative de connexion au serveur : {server_url}")
-            response = requests.post(server_url, data={'data': overpass_query}, timeout=90)
+            response = requests.post(server_url, data={"/usr/src/data": overpass_query}, timeout=90)
             response.raise_for_status()
             
             response_data = response.json()
