@@ -1,0 +1,6 @@
+# Exclusions pour Docker
+__pycache__/
+logs/
+.env
+.gitignore
+rapport/

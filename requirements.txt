@@ -1,60 +1,60 @@
-annotated-types==0.7.0
-anyio==4.11.0
-attrs==25.4.0
-bcrypt==4.0.1
-blinker==1.9.0
-certifi==2025.10.5
-charset-normalizer==3.4.4
-click==8.3.0
-dnspython==2.8.0
-ecdsa==0.19.1
-fastapi==0.119.1
-Flask==3.1.2
-geographiclib==2.1
-geopy==2.4.1
-gpxpy==1.6.2
-h11==0.16.0
-httptools==0.7.1
-idna==3.11
-itsdangerous==2.2.0
-Jinja2==3.1.6
-MarkupSafe==3.0.3
-mysql-connector-python==9.4.0
-numpy==2.3.4
-orjson==3.11.4
-outcome==1.3.0.post0
-packaging==25.0
-pandas==2.3.3
-passlib==1.7.4
-pyasn1==0.6.1
-pydantic==2.12.3
-pydantic_core==2.41.4
-pymongo==4.15.3
-PySocks==1.7.1
-python-dateutil==2.9.0.post0
-python-dotenv==1.1.1
-python-jose==3.5.0
-python-multipart==0.0.20
-pytz==2025.2
-PyYAML==6.0.3
-requests==2.32.5
-rsa==4.9.1
-selenium==4.36.0
-six==1.17.0
-sniffio==1.3.1
-sortedcontainers==2.4.0
-starlette==0.48.0
-trio==0.31.0
-trio-websocket==0.12.2
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-tzdata==2025.2
-urllib3==2.5.0
-uvicorn==0.38.0
-uvloop==0.22.1
-watchfiles==1.1.1
-webdriver-manager==4.0.2
-websocket-client==1.9.0
-websockets==15.0.1
-Werkzeug==3.1.3
-wsproto==1.2.0
+annotated-types==0.7.0  # Types avancés pour Pydantic
+anyio==4.11.0  # Gestion asynchrone d'E/S
+attrs==25.4.0  # Manipulation avancée d'attributs Python
+bcrypt==4.0.1  # Hachage de mots de passe sécurisé
+blinker==1.9.0  # Signaux pour Flask
+certifi==2025.10.5  # Certificats SSL pour requests
+charset-normalizer==3.4.4  # Détection d'encodage de texte
+click==8.3.0  # Création de CLI Python
+dnspython==2.8.0  # Résolution DNS en Python
+ecdsa==0.19.1  # Algorithmes de signature numérique
+fastapi==0.119.1  # Framework API web asynchrone
+Flask==3.1.2  # Micro-framework web Python
+geographiclib==2.1  # Calculs géodésiques
+geopy==2.4.1  # Géocodage et calculs géographiques
+gpxpy==1.6.2  # Lecture et manipulation de fichiers GPX
+h11==0.16.0  # Protocole HTTP/1.1 bas niveau
+httptools==0.7.1  # Outils HTTP rapides (utilisé par uvicorn)
+idna==3.11  # Encodage internationalisé des noms de domaine
+itsdangerous==2.2.0  # Signatures cryptographiques (Flask)
+Jinja2==3.1.6  # Moteur de templates (Flask, FastAPI)
+MarkupSafe==3.0.3  # Sécurisation des templates Jinja2
+mysql-connector-python==9.4.0  # Connecteur MySQL natif
+numpy==2.3.4  # Calcul scientifique et manipulation de matrices
+orjson==3.11.4  # Sérialisation JSON ultra-rapide
+outcome==1.3.0.post0  # Gestion des résultats d'exécution (trio)
+packaging==25.0  # Analyse de versions et dépendances
+pandas==2.3.3  # Analyse et manipulation de données
+passlib==1.7.4  # Hachage de mots de passe
+pyasn1==0.6.1  # ASN.1 pour protocoles réseau
+pydantic==2.12.3  # Validation de données et modèles
+pydantic_core==2.41.4  # Cœur de Pydantic (performances)
+pymongo==4.15.3  # Client MongoDB
+PySocks==1.7.1  # Support proxy SOCKS
+python-dateutil==2.9.0.post0  # Manipulation avancée de dates
+python-dotenv==1.1.1  # Chargement de variables d'environnement
+python-jose==3.5.0  # JWT et cryptographie pour l'authentification
+python-multipart==0.0.20  # Gestion des formulaires multipart (FastAPI)
+pytz==2025.2  # Gestion des fuseaux horaires
+PyYAML==6.0.3  # Lecture/écriture de fichiers YAML
+requests==2.32.5  # Requêtes HTTP simples
+rsa==4.9.1  # Chiffrement RSA
+selenium==4.36.0  # Automatisation de navigateur web
+six==1.17.0  # Compatibilité Python 2/3
+sniffio==1.3.1  # Détection de contexte async
+sortedcontainers==2.4.0  # Structures de données triées
+starlette==0.48.0  # Toolkit web asynchrone (FastAPI)
+trio==0.31.0  # Bibliothèque de concurrence asynchrone
+trio-websocket==0.12.2  # Websockets pour trio
+typing-inspection==0.4.2  # Inspection avancée des types Python
+typing_extensions==4.15.0  # Extensions pour le typage Python
+tzdata==2025.2  # Base de données de fuseaux horaires
+urllib3==2.5.0  # Client HTTP avancé (utilisé par requests)
+uvicorn==0.38.0  # Serveur ASGI pour FastAPI
+uvloop==0.22.1  # Boucle d'événements rapide pour asyncio
+watchfiles==1.1.1  # Surveillance de fichiers pour rechargement auto
+webdriver-manager==4.0.2  # Gestion automatique des drivers Selenium
+websocket-client==1.9.0  # Client WebSocket Python
+websockets==15.0.1  # WebSocket asynchrone
+Werkzeug==3.1.3  # Toolkit WSGI (Flask)
+wsproto==1.2.0  # Protocole WebSocket bas niveau

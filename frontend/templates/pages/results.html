@@ -1,12 +1,53 @@
 {% extends "base.html" %}
 
-{% set current_step = 5 %}
-
 {% block title %}Résultat - Votre Plan Van Life - RandoVanGo{% endblock %}
 
-{% block hero_subtitle %}Votre plan van life{% endblock %}
-
-{% block planning_content %}
+{% block page_content %}
+<div class="main-container">
+    <div class="page-header">
+        <div class="hero-section">
+            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
+            <div class="hero-overlay"></div>
+            <div class="hero-logo-container">
+                <div class="hero-logo-white">
+                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
+                </div>
+            </div>
+            <div class="hero-content">
+                <h1 class="hero-title">Planificateur RandoVanGo</h1>
+                <p class="hero-subtitle">Sélectionnez votre randonnée préférée</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="planning-stepper">
+        <div class="stepper-container">
+            <div class="step completed">
+                <div class="step-circle">✓</div>
+                <div class="step-label">Ville</div>
+            </div>
+            <div class="step-line completed"></div>
+            <div class="step active">
+                <div class="step-circle">2</div>
+                <div class="step-label">Randonnée</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">3</div>
+                <div class="step-label">Nuit</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">4</div>
+                <div class="step-label">Services</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">📋</div>
+                <div class="step-label">Résultat</div>
+            </div>
+        </div>
+    </div>
 <div class="step-section">
     <div class="step-header">
         <h2>📋 Récapitulatif du voyage</h2>
@@ -42,9 +83,8 @@
         <h3 class="map-title">Visualisation sur la carte</h3>
         <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
     </div>
-{% endblock %}
 
-{% block navigation %}
+<div class="planning-navigation">
 <div class="navigation-buttons">
     <a href="{{ url_for('step4') }}" class="btn btn-outline">
         <i class="fas fa-arrow-left"></i>
@@ -55,6 +95,9 @@
         <i class="fas fa-plus-circle"></i>
         Planifier jour 2
     </button>
+</div>
+</div>
+
 </div>
 {% endblock %}
 
@@ -93,8 +136,32 @@
 </style>
 
 <script>
-// Remplir le tableau avec les sélections
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialiser la carte Leaflet
+    const mapElement = document.getElementById('map');
+    let resultMap = null;
+
+    if (mapElement && window.L && !mapElement._leaflet_id) {
+        resultMap = L.map('map').setView([48.4, -4.5], 11);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(resultMap);
+        
+        // Ajouter tous les marqueurs (randonnée + spot + services)
+        const allMarkers = [
+            { lat: 48.35, lon: -4.73, name: "Randonnée", color: 'blue' },
+            { lat: 48.36, lon: -4.72, name: "Hébergement", color: 'green' },
+            { lat: 48.38, lon: -4.73, name: "Services", color: 'orange' }
+        ];
+        
+        allMarkers.forEach(marker => {
+            L.marker([marker.lat, marker.lon])
+                .addTo(resultMap)
+                .bindPopup(`<b>${marker.name}</b>`);
+        });
+    }
+
     // Récupérer les sélections depuis localStorage
     const selectedHiking = localStorage.getItem('selectedHiking');
     const selectedSpot = localStorage.getItem('selectedSpot');
@@ -138,7 +205,7 @@ function planifierJour2() {
     localStorage.setItem('completed_days', '1');
     
     // Rediriger vers l'étape 1 pour planifier le jour 2
-    window.location.href = '/step1';
+    window.location.href = '/step2';
 }
 </script>
 {% endblock %}

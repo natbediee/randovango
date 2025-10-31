@@ -1,0 +1,16 @@
+bcrypt==4.0.1 # Hachage de mots de passe sécurisé
+fastapi==0.119.1 # Framework API web asynchrone
+geopy==2.4.1 # Géocodage et calculs géographiques
+gpxpy==1.6.2 # Lecture et manipulation de fichiers GPX
+pydantic==2.12.3 # Validation de données et modèles
+python-jose==3.5.0  # JWT et cryptographie pour l'authentification
+mysql-connector-python==9.4.0 # Connecteur MySQL natif
+pymongo==4.15.3 # Client MongoDB
+pandas==2.3.3 # Analyse et manipulation de données
+selenium==4.36.0 # Automatisation de navigateur web
+uvicorn==0.38.0 # Serveur ASGI pour FastAPI
+requests==2.32.5 # Requêtes HTTP simples
+python-dotenv==1.1.1  # Chargement de variables d'environnement
+numpy==2.3.4 # Calcul scientifique et manipulation de matrices
+passlib==1.7.4  # Hachage de mots de passe
+python-multipart==0.0.20  # Gestion des formulaires multipart (FastAPI)

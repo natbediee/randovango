@@ -59,8 +59,8 @@ def step2():
 
 @app.route('/step3')
 def step3():
-    """Étape 3 - Choix de la nuit"""
-    return render_template('pages/step3_night.html')
+    """Étape 3 - Choix du spot nuit"""
+    return render_template('pages/step3_spot.html')
 
 @app.route('/step4')
 def step4():
@@ -155,6 +155,49 @@ def upload_gpx():
             }), resp.status_code
     except Exception as e:
         print(f"Erreur lors de l'upload GPX: {e}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur serveur'
+        }), 500
+
+@app.route('/delete_gpx/<filename>', methods=['DELETE'])
+def delete_gpx(filename):
+    """Delete GPX - proxy vers FastAPI avec authentification admin"""
+    backend_url = f'{API_BASE}/api/etl/delete_gpx/{filename}'
+    try:
+        # Récupérer le token JWT depuis l'en-tête Authorization
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({
+                'success': False,
+                'message': 'Token d\'authentification manquant'
+            }), 401
+        
+        # Préparer les headers pour la requête vers FastAPI
+        headers = {'Authorization': auth_header}
+        
+        # Appeler l'API FastAPI etl/delete_gpx
+        resp = requests.delete(backend_url, headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            response_data = resp.json()
+            return jsonify({
+                'success': True,
+                'message': response_data.get('message', 'Suppression réussie'),
+                'deleted_file': response_data.get('deleted_file')
+            })
+        elif resp.status_code == 403:
+            return jsonify({
+                'success': False,
+                'message': 'Accès refusé : rôle admin requis'
+            }), 403
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Erreur lors de la suppression'
+            }), resp.status_code
+    except Exception as e:
+        print(f"Erreur lors de la suppression GPX: {e}")
         return jsonify({
             'success': False,
             'message': 'Erreur serveur'

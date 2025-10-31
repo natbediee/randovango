@@ -10,9 +10,9 @@ from services.authentification import (
 
 router = APIRouter()
 
-@router.post("/login", tags=["authentification"], name="login")
+@router.post("/login", summary="Login user and return JWT token")
 async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse:
-    username = body.login
+    username = body.username
     password = body.password
     user = get_user_by_username(username)
     if not user or not bcrypt.verify(password or "", user[2]):
@@ -46,6 +46,6 @@ async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse
         }
     )
 
-@router.post("/logout", tags=["auth"], name="logout")
+@router.post("/logout", summary="Logout user")
 async def logout(request: Request) -> ORJSONResponse:
     return ORJSONResponse(content={"success": True, "message": "Logged out"})

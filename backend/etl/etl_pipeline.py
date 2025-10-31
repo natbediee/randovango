@@ -18,7 +18,7 @@ from etl.extract.gpx import extract_all_gpx_files
 
 logger = LoggerUtil.get_logger("etl_pipeline")
 
-# Verrou global pour empêcher plusieurs scrapings P4N en parallèle
+# Verrou pour empêcher plusieurs scrapings P4N en parallèle
 scraping_lock = threading.Lock()
 
 def scraping_background(city):
@@ -65,7 +65,7 @@ def scraping_background(city):
             logger.info(f"[ETL-BG] Ville déjà présente dans histo_scrap : {city}. Extraction P4N sautée.")
         else:
             try:
-                logger.info(f"[ETL-BG] Extraction P4N pour la ville : {city} (scraping long en cours...)")
+                logger.info(f"[ETL-BG] Extraction P4N pour la ville : {city} (scraping en cours...)")
                 df_p4n = run_p4n_scraper(city, is_headless=True, save_csv=False)
                 if df_p4n is not None:
                     df_transformed = transform_p4n(df_p4n)

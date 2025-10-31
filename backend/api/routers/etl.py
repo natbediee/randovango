@@ -3,8 +3,9 @@ from pathlib import Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from utils.service_utils import ServiceUtil
-from api.models.etl import GPXUploadResponse
+from api.models.etl import GPXUploadResponse, GPXDeleteResponse
 from services.authentification import get_roles_for_user
+import os
 
 router = APIRouter()
 
@@ -28,7 +29,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     except JWTError:
         raise HTTPException(status_code=401, detail="Token invalide")
 
-@router.post("/upload_gpx", summary="Uploader un fichier GPX et lancer l'ETL", response_model=GPXUploadResponse)
+@router.post("/upload_gpx", summary="Upload a GPX file and launch the ETL pipeline (Admin and Contributor only)", response_model=GPXUploadResponse)
 async def upload_gpx(
     file: UploadFile = File(..., description="Fichier GPX"),
     user=Depends(get_current_user)
@@ -61,3 +62,36 @@ async def upload_gpx(
         return GPXUploadResponse(success=True, message=msg, city=city, role=user_role)
     except Exception as e:
         return GPXUploadResponse(success=False, message=f"Erreur ETL: {e}", role=user_role)
+
+@router.delete("/delete_gpx/{filename}", summary="Delete a GPX file (Admin only)", response_model=GPXDeleteResponse)
+async def delete_gpx(
+    filename: str,
+    user=Depends(get_current_user)
+):
+    """
+    Supprime un fichier GPX du dossier data.
+    Nécessite un rôle admin.
+    """
+    # Vérifier que l'utilisateur est admin
+    user_id = user["user_id"]
+    roles = get_roles_for_user(user_id)
+    if "admin" not in roles:
+        raise HTTPException(status_code=403, detail="Accès refusé : rôle admin requis")
+    
+    # Vérifier l'extension
+    ext = filename.split(".")[-1].lower()
+    if ext not in ALLOWED_EXT:
+        return GPXDeleteResponse(success=False, message=f"Extension non autorisée: {ext}")
+    
+    # Chercher le fichier dans le dossier data
+    DATA = Path("/usr/src/data")
+    file_path = DATA / filename
+    
+    if not file_path.exists():
+        return GPXDeleteResponse(success=False, message=f"Fichier {filename} introuvable")
+    
+    try:
+        os.remove(file_path)
+        return GPXDeleteResponse(success=True, message=f"Fichier {filename} supprimé avec succès", deleted_file=filename)
+    except Exception as e:
+        return GPXDeleteResponse(success=False, message=f"Erreur lors de la suppression: {e}")

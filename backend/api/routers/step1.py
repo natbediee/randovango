@@ -56,7 +56,7 @@ def get_city_stats(cursor, latitude, longitude, user_role, distance_km=5):
         "poi": poi
     }
 
-@router.get("/cities", response_model=List[CityList])
+@router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
 def get_ville_list(user_role: str = "user", distance_km: float = Query(5, description="Rayon de recherche en km")):
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor(dictionary=True)
@@ -104,7 +104,7 @@ def get_ville_list(user_role: str = "user", distance_km: float = Query(5, descri
     return cities
 
 
-@router.post("/create_plan")
+@router.post("/create_plan", summary="Create a new trip plan with empty days.")
 def create_plan(
     city_id: int = Body(...),
     duration_days: int = Body(...),

@@ -6,11 +6,13 @@
 <div class="main-container">
     <div class="page-header">
         <div class="hero-section">
-            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
+            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life"
+                class="hero-background">
             <div class="hero-overlay"></div>
             <div class="hero-logo-container">
                 <div class="hero-logo-white">
-                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
+                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo"
+                        class="hero-logo-img">
                 </div>
             </div>
             <div class="hero-content">
@@ -19,7 +21,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="planning-stepper">
         <div class="stepper-container">
             <div class="step completed">
@@ -48,193 +50,200 @@
             </div>
         </div>
     </div>
-    
+
     <div class="planning-content">
-<div class="planning-step">
-    <div class="step-header">
-        <h2>🥾 Jour 1 : Choisissez votre randonnée</h2>
-        <p>Sélectionnez l'activité principale qui rythmera votre première journée</p>
-    </div>
-
-    <!-- Filtres rapides -->
-    <div class="hiking-filters">
-        <div class="filter-group">
-            <label>Difficulté :</label>
-            <button class="filter-btn active" data-filter="all">Toutes</button>
-            <button class="filter-btn" data-filter="facile">Facile</button>
-            <button class="filter-btn" data-filter="moyen">Moyen</button>
-            <button class="filter-btn" data-filter="difficile">Difficile</button>
-        </div>
-        <div class="filter-group">
-            <label>Durée :</label>
-            <button class="filter-btn active" data-filter="all">Toutes</button>
-            <button class="filter-btn" data-filter="court">< 2h</button>
-            <button class="filter-btn" data-filter="moyen">2-4h</button>
-            <button class="filter-btn" data-filter="long">> 4h</button>
-        </div>
-    </div>
-    <!-- Carte interactive -->
-    <div class="map-page-container" style="margin: 2rem 0;">
-        <h3 class="map-title">Visualisation sur la carte</h3>
-        <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
-    </div>
-    <!-- Liste des randonnées -->
-    <div class="hiking-list">
-        <!-- Randonnée 1 -->
-        <div class="hiking-card" data-difficulty="facile" data-duration="moyen">
-            <div class="hiking-status">
-                <span class="status-badge verified">✅ Vérifié</span>
+        <div class="planning-step">
+            <div class="step-header">
+                <h2>🥾 Jour 1 : Choisissez votre randonnée</h2>
+                <p>Sélectionnez l'activité principale qui rythmera votre première journée</p>
             </div>
-            <div class="hiking-info">
-                <h3>Du Minou au Mengant</h3>
-                <p class="hiking-description">Magnifique sentier côtier avec vue sur l'océan. Phares historiques et paysages sauvages.</p>
-                <div class="hiking-stats">
-                    <span class="stat">
-                        <i class="fas fa-clock"></i>
-                        3h30
-                    </span>
-                    <span class="stat">
-                        <i class="fas fa-route"></i>
-                        8.2 km
-                    </span>
-                    <span class="stat">
-                        <i class="fas fa-mountain"></i>
-                        +120m
-                    </span>
-                    <span class="stat difficulty-facile">
-                        <i class="fas fa-signal"></i>
-                        Facile
-                    </span>
+
+            <!-- Filtres rapides -->
+            <div class="hiking-filters">
+                <div class="filter-group">
+                    <label>Difficulté :</label>
+                    <button class="filter-btn active" data-filter="all">Toutes</button>
+                    <button class="filter-btn" data-filter="facile">Facile</button>
+                    <button class="filter-btn" data-filter="moyen">Moyen</button>
+                    <button class="filter-btn" data-filter="difficile">Difficile</button>
+                </div>
+                <div class="filter-group">
+                    <label>Durée :</label>
+                    <button class="filter-btn active" data-filter="all">Toutes</button>
+                    <button class="filter-btn" data-filter="court">
+                        < 2h</button>
+                            <button class="filter-btn" data-filter="moyen">2-4h</button>
+                            <button class="filter-btn" data-filter="long">> 4h</button>
                 </div>
             </div>
-            <div class="hiking-actions">
-                <button class="btn btn-outline" onclick="showHikingMap(1)">
-                    <i class="fas fa-map"></i>
-                    Voir
-                </button>
-                <button class="btn btn-primary" onclick="selectHiking(1)">
-                    Choisir
-                </button>
-            </div>
-        </div>
-
-        <!-- Randonnée 2 -->
-        <div class="hiking-card" data-difficulty="moyen" data-duration="moyen">
-            <div class="hiking-status">
-                <span class="status-badge pending">⚠️ En attente</span>
-            </div>
-            <div class="hiking-info">
-                <h3>La pointe des Renards</h3>
-                <p class="hiking-description">Sentier vers une pointe sauvage offrant un panorama exceptionnel sur la mer d'Iroise.</p>
-                <div class="hiking-stats">
-                    <span class="stat">
-                        <i class="fas fa-clock"></i>
-                        2h45
-                    </span>
-                    <span class="stat">
-                        <i class="fas fa-route"></i>
-                        6.8 km
-                    </span>
-                    <span class="stat">
-                        <i class="fas fa-mountain"></i>
-                        +85m
-                    </span>
-                    <span class="stat difficulty-moyen">
-                        <i class="fas fa-signal"></i>
-                        Moyen
-                    </span>
+            <!-- Carte interactive -->
+            <div class="map-page-container" style="margin: 2rem 0;">
+                <h3 class="map-title">Visualisation sur la carte</h3>
+                <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;">
                 </div>
             </div>
-            <div class="hiking-actions">
-                <button class="btn btn-outline" onclick="showHikingMap(2)">
-                    <i class="fas fa-map"></i>
-                    Voir
-                </button>
-                <button class="btn btn-primary" onclick="selectHiking(2)">
-                    Choisir
-                </button>
-            </div>
-        </div>
+            <!-- Liste des randonnées -->
+            <div class="hiking-list">
+                <!-- Randonnée 1 -->
+                <div class="hiking-card" data-difficulty="facile" data-duration="moyen">
+                    <div class="hiking-status">
+                        <span class="status-badge verified">✅ Vérifié</span>
+                    </div>
+                    <div class="hiking-info">
+                        <h3>Du Minou au Mengant</h3>
+                        <p class="hiking-description">Magnifique sentier côtier avec vue sur l'océan. Phares historiques
+                            et paysages sauvages.</p>
+                        <div class="hiking-stats">
+                            <span class="stat">
+                                <i class="fas fa-clock"></i>
+                                3h30
+                            </span>
+                            <span class="stat">
+                                <i class="fas fa-route"></i>
+                                8.2 km
+                            </span>
+                            <span class="stat">
+                                <i class="fas fa-mountain"></i>
+                                +120m
+                            </span>
+                            <span class="stat difficulty-facile">
+                                <i class="fas fa-signal"></i>
+                                Facile
+                            </span>
+                        </div>
+                    </div>
+                    <div class="hiking-actions">
+                        <button class="btn btn-outline" onclick="showHikingMap(1)">
+                            <i class="fas fa-map"></i>
+                            Voir
+                        </button>
+                        <button class="btn btn-primary" onclick="selectHiking(1)">
+                            Choisir
+                        </button>
+                    </div>
+                </div>
 
-        <!-- Randonnée 3 -->
-        <div class="hiking-card" data-difficulty="facile" data-duration="court">
-            <div class="hiking-status">
-                <span class="status-badge verified">✅ Vérifié</span>
-            </div>
-            <div class="hiking-info">
-                <h3>Le circuit de Porsmilin</h3>
-                <p class="hiking-description">Balade familiale autour de la plage de Porsmilin, idéale avec des enfants.</p>
-                <div class="hiking-stats">
-                    <span class="stat">
-                        <i class="fas fa-clock"></i>
-                        1h30
-                    </span>
-                    <span class="stat">
-                        <i class="fas fa-route"></i>
-                        3.2 km
-                    </span>
-                    <span class="stat">
-                        <i class="fas fa-mountain"></i>
-                        +45m
-                    </span>
-                    <span class="stat difficulty-facile">
-                        <i class="fas fa-signal"></i>
-                        Facile
-                    </span>
+                <!-- Randonnée 2 -->
+                <div class="hiking-card" data-difficulty="moyen" data-duration="moyen">
+                    <div class="hiking-status">
+                        <span class="status-badge pending">⚠️ En attente</span>
+                    </div>
+                    <div class="hiking-info">
+                        <h3>La pointe des Renards</h3>
+                        <p class="hiking-description">Sentier vers une pointe sauvage offrant un panorama exceptionnel
+                            sur la mer d'Iroise.</p>
+                        <div class="hiking-stats">
+                            <span class="stat">
+                                <i class="fas fa-clock"></i>
+                                2h45
+                            </span>
+                            <span class="stat">
+                                <i class="fas fa-route"></i>
+                                6.8 km
+                            </span>
+                            <span class="stat">
+                                <i class="fas fa-mountain"></i>
+                                +85m
+                            </span>
+                            <span class="stat difficulty-moyen">
+                                <i class="fas fa-signal"></i>
+                                Moyen
+                            </span>
+                        </div>
+                    </div>
+                    <div class="hiking-actions">
+                        <button class="btn btn-outline" onclick="showHikingMap(2)">
+                            <i class="fas fa-map"></i>
+                            Voir
+                        </button>
+                        <button class="btn btn-primary" onclick="selectHiking(2)">
+                            Choisir
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Randonnée 3 -->
+                <div class="hiking-card" data-difficulty="facile" data-duration="court">
+                    <div class="hiking-status">
+                        <span class="status-badge verified">✅ Vérifié</span>
+                    </div>
+                    <div class="hiking-info">
+                        <h3>Le circuit de Porsmilin</h3>
+                        <p class="hiking-description">Balade familiale autour de la plage de Porsmilin, idéale avec des
+                            enfants.</p>
+                        <div class="hiking-stats">
+                            <span class="stat">
+                                <i class="fas fa-clock"></i>
+                                1h30
+                            </span>
+                            <span class="stat">
+                                <i class="fas fa-route"></i>
+                                3.2 km
+                            </span>
+                            <span class="stat">
+                                <i class="fas fa-mountain"></i>
+                                +45m
+                            </span>
+                            <span class="stat difficulty-facile">
+                                <i class="fas fa-signal"></i>
+                                Facile
+                            </span>
+                        </div>
+                    </div>
+                    <div class="hiking-actions">
+                        <button class="btn btn-outline" onclick="showHikingMap(3)">
+                            <i class="fas fa-map"></i>
+                            Voir
+                        </button>
+                        <button class="btn btn-primary" onclick="selectHiking(3)">
+                            Choisir
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div class="hiking-actions">
-                <button class="btn btn-outline" onclick="showHikingMap(3)">
-                    <i class="fas fa-map"></i>
-                    Voir
-                </button>
-                <button class="btn btn-primary" onclick="selectHiking(3)">
-                    Choisir
+
+            <!-- Option sans randonnée -->
+            <div class="no-hiking-option" id="noHikingCard">
+                <button class="btn btn-primary no-hiking-btn" onclick="selectNoHiking()">
+                    Pas de rando aujourd'hui
                 </button>
             </div>
         </div>
-    </div>
 
-    <!-- Option sans randonnée -->
-    <div class="no-hiking-option" id="noHikingCard">
-        <button class="btn btn-primary no-hiking-btn" onclick="selectNoHiking()">
-            Pas de rando aujourd'hui
-        </button>
-    </div>
-</div>
+        <div class="planning-navigation">
+            <div class="navigation-buttons">
+                <a href="{{ url_for('step1') }}" class="btn btn-outline">
+                    <i class="fas fa-arrow-left"></i>
+                    Retour à la ville
+                </a>
 
-<div class="planning-navigation">
-    <div class="navigation-buttons">
-        <a href="{{ url_for('step1') }}" class="btn btn-outline">
-            <i class="fas fa-arrow-left"></i>
-            Retour à la ville
-        </a>
+                <a href="{{ url_for('step3') }}" class="btn btn-primary btn-large" id="nextStepBtn"
+                    style="display: none;">
+                    Valider la rando et continuer
+                    <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
 
-        <a href="{{ url_for('step3') }}" class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;">
-            Valider la rando et continuer
-            <i class="fas fa-arrow-right"></i>
-        </a>
-    </div>
-</div>
-
-</div>
+    </div> <!-- .planning-content -->
+</div> <!-- .main-container -->
 {% endblock %}
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         // Initialiser la carte Leaflet
         const mapElement = document.getElementById('map');
         let hikeMap = null;
-        
+
         if (mapElement && window.L && !mapElement._leaflet_id) {
             // Position par défaut (sera mise à jour avec les données de la ville)
             hikeMap = L.map('map').setView([48.4, -4.5], 12);
-            
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(hikeMap);
-            
+
             // Ajouter des marqueurs pour les randonnées (exemple)
             // TODO: Récupérer les vraies coordonnées depuis l'API
             const hikingMarkers = [
@@ -242,43 +251,43 @@
                 { lat: 48.37, lon: -4.75, name: "La pointe des Renards" },
                 { lat: 48.33, lon: -4.70, name: "Le circuit de Porsmilin" }
             ];
-            
+
             hikingMarkers.forEach(marker => {
                 L.marker([marker.lat, marker.lon])
                     .addTo(hikeMap)
                     .bindPopup(`<b>${marker.name}</b>`);
             });
         }
-        
+
         // Gestion des filtres
         const filterButtons = document.querySelectorAll('.filter-btn');
         filterButtons.forEach(btn => {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const group = this.parentElement;
                 group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
-                
+
                 // Filtrer les cartes de randonnées
                 // TODO: Implémenter la logique de filtrage
             });
         });
-        
+
         // Gestion de la sélection de randonnée
-        window.selectHiking = function(hikingId) {
+        window.selectHiking = function (hikingId) {
             console.log('Randonnée sélectionnée:', hikingId);
+            // Enregistrer la sélection dans le localStorage
+            localStorage.setItem('selectedHiking', hikingId);
             // Afficher le bouton "Continuer"
             document.getElementById('nextStepBtn').style.display = 'flex';
-            // TODO: Enregistrer la sélection dans le plan
         };
-        
-        window.selectNoHiking = function() {
+
+        window.selectNoHiking = function () {
             console.log('Aucune randonnée sélectionnée');
-            // Afficher le bouton "Continuer"
+            localStorage.setItem('selectedHiking', 'no-hiking');
             document.getElementById('nextStepBtn').style.display = 'flex';
-            // TODO: Enregistrer l'absence de randonnée dans le plan
         };
-        
-        window.showHikingMap = function(hikingId) {
+
+        window.showHikingMap = function (hikingId) {
             console.log('Afficher la carte de la randonnée:', hikingId);
             // TODO: Centrer la carte sur cette randonnée
         };

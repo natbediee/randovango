@@ -6,3 +6,8 @@ class GPXUploadResponse(BaseModel):
     message: str
     city: Optional[str] = None
     role: Optional[str] = None
+
+class GPXDeleteResponse(BaseModel):
+    success: bool
+    message: str
+    deleted_file: Optional[str] = None

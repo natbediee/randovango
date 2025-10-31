@@ -3,7 +3,7 @@ from utils.mysql_utils import MySQLUtils
 
 router = APIRouter()
 
-@router.get("/")
+@router.get("/", summary="Retrieve the trip plan details by plan ID.")
 def get_plan(plan_id: int = Query(...)):
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor(dictionary=True)

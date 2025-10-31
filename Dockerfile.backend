@@ -2,8 +2,8 @@ FROM python:3.12
 
 WORKDIR /usr/src/app
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.backend.txt ./
+RUN pip install --no-cache-dir -r requirements.backend.txt
 
 # Installe Chromium et chromedriver depuis les dépôts Debian (version stable)
 RUN apt-get update && \

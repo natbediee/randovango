@@ -27,7 +27,7 @@ app.include_router(step3.router, prefix="/api/step3", tags=["Step 3 Spots"])
 app.include_router(step4.router, prefix="/api/step4", tags=["Step 4 Services"])
 app.include_router(result.router, prefix="/api/result", tags=["Result Plan"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(etl.router, prefix="/api/etl", tags=["Upload GPX"])
+app.include_router(etl.router, prefix="/api/etl", tags=["GPX Files"])
 
 
 # Logger principal pour le backend

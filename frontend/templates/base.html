@@ -1,70 +1,27 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}RandoVanGo{% endblock %}</title>
-    
+
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 </head>
+
 <body>
-    {% if request.endpoint not in ['step1', 'step2', 'step3', 'step4', 'result'] %}
-    <header class="header">
-        <div class="logo">
-            <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="logo-img">
-        </div>
-        <nav class="nav-tabs">
-            <a href="{{ url_for('step1') }}" class="nav-tab">
-                <i class="fas fa-map-marker-alt"></i> Planificateur
-            </a>
-        </nav>
-        <div class="status-bar">
-            <div class="user-section">
-                <form id="headerLoginForm" class="header-login-form" style="display: flex; gap: 0.5rem; align-items: center;">
-                    <input type="text" id="headerLogin" class="form-input" placeholder="Login" required style="max-width: 140px;">
-                    <input type="password" id="headerLoginPassword" class="form-input" placeholder="Mot de passe" required style="max-width: 110px;">
-                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-sign-in-alt"></i> Connexion</button>
-                </form>
-                <div id="headerLoginError" class="alert alert-danger" style="display:none; margin-top: 0.25rem; font-size: 0.9em;"></div>
-            </div>
-        </div>
-    </header>
-    {% endif %}
-    
     {% block page_content %}{% endblock %}
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const headerLoginForm = document.getElementById('headerLoginForm');
-        const headerLoginError = document.getElementById('headerLoginError');
-        if (headerLoginForm) {
-            headerLoginForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                headerLoginError.style.display = 'none';
-                const login = document.getElementById('headerLogin').value;
-                const password = document.getElementById('headerLoginPassword').value;
-                try {
-                    const response = await fetch('/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: login, password: password }) });
-                    const data = await response.json();
-                    if (response.ok && data.success) {
-                        location.reload();
-                    } else {
-                        headerLoginError.textContent = data.message || 'Erreur de connexion';
-                        headerLoginError.style.display = 'inline-block';
-                    }
-                } catch (err) {
-                    headerLoginError.textContent = 'Erreur réseau ou serveur';
-                    headerLoginError.style.display = 'inline-block';
-                }
-            });
-        }
-    });
-    </script>
     
-    {% block scripts %}{% endblock %}
+    <!-- Script Leaflet (doit être chargé avant les scripts des pages) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+    
+    {% block scripts %}
+    {% endblock %}
 </body>
+
 </html>

@@ -2,13 +2,67 @@
 
 Application de planification de randonnées en Bretagne avec recherche de spots, météo et points d'intérêt.
 
-## Architecture
+## Architecture (2025)
 
-- **Backend** : FastAPI (API REST, ETL, scraping)
-- **Frontend** : Flask (interface utilisateur)
-- **Bases de données** :
-  - MySQL : données structurées (villes, randonnées, spots)
-  - MongoDB : données GPX, météo, POI
+- **Backend Python** :
+    - FastAPI pour l’API REST (gestion des villes, randonnées, plans, utilisateurs, authentification JWT)
+    - Scripts ETL pour l’extraction, la transformation et le chargement des données multi-sources (GPX, météo, OSM, Wikidata, Park4Night)
+    - MySQL pour les données structurées (villes, randonnées, utilisateurs, plans, météo)
+    - MongoDB pour les traces GPX brutes et données non structurées
+- **Frontend** :
+    - Flask pour le serveur web, rendu des pages avec Jinja2
+    - HTML/CSS/JS pour l’interface utilisateur interactive
+- **Orchestration & DevOps** :
+    - Docker pour la conteneurisation, orchestration via docker-compose
+    - Logging centralisé, gestion des variables d’environnement
+- **Sécurité** :
+    - Authentification JWT, gestion des rôles (SQLite), audit des accès
+
+### Schéma simplifié
+
+```mermaid
+graph TD
+  subgraph Utilisateur
+    UI["Frontend (Flask, HTML/CSS/JS)"]
+  end
+  subgraph API & ETL Python
+    API["FastAPI (API REST)"]
+    ETL["Scripts ETL (GPX, OSM, Wikidata, Park4Night, météo)"]
+    LOG["logging"]
+    GEOPY["geopy"]
+    PANDAS["pandas"]
+    REQ["requests"]
+    THREAD["threading"]
+  end
+  subgraph Bases de données
+    MYSQL["MySQL (données structurées)"]
+    MONGO["MongoDB (GPX bruts)"]
+  end
+  subgraph Orchestration & DevOps
+    DOCKER["Docker/docker-compose"]
+    ENV[".env"]
+  end
+  UI -->|HTTP| API
+  API -->|Appels internes| ETL
+  ETL -->|Lecture/écriture| MYSQL
+  ETL -->|Lecture/écriture| MONGO
+  API -->|Lecture/écriture| SQLITE
+  API --> LOG
+  ETL --> LOG
+  ETL --> GEOPY
+  ETL --> PANDAS
+  ETL --> REQ
+  ETL --> THREAD
+  API --> DOCKER
+  ETL --> DOCKER
+  DOCKER --> MYSQL
+  DOCKER --> MONGO
+  DOCKER --> SQLITE
+  DOCKER --> API
+  DOCKER --> ETL
+  DOCKER --> UI
+  DOCKER --> ENV
+```
 
 ## Prérequis
 
@@ -29,29 +83,19 @@ pip install -r requirements.txt
 
 #### Chromium et chromedriver (pour le scraping P4N)
 
-**Sur Debian/Ubuntu :**
+**Sur Ubuntu :**
 ```bash
 sudo apt-get update
 sudo apt-get install -y chromium chromium-driver
 ```
-
-**Sur macOS (avec Homebrew) :**
-```bash
-brew install chromium
-brew install chromedriver
-```
-
-**Sur Windows :**
-- Télécharge [Chromium](https://www.chromium.org/getting-involved/download-chromium/) ou [Google Chrome](https://www.google.com/chrome/)
-- Télécharge [chromedriver](https://chromedriver.chromium.org/downloads) compatible avec ta version de Chrome/Chromium
-- Ajoute le chemin de `chromedriver.exe` à ton PATH système
-
 **Configuration du script Python (`backend/etl/extract/scraper_p4n.py`) :**
-Adapte les chemins selon ton installation locale :
+Adapte les chemins selon votre installation locale :
 ```python
-CHROME_BINARY_PATH = '/usr/bin/chromium'  # Ou '/usr/bin/google-chrome'
+CHROME_BINARY_PATH = '/usr/bin/chromium'  
 CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
 ```
+
+> **Note :** Si vous utilisez Docker, Chromium et Chromedriver sont installés automatiquement dans les conteneurs. L'installation manuelle n'est requise que pour un usage local hors Docker.
 
 #### Bases de données
 - MySQL 8.0+
@@ -199,7 +243,9 @@ Les schémas MySQL et MongoDB sont versionnés dans `storage/database_schema.sql
 
 ## Auteurs
 
-Équipe RandoVango
+Nathalie Bédiée 
+En formation développeur IA 
+Isen Brest
 
 ## Licence
 
