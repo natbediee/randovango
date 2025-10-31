@@ -6,7 +6,7 @@ Application de planification de randonnées en Bretagne avec recherche de spots,
 
 - **Backend Python** :
     - FastAPI pour l’API REST (gestion des villes, randonnées, plans, utilisateurs, authentification JWT)
-    - Scripts ETL pour l’extraction, la transformation et le chargement des données multi-sources (GPX, météo, OSM, Wikidata, Park4Night)
+    - Scripts ETL pour l’extraction, la transformation et le chargement des données multi-sources (GPX, météo, OSM, Wikidata, P4N)
     - MySQL pour les données structurées (villes, randonnées, utilisateurs, plans, météo)
     - MongoDB pour les traces GPX brutes et données non structurées
 - **Frontend** :
@@ -27,7 +27,7 @@ graph TD
   end
   subgraph API & ETL Python
     API["FastAPI (API REST)"]
-    ETL["Scripts ETL (GPX, OSM, Wikidata, Park4Night, météo)"]
+    ETL["Scripts ETL (GPX, OSM, Wikidata, P4N, météo)"]
     LOG["logging"]
     GEOPY["geopy"]
     PANDAS["pandas"]
@@ -37,6 +37,7 @@ graph TD
   subgraph Bases de données
     MYSQL["MySQL (données structurées)"]
     MONGO["MongoDB (GPX bruts)"]
+    SQLITE[SQLite"Authentification"]
   end
   subgraph Orchestration & DevOps
     DOCKER["Docker/docker-compose"]
@@ -122,27 +123,29 @@ cp .env.example .env
 ```bash
 docker compose up -d
 ```
+### Lancement manuel des ETL (hors interface frontend)
 
-4. **Initialise les bases de données**
-```bash
-# MySQL
-docker compose exec backend python3 -m db_init.db_randovango
-
-# Importe les données GPX archivées dans MongoDB
-docker compose exec backend python3 -m utils.migrate_gpx_to_mongo
-```
-
-5. **Lance l'ETL pour une ville**
+- **ETL principal (intégration GPX, météo, OSM, Wikidata, P4N), integrer un ou des fichiers Gpx dnas le dossier Data**
 ```bash
 docker compose exec backend python3 -m etl.etl_pipeline
 ```
+- **ETL de rattrapage (pour relancer l'intégration sur des données déjà présentes)**
+```bash
+docker compose exec backend python3 -m etl.etl_rattrapage
+```
+- **ETL meteo pour rafraichir les données**
+```bash
+docker compose exec backend python3 -m etl.etl_meteo
+```
+
+> ⚠️ Le lancement manuel des ETL est réservé aux cas où vous ne passez pas par le frontend Flask. Sinon, toutes les opérations d'intégration de données se font via l'interface utilisateur.
 
 ### En local
 
 1. **Installe les dépendances**
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Sur Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -211,7 +214,7 @@ Le pipeline ETL extrait, transforme et charge les données depuis plusieurs sour
 
 - **Météo** : API Open-Meteo
 - **Points d'intérêt (POI)** : OpenStreetMap (Overpass API), Wikidata
-- **Spots camping-car** : Park4Night (scraping Selenium)
+- **Spots camping-car** : P4N (scraping Selenium)
 - **Traces GPX** : Fichiers GPX locaux
 
 ### Lancement manuel d'un ETL
@@ -232,21 +235,11 @@ docker compose exec backend python3 -m etl.extract.scraper_p4n "Brest"
 ### Logs
 Les logs sont générés dans le dossier `logs/` et affichés dans la console.
 
-### Tests
-```bash
-# À venir
-pytest
-```
-
 ### Migrations base de données
 Les schémas MySQL et MongoDB sont versionnés dans `storage/database_schema.sql` et `storage/mongodb_schema.md`.
 
 ## Auteurs
 
-Nathalie Bédiée 
+[![GitHub](https://img.shields.io/badge/GitHub-Nathalie%20Bédiée-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/natbediee/)  
 En formation développeur IA 
 Isen Brest
-
-## Licence
-
-MIT
