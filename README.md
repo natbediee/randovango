@@ -37,7 +37,7 @@ graph TD
   subgraph Bases de données
     MYSQL["MySQL (données structurées)"]
     MONGO["MongoDB (GPX bruts)"]
-    SQLITE[SQLite"Authentification"]
+  SQLITE["SQLite (Authentification)"]
   end
   subgraph Orchestration & DevOps
     DOCKER["Docker/docker-compose"]
@@ -90,7 +90,7 @@ sudo apt-get update
 sudo apt-get install -y chromium chromium-driver
 ```
 **Configuration du script Python (`backend/etl/extract/scraper_p4n.py`) :**
-Adapte les chemins selon votre installation locale :
+Adapter les chemins selon votre installation locale :
 ```python
 CHROME_BINARY_PATH = '/usr/bin/chromium'  
 CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
@@ -116,7 +116,7 @@ cd randovango
 Copie et adapte le fichier `.env` :
 ```bash
 cp .env.example .env
-# Édite .env avec tes paramètres
+# Édite .env avec vos paramètres
 ```
 
 3. **Lance les services**
@@ -125,11 +125,11 @@ docker compose up -d
 ```
 ### Lancement manuel des ETL (hors interface frontend)
 
-- **ETL principal (intégration GPX, météo, OSM, Wikidata, P4N), integrer un ou des fichiers Gpx dnas le dossier Data**
+- **ETL principal (intégration GPX, météo, OSM, Wikidata, P4N), integrer un ou des fichiers GPX dnas le dossier Data**
 ```bash
 docker compose exec backend python3 -m etl.etl_pipeline
 ```
-- **ETL de rattrapage (pour relancer l'intégration sur des données déjà présentes)**
+- **ETL de rattrapage sur OSM,P4N,Wiki (pour relancer l'intégration sur des données déjà présentes)**
 ```bash
 docker compose exec backend python3 -m etl.etl_rattrapage
 ```
@@ -217,19 +217,6 @@ Le pipeline ETL extrait, transforme et charge les données depuis plusieurs sour
 - **Spots camping-car** : P4N (scraping Selenium)
 - **Traces GPX** : Fichiers GPX locaux
 
-### Lancement manuel d'un ETL
-
-```bash
-# ETL complet pour une ville
-docker compose exec backend python3 -m etl.etl_pipeline
-
-# ETL météo uniquement
-docker compose exec backend python3 -m etl.extract.api_meteo
-
-# Scraping P4N pour une ville
-docker compose exec backend python3 -m etl.extract.scraper_p4n "Brest"
-```
-
 ## Développement
 
 ### Logs
@@ -241,5 +228,5 @@ Les schémas MySQL et MongoDB sont versionnés dans `storage/database_schema.sql
 ## Auteurs
 
 [![GitHub](https://img.shields.io/badge/GitHub-Nathalie%20Bédiée-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/natbediee/)  
-En formation développeur IA 
-Isen Brest
+En formation développeur IA   
+ISEN Brest  
