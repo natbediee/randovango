@@ -214,7 +214,7 @@ Le pipeline ETL extrait, transforme et charge les données depuis plusieurs sour
 
 - **Météo** : API Open-Meteo
 - **Points d'intérêt (POI)** : OpenStreetMap (Overpass API), Wikidata
-- **Spots camping-car** : P4N (scraping Selenium)
+- **Spots VAN** : P4N (scraping Selenium)
 - **Traces GPX** : Fichiers GPX locaux
 
 ## Développement
