@@ -1181,7 +1181,7 @@ body {
 
 .hiking-card {
     border: 2px solid var(--gray-300);
-    border-radius: 15px;
+    border-radius: 12px;
     padding: 1.5rem;
     background: var(--white);
     display: flex;

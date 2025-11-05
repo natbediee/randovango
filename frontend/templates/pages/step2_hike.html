@@ -92,9 +92,8 @@
             </div>
             <style>
             .hiking-card.selected {
-                border: 2px solid #51cf66;
-                box-shadow: 0 0 12px #51cf6633;
-                background: linear-gradient(90deg, #e6ffe6 0%, #f8fff8 100%);
+                border-color: var(--green);
+                background: rgba(76, 175, 80, 0.05);
             }
             </style>
 
@@ -387,6 +386,8 @@
             localStorage.setItem('selectedHiking', hikingId);
             // Marquer la randonnée sélectionnée visuellement
             document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
+            // Retirer la sélection du bouton "Pas de rando"
+            document.getElementById('noHikingCard').classList.remove('selected');
             // Trouver la carte correspondante et ajouter la classe
             const cards = document.querySelectorAll('.hiking-card');
             cards.forEach(card => {
@@ -404,6 +405,10 @@
         window.selectNoHiking = function () {
             console.log('Aucune randonnée sélectionnée');
             localStorage.setItem('selectedHiking', 'no-hiking');
+            // Retirer la classe 'selected' des autres cartes
+            document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
+            // Ajouter la classe 'selected' au bouton no-hiking
+            document.getElementById('noHikingCard').classList.add('selected');
             document.getElementById('nextStepBtn').style.display = 'flex';
         };
 

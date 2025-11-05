@@ -4,6 +4,7 @@ from typing import Optional
 from services.plan_service import insert_or_update_plan
 from services.authentification import verify_access_token, get_roles_for_user
 from utils.logger_util import LoggerUtil
+from utils.db_utils import MySQLUtils
 
 router = APIRouter()
 security = HTTPBearer(auto_error=False)
@@ -12,6 +13,7 @@ logger = LoggerUtil.get_logger(__name__)
 @router.get("/spots", summary="Returns the spots for a given city.")
 def get_spots(
     city_id: int = Query(..., description="ID de la ville"),
+    distance_km: float = Query(5, description="Rayon de la zone en km"),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ):
     """
@@ -46,49 +48,67 @@ def get_spots(
     else:
         logger.info("Aucun token JWT fourni, rôle par défaut : user")
     
-    logger.info(f"Route /spots appelée avec city_id={city_id}, user_role={user_role}")
-    
-    from utils.db_utils import MySQLUtils
+    logger.info(f"Route /spots appelée avec city_id={city_id}, distance_km={distance_km}, user_role={user_role}")
+
+    # Connexion DB
+    from utils.geo_utils import get_bounding_box
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor(dictionary=True)
 
-    # Récupérer les spots pour la ville
+    # Récupérer les coordonnées de la ville
+    cursor.execute("SELECT latitude, longitude FROM cities WHERE id = %s", (city_id,))
+    city = cursor.fetchone()
+    if not city:
+        cursor.close()
+        MySQLUtils.disconnect(cnx)
+        return []
+
+    min_lat, min_lon, max_lat, max_lon = get_bounding_box(city['latitude'], city['longitude'], distance_km)
+    
+    cnx = MySQLUtils.connect()
+    cursor = cnx.cursor(dictionary=True)
+
+    # Récupérer les spots dans la bounding box
     if user_role != "user":
-        query = '''
-            SELECT s.id, s.name, s.description, s.type, s.latitude, s.longitude, s.rating, s.url, s.verifie
-            FROM spots s
-            WHERE s.city_id = %s
-            ORDER BY s.name ASC
-        '''
-        cursor.execute(query, (city_id,))
+            query = '''
+                    SELECT s.id, s.name, s.description, s.type, s.latitude, s.longitude, s.rating, s.url, s.verifie
+                    FROM spots s
+                    WHERE s.latitude BETWEEN %s AND %s
+                        AND s.longitude BETWEEN %s AND %s
+                    ORDER BY s.name ASC
+                '''
+            cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
     else:
-        query = '''
-            SELECT s.id, s.name, s.description, s.type, s.latitude, s.longitude, s.rating, s.url, s.verifie
-            FROM spots s
-            WHERE s.city_id = %s AND s.verifie = 1
-            ORDER BY s.name ASC
-        '''
-        cursor.execute(query, (city_id,))
+            query = '''
+                        SELECT s.id, s.name, s.description, s.type, s.latitude, s.longitude, s.rating, s.url, s.verifie
+                        FROM spots s
+                        WHERE s.latitude BETWEEN %s AND %s
+                            AND s.longitude BETWEEN %s AND %s
+                            AND s.verifie = 1
+                        ORDER BY s.name ASC
+                '''
+            cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
     spots = cursor.fetchall()
 
     # Récupérer les services associés à chaque spot
+    '''
     spot_ids = [spot["id"] for spot in spots]
     services_map = {}
     if spot_ids:
         format_strings = ','.join(['%s'] * len(spot_ids))
-        cursor.execute(f'''
-            SELECT ss.spot_id, sv.name, sv.category
-            FROM spot_service ss
+        cursor.execute(f''''''
+        cnx = MySQLUtils.connect()
+        cursor = cnx.cursor(dictionary=True)
             JOIN services sv ON ss.service_id = sv.id
             WHERE ss.spot_id IN ({format_strings})
-        ''', tuple(spot_ids))
+        '''''', tuple(spot_ids))
         for row in cursor.fetchall():
             spot_id = row["spot_id"]
             service = {"name": row["name"], "category": row["category"]}
             if spot_id not in services_map:
                 services_map[spot_id] = []
             services_map[spot_id].append(service)
-
+    '''
     # Construire la réponse
     result = []
     for spot in spots:
@@ -102,7 +122,7 @@ def get_spots(
             "rating": spot["rating"],
             "url": spot["url"],
             "verifie": spot["verifie"],
-            "services": services_map.get(spot["id"], [])
+            #"services": services_map.get(spot["id"], [])
         })
 
     cursor.close()

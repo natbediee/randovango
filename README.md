@@ -155,6 +155,7 @@ python app.py
 ### Adminer (interface MySQL)
 - URL : `http://localhost:8080`
 - Serveur : `db_randovango`
+### SQLite
 - Utilisateur : `randovango_user` (voir `.env`)
 
 ## Structure du projet
@@ -174,12 +175,11 @@ randovango/
 │   ├── static/           # CSS, JS, images
 │   ├── templates/        # Templates Jinja2
 │   └── app.py            # Point d'entrée Flask
-├── data/
-│   ├── in/               # Données d'entrée (GPX, JSON, CSV)
-│   └── archive/          # Données archivées
+├── data/                 # Données d'entrée (GPX)
 ├── storage/
 │   ├── mysql/            # Volumes persistants MySQL
-│   └── mongodb/          # Volumes persistants MongoDB
+│   ├── mongodb/          # Volumes persistants MongoDB
+│   └── sqlite/           # Bdd authentification
 ├── logs/                 # Logs applicatifs
 ├── docker-compose.yml
 ├── Dockerfile.backend
