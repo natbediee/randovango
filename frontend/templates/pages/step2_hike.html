@@ -90,6 +90,13 @@
                     <p>Chargement des randonnées...</p>
                 </div>
             </div>
+            <style>
+            .hiking-card.selected {
+                border: 2px solid #51cf66;
+                box-shadow: 0 0 12px #51cf6633;
+                background: linear-gradient(90deg, #e6ffe6 0%, #f8fff8 100%);
+            }
+            </style>
 
             <!-- Option sans randonnée -->
             <div class="no-hiking-option" id="noHikingCard">
@@ -264,12 +271,14 @@
                 const durationCategory = hike.duration < 2 ? 'court' : (hike.duration <= 4 ? 'moyen' : 'long');
                 const verifiedBadge = hike.verifie ? '✅ Vérifié' : '⚠️ En attente';
                 const statusClass = hike.verifie ? 'verified' : 'pending';
-                
+                const selectedHiking = localStorage.getItem('selectedHiking');
+                const isSelected = selectedHiking && selectedHiking == hike.id;
+
                 const card = document.createElement('div');
-                card.className = 'hiking-card';
+                card.className = 'hiking-card' + (isSelected ? ' selected' : '');
                 card.setAttribute('data-difficulty', difficultyClass);
                 card.setAttribute('data-duration', durationCategory);
-                
+
                 card.innerHTML = `
                     <div class="hiking-status">
                         <span class="status-badge ${statusClass}">${verifiedBadge}</span>
@@ -306,7 +315,7 @@
                         </button>
                     </div>
                 `;
-                
+
                 hikingList.appendChild(card);
             });
         }
@@ -376,6 +385,18 @@
             console.log('Randonnée sélectionnée:', hikingId);
             // Enregistrer la sélection dans le localStorage
             localStorage.setItem('selectedHiking', hikingId);
+            // Marquer la randonnée sélectionnée visuellement
+            document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
+            // Trouver la carte correspondante et ajouter la classe
+            const cards = document.querySelectorAll('.hiking-card');
+            cards.forEach(card => {
+                const title = card.querySelector('h3');
+                if (title && title.textContent && title.textContent.includes(hikingId)) {
+                    card.classList.add('selected');
+                } else if (card.querySelector('button.btn-primary') && card.querySelector('button.btn-primary').getAttribute('onclick') === `selectHiking(${hikingId})`) {
+                    card.classList.add('selected');
+                }
+            });
             // Afficher le bouton "Continuer"
             document.getElementById('nextStepBtn').style.display = 'flex';
         };
