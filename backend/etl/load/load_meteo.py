@@ -1,13 +1,16 @@
 
-from utils.mysql_utils import MySQLUtils
+from utils.logger_util import LoggerUtil
+from utils.db_utils import MySQLUtils
 from utils.service_utils import ServiceUtil
+
+logger = LoggerUtil.get_logger("etl_meteo")
 
 def load_weather_data(data, city) -> None:
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor()
     city_id = ServiceUtil.get_city_id(cursor, city)
     if city_id is None:
-        print(f"Ville {city} absente de la base. Aucune donnée météo insérée.")
+        logger.warning(f"Ville {city} absente de la base. Aucune donnée météo insérée.")
         cursor.close()
         MySQLUtils.disconnect(cnx)
         return

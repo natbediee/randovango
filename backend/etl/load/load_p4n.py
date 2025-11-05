@@ -2,18 +2,18 @@ import pandas as pd
 
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
-from utils.mysql_utils import MySQLUtils
+from utils.db_utils import MySQLUtils
 
 def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     """
     Charge un DataFrame transformé Park4Night dans la base MySQL.
     La ville utilisée est celle passée explicitement par le pipeline (issue du GPX).
     """
-    logger = LoggerUtil.get_logger("load_p4n")
+    logger = LoggerUtil.get_logger("etl_p4n")
     if not isinstance(df, pd.DataFrame):
-        logger.error("Le premier argument doit être un DataFrame transformé (pas de compatibilité CSV).")
+        logger.error("[load] : Le premier argument doit être un DataFrame transformé (pas de compatibilité CSV).")
         return
-    logger.info(f"Chargement de {len(df)} lignes depuis DataFrame fourni")
+    logger.info(f"[load] : Chargement de {len(df)} lignes depuis DataFrame fourni")
     # Remplacer tous les NaN par None pour éviter les erreurs MySQL
     df = df.where(pd.notnull(df), None)
     conn = MySQLUtils.connect()
@@ -35,11 +35,11 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     # Récupère tous les p4n_id déjà présents dans spots
     cursor.execute("SELECT p4n_id FROM spots")
     existing_ids = set(str(row[0]) for row in cursor.fetchall())
-    logger.info(f"{len(existing_ids)} p4n_id déjà présents dans la table spots")
+    logger.info(f"[load] : {len(existing_ids)} p4n_id déjà présents dans la table spots")
 
     # Filtre le DataFrame pour ne garder que les nouveaux p4n_id
     df_new = df[~df['p4n_id'].astype(str).isin(existing_ids)]
-    logger.info(f"{len(df_new)} nouveaux spots à insérer")
+    logger.info(f"[load] : {len(df_new)} nouveaux spots à insérer")
 
     # Prépare les requêtes
     insert_spot_sql = """
@@ -58,16 +58,17 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
    
     # Utilise uniquement la ville passée explicitement (issue du GPX)
     if not city:
-        logger.error("Aucune ville fournie par le pipeline. Aucune insertion ne sera effectuée.")
+        logger.error("[load] : Aucune ville fournie par le pipeline. Aucune insertion ne sera effectuée.")
         return
     cursor.execute("SELECT id FROM cities WHERE name = %s", (city,))
     result = cursor.fetchone()
     if result:
         city_id = result[0]
     else:
-        logger.error(f"Ville '{city}' absente de la base. Aucune insertion ne sera effectuée.")
+        logger.error(f"[load] : Ville '{city}' absente de la base. Aucune insertion ne sera effectuée.")
         return
 
+    logger.info(f"[load] : Ville utilisée pour l'insertion : {city} (id={city_id})")
     for _, row in df_new.iterrows():
         # 1. Insert spot
         spot_values = (
@@ -83,17 +84,20 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
         )
         cursor.execute(insert_spot_sql, spot_values)
         spot_id = cursor.lastrowid
+        logger.info(f"[load] : Spot inséré - Nom: {row['Nom_Place']}, p4n_id: {row['p4n_id']}, ville: {city}, spot_id: {spot_id}")
 
         # 2. Insert services et liaisons
         services = [s.strip() for s in str(row['Services']).split(',') if s.strip()]
         for service in services:
             service_id = ServiceUtil.get_or_create_service_with_category(cursor, service)
             cursor.execute(insert_spot_service_sql, (spot_id, service_id))
+            logger.info(f"[load] : Service lié - spot_id: {spot_id}, service: {service}, service_id: {service_id}")
 
         # 3. Ajout dans histo_scrap (ou city_spot_scraped) avec la ville principale
         cursor.execute(insert_histo_sql, (spot_id, city_id))
+        logger.info(f"[load] : Ajout dans histo_scrap - spot_id: {spot_id}, city_id: {city_id}")
 
     conn.commit()
-    logger.info(f"{len(df_new)} nouveaux spots insérés avec services associés.")
+    logger.info(f"[load] : {len(df_new)} nouveaux spots insérés avec services associés.")
     cursor.close()
     MySQLUtils.disconnect(conn)

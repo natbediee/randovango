@@ -83,122 +83,11 @@
                 </div>
             </div>
             <!-- Liste des randonnées -->
-            <div class="hiking-list">
-                <!-- Randonnée 1 -->
-                <div class="hiking-card" data-difficulty="facile" data-duration="moyen">
-                    <div class="hiking-status">
-                        <span class="status-badge verified">✅ Vérifié</span>
-                    </div>
-                    <div class="hiking-info">
-                        <h3>Du Minou au Mengant</h3>
-                        <p class="hiking-description">Magnifique sentier côtier avec vue sur l'océan. Phares historiques
-                            et paysages sauvages.</p>
-                        <div class="hiking-stats">
-                            <span class="stat">
-                                <i class="fas fa-clock"></i>
-                                3h30
-                            </span>
-                            <span class="stat">
-                                <i class="fas fa-route"></i>
-                                8.2 km
-                            </span>
-                            <span class="stat">
-                                <i class="fas fa-mountain"></i>
-                                +120m
-                            </span>
-                            <span class="stat difficulty-facile">
-                                <i class="fas fa-signal"></i>
-                                Facile
-                            </span>
-                        </div>
-                    </div>
-                    <div class="hiking-actions">
-                        <button class="btn btn-outline" onclick="showHikingMap(1)">
-                            <i class="fas fa-map"></i>
-                            Voir
-                        </button>
-                        <button class="btn btn-primary" onclick="selectHiking(1)">
-                            Choisir
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Randonnée 2 -->
-                <div class="hiking-card" data-difficulty="moyen" data-duration="moyen">
-                    <div class="hiking-status">
-                        <span class="status-badge pending">⚠️ En attente</span>
-                    </div>
-                    <div class="hiking-info">
-                        <h3>La pointe des Renards</h3>
-                        <p class="hiking-description">Sentier vers une pointe sauvage offrant un panorama exceptionnel
-                            sur la mer d'Iroise.</p>
-                        <div class="hiking-stats">
-                            <span class="stat">
-                                <i class="fas fa-clock"></i>
-                                2h45
-                            </span>
-                            <span class="stat">
-                                <i class="fas fa-route"></i>
-                                6.8 km
-                            </span>
-                            <span class="stat">
-                                <i class="fas fa-mountain"></i>
-                                +85m
-                            </span>
-                            <span class="stat difficulty-moyen">
-                                <i class="fas fa-signal"></i>
-                                Moyen
-                            </span>
-                        </div>
-                    </div>
-                    <div class="hiking-actions">
-                        <button class="btn btn-outline" onclick="showHikingMap(2)">
-                            <i class="fas fa-map"></i>
-                            Voir
-                        </button>
-                        <button class="btn btn-primary" onclick="selectHiking(2)">
-                            Choisir
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Randonnée 3 -->
-                <div class="hiking-card" data-difficulty="facile" data-duration="court">
-                    <div class="hiking-status">
-                        <span class="status-badge verified">✅ Vérifié</span>
-                    </div>
-                    <div class="hiking-info">
-                        <h3>Le circuit de Porsmilin</h3>
-                        <p class="hiking-description">Balade familiale autour de la plage de Porsmilin, idéale avec des
-                            enfants.</p>
-                        <div class="hiking-stats">
-                            <span class="stat">
-                                <i class="fas fa-clock"></i>
-                                1h30
-                            </span>
-                            <span class="stat">
-                                <i class="fas fa-route"></i>
-                                3.2 km
-                            </span>
-                            <span class="stat">
-                                <i class="fas fa-mountain"></i>
-                                +45m
-                            </span>
-                            <span class="stat difficulty-facile">
-                                <i class="fas fa-signal"></i>
-                                Facile
-                            </span>
-                        </div>
-                    </div>
-                    <div class="hiking-actions">
-                        <button class="btn btn-outline" onclick="showHikingMap(3)">
-                            <i class="fas fa-map"></i>
-                            Voir
-                        </button>
-                        <button class="btn btn-primary" onclick="selectHiking(3)">
-                            Choisir
-                        </button>
-                    </div>
+            <div class="hiking-list" id="hikingList">
+                <!-- Les randonnées seront chargées dynamiquement via l'API -->
+                <div style="text-align: center; padding: 2rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
+                    <p>Chargement des randonnées...</p>
                 </div>
             </div>
 
@@ -231,46 +120,256 @@
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Initialiser la carte Leaflet
+    // ========================================
+    // INITIALISATION ET CHARGEMENT DES RANDONNÉES
+    // ========================================
+    
+    document.addEventListener('DOMContentLoaded', async function () {
+        // Récupérer l'ID de la ville depuis le localStorage (défini à l'étape 1)
+        const cityId = localStorage.getItem('selectedCityId');
+        
+        // Validation : vérifier qu'une ville a été sélectionnée à l'étape 1
+        if (!cityId) {
+            alert('Aucune ville sélectionnée. Retour à l\'étape 1.');
+            window.location.href = "{{ url_for('step1') }}";
+            return;
+        }
+
+        // ========================================
+        // INITIALISATION DE LA CARTE LEAFLET
+        // ========================================
+        
         const mapElement = document.getElementById('map');
         let hikeMap = null;
+        let hikingMarkers = [];  // Tableau pour stocker les marqueurs des randonnées
 
         if (mapElement && window.L && !mapElement._leaflet_id) {
-            // Position par défaut (sera mise à jour avec les données de la ville)
+            // Créer la carte Leaflet avec une position par défaut (Bretagne)
+            // La position sera mise à jour avec les coordonnées réelles de la ville
             hikeMap = L.map('map').setView([48.4, -4.5], 12);
 
+            // Ajouter les tuiles OpenStreetMap
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(hikeMap);
+        }
 
-            // Ajouter des marqueurs pour les randonnées (exemple)
-            // TODO: Récupérer les vraies coordonnées depuis l'API
-            const hikingMarkers = [
-                { lat: 48.35, lon: -4.73, name: "Du Minou au Mengant" },
-                { lat: 48.37, lon: -4.75, name: "La pointe des Renards" },
-                { lat: 48.33, lon: -4.70, name: "Le circuit de Porsmilin" }
-            ];
+        // ========================================
+        // RÉCUPÉRATION DES COORDONNÉES DE LA VILLE
+        // ========================================
+        
+        // Récupérer les coordonnées de la ville depuis l'API step1/cities
+        // Note : pas besoin d'envoyer le token ici car on récupère juste les coordonnées
+        let cityCoords = null;
+        try {
+            const citiesResponse = await fetch('/api/step1/cities');
+            if (citiesResponse.ok) {
+                const cities = await citiesResponse.json();
+                const selectedCity = cities.find(c => c.id == cityId);
+                console.log('Ville sélectionnée:', selectedCity);
+                if (selectedCity) {
+                    // Stocker les coordonnées de la ville
+                    cityCoords = { lat: selectedCity.latitude, lon: selectedCity.longitude, name: selectedCity.name };
+                    
+                    // Ajouter un marqueur bleu pour la ville sur la carte
+                    if (hikeMap) {
+                        // Créer une icône personnalisée bleue pour la ville
+                        const cityIcon = L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div style="background-color: #339af0; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.4);"></div>`,
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
+                        });
+                        
+                        // Ajouter le marqueur de la ville avec popup
+                        const cityMarker = L.marker([cityCoords.lat, cityCoords.lon], { icon: cityIcon })
+                            .addTo(hikeMap)
+                            .bindPopup(`<b>📍 ${cityCoords.name}</b><br>Centre de recherche`);
+                        
+                        console.log('Marqueur ville ajouté:', cityCoords);
+                        // Centrer la carte sur la ville
+                        hikeMap.setView([cityCoords.lat, cityCoords.lon], 12);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Erreur lors de la récupération de la ville:', error);
+        }
 
-            hikingMarkers.forEach(marker => {
-                L.marker([marker.lat, marker.lon])
-                    .addTo(hikeMap)
-                    .bindPopup(`<b>${marker.name}</b>`);
+        // ========================================
+        // CHARGEMENT DES RANDONNÉES AVEC AUTHENTIFICATION JWT
+        // ========================================
+        
+        // Note : Le token JWT est géré côté serveur par Flask (session)
+        // Flask récupère le token depuis session['user']['token'] et le passe à FastAPI
+        // Si utilisateur connecté : affichage selon le rôle (user = vérifiées uniquement, admin/contributor = toutes)
+        // Si pas connecté : affichage uniquement des randonnées vérifiées (comportement par défaut)
+        
+        // Charger les randonnées depuis l'API via le proxy Flask
+        try {
+            // Appel API pour récupérer les randonnées dans un rayon de 5km autour de la ville
+            // Le proxy Flask (/api/step2/hikes) ajoute automatiquement le token JWT depuis la session
+            const response = await fetch(`/api/step2/hikes?city_id=${cityId}&distance_km=5`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Erreur lors du chargement des randonnées');
+            }
+            const hikes = await response.json();
+            
+            // Afficher les randonnées dans la liste
+            displayHikes(hikes);
+            
+            // Ajouter les marqueurs verts sur la carte pour chaque randonnée
+            if (hikeMap && hikes.length > 0) {
+                hikes.forEach(hike => {
+                    // Créer une icône personnalisée verte pour les randonnées
+                    const hikeIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div style="background-color: #51cf66; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    });
+                    
+                    // Ajouter le marqueur avec popup contenant les infos de la randonnée
+                    const marker = L.marker([hike.start_latitude, hike.start_longitude], { icon: hikeIcon })
+                        .addTo(hikeMap)
+                        .bindPopup(`<b>🥾 ${hike.name}</b><br>${hike.distance_km} km - ${hike.duration}h`);
+                    
+                    // Stocker le marqueur pour manipulation ultérieure
+                    hikingMarkers.push({ marker, hike });
+                });
+            }
+        } catch (error) {
+            console.error('Erreur:', error);
+            document.getElementById('hikingList').innerHTML = '<p style="text-align: center; color: red;">Erreur lors du chargement des randonnées</p>';
+        }
+
+        // Fonction pour afficher les randonnées
+        function displayHikes(hikes) {
+            const hikingList = document.getElementById('hikingList');
+            hikingList.innerHTML = '';
+            
+            if (hikes.length === 0) {
+                hikingList.innerHTML = '<p style="text-align: center;">Aucune randonnée disponible pour cette ville</p>';
+                return;
+            }
+            
+            hikes.forEach(hike => {
+                const difficultyClass = hike.difficulte ? hike.difficulte.toLowerCase() : 'facile';
+                const durationCategory = hike.duration < 2 ? 'court' : (hike.duration <= 4 ? 'moyen' : 'long');
+                const verifiedBadge = hike.verifie ? '✅ Vérifié' : '⚠️ En attente';
+                const statusClass = hike.verifie ? 'verified' : 'pending';
+                
+                const card = document.createElement('div');
+                card.className = 'hiking-card';
+                card.setAttribute('data-difficulty', difficultyClass);
+                card.setAttribute('data-duration', durationCategory);
+                
+                card.innerHTML = `
+                    <div class="hiking-status">
+                        <span class="status-badge ${statusClass}">${verifiedBadge}</span>
+                    </div>
+                    <div class="hiking-info">
+                        <h3>${hike.name}</h3>
+                        <p class="hiking-description">${hike.description || 'Randonnée sans description'}</p>
+                        <div class="hiking-stats">
+                            <span class="stat">
+                                <i class="fas fa-clock"></i>
+                                ${hike.duration}h
+                            </span>
+                            <span class="stat">
+                                <i class="fas fa-route"></i>
+                                ${hike.distance_km} km
+                            </span>
+                            <span class="stat">
+                                <i class="fas fa-mountain"></i>
+                                +${hike.elevation_gain_m}m
+                            </span>
+                            <span class="stat difficulty-${difficultyClass}">
+                                <i class="fas fa-signal"></i>
+                                ${hike.difficulte || 'N/A'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="hiking-actions">
+                        <button class="btn btn-outline" onclick="showHikingMap(${hike.id}, ${hike.start_latitude}, ${hike.start_longitude})">
+                            <i class="fas fa-map"></i>
+                            Voir
+                        </button>
+                        <button class="btn btn-primary" onclick="selectHiking(${hike.id})">
+                            Choisir
+                        </button>
+                    </div>
+                `;
+                
+                hikingList.appendChild(card);
             });
         }
 
+        // Fonction pour afficher une randonnée sur la carte
+        window.showHikingMap = function(hikeId, lat, lon) {
+            if (hikeMap) {
+                hikeMap.setView([lat, lon], 14);
+                // Ouvrir le popup du marqueur correspondant
+                const markerData = hikingMarkers.find(m => m.hike.id === hikeId);
+                if (markerData) {
+                    markerData.marker.openPopup();
+                }
+            }
+        };
+
         // Gestion des filtres
+        let activeDifficultyFilter = 'all';
+        let activeDurationFilter = 'all';
+        
         const filterButtons = document.querySelectorAll('.filter-btn');
         filterButtons.forEach(btn => {
             btn.addEventListener('click', function () {
                 const group = this.parentElement;
+                const filterType = group.querySelector('label').textContent.includes('Difficulté') ? 'difficulty' : 'duration';
+                const filterValue = this.getAttribute('data-filter');
+                
+                // Mettre à jour le bouton actif dans le groupe
                 group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
-
-                // Filtrer les cartes de randonnées
-                // TODO: Implémenter la logique de filtrage
+                
+                // Mettre à jour les filtres actifs
+                if (filterType === 'difficulty') {
+                    activeDifficultyFilter = filterValue;
+                } else {
+                    activeDurationFilter = filterValue;
+                }
+                
+                // Appliquer les filtres
+                applyFilters();
             });
         });
+        
+        // Fonction pour appliquer les filtres
+        function applyFilters() {
+            const hikingCards = document.querySelectorAll('.hiking-card');
+            
+            hikingCards.forEach(card => {
+                const difficulty = card.getAttribute('data-difficulty');
+                const duration = card.getAttribute('data-duration');
+                
+                // Vérifier si la carte correspond aux filtres
+                const matchesDifficulty = activeDifficultyFilter === 'all' || difficulty === activeDifficultyFilter;
+                const matchesDuration = activeDurationFilter === 'all' || duration === activeDurationFilter;
+                
+                // Afficher ou masquer la carte
+                if (matchesDifficulty && matchesDuration) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
 
         // Gestion de la sélection de randonnée
         window.selectHiking = function (hikingId) {

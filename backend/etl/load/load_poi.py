@@ -1,6 +1,8 @@
 import pandas as pd
-from utils.mysql_utils import MySQLUtils
+from utils.logger_util import LoggerUtil
+from utils.db_utils import MySQLUtils
 from utils.service_utils import ServiceUtil, SERVICE_CATEGORY_LABEL_MAP
+logger = LoggerUtil.get_logger("etl_poi")
 
 def insert_service_and_link(cursor, poi_id, type_value):
     """
@@ -48,7 +50,7 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
     osm_id → original_id, name → name, description → description, type → service_category, lat/lon → latitude/longitude
     """
     if df_osm is None or df_osm.empty:
-        print("Aucun POI OSM à insérer.")
+        logger.warning("[load_osm_poi] : Aucun POI OSM à insérer.")
         return
     # Remplacer les NaN par None pour éviter les erreurs MySQL
     df_osm = df_osm.where(pd.notnull(df_osm), None)
@@ -59,8 +61,8 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
         # Insertion dans poi sans city_id ni type
         cursor.execute(
             """
-            INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, url, source_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, url, source_id, verifie)
+            VALUES (%s, %s, %s, %s, %s, %s, %s,1)
             """,
             (
                 row.get('osm_id'),
@@ -87,7 +89,7 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
             if row.get('type'):
                 insert_service_and_link(cursor, poi_id, row.get('type'))
     cnx.commit()
-    print(f"{len(df_osm)} POI OSM insérés pour {city_name}.")
+    logger.info(f"[load_osm_poi] : {len(df_osm)} POI OSM insérés pour {city_name}.")
     cursor.close()
     MySQLUtils.disconnect(cnx)
 
@@ -97,7 +99,7 @@ def load_wikidata_poi(df_wiki: pd.DataFrame, city_name: str):
     wikidata_id → original_id, name → name, description → description, type → service_category, lat/lon → latitude/longitude
     """
     if df_wiki is None or df_wiki.empty:
-        print("Aucun POI Wikidata à insérer.")
+        logger.warning("[load_wikidata_poi] : Aucun POI Wikidata à insérer.")
         return
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor()
@@ -135,6 +137,6 @@ def load_wikidata_poi(df_wiki: pd.DataFrame, city_name: str):
             if row.get('type'):
                 insert_service_and_link(cursor, poi_id, row.get('type'))
     cnx.commit()
-    print(f"{len(df_wiki)} POI Wikidata insérés pour {city_name}.")
+    logger.info(f"[load_wikidata_poi] : {len(df_wiki)} POI Wikidata insérés pour {city_name}.")
     cursor.close()
     MySQLUtils.disconnect(cnx)

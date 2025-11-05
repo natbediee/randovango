@@ -45,24 +45,29 @@ def get_bounding_box(latitude, longitude, distance_km):
     max_lon = longitude + delta_lon
     return min_lat, min_lon, max_lat, max_lon
 
-def get_coordinates_for_city(city_name, country="France", timeout=10, max_retries=3):
+def get_coordinates_for_city(city_name, department=None, country="France", timeout=10, max_retries=3):
     """
     Géocodage direct: obtient la latitude et la longitude d'une ville.
+    Permet de préciser le département pour éviter les ambiguïtés.
     Timeout et retry custom.
     """
     from time import sleep
+    query = city_name
+    if department:
+        query += f", {department}"
+    query += f", {country}"
     for attempt in range(max_retries):
         try:
             geolocator = Nominatim(user_agent="randovango-geocoder-v1", timeout=timeout)
-            location = geolocator.geocode(f"{city_name}, {country}")
+            location = geolocator.geocode(query)
             if location:
-                logger.info(f"Coordonnées trouvées pour {city_name}: {location.latitude}, {location.longitude}")
+                logger.info(f"Coordonnées trouvées pour {query}: {location.latitude}, {location.longitude}")
                 return location.latitude, location.longitude
             else:
-                logger.warning(f"Aucune coordonnée trouvée pour {city_name}")
+                logger.warning(f"Aucune coordonnée trouvée pour {query}")
                 return None, None
         except (GeocoderTimedOut, GeocoderServiceError) as e:
-            logger.error(f"Erreur de géocodage pour {city_name} (tentative {attempt+1}/{max_retries}): {e}")
+            logger.error(f"Erreur de géocodage pour {query} (tentative {attempt+1}/{max_retries}): {e}")
             sleep(2)
     return None, None
 
@@ -100,3 +105,10 @@ def get_city_from_coordinates(latitude, longitude, language='fr', timeout=10, ma
             logger.error(f"Erreur de géocodage inversé pour ({latitude}, {longitude}) (tentative {attempt+1}/{max_retries}): {e}")
             sleep(2)
     return None
+
+if __name__ == "__main__":
+    # Exemple : Brest, 10 km
+    # lat, lon, dist = 48.3904, -4.4861, 10
+    lat, lon, dist = 43.2747, 5.44028, 10
+    bbox = get_bounding_box(lat, lon, dist)
+    print(f"BBOX pour ({lat}, {lon}) sur {dist} km : {bbox}")

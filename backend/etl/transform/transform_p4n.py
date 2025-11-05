@@ -9,9 +9,8 @@ def transform_p4n(df: pd.DataFrame) -> pd.DataFrame:
     - Nettoie Type_Place (après le tiret)
     - Nettoie note (avant /5)
     - Garde Nom_Place, services, description
-    - Supprime les doublons sur p4n_id
     """
-    logger = LoggerUtil.get_logger("transform_p4n")
+    logger = LoggerUtil.get_logger("etl_p4n")
 
     # p4n_id
     df['p4n_id'] = df['URL_fiche'].str.extract(r'/place/(\d+)')
@@ -36,5 +35,7 @@ def transform_p4n(df: pd.DataFrame) -> pd.DataFrame:
     # Colonnes finales
     cols = ['URL_fiche', 'p4n_id', 'Nom_Place', 'latitude', 'longitude', 'Type_Place', 'note', 'Services', 'Description']
     df_out = df[cols].drop_duplicates(subset=['p4n_id']).reset_index(drop=True)
-    logger.info(f"DataFrame transformé: shape={df_out.shape}, colonnes={df_out.columns.tolist()}")
+    for i, row in df_out.iterrows():
+        logger.info(f"[transform] : Spot transformé - Nom: {row['Nom_Place']}, p4n_id: {row['p4n_id']}, lat: {row['latitude']}, lon: {row['longitude']}, type: {row['Type_Place']}")
+    logger.info(f"[transform] : DataFrame transformé: shape={df_out.shape}, colonnes={df_out.columns.tolist()}")
     return df_out

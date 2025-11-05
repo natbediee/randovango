@@ -1,6 +1,6 @@
 
 import threading
-from utils.mysql_utils import MySQLUtils
+from utils.db_utils import MySQLUtils
 from etl.extract.scraper_p4n import run_p4n_scraper
 from etl.transform.transform_p4n import transform_p4n
 from etl.load.load_p4n import load_p4n_to_mysql
@@ -62,21 +62,21 @@ def scraping_background(city):
     # Verrou uniquement pour le scraping P4N (Selenium) pour éviter les conflits
     with scraping_lock:
         if city_already_scraped(city):
-            logger.info(f"[ETL-BG] Ville déjà présente dans histo_scrap : {city}. Extraction P4N sautée.")
+            logger.info(f"[ETL-SC] Ville déjà présente dans histo_scrap : {city}. Extraction P4N sautée.")
         else:
             try:
-                logger.info(f"[ETL-BG] Extraction P4N pour la ville : {city} (scraping en cours...)")
+                logger.info(f"[ETL-SC] Extraction P4N pour la ville : {city} (scraping en cours...)")
                 df_p4n = run_p4n_scraper(city, is_headless=True, save_csv=False)
                 if df_p4n is not None:
                     df_transformed = transform_p4n(df_p4n)
                     load_p4n_to_mysql(df_transformed, city)
-                    logger.info(f"[ETL-BG] P4N chargé pour la ville : {city}")
+                    logger.info(f"[ETL-SC] P4N chargé pour la ville : {city}")
                 else:
-                    logger.warning(f"[ETL-BG] Scraping P4N a échoué pour la ville : {city}")
+                    logger.warning(f"[ETL-SC] Scraping P4N a échoué pour la ville : {city}")
             except Exception as e:
-                logger.error(f"[ETL-BG] Erreur lors de l'extraction/chargement P4N: {e}")
+                logger.error(f"[ETL-SC] Erreur lors de l'extraction/chargement P4N: {e}")
 
-    logger.info(f"[ETL-BG] Scraping terminé pour la ville: {city}")
+    logger.info(f"[ETL-SC] Scraping terminé pour la ville: {city}")
 
 def main(user_role="user"):
 
@@ -108,7 +108,7 @@ def main(user_role="user"):
             logger.error(f"[ETL] Erreur lors de l'extraction/chargement météo: {e}")
 
         # 3. Lancer le scraping en arrière-plan (non bloquant)
-        logger.info(f"[ETL] Lancement du scraping en arrière-plan pour la ville: {city}")
+        logger.info(f"[ETL_SC] Lancement du scraping en arrière-plan pour la ville: {city}")
         threading.Thread(target=scraping_background, args=(city,), daemon=True).start()
         results.append(city)
 

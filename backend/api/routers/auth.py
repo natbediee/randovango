@@ -16,13 +16,13 @@ async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse
     password = body.password
     user = get_user_by_username(username)
     if not user or not bcrypt.verify(password or "", user[2]):
-        insert_auth_log(user[0] if user else None, username, "failed_login", "/auth/login", 401)
+        insert_auth_log(user[0] if user else None, username, "failed_login", "/auth/login", 401, token=None, filename=None)
         return ORJSONResponse(
             content={"success": False, "message": "Identifiants invalides"},
             status_code=401,
         )
     if not user[3]:
-        insert_auth_log(user[0], user[1], "login_inactive", "/auth/login", 401)
+        insert_auth_log(user[0], user[1], "login_inactive", "/auth/login", 401, token=None, filename=None)
         return ORJSONResponse(
             content={"success": False, "message": "Utilisateur inactif"},
             status_code=401,
@@ -36,7 +36,7 @@ async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse
     expires_delta = timedelta(minutes=60)
     token = create_access_token(token_data, expires_delta)
     expires_at = (datetime.utcnow() + expires_delta).isoformat() + "Z"
-    insert_auth_log(user[0], user[1], "login", "/auth/login", 200, token=token)
+    insert_auth_log(user[0], user[1], "login", "/auth/login", 200, token=token, filename=None)
     return ORJSONResponse(
         content={
             "success": True,

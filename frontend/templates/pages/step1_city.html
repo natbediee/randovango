@@ -183,6 +183,8 @@
                     <div class="weather-advice">
                         {% if forecast.picto == 'sun' %}
                             <i class="fas fa-check-circle"></i> Parfait pour randonner
+                         {% elif forecast.picto == 'partly_cloudy' %}
+                            <i class="fas fa-check-circle"></i> Parfait pour randonner
                         {% elif forecast.picto == 'storm' %}
                             <i class="fas fa-exclamation-triangle"></i> Éviter les randos
                         {% elif forecast.picto == 'rain' or forecast.picto == 'snow' %}
@@ -253,13 +255,19 @@
 
 {% block scripts %}
 <script>
-    // Gestion de l'authentification et affichage conditionnel
+    // ========================================
+    // GESTION DE L'AUTHENTIFICATION JWT
+    // ========================================
+    
     document.addEventListener('DOMContentLoaded', function() {
+        // Récupération des éléments DOM pour l'authentification
         const loginForm = document.getElementById('loginForm');
         const userMenu = document.getElementById('userMenu');
         const stepperLoginForm = document.getElementById('stepperLoginForm');
         const stepperLoginError = document.getElementById('stepperLoginError');
         const logoutBtn = document.getElementById('logoutBtn');
+        
+        // Récupération des éléments DOM pour l'upload GPX
         const gpxUploadForm = document.getElementById('gpxUploadForm');
         const gpxFileInput = document.getElementById('gpxFileInput');
         const fileName = document.getElementById('fileName');
@@ -267,7 +275,12 @@
         const gpxUploadError = document.getElementById('gpxUploadError');
         const gpxUploadSuccess = document.getElementById('gpxUploadSuccess');
 
-        // Vérifier si le token JWT est expiré (décodage base64, lecture exp)
+        /**
+         * Vérifie si un token JWT est expiré
+         * Décode le payload base64 et compare le timestamp d'expiration
+         * @param {string} token - Le token JWT à vérifier
+         * @returns {boolean} - true si expiré ou invalide, false sinon
+         */
         function isJwtExpired(token) {
             if (!token) return true;
             try {
@@ -281,18 +294,20 @@
             }
         }
 
+        // Récupération du token et username depuis sessionStorage
         let token = sessionStorage.getItem('jwtToken');
         const username = sessionStorage.getItem('username');
 
-        // Si token expiré, on le supprime et on force la déconnexion
+        // Nettoyage automatique si le token est expiré
         if (token && isJwtExpired(token)) {
             sessionStorage.removeItem('jwtToken');
             sessionStorage.removeItem('username');
             token = null;
         }
 
+        // Affichage conditionnel : menu utilisateur OU formulaire de connexion
         if (token && username) {
-            // Utilisateur connecté : afficher le menu utilisateur
+            // Utilisateur connecté : afficher le menu utilisateur avec upload GPX
             loginForm.style.display = 'none';
             userMenu.style.display = 'block';
             document.getElementById('userName').textContent = username;
@@ -302,7 +317,10 @@
             userMenu.style.display = 'none';
         }
         
-        // Gestion de la connexion
+        // ========================================
+        // GESTION DU FORMULAIRE DE CONNEXION
+        // ========================================
+        
         if (stepperLoginForm) {
             stepperLoginForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -311,6 +329,7 @@
                 const password = document.getElementById('stepperLoginPassword').value;
                 
                 try {
+                    // Appel API de connexion via le proxy Flask
                     const response = await fetch('/login', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -320,13 +339,13 @@
                     const data = await response.json();
                     
                     if (response.ok && data.success) {
-                        // Stocker le token et le nom d'utilisateur
+                        // Succès : stocker le token JWT et le username en sessionStorage
                         sessionStorage.setItem('jwtToken', data.token);
                         sessionStorage.setItem('username', data.username);
-                        
-                        // Recharger la page pour afficher le menu utilisateur
+                        // Recharger la page pour afficher le menu utilisateur et les données filtrées par rôle
                         location.reload();
                     } else {
+                        // Échec : afficher le message d'erreur
                         stepperLoginError.textContent = data.message || 'Erreur de connexion';
                         stepperLoginError.style.display = 'block';
                     }
@@ -338,14 +357,23 @@
             });
         }
         
-        // Gestion de la déconnexion
+        // ========================================
+        // GESTION DE LA DÉCONNEXION
+        // ========================================
+        
         if (logoutBtn) {
             logoutBtn.addEventListener('click', function() {
+                // Supprimer le token et le username du sessionStorage
                 sessionStorage.removeItem('jwtToken');
                 sessionStorage.removeItem('username');
+                // Recharger la page pour afficher le formulaire de connexion
                 location.reload();
             });
         }
+        
+        // ========================================
+        // GESTION DE L'UPLOAD GPX (Admin/Contributeur uniquement)
+        // ========================================
         
         // Gestion de la sélection de fichier GPX
         if (gpxFileInput) {
@@ -360,13 +388,15 @@
             });
         }
         
-        // Gestion de l'upload GPX
+        // Gestion de la soumission du formulaire d'upload GPX
         if (gpxUploadForm) {
             gpxUploadForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
+                // Masquer les messages d'erreur/succès précédents
                 gpxUploadError.style.display = 'none';
                 gpxUploadSuccess.style.display = 'none';
                 
+                // Validation : fichier sélectionné
                 const file = gpxFileInput.files[0];
                 if (!file) {
                     gpxUploadError.textContent = 'Veuillez sélectionner un fichier';
@@ -374,20 +404,24 @@
                     return;
                 }
                 
-                // Vérifier que le token JWT est présent
+                // Validation : utilisateur authentifié (token JWT requis)
                 if (!token) {
                     gpxUploadError.textContent = 'Vous devez être connecté pour uploader un fichier. Veuillez vous reconnecter.';
                     gpxUploadError.style.display = 'block';
                     return;
                 }
                 
+                // Préparation des données : création d'un FormData avec le fichier GPX
                 const formData = new FormData();
                 formData.append('file', file);
                 
                 try {
+                    // Désactiver le bouton pendant l'upload et afficher un indicateur de chargement
                     uploadBtn.disabled = true;
                     uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Upload en cours...';
-                    // Appel via le proxy Flask (plus propre que http://localhost:8000)
+                    
+                    // Appel API pour uploader le fichier GPX via le proxy Flask
+                    // Le token JWT est envoyé dans le header Authorization pour authentifier la requête
                     const response = await fetch('/upload_gpx', {
                         method: 'POST',
                         headers: {
@@ -396,13 +430,16 @@
                         body: formData
                     });
                     
-                    // Parse response safely: si JSON => parse, sinon lire texte brut
+                    // Traitement de la réponse : gestion des différents types de contenu (JSON ou texte brut)
                     let data = null;
                     const contentType = response.headers.get('content-type') || '';
+                    
                     if (contentType.includes('application/json')) {
+                        // Réponse JSON : parser les données
                         try {
                             data = await response.json();
                         } catch (e) {
+                            // Erreur de parsing JSON : afficher l'erreur et le contenu brut
                             console.error('Erreur parsing JSON:', e);
                             const text = await response.text();
                             gpxUploadError.textContent = `Réponse serveur non valide (status ${response.status}): ${text}`;
@@ -412,10 +449,10 @@
                             return;
                         }
                     } else {
-                        // contenu non-JSON (HTML erreur ou autre)
+                        // Réponse non-JSON (HTML ou texte brut)
                         const text = await response.text();
                         if (response.ok) {
-                            // succès mais non-JSON: afficher texte brut
+                            // Succès mais réponse non-JSON : afficher le texte brut et recharger la page
                             gpxUploadSuccess.textContent = text;
                             gpxUploadSuccess.style.display = 'block';
                             gpxUploadForm.reset();
@@ -425,6 +462,7 @@
                             setTimeout(() => { location.reload(); }, 2000);
                             return;
                         } else {
+                            // Erreur serveur avec réponse non-JSON : afficher le message d'erreur
                             gpxUploadError.textContent = `Erreur serveur (status ${response.status}): ${text}`;
                             gpxUploadError.style.display = 'block';
                             uploadBtn.disabled = false;
@@ -433,32 +471,28 @@
                         }
                     }
 
+                    // Traitement du succès de l'upload
                     if (response.ok && data && data.success) {
+                        // Construire le message de succès avec la ville détectée si disponible
                         const cityMsg = data.city ? ` - Ville détectée : ${data.city}. Vous pouvez maintenant la sélectionner dans la liste pour voir les nouveaux résultats.` : '';
                         gpxUploadSuccess.textContent = data.message + cityMsg;
                         gpxUploadSuccess.style.display = 'block';
                         
-                        // Afficher le bouton "Rafraîchir les données"
-                        const refreshDataBtn = document.getElementById('refreshDataBtn');
-                        if (refreshDataBtn) {
-                            refreshDataBtn.style.display = 'block';
-                        }
-                        
-                        // Réinitialiser le formulaire
+                        // Réinitialiser le formulaire d'upload
                         gpxUploadForm.reset();
                         fileName.textContent = '';
                         uploadBtn.disabled = true;
                         uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
                         
-                        // Si une ville est retournée, la sélectionner dans le dropdown (sans rechargement)
+                        // Si une ville a été détectée, la sélectionner automatiquement dans le dropdown
                         if (data.city) {
-                            // Trouver l'option correspondant à la ville
                             const citySelect = document.getElementById('citySelect');
                             if (citySelect) {
+                                // Parcourir les options pour trouver la ville correspondante
                                 for (let i = 0; i < citySelect.options.length; i++) {
                                     if (citySelect.options[i].getAttribute('data-name') === data.city) {
                                         citySelect.selectedIndex = i;
-                                        // Déclencher l'événement change pour mettre à jour la carte et les infos
+                                        // Déclencher l'événement change pour mettre à jour la carte et les statistiques
                                         citySelect.dispatchEvent(new Event('change'));
                                         break;
                                     }
@@ -466,6 +500,7 @@
                             }
                         }
                     } else {
+                        // Traitement de l'échec de l'upload
                         gpxUploadError.textContent = data.message || 'Erreur lors de l\'upload';
                         gpxUploadError.style.display = 'block';
                         uploadBtn.disabled = false;
@@ -480,74 +515,10 @@
                 }
             });
         }
+        // ========================================
+        // GESTION DE LA SÉLECTION DE VILLE (Carte et Météo)
+        // ========================================
         
-        // Gestion du bouton "Rafraîchir les données"
-        const refreshDataBtn = document.getElementById('refreshDataBtn');
-        if (refreshDataBtn) {
-            refreshDataBtn.addEventListener('click', async function() {
-                this.disabled = true;
-                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rafraîchissement...';
-                
-                try {
-                    // Recharger les données de la ville depuis l'API
-                    const userRole = sessionStorage.getItem('jwtToken') ? 'admin' : 'user';
-                    const response = await fetch(`/api/step1/cities?user_role=${userRole}`);
-                    
-                    if (!response.ok) {
-                        throw new Error('Erreur lors du rechargement des données');
-                    }
-                    
-                    const cities = await response.json();
-                    
-                    // Mettre à jour le dropdown avec les nouvelles données
-                    const citySelect = document.getElementById('citySelect');
-                    const currentCityName = citySelect.options[citySelect.selectedIndex].getAttribute('data-name');
-                    
-                    // Vider et reconstruire les options
-                    citySelect.innerHTML = '';
-                    cities.forEach((city, index) => {
-                        const option = document.createElement('option');
-                        option.value = city.id;
-                        option.setAttribute('data-lat', city.latitude);
-                        option.setAttribute('data-lon', city.longitude);
-                        option.setAttribute('data-name', city.name);
-                        option.setAttribute('data-dept', city.department || '');
-                        option.setAttribute('data-country', city.country || '');
-                        option.setAttribute('data-hikes', city.stats.hikes);
-                        option.setAttribute('data-spots', city.stats.spots);
-                        option.setAttribute('data-poi', city.stats.poi);
-                        option.setAttribute('data-meteo', JSON.stringify(city.meteo));
-                        option.textContent = city.name;
-                        citySelect.appendChild(option);
-                        
-                        // Resélectionner la ville courante
-                        if (city.name === currentCityName) {
-                            citySelect.selectedIndex = index;
-                        }
-                    });
-                    
-                    // Déclencher l'événement change pour mettre à jour l'affichage
-                    citySelect.dispatchEvent(new Event('change'));
-                    
-                    this.innerHTML = '<i class="fas fa-check"></i> Données rafraîchies !';
-                    setTimeout(() => {
-                        this.style.display = 'none';
-                        this.innerHTML = '<i class="fas fa-sync-alt"></i> Rafraîchir les données';
-                        this.disabled = false;
-                    }, 2000);
-                    
-                } catch (error) {
-                    console.error('Erreur rafraîchissement:', error);
-                    this.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erreur';
-                    setTimeout(() => {
-                        this.innerHTML = '<i class="fas fa-sync-alt"></i> Rafraîchir les données';
-                        this.disabled = false;
-                    }, 2000);
-                }
-            });
-        }
-        
-        // Gestion dynamique de la sélection de ville avec carte et météo
         const select = document.getElementById('citySelect');
         if (!select) return;
         
@@ -555,42 +526,57 @@
         let cityMap = null;
         let cityMarker = null;
         
-        // Initialisation de la carte sur la première ville
+        // Initialisation de la carte Leaflet sur la première ville sélectionnée
         const mapElement = document.getElementById('map');
         if (window.L && mapElement && !mapElement._leaflet_id) {
+            // Récupérer les coordonnées de la ville sélectionnée par défaut
             const opt = select.options[select.selectedIndex];
             const lat = parseFloat(opt.getAttribute('data-lat'));
             const lon = parseFloat(opt.getAttribute('data-lon'));
             
+            // Créer la carte centrée sur la ville avec zoom niveau 12
             cityMap = L.map('map').setView([lat, lon], 12);
+            // Ajouter les tuiles OpenStreetMap
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(cityMap);
+            // Ajouter un marqueur sur la position de la ville
             cityMarker = L.marker([lat, lon]).addTo(cityMap);
         }
         
-        // Écouter le changement de ville
+        // Écouter le changement de ville dans le dropdown
         select.addEventListener('change', function() {
             const opt = select.options[select.selectedIndex];
             const cityName = opt.getAttribute('data-name');
-            // Mise à jour des informations de la ville
+            
+            // Mise à jour des informations de la ville (nom, département, statistiques)
             document.getElementById('cityName').textContent = cityName;
             const dept = opt.getAttribute('data-dept') || '';
             const country = opt.getAttribute('data-country') || '';
             document.getElementById('cityDept').textContent = dept + (country ? ' - ' + country : '');
+            
+            // Mise à jour des statistiques : nombre de randonnées, spots nuit, POI
             document.getElementById('cityHikes').textContent = opt.getAttribute('data-hikes') + ' randonnées';
             document.getElementById('citySpots').textContent = opt.getAttribute('data-spots') + ' spots nuit';
             document.getElementById('cityServices').textContent = opt.getAttribute('data-poi') + " points d'intérêt";
+            
+            // Mise à jour du titre de la section météo
             document.getElementById('weatherTitle').textContent = '🌤️ Météo à ' + cityName + ' - Prochains jours';
-            // Mise à jour de la météo
+            
+            // Mettre à jour l'affichage de la météo et de la carte
             updateWeatherDisplay(opt);
-            // Mise à jour de la carte
             updateMap(opt);
         });
         
-        // Fonction pour mettre à jour l'affichage météo
+        /**
+         * Met à jour l'affichage de la météo pour la ville sélectionnée
+         * Parse les données météo depuis les attributs data-meteo de l'option
+         * et génère une grille de cartes météo pour les 7 prochains jours
+         * @param {HTMLOptionElement} option - L'option sélectionnée contenant les données météo
+         */
         function updateWeatherDisplay(option) {
             let meteoData = [];
+            // Parser les données météo JSON depuis l'attribut data-meteo
             try {
                 meteoData = JSON.parse(option.getAttribute('data-meteo'));
             } catch (e) {
@@ -601,15 +587,18 @@
             weatherGrid.innerHTML = '';
             
             if (meteoData && meteoData.length > 0) {
+                // Tableaux pour formater les dates en français
                 const daysOfWeek = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 const months = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
                 
+                // Générer une carte météo pour chaque jour de prévision
                 meteoData.forEach((forecast, index) => {
                     const date = new Date(forecast.date);
+                    // Afficher "Aujourd'hui" pour le premier jour, sinon le jour de la semaine et la date
                     const dayName = index === 0 ? "Aujourd'hui" : 
                         `${daysOfWeek[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
                     
-                    // Classe CSS selon le weather_code
+                    // Déterminer la classe CSS selon le weather_code (bon/moyen/mauvais temps)
                     let weatherClass = 'good-weather';
                     if (forecast.weather_code >= 45 && forecast.weather_code <= 65) {
                         weatherClass = 'acceptable-weather';
@@ -617,9 +606,10 @@
                         weatherClass = 'bad-weather';
                     }
                     
-                    // Message de conseil selon le type de temps
+                    // Mapper les pictogrammes météo avec des conseils pour la randonnée
                     const adviceMap = {
                         'sun': { icon: 'fa-check-circle', text: 'Parfait pour randonner' },
+                        'partly_cloudy': { icon: 'fa-check-circle', text: 'Parfait pour randonner' },
                         'storm': { icon: 'fa-exclamation-triangle', text: 'Éviter les randos' },
                         'rain': { icon: 'fa-info-circle', text: 'Équipements conseillés' },
                         'snow': { icon: 'fa-info-circle', text: 'Équipements conseillés' },
@@ -629,6 +619,7 @@
                     };
                     const advice = adviceMap[forecast.picto] || adviceMap['indisponible'];
                     
+                    // Créer la carte météo HTML pour ce jour
                     const dayDiv = document.createElement('div');
                     dayDiv.className = 'weather-day ' + weatherClass;
                     dayDiv.innerHTML = `
@@ -651,46 +642,61 @@
                             <i class="fas ${advice.icon}"></i> ${advice.text}
                         </div>
                     `;
+                    // Ajouter la carte au conteneur grille
                     weatherGrid.appendChild(dayDiv);
                 });
             } else {
+                // Aucune donnée météo disponible : afficher un message
                 weatherGrid.innerHTML = '<p>Aucune donnée météo disponible</p>';
             }
         }
         
-        // Fonction pour mettre à jour la carte
+        /**
+         * Met à jour la carte Leaflet avec les coordonnées de la ville sélectionnée
+         * Centre la carte sur la nouvelle position et met à jour le marqueur
+         * @param {HTMLOptionElement} option - L'option sélectionnée contenant les coordonnées lat/lon
+         */
         function updateMap(option) {
             if (!cityMap || !window.L) return;
             
+            // Récupérer les coordonnées latitude/longitude depuis les attributs data
             const lat = parseFloat(option.getAttribute('data-lat'));
             const lon = parseFloat(option.getAttribute('data-lon'));
             
             if (!isNaN(lat) && !isNaN(lon)) {
+                // Centrer la carte sur la nouvelle ville
                 cityMap.setView([lat, lon], 12);
+                // Supprimer l'ancien marqueur s'il existe
                 if (cityMarker) {
                     cityMap.removeLayer(cityMarker);
                 }
+                // Créer un nouveau marqueur sur la position de la ville
                 cityMarker = L.marker([lat, lon]).addTo(cityMap);
             }
         }
         
-        // Gestion de la sélection de la durée
-        let selectedDays = 2; // Par défaut 2 jours
+        // ========================================
+        // GESTION DE LA SÉLECTION DE LA DURÉE DU SÉJOUR
+        // ========================================
+        
+        let selectedDays = 2; // Durée par défaut : 2 jours
         const durationCards = document.querySelectorAll('.duration-card');
         const planButton = document.getElementById('planButton');
         
+        // Écouter les clics sur les cartes de durée
         durationCards.forEach(card => {
             card.addEventListener('click', function() {
-                // Retirer la classe active de toutes les cards
+                // Retirer la classe active de toutes les cartes
                 durationCards.forEach(c => c.classList.remove('active'));
                 
-                // Ajouter la classe active à la card cliquée
+                // Ajouter la classe active à la carte cliquée
                 this.classList.add('active');
                 
-                // Récupérer le nombre de jours
+                // Récupérer le nombre de jours sélectionné
                 const days = this.getAttribute('data-days');
                 
                 if (days === 'custom') {
+                    // Durée personnalisée : focus sur l'input et écouter les changements
                     const customInput = document.getElementById('customDays');
                     customInput.focus();
                     customInput.addEventListener('input', function() {
@@ -698,13 +704,17 @@
                         updatePlanButton();
                     });
                 } else {
+                    // Durée prédéfinie : mettre à jour directement
                     selectedDays = parseInt(days);
                     updatePlanButton();
                 }
             });
         });
         
-        // Mettre à jour le texte du bouton
+        /**
+         * Met à jour le texte du bouton de planification selon la durée sélectionnée
+         * Affiche "jour" au singulier si 1 jour, "jours" au pluriel sinon
+         */
         function updatePlanButton() {
             if (planButton) {
                 const dayText = selectedDays === 1 ? 'jour' : 'jours';
@@ -712,37 +722,52 @@
             }
         }
         
-        // Appel de l'API create_plan au clic sur le bouton
+        // ========================================
+        // CRÉATION DU PLAN ET NAVIGATION VERS ÉTAPE 2
+        // ========================================
+        
+        // Écouter le clic sur le bouton de planification
         if (planButton) {
             planButton.addEventListener('click', function(e) {
                 e.preventDefault();
                 
+                // Récupérer l'ID de la ville sélectionnée
                 const selectedOption = select.options[select.selectedIndex];
                 const cityId = selectedOption.value;
                 
-                // Stocker en localStorage
+                // Stocker la ville et la durée dans localStorage pour les étapes suivantes
                 localStorage.setItem('selectedCityId', cityId);
                 localStorage.setItem('selectedDays', selectedDays);
                 
-                // Appeler l'API create_plan
+                // Lancer la création du plan via API
                 createPlan(cityId, selectedDays);
             });
         }
         
-        // Fonction pour appeler l'API create_plan
+        /**
+         * Appelle l'API create_plan pour créer un nouveau plan de voyage
+         * Génère un userToken invité si nécessaire et redirige vers l'étape 2
+         * @param {number} cityId - L'ID de la ville sélectionnée
+         * @param {number} days - La durée du séjour en jours
+         */
         async function createPlan(cityId, days) {
             try {
+                // Désactiver le bouton et afficher un indicateur de chargement
                 planButton.disabled = true;
                 planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création du plan...';
 
-                // Générer un userToken invité si absent
+                // Générer un userToken unique pour les utilisateurs non connectés (invités)
                 let userToken = localStorage.getItem('userToken');
                 if (!userToken) {
+                    // Utiliser crypto.randomUUID() si disponible, sinon générer un UUID v4 manuellement
                     userToken = crypto.randomUUID ? crypto.randomUUID() : ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
                     localStorage.setItem('userToken', userToken);
                 }
+                
+                // Récupérer l'userId depuis localStorage (null si utilisateur non connecté)
                 const userId = localStorage.getItem('userId') ? parseInt(localStorage.getItem('userId')) : null;
 
+                // Appel API pour créer le plan avec les paramètres sélectionnés
                 const response = await fetch('/api/step1/create_plan', {
                     method: 'POST',
                     headers: {
@@ -756,13 +781,14 @@
                     })
                 });
 
+                // Vérifier le statut HTTP de la réponse
                 if (!response.ok) {
                     const text = await response.text();
                     console.error('create_plan response not ok', response.status, text);
                     throw new Error('Erreur lors de la création du plan: ' + response.status);
                 }
 
-                // Récupérer la réponse texte et tenter un parse JSON robuste
+                // Parser la réponse JSON de manière robuste
                 const text = await response.text();
                 let data = null;
                 try {
@@ -774,6 +800,7 @@
 
                 console.log('create_plan response data:', data);
 
+                // Validation : vérifier que l'API a retourné un plan_id
                 if (!data || !data.plan_id) {
                     console.error('Aucun plan_id retourné par create_plan:', data);
                     alert('La création du plan a échoué : réponse inattendue du serveur.');
@@ -782,13 +809,16 @@
                     return;
                 }
 
-                // Stocker le plan_id et rediriger vers l'étape 2
+                // Stocker le plan_id dans localStorage pour les étapes suivantes
                 localStorage.setItem('planId', data.plan_id);
+                
+                // Rediriger vers l'étape 2 (sélection des randonnées)
                 window.location.href = "{{ url_for('step2') }}";
 
             } catch (error) {
+                // Gestion des erreurs : afficher un message d'alerte et réactiver le bouton
                 console.error('Erreur:', error);
-                alert('Erreur lors de la création du plan. Veuillez réessayer.');
+                alert('Erreur lors de la création du plan: ' + error.message);
                 planButton.disabled = false;
                 updatePlanButton();
             }

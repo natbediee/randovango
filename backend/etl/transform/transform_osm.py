@@ -2,7 +2,7 @@ import pandas as pd
 
 from utils.logger_util import LoggerUtil
 
-logger = LoggerUtil.get_logger("transform_osm")
+logger = LoggerUtil.get_logger("etl_osm")
 
 def transform_osm(osm_json : dict,city : str) -> pd.DataFrame:
     """
@@ -13,7 +13,7 @@ def transform_osm(osm_json : dict,city : str) -> pd.DataFrame:
     """
     pois = []
     if not osm_json or 'elements' not in osm_json:
-        logger.warning(f"[OSM] Données OSM invalides pour {city}")
+        logger.warning(f"[transform] Données OSM invalides pour {city}")
         return pd.DataFrame()
     for el in osm_json['elements']:
         # Cas node classique
@@ -68,5 +68,5 @@ def transform_osm(osm_json : dict,city : str) -> pd.DataFrame:
                     poi['description'] = description
                 pois.append(poi)
     df = pd.DataFrame(pois)
-    logger.info(f"[OSM] {len(df)} POI valides extraits pour {city}")
+    logger.info(f"[transform] {len(df)} POI valides extraits pour {city}")
     return df

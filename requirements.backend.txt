@@ -14,3 +14,5 @@ python-dotenv==1.1.1  # Chargement de variables d'environnement
 numpy==2.3.4 # Calcul scientifique et manipulation de matrices
 passlib==1.7.4  # Hachage de mots de passe
 python-multipart==0.0.20  # Gestion des formulaires multipart (FastAPI)
+orjson==3.11.4 # Sérialisation JSON ultra-rapide
+folium==0.20.0  # Visualisation de données géospatiales

@@ -3,7 +3,7 @@ import time
 
 from utils.logger_util import LoggerUtil
 
-logger = LoggerUtil.get_logger("api_wikidata")
+logger = LoggerUtil.get_logger("etl_wikidata")
 
 def extract_wikidata(city) -> dict:
     """
@@ -11,7 +11,7 @@ def extract_wikidata(city) -> dict:
     agrégations (GROUP BY) pour simplifier les données et obtenir tous les types
     (types) et labels (itemLabel) corrects en une seule ligne par POI.
     """
-    logger.info(f"Lancement de l'extraction Wikidata pour : {city}")
+    logger.info(f"[Extract] : Lancement de l'extraction Wikidata pour : {city}")
     
     # --- Requête SPARQL ---
     sparql_query = f"""
@@ -82,20 +82,20 @@ def extract_wikidata(city) -> dict:
 
             data = response.json()
             if not data.get('results', {}).get('bindings'):
-                logger.warning(f"AVERTISSEMENT : La requête a réussi, mais 0 POI a été trouvé autour de {city}.")
+                logger.warning(f"[Extract] : La requête a réussi, mais 0 POI a été trouvé autour de {city}.")
                 return None
-            logger.info(f"Données Wikidata extraites pour {city} ({len(data['results']['bindings'])} POI)")
+            logger.info(f"[Extract] : Données Wikidata extraites pour {city} ({len(data['results']['bindings'])} POI)")
             return data
             
         except requests.exceptions.HTTPError as e:
             if response.status_code == 504 and attempt < MAX_RETRIES - 1:
-                logger.warning(f"Erreur 504, tentative de réessai dans 5 secondes ({attempt + 1}/{MAX_RETRIES})...")
+                logger.warning(f"[Extract] : Erreur 504, tentative de réessai dans 5 secondes ({attempt + 1}/{MAX_RETRIES})...")
                 time.sleep(5)
                 continue
-            logger.error(f"Erreur HTTP {response.status_code}: {e}")
-            raise Exception(f"Erreur HTTP {response.status_code}: {e}")
-        
+            logger.error(f"[Extract] : Erreur HTTP {response.status_code}: {e}")
+            raise Exception(f"[Extract] : Erreur HTTP {response.status_code}: {e}")
+
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Erreur de connexion : {e}")
+            raise Exception(f"[Extract] : Erreur de connexion : {e}")
         except Exception as e:
-            raise Exception(f"Erreur de traitement des données : {e}")
+            raise Exception(f"[Extract] : Erreur de traitement des données : {e}")

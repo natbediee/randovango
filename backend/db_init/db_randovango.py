@@ -1,12 +1,15 @@
 import sys
 import time
 from pathlib import Path
+
+from utils.logger_util import LoggerUtil
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import mysql.connector
-from utils.mysql_utils import MySQLUtils
+from utils.db_utils import MySQLUtils
 from mysql.connector import Error
 from utils.service_utils import ServiceUtil
+logger = LoggerUtil.get_logger("db_init")
 
 ServiceUtil.load_env()
 
@@ -32,14 +35,14 @@ def init_database():
                 password=DB_ROOT_PSWD
             )
             test_cnx.close()
-            print(f"✓ MySQL est prêt après {attempt + 1} tentative(s)")
+            logger.info(f"[MySQL] :✓ MySQL est prêt après {attempt + 1} tentative(s)")
             break
         except Error as err:
             if attempt < max_retries - 1:
-                print(f"MySQL pas encore prêt (tentative {attempt + 1}/{max_retries}): {err}")
+                logger.warning(f"[MySQL] : MySQL pas encore prêt (tentative {attempt + 1}/{max_retries}): {err}")
                 time.sleep(retry_delay)
             else:
-                print(f"✗ ERREUR: Impossible de se connecter à MySQL après {max_retries} tentatives")
+                logger.error(f"[MySQL] : ✗ ERREUR: Impossible de se connecter à MySQL après {max_retries} tentatives")
                 sys.exit(1)
     
     try:
@@ -54,7 +57,7 @@ def init_database():
             f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}` "
             "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
         )
-        print(f"Base '{DB_NAME}' créée.")
+        logger.info(f"[MySQL] : Base '{DB_NAME}' créée.")
         admin_cursor.execute(
             f"CREATE USER IF NOT EXISTS '{DB_USER}'@'%' "
             f"IDENTIFIED BY '{DB_PSWD}'"
@@ -67,7 +70,7 @@ def init_database():
         admin_cnx.commit()
         admin_cursor.close()
         admin_cnx.close()
-        print(f"Utilisateur {DB_USER} créé.")
+        logger.info(f"[MySQL] : Utilisateur {DB_USER} créé.")
 
     # Liste des statements pour la création des tables
         statements = [
@@ -150,6 +153,7 @@ def init_database():
                 distance_km FLOAT,
                 estimated_duration_h FLOAT,
                 elevation_gain_m FLOAT,
+                difficulte VARCHAR(10),
                 filename VARCHAR(255),
                 mongo_id VARCHAR(24),
                 source_id INT,
@@ -251,7 +255,7 @@ def init_database():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
         ]
-        print("- Création des tables :")
+        ("- Création des tables :")
         user_cnx = MySQLUtils.connect()
         user_cursor = user_cnx.cursor()
         for stmt in statements:
@@ -261,23 +265,23 @@ def init_database():
                     user_cursor.fetchall()
                 except Exception:
                     pass
-                print("→ OK :", stmt.strip().split()[5])
+                logger.info(f"[MySQL] :→ OK : {stmt.strip().split()[5]}")
             except Exception as table_err:
-                print(f"✗ [ERREUR SQL] lors de la création: {table_err}\nStatement:\n{stmt}")
+                logger.error(f"[MySQL] :✗ [ERREUR SQL] lors de la création: {table_err}\nStatement:\n{stmt}")
                 user_cursor.close()
                 user_cnx.close()
                 sys.exit(1)
         user_cnx.commit()
         user_cursor.close()
         user_cnx.close()
-        print("Initialisation de la base terminée avec succès.\n")
+        logger.info("[MySQL] : Initialisation de la base terminée avec succès.")
         return True
 
     except Error as err:
-        print(f"✗ [ERREUR MySQL] {err}")
+        logger.error(f"[MySQL] :✗ [ERREUR] {err}")
         sys.exit(1)
     except Exception as e:
-        print(f"✗ [ERREUR] {e}")
+        logger.error(f"[MySQL] :✗ [ERREUR] {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
-
-from fastapi import APIRouter, Body, HTTPException, Query
-from utils.mysql_utils import MySQLUtils
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional
+from services.authentification import verify_access_token, get_roles_for_user
+from fastapi import APIRouter, Body, HTTPException, Query, Request, Depends
+from utils.logger_util import LoggerUtil
+from utils.db_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
 from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
@@ -9,6 +12,8 @@ from typing import List
 from datetime import datetime, timedelta
 
 router = APIRouter()
+logger = LoggerUtil.get_logger("router")
+security = HTTPBearer(auto_error=False)
 
 def get_city_stats(cursor, latitude, longitude, user_role, distance_km=5):
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(latitude, longitude, distance_km)
@@ -57,33 +62,53 @@ def get_city_stats(cursor, latitude, longitude, user_role, distance_km=5):
     }
 
 @router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
-def get_ville_list(user_role: str = "user", distance_km: float = Query(5, description="Rayon de recherche en km")):
+async def get_ville_list(
+    request: Request,
+    distance_km: float = Query(5, description="Rayon de recherche en km"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+):
+    # Extraire le rôle utilisateur via authentification.py
+    user_role = "user"
+    token = credentials.credentials if credentials else None
+    logger.info(f"Header Authorization reçu: {token}")
+    if token:
+        try:
+            payload = verify_access_token(token)
+            user_id = payload.get('user_id')
+            roles = get_roles_for_user(user_id)
+            logger.info(f"Rôles trouvés pour l'utilisateur {user_id}: {roles}")
+            user_role = next(iter(roles), "user")
+        except Exception as e:
+            logger.warning(f"Impossible de vérifier le token ou récupérer le rôle: {e}")
+            user_role = "user"
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor(dictionary=True)
-    
+
     # Vérification si les données météo J+6 existent (7 jours de prévisions : J+0 à J+6)
     date_j6 = datetime.now().date() + timedelta(days=6)
     cursor.execute("SELECT COUNT(*) as count FROM weather WHERE date >= %s", (date_j6,))
     result = cursor.fetchone()
     meteo_j7_exists = result['count'] > 0
-    
+
     # Si les données J+6 n'existent pas, lancer l'ETL météo pour toutes les villes
     if not meteo_j7_exists:
+        logger.info("Lancement de l'ETL météo pour toutes les villes...")
         cursor.execute("SELECT id, name FROM cities")
         cities = cursor.fetchall()
         for city in cities:
             try:
+                logger.info(f"Lancement ETL météo pour la ville : {city['name']}")
                 run_meteo_etl(city['name'])
             except Exception as e:
-                print(f"Erreur ETL météo pour {city['name']}: {e}")
-    
+                logger.error(f"Erreur ETL météo pour {city['name']}: {e}")
+
     cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
     cities = []
     for row in cursor.fetchall():
         row["stats"] = get_city_stats(cursor, row["latitude"], row["longitude"], user_role, distance_km)
-        
+
         # Récupération des prévisions météo pour cette ville
-        cursor.execute("SELECT * FROM weather WHERE city_id = %s ORDER BY date ASC", (row['id'],))
+        cursor.execute("SELECT * FROM weather WHERE city_id = %s AND DATE >= CURDATE() ORDER BY date ASC", (row['id'],))
         meteo_data = cursor.fetchall()
         forecasts = []
         for m in meteo_data:
@@ -97,7 +122,7 @@ def get_ville_list(user_role: str = "user", distance_km: float = Query(5, descri
                 "wind_speed_max": m.get("wind_max_kmh", 0.0)
             })
         row["meteo"] = forecasts
-        
+
         cities.append(row)
     cursor.close()
     MySQLUtils.disconnect(cnx)

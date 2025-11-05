@@ -215,30 +215,71 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialiser la carte Leaflet
+    // ========================================
+    // INITIALISATION ET CHARGEMENT DES SPOTS
+    // ========================================
+    
+document.addEventListener('DOMContentLoaded', async function() {
+    // Récupérer l'ID de la ville et de la randonnée depuis localStorage
+    const cityId = localStorage.getItem('selectedCityId');
+    const hikeId = localStorage.getItem('selectedHiking');
+    
+    // Validation : vérifier qu'une ville a été sélectionnée
+    if (!cityId) {
+        alert('Aucune ville sélectionnée. Retour à l\'étape 1.');
+        window.location.href = "{{ url_for('step1') }}";
+        return;
+    }
+    
+    // ========================================
+    // INITIALISATION DE LA CARTE LEAFLET
+    // ========================================
+    
     const mapElement = document.getElementById('map');
     let spotMap = null;
+    let spotMarkers = [];
 
     if (mapElement && window.L && !mapElement._leaflet_id) {
+        // Créer la carte Leaflet avec position par défaut (sera mise à jour)
         spotMap = L.map('map').setView([48.4, -4.5], 12);
         
+        // Ajouter les tuiles OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(spotMap);
-        
-        // Ajouter des marqueurs pour les spots (exemple)
-        const spotMarkers = [
-            { lat: 48.36, lon: -4.72, name: "Aire CC de Plougonvelin" },
-            { lat: 48.34, lon: -4.74, name: "Parking Fort de Bertheaume" },
-            { lat: 48.35, lon: -4.71, name: "Camping de Porsmilin" }
-        ];
-        
-        spotMarkers.forEach(marker => {
-            L.marker([marker.lat, marker.lon])
-                .addTo(spotMap)
-                .bindPopup(`<b>${marker.name}</b>`);
+    }
+    
+    // ========================================
+    // CHARGEMENT DES SPOTS AVEC AUTHENTIFICATION JWT
+    // ========================================
+    
+    // Note : Le token JWT est géré côté serveur par Flask (session)
+    // Flask récupère le token depuis session['user']['token'] et le passe à FastAPI
+    // Si utilisateur connecté : affichage selon le rôle (user = vérifiés uniquement, admin/contributor = tous)
+    // Si pas connecté : affichage uniquement des spots vérifiés (comportement par défaut)
+    
+    try {
+        // Appel API pour récupérer les spots
+        // Le proxy Flask (/api/step3/spots) ajoute automatiquement le token JWT depuis la session
+        const response = await fetch(`/api/step3/spots?city_id=${cityId}&hike_id=${hikeId || 0}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
+        
+        if (!response.ok) {
+            throw new Error('Erreur lors du chargement des spots');
+        }
+        
+        const spots = await response.json();
+        console.log('Spots récupérés:', spots);
+        
+        // TODO: Afficher les spots dynamiquement au lieu des données en dur
+        // Pour l'instant, on garde les données mock en attendant l'implémentation DB
+        
+    } catch (error) {
+        console.error('Erreur lors du chargement des spots:', error);
     }
 
     // Adapter le contenu si pas de randonnée

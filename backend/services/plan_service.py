@@ -1,4 +1,4 @@
-from utils.mysql_utils import MySQLUtils
+from utils.db_utils import MySQLUtils
 
 def insert_or_update_plan(plan_id, data):
     cnx = MySQLUtils.connect()

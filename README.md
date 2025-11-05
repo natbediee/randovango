@@ -1,6 +1,6 @@
 # RandoVango
 
-Application de planification de randonnées en Bretagne avec recherche de spots, météo et points d'intérêt.
+Application de planification de randonnées en itinérance en van avec recherche de spots, météo et points d'intérêt.
 
 ## Architecture (2025)
 
@@ -9,6 +9,7 @@ Application de planification de randonnées en Bretagne avec recherche de spots,
     - Scripts ETL pour l’extraction, la transformation et le chargement des données multi-sources (GPX, météo, OSM, Wikidata, P4N)
     - MySQL pour les données structurées (villes, randonnées, utilisateurs, plans, météo)
     - MongoDB pour les traces GPX brutes et données non structurées
+    - SQLITE pour l'authentication et l'historisation des accès aux routes
 - **Frontend** :
     - Flask pour le serveur web, rendu des pages avec Jinja2
     - HTML/CSS/JS pour l’interface utilisateur interactive
@@ -22,47 +23,26 @@ Application de planification de randonnées en Bretagne avec recherche de spots,
 
 ```mermaid
 graph TD
-  subgraph Utilisateur
-    UI["Frontend (Flask, HTML/CSS/JS)"]
-  end
-  subgraph API & ETL Python
-    API["FastAPI (API REST)"]
-    ETL["Scripts ETL (GPX, OSM, Wikidata, P4N, météo)"]
-    LOG["logging"]
-    GEOPY["geopy"]
-    PANDAS["pandas"]
-    REQ["requests"]
-    THREAD["threading"]
-  end
-  subgraph Bases de données
-    MYSQL["MySQL (données structurées)"]
-    MONGO["MongoDB (GPX bruts)"]
-  SQLITE["SQLite (Authentification)"]
-  end
-  subgraph Orchestration & DevOps
-    DOCKER["Docker/docker-compose"]
-    ENV[".env"]
-  end
-  UI -->|HTTP| API
-  API -->|Appels internes| ETL
-  ETL -->|Lecture/écriture| MYSQL
-  ETL -->|Lecture/écriture| MONGO
-  API -->|Lecture/écriture| SQLITE
-  API --> LOG
-  ETL --> LOG
-  ETL --> GEOPY
-  ETL --> PANDAS
-  ETL --> REQ
-  ETL --> THREAD
-  API --> DOCKER
-  ETL --> DOCKER
-  DOCKER --> MYSQL
-  DOCKER --> MONGO
-  DOCKER --> SQLITE
-  DOCKER --> API
-  DOCKER --> ETL
-  DOCKER --> UI
-  DOCKER --> ENV
+  USER["Utilisateur"]
+  UI["Frontend (Flask, HTML/CSS/JS)"]
+  API["API REST (FastAPI)"]
+  ETL["ETL Pipeline"]
+  EXTRACTION["Extraction (GPX, APIs, Scraping)"]
+  AGGREGATION["Agrégation / Nettoyage"]
+  MYSQL["MySQL"]
+  MONGO["MongoDB"]
+  SQLITE["SQLite (authentification)"]
+
+  USER -- "Dépose GPX / Utilise l'interface" --> UI
+  UI -- "Appels HTTP" --> API
+  API -- "Déclenche ETL" --> ETL
+  ETL -- "Extraction" --> EXTRACTION
+  ETL -- "Agrégation" --> AGGREGATION
+  AGGREGATION -- "Stockage structuré" --> MYSQL
+  AGGREGATION -- "Stockage GPX brut" --> MONGO
+  API -- "Lecture/écriture" --> MYSQL
+  API -- "Lecture/écriture" --> MONGO
+  API -- "Lecture/écriture" --> SQLITE
 ```
 
 ## Prérequis
@@ -222,8 +202,6 @@ Le pipeline ETL extrait, transforme et charge les données depuis plusieurs sour
 ### Logs
 Les logs sont générés dans le dossier `logs/` et affichés dans la console.
 
-### Migrations base de données
-Les schémas MySQL et MongoDB sont versionnés dans `storage/database_schema.sql` et `storage/mongodb_schema.md`.
 
 ## Auteurs
 

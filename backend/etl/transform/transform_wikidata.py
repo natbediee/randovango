@@ -1,7 +1,7 @@
 from utils.logger_util import LoggerUtil
 import pandas as pd
 
-logger = LoggerUtil.get_logger("transform_wikidata")
+logger = LoggerUtil.get_logger("etl_wikidata")
 
 def extract_lat_lon_from_wkt(wkt)-> tuple:
     # Ex: 'Point(-4.75968 48.36939)' → lon, lat
@@ -21,7 +21,7 @@ def transform_wikidata(wikidata_json, city_name)-> pd.DataFrame:
     """
     pois = []
     if not wikidata_json or 'results' not in wikidata_json or 'bindings' not in wikidata_json['results']:
-        logger.warning(f"[Wikidata] Données Wikidata invalides pour {city_name}")
+        logger.warning(f"[transform] : Données Wikidata invalides pour {city_name}")
         return pd.DataFrame()
     for item in wikidata_json['results']['bindings']:
         wikidata_id = item.get('item', {}).get('value', None)
@@ -55,5 +55,5 @@ def transform_wikidata(wikidata_json, city_name)-> pd.DataFrame:
                 poi['description'] = description
             pois.append(poi)
     df = pd.DataFrame(pois)
-    logger.info(f"[Wikidata] {len(df)} POI valides extraits de {city_name}")
+    logger.info(f"[transform] : {len(df)} POI valides extraits de {city_name}")
     return df

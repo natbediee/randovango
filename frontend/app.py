@@ -22,8 +22,12 @@ def step1():
     """Étape 1 - Choix de la ville"""
     # Appel à l'API FastAPI pour récupérer la liste des villes
     try:
-        api_url = f'{API_BASE}/api/step1/cities?user_role=admin'
-        response = requests.get(api_url, timeout=5)
+        api_url = f'{API_BASE}/api/step1/cities'
+        headers = {}
+        # Récupérer le token JWT depuis la session si l'utilisateur est connecté
+        if 'user' in session and session['user'].get('token'):
+            headers['Authorization'] = f"Bearer {session['user']['token']}"
+        response = requests.get(api_url, headers=headers, timeout=5)
         response.raise_for_status()
         cities = response.json()
     except Exception as e:
@@ -41,26 +45,65 @@ def proxy_create_plan():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Proxy route pour récupérer les villes avec rafraîchissement
-@app.route('/api/step1/cities', methods=['GET'])
-def proxy_get_cities():
-    user_role = request.args.get('user_role', 'user')
-    backend_url = f'{API_BASE}/api/step1/cities?user_role={user_role}'
-    try:
-        resp = requests.get(backend_url, timeout=10)
-        return (resp.content, resp.status_code, resp.headers.items())
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/step2')
 def step2():
     """Étape 2 - Choix de la randonnée"""
     return render_template('pages/step2_hike.html')
 
+@app.route('/api/step2/hikes', methods=['GET'])
+def proxy_get_hikes():
+    """Proxy pour récupérer les randonnées avec authentification JWT depuis la session"""
+    backend_url = f'{API_BASE}/api/step2/hikes'
+    try:
+        # Transférer les query params (city_id, distance_km)
+        if request.query_string:
+            backend_url += '?' + request.query_string.decode('utf-8')
+        
+        # Préparer les headers
+        headers = {}
+        
+        # Récupérer le token JWT depuis la session Flask si l'utilisateur est connecté
+        if 'user' in session and session['user'].get('token'):
+            headers['Authorization'] = f"Bearer {session['user']['token']}"
+        
+        # Appeler FastAPI avec le token
+        resp = requests.get(backend_url, headers=headers, timeout=10)
+        
+        # Retourner la réponse JSON
+        return (resp.content, resp.status_code, resp.headers.items())
+    except Exception as e:
+        print(f"Erreur proxy /api/step2/hikes: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/step3')
 def step3():
     """Étape 3 - Choix du spot nuit"""
     return render_template('pages/step3_spot.html')
+
+@app.route('/api/step3/spots', methods=['GET'])
+def proxy_get_spots():
+    """Proxy pour récupérer les spots avec authentification JWT depuis la session"""
+    backend_url = f'{API_BASE}/api/step3/spots'
+    try:
+        # Transférer les query params (city_id, hike_id)
+        if request.query_string:
+            backend_url += '?' + request.query_string.decode('utf-8')
+        
+        # Préparer les headers
+        headers = {}
+        
+        # Récupérer le token JWT depuis la session Flask si l'utilisateur est connecté
+        if 'user' in session and session['user'].get('token'):
+            headers['Authorization'] = f"Bearer {session['user']['token']}"
+        
+        # Appeler FastAPI avec le token
+        resp = requests.get(backend_url, headers=headers, timeout=10)
+        
+        # Retourner la réponse JSON
+        return (resp.content, resp.status_code, resp.headers.items())
+    except Exception as e:
+        print(f"Erreur proxy /api/step3/spots: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/step4')
 def step4():
@@ -89,10 +132,22 @@ def login_post():
         if resp.status_code == 200:
             # Récupérer le token JWT et les infos utilisateur
             response_data = resp.json()
+            user_data = response_data.get('user', {})
+            token = response_data.get('token')
+            
+            # Stocker les infos utilisateur dans la session Flask
+            session['user'] = {
+                'id': user_data.get('id'),
+                'username': user_data.get('username'),
+                'roles': user_data.get('roles', []),
+                'token': token
+            }
+            
             return jsonify({
                 'success': True,
-                'token': response_data.get('token'),  # FastAPI renvoie 'token', pas 'access_token'
-                'username': data.get('username'),
+                'token': token,
+                'username': user_data.get('username'),
+                'roles': user_data.get('roles', []),
                 'message': 'Connexion réussie'
             })
         else:
@@ -216,6 +271,39 @@ def logout():
 @app.route('/login_page', methods=['GET'])
 def login_page():
     return render_template('pages/login.html')
+
+# Route proxy générique pour toutes les autres routes API
+@app.route('/api/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def proxy_api(path):
+    """Proxy générique pour toutes les routes API vers FastAPI"""
+    backend_url = f'{API_BASE}/api/{path}'
+    try:
+        # Transférer les query params
+        if request.query_string:
+            backend_url += '?' + request.query_string.decode('utf-8')
+        
+        # Transférer les headers (sauf Host)
+        headers = {key: value for key, value in request.headers if key.lower() != 'host'}
+        
+        # Faire la requête vers FastAPI
+        resp = requests.request(
+            method=request.method,
+            url=backend_url,
+            headers=headers,
+            data=request.get_data(),
+            cookies=request.cookies,
+            allow_redirects=False,
+            timeout=30
+        )
+        
+        # Retourner la réponse
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        response_headers = [(name, value) for name, value in resp.raw.headers.items() if name.lower() not in excluded_headers]
+        
+        return (resp.content, resp.status_code, response_headers)
+    except Exception as e:
+        print(f"Erreur proxy API {path}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

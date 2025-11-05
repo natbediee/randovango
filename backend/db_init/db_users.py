@@ -1,9 +1,13 @@
 import sys
 from pathlib import Path
+
+from utils.logger_util import LoggerUtil
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 import sqlite3
 from passlib.hash import bcrypt
 from utils.service_utils import ServiceUtil
+
+logger = LoggerUtil.get_logger("DB_init")
 
 ServiceUtil.load_env()
 DB_PATH = Path("/usr/src/storage/rando_users.sqlite")
@@ -53,6 +57,7 @@ CREATE TABLE IF NOT EXISTS auth_log (
     status_code  INTEGER NOT NULL,
     ip_address   TEXT    NULL,
     access_type  TEXT    NULL,
+    filename     TEXT    NULL,
     expires_at   DATETIME NULL,
     timestamp    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -108,7 +113,7 @@ def main():
     with sqlite3.connect(DB_PATH) as conn:
         conn.executescript(DDL)
         seed(conn)
-    print(f"Base créée: {DB_PATH.resolve()}")
+    logger.info(f"[SQLITE] : Base créée: {DB_PATH.resolve()}")
 
 
 if __name__ == "__main__":

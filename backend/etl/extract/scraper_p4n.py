@@ -18,7 +18,7 @@ from utils.db_utils import p4n_id_exists
 
 ServiceUtil.load_env()
 
-logger = LoggerUtil.get_logger("scraper_p4n")
+logger = LoggerUtil.get_logger("etl_p4n")
 
 # Chemin vers data à la racine du projet (volume Docker)
 DATA = Path(__file__).resolve().parents[2] / "data"
@@ -33,7 +33,7 @@ ZOOM_LEVEL = 15 # Niveau de zoom par défaut pour un affichage local
 
 # --- Fonction d'Extraction des Détails d'un Emplacement ---
 def scrape_place_details(driver, url, wait) -> dict:
-    logger.info(f"--- Scraping de l'URL : {url} ---")
+    logger.info(f"[Extract] : Scraping de l'URL : {url} ---")
     try:
         driver.get(url)
         # --- Extraction du nom du lieu ---
@@ -81,7 +81,7 @@ def scrape_place_details(driver, url, wait) -> dict:
                     services.append(service_name)
         except NoSuchElementException:
             services.append("Aucun service listé")
-        logger.info(f"Extrait: {name}")
+        logger.info(f"[Extract] : Extrait: {name}")
         result = {
             'URL_fiche': url,
             'Nom_Place': name,
@@ -91,10 +91,10 @@ def scrape_place_details(driver, url, wait) -> dict:
             'Note_Avis': rating_score,
             'Services': ', '.join(services)
         }
-        logger.debug(f"Sortie scrape_place_details: type={type(result)}, keys={list(result.keys())}")
+        logger.debug(f"[Extract] : Sortie scrape_place_details: type={type(result)}, keys={list(result.keys())}")
         return result
     except (TimeoutException, NoSuchElementException, StaleElementReferenceException) as e:
-        logger.error(f"Erreur lors du scraping de {url}: {type(e).__name__}")
+        logger.error(f"[Extract] : Erreur lors du scraping de {url}: {type(e).__name__}")
         return {'URL_fiche': url, 'Erreur': f"Impossible de scraper les détails: {type(e).__name__}"}
 
 # --- Fonction Principale de Scraping (MODIFIÉE) ---
@@ -107,12 +107,12 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
     latitude, longitude = get_coordinates_for_city(city_name)
     
     if not latitude or not longitude:
-        logger.error("Échec de la recherche : Impossible de continuer sans coordonnées.")
+        logger.error("[Extract] : Échec de la recherche : Impossible de continuer sans coordonnées.")
         return
 
     # 1. Construction de l'URL de recherche géographique
     search_url = f"{BASE_SEARCH_URL}?lat={latitude}&lng={longitude}&z={ZOOM_LEVEL}"
-    logger.info(f" URL de recherche construite : {search_url}")
+    logger.info(f"[Extract] : URL de recherche construite : {search_url}")
 
     driver = None
     scraped_data = []
@@ -126,9 +126,9 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
 
         if is_headless:
             options.add_argument('--headless')
-            logger.info(" Mode Headless activé (Sans interface graphique).")
+            logger.info("[Extract] : Mode Headless activé (Sans interface graphique).")
         else:
-            logger.info("Mode Visuel activé (Avec interface graphique, pour débogage).")
+            logger.info("[Extract] : Mode Visuel activé (Avec interface graphique, pour débogage).")
 
         # Utilise le chromedriver installé dans le conteneur Docker
         service = Service(CHROMEDRIVER_PATH)
@@ -145,7 +145,7 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
             )
             driver.execute_script("arguments[0].click();", consent_button)
             wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, '.cc-container')))
-            logger.info("Cookies gérés.")
+            logger.info("[Extract] : Cookies gérés.")
         except Exception:
             pass
 
@@ -170,7 +170,7 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
             html_path = f"/usr/src/logs/p4n_debug_{city_name.replace(' ', '_')}.html"
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
-            logger.warning(f"Aucun spot trouvé pour {city_name}. HTML sauvegardé dans {html_path}")
+            logger.warning(f"[Extract] : Aucun spot trouvé pour {city_name}. HTML sauvegardé dans {html_path}")
         for url in place_urls:
             n_total += 1
             # Extraire p4n_id depuis l'URL (ex: /fr/place/18293)
@@ -179,7 +179,7 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
             except Exception:
                 p4n_id = None
             if p4n_id and p4n_id_exists(p4n_id):
-                logger.info(f"Spot déjà en base (p4n_id={p4n_id}), on saute le scraping.")
+                logger.info(f"[Extract] : Spot déjà en base (p4n_id={p4n_id}), on saute le scraping.")
                 n_skipped += 1
                 continue
             data = scrape_place_details(driver, url, wait)
@@ -189,7 +189,7 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
                 scraped_data.append(data)
                 n_scraped += 1
             time.sleep(1)
-        logger.info(f"{n_total} spots trouvés, {n_skipped} déjà en base, {n_scraped} nouveaux scrapés.")
+        logger.info(f"[Extract] : {n_total} spots trouvés, {n_skipped} déjà en base, {n_scraped} nouveaux scrapés.")
 
         # --- Option de sauvegarde CSV manuelle ---
         if scraped_data:
@@ -201,21 +201,21 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
                     csv_file_name = f'p4n_results_{city_name.replace(" ", "_")}.csv'
                     csv_file_path = os.path.join(output_folder, csv_file_name)
                     df.to_csv(csv_file_path, sep=';', index=False, encoding='utf-8')
-                    logger.info(f"\n SUCCÈS : {len(scraped_data)} emplacements sauvegardés dans '{csv_file_path}' avec Pandas.")
+                    logger.info(f"[Extract] : SUCCÈS : {len(scraped_data)} emplacements sauvegardés dans '{csv_file_path}' avec Pandas.")
                 else:
-                    logger.warning(f"Aucune donnée trouvée pour {city_name}. Le fichier précédent n'a pas été créé/écrasé.")
+                    logger.warning(f"[Extract] : Aucune donnée trouvée pour {city_name}. Le fichier précédent n'a pas été créé/écrasé.")
             # df peut être passé à transform et load
-            logger.info(f"Sortie run_p4n_scraper: type=DataFrame, shape={df.shape}")
+            logger.info(f"[Extract] : Sortie run_p4n_scraper: type=DataFrame, shape={df.shape}")
             return df
         else:
-            logger.warning("Aucune donnée valide à traiter.")
+            logger.warning("[Extract] : Aucune donnée valide à traiter.")
             return None
 
     except TimeoutException:
-        logger.error(" ÉCHEC : Timeout. La liste des résultats n'a pas chargé à temps.")
+        logger.error("[Extract] : ÉCHEC : Timeout. La liste des résultats n'a pas chargé à temps.")
         sys.exit(1)
     except Exception as e:
-        logger.critical(f" ERREUR FATALE : {e}")
+        logger.critical(f"[Extract] : ERREUR FATALE : {e}")
         sys.exit(1)
     finally:
         if driver:

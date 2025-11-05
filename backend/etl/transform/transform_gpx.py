@@ -1,5 +1,6 @@
 import math
 import os
+import re
 import gpxpy
 from utils.geo_utils import get_city_from_coordinates
 
@@ -16,6 +17,25 @@ def extract_waypoints(gpx):
 		{'name': wpt.name, 'lat': wpt.latitude, 'lon': wpt.longitude, 'ele': wpt.elevation, 'desc': wpt.description}
 		for wpt in gpx.waypoints
 	]
+def normalize_name(raw_name):
+    # Prendre la partie après le premier tiret
+    if '-' in raw_name:
+        name = raw_name.split('-', 1)[1]
+    else:
+        name = raw_name
+
+    # Remplacer les cas particuliers d'apostrophe
+    name = re.sub(r'_d_', " d'", name)
+    name = re.sub(r'_l_', " l'", name)
+    name = re.sub(r'_qu_', " qu'", name)
+    name = re.sub(r'_s_', " s'", name)
+    name = re.sub(r'_t_', " t'", name)
+    name = re.sub(r'_n_', " n'", name)
+    # Remplacer les autres _ par des espaces
+    name = name.replace('_', ' ')
+    # Supprimer les espaces en double
+    name = re.sub(r' +', ' ', name)
+    return name
 
 def transform_gpx(gpx_content, fname) -> dict:
 	"""
@@ -102,12 +122,24 @@ def transform_gpx(gpx_content, fname) -> dict:
 		hike_name = gpx.tracks[0].name
 	else:
 		hike_name = os.path.splitext(fname)[0]
+	# Normalisation du nom de la randonnée
+	hike_name = normalize_name(hike_name)
 	author = gpx.author_name if hasattr(gpx, 'author_name') and gpx.author_name else 'inconnue'
+
+	# Calcul de la difficulté
+	if distance_km_rounded < 8 and denivele_m_rounded < 200:
+		difficulte = "facile"
+	elif distance_km_rounded < 15 or denivele_m_rounded < 500:
+		difficulte = "moyen"
+	else:
+		difficulte = "difficile"
+
 	return {
 		'name': hike_name,
 		'distance_km': distance_km_rounded,
 		'denivele_m': denivele_m_rounded,
 		'estimated_duration_h': estimated_duration_h,
+		'difficulte': difficulte,
 		'points': points,
 		'waypoints': waypoints,
 		'author': author,

@@ -1,4 +1,5 @@
 import sqlite3
+import logging
 import os
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
@@ -48,12 +49,13 @@ def get_roles_for_user(uid):
         return {row[0] for row in c.execute(sql, (uid,))}
 
 
-def insert_auth_log(user_id, username, action, route, status_code, token=None):
+def insert_auth_log(user_id, username, action, route, status_code, token=None, filename=None):
+    logging.info(f"insert_auth_log: user_id={user_id}, username={username}, action={action}, route={route}, status_code={status_code}, token={token}, filename={filename}")
     with connect() as c:
         c.execute(
-            """INSERT INTO auth_log(user_id, username, action, route, status_code, token)
-                     VALUES (?,?,?,?,?,?)""",
-            (user_id, username, action, route, status_code, token),
+            """INSERT INTO auth_log(user_id, username, token, action, route, status_code, ip_address, access_type, filename, expires_at)
+                     VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (user_id, username, token, action, route, status_code, None, None, filename, None),
         )
         c.commit()
 
@@ -61,7 +63,8 @@ def insert_auth_log(user_id, username, action, route, status_code, token=None):
 # --- JWT Token Generation ---
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    from datetime import timezone
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
