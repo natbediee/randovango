@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+
+{% block title %}Étape 1 - Durée du séjour - RandoVanGo{% endblock %}
+
+{% block page_content %}
+<div class="main-container">
+    <div class="page-header">
+        <div class="hero-section">
+            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
+            <div class="hero-overlay"></div>
+            <div class="hero-logo-container">
+                <div class="hero-logo-white">
+                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
+                </div>
+            </div>
+            <div class="hero-content">
+                <h1 class="hero-title">Planificateur RandoVanGo</h1>
+                <p class="hero-subtitle">Votre aventure van life</p>
+            </div>
+
+            <!-- Widget d'authentification et upload GPX -->
+            <div id="floatingLogin" style="position: absolute; bottom: 20px; top: 50%; transform: translateY(-50%); right: 20px; z-index: 1000; background: rgba(255,255,255,0.98); padding: 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 400px;min-height: 230px;">
+                <!-- Formulaire de connexion (visible si non connecté) -->
+                <div id="loginForm" class="stepper-login" style="position: static !important; transform: none !important;">
+                    <p style="text-align: center; font-size: 0.9rem; color: #555; margin-bottom: 1rem; padding: 0 0.5rem;">
+                        Pour insérer <br>de nouvelles randonnées !
+                    </p>
+                    <form id="stepperLoginForm" class="stepper-login-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <input type="text" id="stepperLogin" class="form-input" placeholder="Identifiant" required style="width: 100%;">
+                        <input type="password" id="stepperLoginPassword" class="form-input" placeholder="Mot de passe" required style="width: 100%;">
+                        <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-sign-in-alt"></i> Connexion Contributeur</button>
+                    </form>
+                    <div id="stepperLoginError" class="alert alert-danger" style="display:none; margin-top: 0.5rem; font-size: 0.85em;"></div>
+                </div>
+
+                <!-- Menu utilisateur et upload GPX (visible si connecté) -->
+                <div id="userMenu" class="user-menu" style="display: none;">
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch;">
+                        <div class="user-info" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f0f0f0; border-radius: 4px;">
+                            <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
+                            <span id="userName" style="font-weight: 500;">Contributeur</span>
+                        </div>
+                        <!-- Formulaire d'upload GPX -->
+                        <form id="gpxUploadForm" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 0.2rem;">
+                            <label for="gpxFileInput" class="btn btn-outline" style="margin: 0; cursor: pointer; text-align: center; padding: 0.5rem; font-size: 0.9rem;">
+                                <i class="fas fa-file-upload"></i> Choisir un fichier GPX
+                            </label>
+                            <input type="file" id="gpxFileInput" accept=".gpx" style="display: none;" required>
+                            <div id="fileName" style="font-size: 0.9em; color: #666; text-align: center;  font-weight: 500;"></div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;" disabled id="uploadBtn">
+                                <i class="fas fa-cloud-upload-alt"></i> Envoyer la rando                            </button>
+                        </form>
+                        <div id="gpxUploadError" class="alert alert-danger" style="display:none; padding: 0.75rem; font-size: 0.9em;"></div>
+                        <div id="gpxUploadSuccess" class="alert alert-success" style="display:none; padding: 0.75rem; font-size: 0.9em;"></div>
+
+                        <button id="logoutBtn" class="btn btn-outline" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;"><i class="fas fa-sign-out-alt"></i> Se déconnecter</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="planning-stepper">
+        <div class="day-badge" id="dayBadge" style="display:none;">Jours</div>
+        <div class="stepper-container">
+            <div class="step active">
+                <div class="step-circle">1</div>
+                <div class="step-label">Jours</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">2</div>
+                <div class="step-label">Ville</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">3</div>
+                <div class="step-label">Randonnée</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">4</div>
+                <div class="step-label">Nuit</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">5</div>
+                <div class="step-label">Services</div>
+            </div>
+            <div class="step-line step-resultat-only"></div>
+            <div class="step step-resultat-only">
+                <div class="step-circle">📋</div>
+                <div class="step-label">Résultat</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="planning-content">
+        <div class="step-section">
+            <div class="step-header" style="margin-bottom:0.75rem;">
+                <h2>Bienvenue sur RandoVanGo !</h2>
+                <p>Planifiez votre séjour van life en quelques étapes : choisissez la durée, puis pour chaque
+                   jour une ville, une randonnée, un spot pour la nuit et les services utiles. Vous pourrez changer
+                   de ville d'un jour à l'autre si vous le souhaitez.</p>
+            </div>
+
+            <div class="duration-section" id="durationSection">
+                <h3>Combien de jours souhaitez-vous partir ?</h3>
+                <div class="duration-options">
+                    <div class="duration-card" data-days="1">
+                        <div class="duration-number">1</div>
+                        <div class="duration-label">jour</div>
+                        <div class="duration-desc">Escapade express</div>
+                    </div>
+                    <div class="duration-card active" data-days="2">
+                        <div class="duration-number">2</div>
+                        <div class="duration-label">jours</div>
+                        <div class="duration-desc">Week-end parfait</div>
+                    </div>
+                    <div class="duration-card" data-days="3">
+                        <div class="duration-number">3</div>
+                        <div class="duration-label">jours</div>
+                        <div class="duration-desc">Long week-end</div>
+                    </div>
+                    <div class="duration-card" data-days="7">
+                        <div class="duration-number">7</div>
+                        <div class="duration-label">jours</div>
+                        <div class="duration-desc">Semaine complète</div>
+                    </div>
+                    <div class="duration-card" data-days="custom">
+                        <div class="duration-number">
+                            <input type="number" id="customDays" min="1" max="30" placeholder="?">
+                        </div>
+                        <div class="duration-label">jours</div>
+                        <div class="duration-desc">Durée personnalisée</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="planning-navigation">
+            <div class="navigation-buttons navigation-right">
+                <button id="nextButton" class="btn btn-primary btn-large">
+                    Planifier ces 2 jours
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // /duration n'est atteint qu'au tout début d'une nouvelle planification (le
+        // changement de ville mi-séjour, lui, va directement à /step1). On efface donc
+        // ici tout l'état d'un séjour précédent, y compris s'il a été abandonné en
+        // cours de route (ex. changingCityForNextDay resté bloqué à '1' après un
+        // "Changer de ville" jamais finalisé) — sinon l'utilisateur reste coincé sur
+        // l'ancienne ville/plan à sa prochaine visite.
+        localStorage.removeItem('changingCityForNextDay');
+        localStorage.removeItem('planId');
+        localStorage.removeItem('currentDay');
+        localStorage.removeItem('selectedCityId');
+        localStorage.removeItem('selectedHiking');
+        localStorage.removeItem('selectedSpot');
+        localStorage.removeItem('selectedServices');
+        // Idem pour la ville mémorisée en sessionStorage par step1_city.html afin de
+        // restaurer la sélection lors d'un retour arrière depuis step2 : utile dans ce
+        // cas précis, mais pas pour un vrai nouveau départ.
+        sessionStorage.removeItem('step1_cityId');
+
+        // ========================================
+        // GESTION DE L'AUTHENTIFICATION JWT ET DE L'UPLOAD GPX
+        // ========================================
+
+        // Récupération des éléments DOM pour l'authentification
+        const loginForm = document.getElementById('loginForm');
+        const userMenu = document.getElementById('userMenu');
+        const stepperLoginForm = document.getElementById('stepperLoginForm');
+        const stepperLoginError = document.getElementById('stepperLoginError');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        // Récupération des éléments DOM pour l'upload GPX
+        const gpxUploadForm = document.getElementById('gpxUploadForm');
+        const gpxFileInput = document.getElementById('gpxFileInput');
+        const fileName = document.getElementById('fileName');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const gpxUploadError = document.getElementById('gpxUploadError');
+        const gpxUploadSuccess = document.getElementById('gpxUploadSuccess');
+
+        /**
+         * Vérifie si un token JWT est expiré
+         * Décode le payload base64 et compare le timestamp d'expiration
+         * @param {string} token - Le token JWT à vérifier
+         * @returns {boolean} - true si expiré ou invalide, false sinon
+         */
+        function isJwtExpired(token) {
+            if (!token) return true;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+                if (!payload.exp) return true;
+                // exp est en secondes depuis epoch
+                const now = Math.floor(Date.now() / 1000);
+                return payload.exp < now;
+            } catch (e) {
+                return true;
+            }
+        }
+
+        // Récupération du token et username depuis sessionStorage
+        let token = sessionStorage.getItem('jwtToken');
+        const username = sessionStorage.getItem('username');
+
+        // Nettoyage automatique si le token est expiré
+        if (token && isJwtExpired(token)) {
+            sessionStorage.removeItem('jwtToken');
+            sessionStorage.removeItem('username');
+            token = null;
+        }
+
+        // Affichage conditionnel : menu utilisateur OU formulaire de connexion
+        if (token && username) {
+            // Utilisateur connecté : afficher le menu utilisateur avec upload GPX
+            loginForm.style.display = 'none';
+            userMenu.style.display = 'block';
+            document.getElementById('userName').textContent = username;
+        } else {
+            // Utilisateur non connecté : afficher le formulaire de connexion
+            loginForm.style.display = 'block';
+            userMenu.style.display = 'none';
+        }
+
+        // ========================================
+        // GESTION DU FORMULAIRE DE CONNEXION
+        // ========================================
+
+        if (stepperLoginForm) {
+            stepperLoginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                stepperLoginError.style.display = 'none';
+                const login = document.getElementById('stepperLogin').value;
+                const password = document.getElementById('stepperLoginPassword').value;
+
+                try {
+                    // Appel API de connexion via le proxy Flask
+                    const response = await fetch('/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: login, password: password })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        // Succès : stocker le token JWT et le username en sessionStorage
+                        sessionStorage.setItem('jwtToken', data.token);
+                        sessionStorage.setItem('username', data.username);
+                        // Recharger la page pour afficher le menu utilisateur et les données filtrées par rôle
+                        location.reload();
+                    } else {
+                        // Échec : afficher le message d'erreur
+                        stepperLoginError.textContent = data.message || 'Erreur de connexion';
+                        stepperLoginError.style.display = 'block';
+                    }
+                } catch (err) {
+                    console.error('Erreur connexion:', err);
+                    stepperLoginError.textContent = 'Erreur réseau ou serveur';
+                    stepperLoginError.style.display = 'block';
+                }
+            });
+        }
+
+        // ========================================
+        // GESTION DE LA DÉCONNEXION
+        // ========================================
+
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', function() {
+                // Supprimer le token et le username du sessionStorage
+                sessionStorage.removeItem('jwtToken');
+                sessionStorage.removeItem('username');
+                // Recharger la page pour afficher le formulaire de connexion
+                location.reload();
+            });
+        }
+
+        // ========================================
+        // GESTION DE L'UPLOAD GPX (Admin/Contributeur uniquement)
+        // ========================================
+
+        // Gestion de la sélection de fichier GPX
+        if (gpxFileInput) {
+            gpxFileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    fileName.textContent = this.files[0].name;
+                    uploadBtn.disabled = false;
+                } else {
+                    fileName.textContent = '';
+                    uploadBtn.disabled = true;
+                }
+            });
+        }
+
+        // Gestion de la soumission du formulaire d'upload GPX
+        if (gpxUploadForm) {
+            gpxUploadForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                // Masquer les messages d'erreur/succès précédents
+                gpxUploadError.style.display = 'none';
+                gpxUploadSuccess.style.display = 'none';
+
+                // Validation : fichier sélectionné
+                const file = gpxFileInput.files[0];
+                if (!file) {
+                    gpxUploadError.textContent = 'Veuillez sélectionner un fichier';
+                    gpxUploadError.style.display = 'block';
+                    return;
+                }
+
+                // Validation : utilisateur authentifié (token JWT requis)
+                if (!token) {
+                    gpxUploadError.textContent = 'Vous devez être connecté pour uploader un fichier. Veuillez vous reconnecter.';
+                    gpxUploadError.style.display = 'block';
+                    return;
+                }
+
+                // Préparation des données : création d'un FormData avec le fichier GPX
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    // Désactiver le bouton pendant l'upload et afficher un indicateur de chargement
+                    uploadBtn.disabled = true;
+                    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Upload en cours...';
+
+                    // Appel API pour uploader le fichier GPX via le proxy Flask
+                    // Le token JWT est envoyé dans le header Authorization pour authentifier la requête
+                    const response = await fetch('/upload_gpx', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: formData
+                    });
+
+                    // Traitement de la réponse : gestion des différents types de contenu (JSON ou texte brut)
+                    let data = null;
+                    const contentType = response.headers.get('content-type') || '';
+
+                    if (contentType.includes('application/json')) {
+                        // Réponse JSON : parser les données
+                        try {
+                            data = await response.json();
+                        } catch (e) {
+                            // Erreur de parsing JSON : afficher l'erreur et le contenu brut
+                            console.error('Erreur parsing JSON:', e);
+                            const text = await response.text();
+                            gpxUploadError.textContent = `Réponse serveur non valide (status ${response.status}): ${text}`;
+                            gpxUploadError.style.display = 'block';
+                            uploadBtn.disabled = false;
+                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                            return;
+                        }
+                    } else {
+                        // Réponse non-JSON (HTML ou texte brut)
+                        const text = await response.text();
+                        if (response.ok) {
+                            // Succès mais réponse non-JSON : afficher le texte brut et recharger la page
+                            gpxUploadSuccess.textContent = text;
+                            gpxUploadSuccess.style.display = 'block';
+                            gpxUploadForm.reset();
+                            fileName.textContent = '';
+                            uploadBtn.disabled = true;
+                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                            setTimeout(() => { location.reload(); }, 2000);
+                            return;
+                        } else {
+                            // Erreur serveur avec réponse non-JSON : afficher le message d'erreur
+                            gpxUploadError.textContent = `Erreur serveur (status ${response.status}): ${text}`;
+                            gpxUploadError.style.display = 'block';
+                            uploadBtn.disabled = false;
+                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                            return;
+                        }
+                    }
+
+                    // Traitement du succès de l'upload
+                    if (response.ok && data && data.success) {
+                        // Construire le message de succès avec la ville détectée si disponible
+                        const cityMsg = data.city ? ` - Ville détectée : ${data.city}. Vous pourrez la sélectionner à l'étape suivante.` : '';
+                        gpxUploadSuccess.textContent = data.message + cityMsg;
+                        gpxUploadSuccess.style.display = 'block';
+
+                        // Réinitialiser le formulaire d'upload
+                        gpxUploadForm.reset();
+                        fileName.textContent = '';
+                        uploadBtn.disabled = true;
+                        uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                    } else {
+                        // Traitement de l'échec de l'upload
+                        gpxUploadError.textContent = data.message || 'Erreur lors de l\'upload';
+                        gpxUploadError.style.display = 'block';
+                        uploadBtn.disabled = false;
+                        uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                    }
+                } catch (err) {
+                    console.error('Erreur upload:', err);
+                    gpxUploadError.textContent = 'Erreur réseau ou serveur';
+                    gpxUploadError.style.display = 'block';
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
+                }
+            });
+        }
+
+        let selectedDays = 2;
+        const durationCards = document.querySelectorAll('.duration-card');
+        const nextButton = document.getElementById('nextButton');
+        const dayBadge = document.getElementById('dayBadge');
+
+        function updateNextButton() {
+            const dayText = selectedDays === 1 ? 'jour' : 'jours';
+            nextButton.innerHTML = `Planifier ces ${selectedDays} ${dayText} <i class="fas fa-arrow-right"></i>`;
+        }
+        updateNextButton();
+
+        // Le badge "Jours : N" reste masqué tant que l'utilisateur n'a pas fait un
+        // choix explicite (clic sur une carte) — la présélection par défaut de la
+        // carte "2 jours" ne compte pas comme un choix.
+        function showDayBadge() {
+            if (!dayBadge) return;
+            dayBadge.textContent = `Jours : ${selectedDays}`;
+            dayBadge.style.display = '';
+        }
+
+        durationCards.forEach(card => {
+            card.addEventListener('click', function () {
+                durationCards.forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+
+                const days = this.getAttribute('data-days');
+                if (days === 'custom') {
+                    const customInput = document.getElementById('customDays');
+                    customInput.focus();
+                    customInput.addEventListener('input', function () {
+                        selectedDays = parseInt(this.value) || 2;
+                        updateNextButton();
+                        showDayBadge();
+                    });
+                } else {
+                    selectedDays = parseInt(days);
+                    updateNextButton();
+                    showDayBadge();
+                }
+            });
+        });
+
+        nextButton.addEventListener('click', function (e) {
+            e.preventDefault();
+            localStorage.setItem('selectedDays', selectedDays);
+            window.location.href = "{{ url_for('step1') }}";
+        });
+    });
+</script>
+{% endblock %}

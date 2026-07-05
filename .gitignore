@@ -4,8 +4,14 @@
 .env
 # Python cache
 __pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
 # bdd
 storage/
 logs/
 data/
 rapport/
+mongodump/
+bdd_randovango_dump.sql
+.claudeignore

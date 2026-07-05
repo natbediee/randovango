@@ -1,9 +1,20 @@
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import logging
-from math import radians, cos
+from math import radians, cos, sin, asin, sqrt
 
 logger = logging.getLogger(__name__)
+
+def haversine_distance_km(lat1, lon1, lat2, lon2):
+    """
+    Calcule la distance en km entre deux points (latitude, longitude) via la formule de Haversine.
+    """
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    earth_radius_km = 6371
+    return 2 * earth_radius_km * asin(sqrt(a))
 
 def get_admin_info_from_coordinates(latitude, longitude, language='fr', timeout=10, max_retries=3):
     """
@@ -70,6 +81,45 @@ def get_coordinates_for_city(city_name, department=None, country="France", timeo
             logger.error(f"Erreur de géocodage pour {query} (tentative {attempt+1}/{max_retries}): {e}")
             sleep(2)
     return None, None
+
+
+def get_address_from_coordinates(latitude, longitude, language='fr', timeout=10, max_retries=3):
+    """
+    Géocodage inversé: compose une adresse lisible ("12 Rue de la Mairie, 29880
+    Plouguerneau") à partir de coordonnées GPS via Nominatim.
+    Timeout et retry custom.
+    """
+    from time import sleep
+    for attempt in range(max_retries):
+        try:
+            geolocator = Nominatim(user_agent="randovango-geocoder-v1", timeout=timeout)
+            location = geolocator.reverse(f"{latitude}, {longitude}", language=language)
+
+            if location and location.raw.get('address'):
+                address = location.raw['address']
+                road = address.get('road') or address.get('pedestrian')
+                house_number = address.get('house_number')
+                postcode = address.get('postcode')
+                city = (address.get('city') or
+                        address.get('town') or
+                        address.get('village') or
+                        address.get('municipality') or
+                        address.get('hamlet'))
+
+                if not road:
+                    logger.warning(f"Pas de rue dans l'adresse pour ({latitude}, {longitude})")
+                    return None
+
+                street_part = f"{house_number} {road}" if house_number else road
+                locality_part = f"{postcode} {city}" if postcode and city else (postcode or city or '')
+                return f"{street_part}, {locality_part}" if locality_part else street_part
+            else:
+                logger.warning(f"Aucun résultat d'adresse pour les coordonnées ({latitude}, {longitude})")
+                return None
+        except (GeocoderTimedOut, GeocoderServiceError) as e:
+            logger.error(f"Erreur de géocodage d'adresse pour ({latitude}, {longitude}) (tentative {attempt+1}/{max_retries}): {e}")
+            sleep(2)
+    return None
 
 
 def get_city_from_coordinates(latitude, longitude, language='fr', timeout=10, max_retries=3):

@@ -16,3 +16,6 @@ passlib==1.7.4  # Hachage de mots de passe
 python-multipart==0.0.20  # Gestion des formulaires multipart (FastAPI)
 orjson==3.11.4 # Sérialisation JSON ultra-rapide
 folium==0.20.0  # Visualisation de données géospatiales
+weasyprint==69.0 # Génération de PDF à partir de HTML/CSS
+staticmap==0.5.7 # Carte statique (tuiles OSM + marqueurs) pour le carnet PDF
+fontawesomefree==6.4.0 # Police Font Awesome (mêmes icônes que le site) pour les marqueurs de la carte PDF

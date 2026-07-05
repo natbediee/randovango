@@ -1,8 +1,13 @@
 import requests
 import json
+import time
 
 from utils.logger_util import LoggerUtil
 from utils.geo_utils import get_coordinates_for_city
+
+OVERPASS_HEADERS = {
+    "User-Agent": "RandoVanGo-ETL/1.0 (https://github.com/natbediee/randovango)"
+}
 
 
 logger = LoggerUtil.get_logger("etl_osm")
@@ -65,16 +70,21 @@ def extract_osm(city: str) -> dict:
                     nwr["shop"="convenience"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["shop"="bakery"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="fuel"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
+                    nwr["amenity"="shower"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
+                    nwr["amenity"="sanitary_dump_station"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
+                    nwr["amenity"="waste_disposal"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
+                    nwr["shop"="laundry"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                 );
                 out center;
         """
     logger.info(f"[Extract] : Requête Overpass envoyée : {overpass_query}")
     
     # Liste de serveurs Overpass à essayer (en cas d'échec du premier)
+    # lz4.overpass-api.de retiré : injoignable de façon répétée (connexion impossible,
+    # pas juste un 429), il ne fait que ralentir le fallback pour rien.
     overpass_servers = [
         "https://overpass-api.de/api/interpreter",
         "https://overpass.kumi.systems/api/interpreter",
-        "https://lz4.overpass-api.de/api/interpreter"
     ]
     
     # 2. Essayer chaque serveur jusqu'à obtenir une réponse valide
@@ -82,38 +92,54 @@ def extract_osm(city: str) -> dict:
     last_error = None
     
     for server_url in overpass_servers:
-        try:
-            logger.info(f"[Extract] : Tentative de connexion au serveur : {server_url}")
-            response = requests.post(server_url, data={"data": overpass_query}, timeout=90)
-            response.raise_for_status()
-            
-            response_data = response.json()
-            
-            # Vérifier si la réponse contient des éléments
-            elements = response_data.get('elements', [])
-            logger.info(f"[Extract] : Nombre d'éléments trouvés : {len(elements)}")
-            
-            if len(elements) == 0:
-                logger.warning(f"[Extract] : Aucun élément trouvé pour '{city}' avec le serveur {server_url}")
-                # On continue avec ce résultat même s'il est vide
-            else:
-                logger.info(f"[Extract] : Succès : {len(elements)} POI trouvés pour '{city}'")
+        # Sur 429 (trop de requêtes), on retente le même serveur après une pause
+        # au lieu de l'abandonner immédiatement (limite imposée par Overpass).
+        for attempt in range(2):
+            try:
+                logger.info(f"[Extract] : Tentative de connexion au serveur : {server_url}")
+                response = requests.post(
+                    server_url, data={"data": overpass_query}, headers=OVERPASS_HEADERS, timeout=90
+                )
 
-            # Si on arrive ici, la requête a réussi (même si vide)
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 10))
+                    last_error = f"[Extract] : 429 Too Many Requests pour {server_url}"
+                    if attempt == 0:
+                        logger.warning(f"{last_error}, nouvelle tentative dans {retry_after}s...")
+                        time.sleep(retry_after)
+                        continue
+                    logger.warning(last_error)
+                    break
+
+                response.raise_for_status()
+                response_data = response.json()
+
+                # Vérifier si la réponse contient des éléments
+                elements = response_data.get('elements', [])
+                logger.info(f"[Extract] : Nombre d'éléments trouvés : {len(elements)}")
+
+                if len(elements) == 0:
+                    logger.warning(f"[Extract] : Aucun élément trouvé pour '{city}' avec le serveur {server_url}")
+                    # On continue avec ce résultat même s'il est vide
+                else:
+                    logger.info(f"[Extract] : Succès : {len(elements)} POI trouvés pour '{city}'")
+                break
+
+            except requests.exceptions.Timeout:
+                last_error = f"[Extract] : Timeout pour le serveur {server_url}"
+                logger.warning(last_error)
+                break
+            except requests.exceptions.RequestException as e:
+                last_error = f"[Extract] : Erreur de connexion au serveur {server_url} : {e}"
+                logger.warning(last_error)
+                break
+            except json.JSONDecodeError as e:
+                last_error = f"[Extract] : Erreur de décodage JSON depuis {server_url} : {e}"
+                logger.warning(last_error)
+                break
+
+        if response_data is not None:
             break
-            
-        except requests.exceptions.Timeout:
-            last_error = f"[Extract] : Timeout pour le serveur {server_url}"
-            logger.warning(last_error)
-            continue
-        except requests.exceptions.RequestException as e:
-            last_error = f"[Extract] : Erreur de connexion au serveur {server_url} : {e}"
-            logger.warning(last_error)
-            continue
-        except json.JSONDecodeError as e:
-            last_error = f"[Extract] : Erreur de décodage JSON depuis {server_url} : {e}"
-            logger.warning(last_error)
-            continue
     
     # Si aucun serveur n'a fonctionné
     if response_data is None:

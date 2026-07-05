@@ -61,8 +61,8 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
         # Insertion dans poi sans city_id ni type
         cursor.execute(
             """
-            INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, url, source_id, verifie)
-            VALUES (%s, %s, %s, %s, %s, %s, %s,1)
+            INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, url, source_id, verifie, address)
+            VALUES (%s, %s, %s, %s, %s, %s, %s,1, %s)
             """,
             (
                 row.get('osm_id'),
@@ -71,7 +71,8 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
                 row.get('lat'),
                 row.get('lon'),
                 row.get('website'),
-                source_id
+                source_id,
+                row.get('address')
             )
         )
         # Récupérer l'id du poi inséré

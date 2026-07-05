@@ -9,6 +9,7 @@ from etl.transform.transform_wikidata import transform_wikidata
 from etl.transform.transform_p4n import transform_p4n
 from etl.load.load_poi import load_osm_poi, load_wikidata_poi
 from etl.load.load_p4n import load_p4n_to_mysql
+from etl.etl_meteo import run_meteo_etl
 
 
 logger = LoggerUtil.get_logger("etl_rattrapage")
@@ -28,15 +29,15 @@ def main():
     # get_all_city_ids retourne maintenant une liste de tuples (id, name)
     all_cities = get_all_city_ids()  # [(id, name), ...]
     all_city_ids = set(city_id for city_id, _ in all_cities)
-    logger.info(f"[ETL] Villes à traiter : {len(all_city_ids)}")
+    logger.info(f"[ETL] Total de villes en base : {len(all_city_ids)}")
     histo_poi_city_ids = set(get_histo_poi_city_ids())
-    logger.info(f"[POI] Villes dans histo_poi : {len(histo_poi_city_ids)}")
+    logger.info(f"[POI] Villes déjà traitées (OSM/Wiki déjà chargés) : {len(histo_poi_city_ids)}")
     histo_scrap_city_ids = set(get_histo_scrap_city_ids())
-    logger.info(f"[SCRAP] Villes dans histo_scrap : {len(histo_scrap_city_ids)}")
+    logger.info(f"[SCRAP] Villes déjà traitées (P4N déjà scrapé) : {len(histo_scrap_city_ids)}")
 
     # Rattrapage OSM + Wiki (si city_id absent de histo_poi)
     missing_poi = all_city_ids - histo_poi_city_ids
-    logger.info(f"[POI] Villes à rattraper pour OSM/Wiki : {len(missing_poi)}")
+    logger.info(f"[POI] Villes restant à rattraper pour OSM/Wiki : {len(missing_poi)}")
     for city_id, city_name in all_cities:
         if city_id in missing_poi:
             logger.info(f"[POI] OSM/Wiki pour city_id={city_id} ({city_name})")
@@ -53,6 +54,7 @@ def main():
 
     # Rattrapage P4N (si city_id absent de histo_scrap)
     missing_scrap = all_city_ids - histo_scrap_city_ids
+    logger.info(f"[SCRAP] Villes restant à rattraper pour P4N : {len(missing_scrap)}")
     for city_id, city_name in all_cities:
         # initialiser la variable par itération pour éviter UnboundLocalError
         df_p4n = None
@@ -73,5 +75,32 @@ def main():
         elif city_id in missing_scrap:
             add_fictive_histo_scrap(city_id)
 
+def rattrapage_meteo():
+    """Relance l'ETL météo pour les villes sans prévisions à jour (coordonnées depuis DB, pas Nominatim)."""
+    cnx = MySQLUtils.connect()
+    cursor = cnx.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT c.id, c.name, c.latitude, c.longitude
+        FROM cities c
+        LEFT JOIN weather w ON w.city_id = c.id AND w.date >= CURDATE()
+        WHERE w.id IS NULL
+        GROUP BY c.id, c.name, c.latitude, c.longitude
+        ORDER BY c.name
+    """)
+    missing = cursor.fetchall()
+    cursor.close()
+    MySQLUtils.disconnect(cnx)
+
+    logger.info(f"[METEO] Villes restant à rattraper (prévisions absentes/périmées) : {len(missing)}")
+    for city in missing:
+        logger.info(f"[METEO] Rattrapage pour {city['name']}")
+        result = run_meteo_etl(city['name'], city['latitude'], city['longitude'])
+        if 'error' in result or 'warning' in result:
+            logger.warning(f"[METEO] {city['name']} : {result}")
+        else:
+            logger.info(f"[METEO] {city['name']} : OK")
+
+
 if __name__ == "__main__":
     main()
+    rattrapage_meteo()

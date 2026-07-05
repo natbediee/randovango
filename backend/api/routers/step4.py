@@ -1,21 +1,30 @@
 from fastapi import APIRouter, Query, Body
 from services.plan_service import insert_or_update_plan
 from utils.db_utils import MySQLUtils
+from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
 router = APIRouter()
+
+MAX_POI_PER_CATEGORY = 10
 
 @router.get("/poi", summary="Returns the POI (points of interest/services) categorized by service type.")
 def get_poi(
     city_id: int = Query(..., description="ID de la ville"),
-    user_role: str = Query("user", description="Rôle de l'utilisateur (user, contributor, admin)"),
-    distance_km: float = Query(5, description="Rayon de recherche en km autour de la ville")
+    distance_km: float = Query(5, description="Rayon de recherche en km autour de la ville"),
+    spot_lat: float = Query(None, description="Latitude du spot choisi, utilisée comme point de référence"),
+    spot_lon: float = Query(None, description="Longitude du spot choisi, utilisée comme point de référence")
 ):
     """
-    Retourne les POI (Points d'Intérêt / Services) pour une ville donnée, 
-    catégorisés par type de service (logistique, hygiene, culture, urgence).
-    
-    Si user_role != "user", retourne tous les POI (vérifiés + non vérifiés).
-    Sinon, retourne uniquement les POI vérifiés.
+    Retourne les POI (Points d'Intérêt / Services) pour une ville donnée,
+    catégorisés par type de service (eau, vidange, gasoil, supermarche,
+    commerce, restauration, toilettes, hygiene, culture, urgence).
+
+    Tous les POI sont retournés (vérifiés + non vérifiés), quel que soit
+    le statut de connexion de l'utilisateur.
+
+    Les résultats de chaque catégorie sont limités aux MAX_POI_PER_CATEGORY
+    POI les plus proches du spot choisi (ou du centre-ville à défaut), afin
+    d'éviter une liste trop longue dans les grandes villes.
     """
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor(dictionary=True)
@@ -31,114 +40,100 @@ def get_poi(
         cursor.close()
         MySQLUtils.disconnect(cnx)
         return {
-            "logistique": [],
+            "eau": [], "vidange": [], "gasoil": [], "supermarche": [], "commerce": [],
+            "restauration": [],
+            "toilettes": [],
             "hygiene": [],
             "culture": [],
             "urgence": []
         }
     
     # Calculer la bounding box autour de la ville
-    from utils.geo_utils import get_bounding_box
+    from utils.geo_utils import get_bounding_box, haversine_distance_km
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(
-        city['latitude'], 
-        city['longitude'], 
+        city['latitude'],
+        city['longitude'],
         distance_km
     )
+
+    # Point de référence pour trier par proximité : le spot choisi si fourni, sinon le centre-ville
+    ref_lat = spot_lat if spot_lat is not None else city['latitude']
+    ref_lon = spot_lon if spot_lon is not None else city['longitude']
     
-    # Construire la requête avec jointure pour récupérer les services
-    if user_role != "user":
-        # Admin/Contributor : tous les POI
-        query = """
-            SELECT 
-                p.id,
-                p.name,
-                p.description,
-                p.latitude,
-                p.longitude,
-                p.verifie,
-                p.image_url,
-                --
-                s.category as service_category,
-                s.name as service_name
-            FROM poi p
-            JOIN poi_service ps ON p.id = ps.poi_id
-            JOIN services s ON ps.service_id = s.id
-            WHERE p.latitude BETWEEN %s AND %s 
-            AND p.longitude BETWEEN %s AND %s
-            ORDER BY s.category, p.name ASC
-        """
-    else:
-        # User : uniquement les POI vérifiés
-        query = """
-            SELECT 
-                p.id,
-                p.name,
-                p.description,
-                p.latitude,
-                p.longitude,
-                p.verifie,
-                p.image_url,
-                --
-                s.category as service_category,
-                s.name as service_name
-            FROM poi p
-            JOIN poi_service ps ON p.id = ps.poi_id
-            JOIN services s ON ps.service_id = s.id
-            WHERE p.latitude BETWEEN %s AND %s 
-            AND p.longitude BETWEEN %s AND %s
-            AND p.verifie = 1
-            ORDER BY s.category, p.name ASC
-        """
-    
+    # Tous les POI (vérifiés et non vérifiés)
+    query = """
+        SELECT
+            p.id,
+            p.name,
+            p.description,
+            p.latitude,
+            p.longitude,
+            p.verifie,
+            p.image_url,
+            p.url,
+            p.address,
+            --
+            s.category as service_category,
+            s.name as service_name
+        FROM poi p
+        JOIN poi_service ps ON p.id = ps.poi_id
+        JOIN services s ON ps.service_id = s.id
+        WHERE p.latitude BETWEEN %s AND %s
+        AND p.longitude BETWEEN %s AND %s
+        ORDER BY s.category, p.name ASC
+    """
+
     cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
     poi_list = cursor.fetchall()
     
     cursor.close()
     MySQLUtils.disconnect(cnx)
     
-    # Définir le mapping des catégories vers les groupes du frontend
-    category_mapping = {
-        "supermarket": "logistique",
-        "fuel": "logistique",
-        "drinking_water": "logistique",
-        "water": "logistique",
-        "toilets": "hygiene",
-        "shower": "hygiene",
-        "tourism": "culture",
-        "attraction": "culture",
-        "museum": "culture",
-        "pharmacy": "urgence",
-        "hospital": "urgence",
-        "doctors": "urgence"
-    }
-    
+    category_mapping = POI_FRONTEND_CATEGORY_MAP
+
     # Grouper les POI par catégorie
     categorized_poi = {
-        "logistique": [],
+        "eau": [], "vidange": [], "gasoil": [], "supermarche": [], "commerce": [],
+        "restauration": [],
+        "toilettes": [],
         "hygiene": [],
         "culture": [],
         "urgence": []
     }
-    
+    seen_ids = {cat: set() for cat in categorized_poi}
+
     for poi in poi_list:
         service_cat = poi.get('service_category', '').lower()
-        # Déterminer la catégorie frontend
-        frontend_category = category_mapping.get(service_cat, "logistique")
-        
-        poi_data = {
-            "id": poi['id'],
+        frontend_category = category_mapping.get(service_cat)
+        if not frontend_category:
+            continue
+
+        poi_id = poi['id']
+        if poi_id in seen_ids[frontend_category]:
+            continue
+        seen_ids[frontend_category].add(poi_id)
+
+        distance_km = haversine_distance_km(ref_lat, ref_lon, poi['latitude'], poi['longitude'])
+
+        categorized_poi[frontend_category].append({
+            "id": poi_id,
             "name": poi['name'],
             "description": poi['description'],
             "latitude": poi['latitude'],
             "longitude": poi['longitude'],
             "verifie": poi['verifie'],
             "image_url": poi['image_url'],
-            # "website": poi['website'],
-            "service_type": poi['service_name']
-        }
-        
-        categorized_poi[frontend_category].append(poi_data)
-    
+            "url": poi['url'],
+            "address": poi['address'],
+            "service_type": poi['service_name'],
+            "distance_km": round(distance_km, 2)
+        })
+
+    # Ne garder que les POI les plus proches du point de référence, par catégorie
+    for category, pois in categorized_poi.items():
+        pois.sort(key=lambda p: p['distance_km'])
+        categorized_poi[category] = pois[:MAX_POI_PER_CATEGORY]
+
     return categorized_poi
 
 @router.put("/update_plan/{plan_id}",summary="Update an existing trip plan with new data.")

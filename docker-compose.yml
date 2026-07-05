@@ -12,6 +12,12 @@ services:
       - ./storage/mongodb:/data/db
     networks:
       - randovango
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
   db_randovango:
     image: mysql
     container_name: db_randovango
@@ -27,6 +33,12 @@ services:
     restart: always
     networks:
       - randovango
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PSWD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
   
   adminer:
     image: adminer
@@ -52,11 +64,18 @@ services:
       - "8000:8000"
     networks:
       - randovango
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       mongo:
-        condition: service_started
+        condition: service_healthy
       db_randovango:
-        condition: service_started
+        condition: service_healthy
 
   frontend:
     container_name: flask_frontend
@@ -67,11 +86,13 @@ services:
       - ./frontend:/usr/src/app
       - ./.env:/usr/src/app/.env
     ports:
-      - "5000:5000"
+      - "80:5000"
     networks:
       - randovango
+    restart: always
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 networks:
   randovango:

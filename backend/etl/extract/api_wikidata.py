@@ -44,8 +44,9 @@ def extract_wikidata(city) -> dict:
             wd:Q57821   # Fort
             wd:Q839954  # Phare (répétition mais utile pour la robustesse)
             wd:Q4989906 # Site naturel / Géosite (ajouté pour la côte)
-            wd:Q49899   # Église / Chapelle
-            wd:Q44539   # Ruines
+            # Église/Chapelle (Q49899) et Ruines (Q44539) retirés : leurs
+            # sous-classes (temple, fortification, croix, lavoir, site
+            # archéologique...) noyaient les résultats utiles en van life.
           }}
           ?item wdt:P31/wdt:P279* ?baseType .
 

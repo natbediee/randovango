@@ -13,9 +13,14 @@ app.config['TEMPLATES_FOLDER'] = 'templates'
 @app.route('/')
 def index():
     """Page d'accueil - Redirection vers le planificateur"""
-    return redirect(url_for('step1'))
+    return redirect(url_for('duration'))
 
 # ===== PLANIFICATEUR PRINCIPAL ====
+
+@app.route('/duration')
+def duration():
+    """Étape 1 - Durée du séjour"""
+    return render_template('pages/step_duration.html')
 
 @app.route('/step1')
 def step1():
@@ -27,7 +32,7 @@ def step1():
         # Récupérer le token JWT depuis la session si l'utilisateur est connecté
         if 'user' in session and session['user'].get('token'):
             headers['Authorization'] = f"Bearer {session['user']['token']}"
-        response = requests.get(api_url, headers=headers, timeout=5)
+        response = requests.get(api_url, headers=headers, timeout=30)
         response.raise_for_status()
         cities = response.json()
     except Exception as e:
@@ -75,11 +80,6 @@ def proxy_get_hikes():
         print(f"Erreur proxy /api/step2/hikes: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/step3')
-def step3():
-    """Étape 3 - Choix du spot nuit"""
-    return render_template('pages/step3_spot.html')
-
 @app.route('/api/step3/spots', methods=['GET'])
 def proxy_get_spots():
     """Proxy pour récupérer les spots avec authentification JWT depuis la session"""
@@ -104,6 +104,11 @@ def proxy_get_spots():
     except Exception as e:
         print(f"Erreur proxy /api/step3/spots: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/step3')
+def step3():
+    """Étape 3 - Choix des spots/nuits"""
+    return render_template('pages/step3_spot.html')
 
 @app.route('/step4')
 def step4():

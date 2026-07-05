@@ -12,6 +12,12 @@ class MongoUtils:
 
     @staticmethod
     def connect():
+        # MongoClient gère déjà un pool de connexions thread-safe : on le crée une
+        # seule fois et on le réutilise. Le recréer à chaque appel provoquait une
+        # course entre requêtes concurrentes (l'une pouvait fermer la connexion
+        # qu'une autre était en train d'utiliser, cf. /hike/{id}/trace en step2).
+        if MongoUtils.client is not None:
+            return
         ServiceUtil.load_env()
         username = ServiceUtil.get_env("MONGO_INITDB_ROOT_USERNAME", "")
         password = ServiceUtil.get_env("MONGO_INITDB_ROOT_PASSWORD", "")
@@ -22,15 +28,17 @@ class MongoUtils:
         else:
             url = f"mongodb://{host}:{port}"
         try:
-            MongoUtils.client = MongoClient(url)
-            MongoUtils.client.admin.command('ping')
+            client = MongoClient(url)
+            client.admin.command('ping')
+            MongoUtils.client = client
         except ConnectionFailure as e:
             raise RuntimeError("MongoDB connection failed") from e
 
     @staticmethod
     def disconnect():
-        if MongoUtils.client:
-            MongoUtils.client.close()
+        # No-op : le client est partagé entre toutes les requêtes, il ne doit pas
+        # être fermé par une requête individuelle (voir connect() ci-dessus).
+        pass
 
     @staticmethod
     def get_database() -> Database:

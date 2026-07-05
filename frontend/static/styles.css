@@ -179,6 +179,18 @@ body {
     box-shadow: 0 4px 12px rgba(75, 111, 142, 0.3);
 }
 
+.btn-selected {
+    background: var(--green);
+    color: var(--white);
+    cursor: default;
+}
+
+.btn-selected:hover {
+    background: var(--green);
+    transform: none;
+    box-shadow: none;
+}
+
 .btn-white {
     background: var(--white);
     color: var(--blue);
@@ -232,10 +244,24 @@ body {
     background: rgba(76, 175, 80, 0.05);
 }
 
+.spot-card.highlight-flash {
+    animation: cardHighlightFlash 1.4s ease;
+}
+
+.spot-card.highlight-frame {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.45);
+}
+
+@keyframes cardHighlightFlash {
+    0% { box-shadow: 0 0 0 4px rgba(51, 154, 240, 0.6); }
+    100% { box-shadow: none; }
+}
+
 /* Grille 3 colonnes pour les spots */
 .spot-content-grid {
     display: grid;
-    grid-template-columns: 200px 1fr 150px;
+    grid-template-columns: 200px 1fr auto;
     gap: 2rem;
     align-items: start;
 }
@@ -261,15 +287,29 @@ body {
 /* Colonne droite : Actions */
 .spot-right {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: nowrap;
     gap: 0.5rem;
     justify-content: flex-start;
+    min-width: 220px;
+}
+
+.spot-right .btn {
+    white-space: nowrap;
 }
 
 /* Styles communs pour le contenu */
 .spot-description {
     margin-bottom: 1rem;
     line-height: 1.5;
+}
+
+.spot-address,
+.service-address,
+.service-distance {
+    margin: 0 0 0.5rem 0;
+    color: var(--gray-500);
+    font-size: 0.9rem;
 }
 
 .spot-features {
@@ -349,8 +389,8 @@ body {
 }
 
 .services-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 1.5rem;
 }
 
@@ -370,6 +410,15 @@ body {
 .service-card.selected {
     border-color: var(--green);
     background: rgba(76, 175, 80, 0.05);
+}
+
+.service-card.highlight-flash {
+    animation: cardHighlightFlash 1.4s ease;
+}
+
+.service-card.highlight-frame {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.45);
 }
 
 /* Section des services sélectionnés */
@@ -427,7 +476,7 @@ body {
 /* Grille 3 colonnes pour les services */
 .service-content-grid {
     display: grid;
-    grid-template-columns: 200px 1fr 150px;
+    grid-template-columns: 200px 1fr auto;
     gap: 2rem;
     align-items: start;
 }
@@ -453,9 +502,15 @@ body {
 /* Colonne droite : Actions */
 .service-right {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: nowrap;
     gap: 0.5rem;
     justify-content: flex-start;
+    min-width: 220px;
+}
+
+.service-right .btn {
+    white-space: nowrap;
 }
 
 .service-details {
@@ -482,10 +537,6 @@ body {
     
     .spot-right {
         flex-direction: row;
-    }
-    
-    .services-grid {
-        grid-template-columns: 1fr;
     }
     
     .service-content-grid {
@@ -519,6 +570,21 @@ body {
     border-radius: 15px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     position: relative !important;
+}
+
+/* Badge "Jours : N" / "Jour X/N", en haut à gauche du stepper */
+.day-badge {
+    position: absolute;
+    top: 1rem;
+    left: 1.5rem;
+    background: var(--blue);
+    color: var(--white);
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 10;
 }
 
 /* Logo dans stepper */
@@ -574,8 +640,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    max-width: 600px;
+    max-width: 900px;
     margin: 0 auto;
+    flex-wrap: wrap;
+    row-gap: 1rem;
 }
 
 .step {
@@ -616,7 +684,7 @@ body {
 }
 
 .step-line {
-    width: 80px;
+    width: 70px;
     height: 2px;
     background: var(--gray-300);
     margin: 0 1rem;
@@ -627,13 +695,39 @@ body {
     background: var(--green);
 }
 
-/* ===== NAVIGATION ===== */
+/* Sur /duration, "Résultat" n'est qu'indicatif (explication du parcours) : on le
+   masque sous 1200px pour laisser de la place au reste du stepper. */
+@media (max-width: 1200px) {
+    .step-resultat-only {
+        display: none;
+    }
+}
+
+/* ===== NAVIGATION =====
+    Barre "collante" : reste visible en bas du viewport pendant le scroll
+    pour que le bouton Suivant/Retour ne soit jamais caché plus bas dans la page.
+*/
 .planning-navigation {
-    background: var(--white);
+    position: sticky;
+    bottom: 0;
+    z-index: 50;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(6px);
     padding: 1.5rem 2rem;
     margin: 0.5rem 0 2rem 0;
     border-radius: 15px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+}
+
+/* Sur petit écran, une barre pleine largeur et compacte est moins intrusive
+   qu'un bloc arrondi avec de grandes marges. */
+@media (max-width: 768px) {
+    .planning-navigation {
+        padding: 0.6rem 1rem;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.12);
+    }
 }
 
 .navigation-buttons {
@@ -989,6 +1083,10 @@ body {
     margin: 0.5rem 0;
 }
 
+.weather-icon img {
+    mix-blend-mode: multiply;
+}
+
 .temperatures {
     margin: 0.5rem 0;
 }
@@ -1220,6 +1318,11 @@ body {
 .status-badge.pending {
     background: rgba(255, 152, 0, 0.1);
     color: var(--orange);
+}
+
+.status-badge.planned {
+    background: rgba(92, 107, 192, 0.12);
+    color: #5C6BC0;
 }
 
 .hiking-info {
@@ -1476,7 +1579,13 @@ body {
 .hiking-actions {
     display: flex;
     gap: 1rem;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+}
+
+.hiking-actions .btn {
+    white-space: nowrap;
 }
 
 /* Navigation avec boutons multiples */

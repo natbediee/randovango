@@ -239,9 +239,11 @@ def init_database():
                 day_number INT NOT NULL,
                 hike_id INT,
                 spot_id INT,
+                city_id INT,
                 FOREIGN KEY (trip_plan_id) REFERENCES trip_plans(id) ON DELETE CASCADE,
                 FOREIGN KEY (hike_id) REFERENCES hikes(id),
-                FOREIGN KEY (spot_id) REFERENCES poi(id)
+                FOREIGN KEY (spot_id) REFERENCES poi(id),
+                FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 14. trip_day_pois (dépend de trip_days, poi)

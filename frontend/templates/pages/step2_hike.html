@@ -23,6 +23,7 @@
     </div>
 
     <div class="planning-stepper">
+        <div class="day-badge" id="dayBadge">Jour 1</div>
         <div class="stepper-container">
             <div class="step completed">
                 <div class="step-circle">✓</div>
@@ -43,19 +44,13 @@
                 <div class="step-circle">4</div>
                 <div class="step-label">Services</div>
             </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">📋</div>
-                <div class="step-label">Résultat</div>
-            </div>
         </div>
     </div>
 
     <div class="planning-content">
         <div class="planning-step">
             <div class="step-header">
-                <h2>🥾 Jour 1 : Choisissez votre randonnée</h2>
-                <p>Sélectionnez l'activité principale qui rythmera votre première journée</p>
+                <h2 id="step2Title">🥾 Jour 1 : Choisissez votre randonnée</h2>
             </div>
 
             <!-- Filtres rapides -->
@@ -76,6 +71,7 @@
                             <button class="filter-btn" data-filter="long">> 4h</button>
                 </div>
             </div>
+            <p id="step2Subtitle" style="text-align:center; color: var(--gray-500); margin: -1rem 0 1.5rem;">Sélectionnez l'activité principale qui rythmera votre première journée</p>
             <!-- Carte interactive -->
             <div class="map-page-container" style="margin: 2rem 0;">
                 <h3 class="map-title">Visualisation sur la carte</h3>
@@ -94,6 +90,18 @@
             .hiking-card.selected {
                 border-color: var(--green);
                 background: rgba(76, 175, 80, 0.05);
+            }
+            .hiking-card.highlight-flash {
+                animation: cardHighlightFlash 1.4s ease;
+            }
+            @keyframes cardHighlightFlash {
+                0% { box-shadow: 0 0 0 4px rgba(51, 154, 240, 0.6); }
+                100% { box-shadow: none; }
+            }
+            .hiking-card:hover:not(.selected),
+            .hiking-card.map-hover {
+                border-color: #ff9800;
+                background: rgba(255, 152, 0, 0.07);
             }
             </style>
 
@@ -126,11 +134,101 @@
 
 {% block scripts %}
 <script>
+    function buildHikeDivIcon(dayLabel) {
+        const label = dayLabel
+            ? `<span style="position:absolute;left:50%;transform:translateX(-50%);top:32px;
+                            background:var(--blue);color:#fff;font-size:9px;font-weight:700;
+                            padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 3px #0004;">
+                   ${dayLabel}
+               </span>` : '';
+        return L.divIcon({
+            className: 'custom-map-marker',
+            html: `<div style="position:relative;width:30px;">
+                      <div style="background:var(--blue);width:30px;height:30px;border-radius:50% 50% 50% 0;
+                                  transform:rotate(-45deg);box-shadow:0 1px 4px #0006;display:flex;align-items:center;justify-content:center;">
+                        <i class="fas fa-hiking" style="color:#fff;transform:rotate(45deg);font-size:14px;"></i>
+                      </div>${label}
+                   </div>`,
+            iconSize: [30, dayLabel ? 48 : 30],
+            iconAnchor: [15, 30],
+            popupAnchor: [0, -28]
+        });
+    }
+
+    function buildSpotDivIcon(dayLabel) {
+        const label = dayLabel
+            ? `<span style="position:absolute;left:50%;transform:translateX(-50%);top:30px;
+                            background:#5C6BC0;color:#fff;font-size:9px;font-weight:700;
+                            padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 3px #0004;">
+                   ${dayLabel}
+               </span>` : '';
+        return L.divIcon({
+            className: 'custom-map-marker',
+            html: `<div style="position:relative;width:28px;">
+                      <div style="background:#5C6BC0;width:28px;height:28px;border-radius:50% 50% 50% 0;
+                                  transform:rotate(-45deg);box-shadow:0 1px 4px #0006;display:flex;align-items:center;justify-content:center;">
+                        <i class="fas fa-bed" style="color:#fff;transform:rotate(45deg);font-size:13px;"></i>
+                      </div>${label}
+                   </div>`,
+            iconSize: [28, dayLabel ? 46 : 28],
+            iconAnchor: [14, 28],
+            popupAnchor: [0, -26]
+        });
+    }
+
+    // Icône orange affichée au survol d'une carte dans la liste
+    function buildHikeHoveredDivIcon() {
+        return L.divIcon({
+            className: 'custom-map-marker',
+            html: `<div style="background:#ff9800;width:36px;height:36px;border-radius:50% 50% 50% 0;
+                        transform:rotate(-45deg);box-shadow:0 2px 8px #0008;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                      <i class="fas fa-hiking" style="color:#fff;transform:rotate(45deg);font-size:16px;"></i>
+                   </div>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 36],
+            popupAnchor: [0, -34]
+        });
+    }
+
+    // Icône verte affichée sur le marqueur de la randonnée sélectionnée
+    function buildHikeSelectedDivIcon() {
+        return L.divIcon({
+            className: 'custom-map-marker',
+            html: `<div style="background:var(--green);width:34px;height:34px;border-radius:50% 50% 50% 0;
+                        transform:rotate(-45deg);box-shadow:0 2px 6px #0008;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                      <i class="fas fa-check" style="color:#fff;transform:rotate(45deg);font-size:14px;"></i>
+                   </div>`,
+            iconSize: [34, 34],
+            iconAnchor: [17, 34],
+            popupAnchor: [0, -32]
+        });
+    }
+
+    // Teinte de bleu propre à chaque randonnée (dégradé clair → foncé), pour distinguer
+    // les tracés qui se chevauchent (randos partant d'un même point de départ)
+    function getHikeBaseColor(index, total) {
+        const lightness = total > 1 ? 70 - (index / (total - 1)) * 35 : 55;
+        return `hsl(207, 75%, ${lightness}%)`;
+    }
+
     // ========================================
     // INITIALISATION ET CHARGEMENT DES RANDONNÉES
     // ========================================
-    
+
     document.addEventListener('DOMContentLoaded', async function () {
+        const currentDay = parseInt(localStorage.getItem('currentDay') || '1');
+        const selectedDays = parseInt(localStorage.getItem('selectedDays') || '1');
+
+        // Badge "Jour X/N" en haut à gauche du stepper (dynamique, depuis localStorage)
+        const dayBadge = document.getElementById('dayBadge');
+        if (dayBadge) dayBadge.textContent = `Jour ${currentDay}/${selectedDays}`;
+
+        // Mettre à jour le titre pour le jour en cours
+        document.getElementById('step2Title').textContent =
+            `🥾 Jour ${currentDay} : Choisissez votre randonnée`;
+        document.getElementById('step2Subtitle').textContent =
+            'Sélectionnez l\'activité principale qui rythmera votre journée';
+
         // Récupérer l'ID de la ville depuis le localStorage (défini à l'étape 1)
         const cityId = localStorage.getItem('selectedCityId');
         
@@ -148,6 +246,11 @@
         const mapElement = document.getElementById('map');
         let hikeMap = null;
         let hikingMarkers = [];  // Tableau pour stocker les marqueurs des randonnées
+
+        // Filtres actifs (doivent être initialisés avant le premier appel à applyFilters(),
+        // déclenché dès le chargement initial des randonnées)
+        let activeDifficultyFilter = 'all';
+        let activeDurationFilter = 'all';
 
         if (mapElement && window.L && !mapElement._leaflet_id) {
             // Créer la carte Leaflet avec une position par défaut (Bretagne)
@@ -211,60 +314,167 @@
         // Si utilisateur connecté : affichage selon le rôle (user = vérifiées uniquement, admin/contributor = toutes)
         // Si pas connecté : affichage uniquement des randonnées vérifiées (comportement par défaut)
         
-        // Charger les randonnées depuis l'API via le proxy Flask
+        // Charger les randonnées (et leurs tracés GPX) depuis l'API, ou depuis le cache de session
+        // si elles ont déjà été chargées pour cette ville lors d'un jour précédent du même séjour
+        // (la ville ne change pas d'un jour à l'autre dans le parcours de planification).
         try {
-            // Appel API pour récupérer les randonnées dans un rayon de 5km autour de la ville
-            // Le proxy Flask (/api/step2/hikes) ajoute automatiquement le token JWT depuis la session
-            const response = await fetch(`/api/step2/hikes?city_id=${cityId}&distance_km=5`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
+            const cacheKey = `hikesCache_${cityId}`;
+            let hikes, tracesByHikeId;
+            try {
+                const cached = JSON.parse(sessionStorage.getItem(cacheKey));
+                if (cached && Array.isArray(cached.hikes)) {
+                    hikes = cached.hikes;
+                    tracesByHikeId = cached.traces || {};
                 }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Erreur lors du chargement des randonnées');
+            } catch { /* cache absent ou corrompu : on ignore et on recharge depuis l'API */ }
+
+            if (!hikes) {
+                // Appel API pour récupérer les randonnées dans un rayon de 5km autour de la ville
+                // Le proxy Flask (/api/step2/hikes) ajoute automatiquement le token JWT depuis la session
+                const response = await fetch(`/api/step2/hikes?city_id=${cityId}&distance_km=5`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erreur lors du chargement des randonnées');
+                }
+                hikes = await response.json();
+
+                // Charger le tracé GPX de chaque randonnée
+                tracesByHikeId = {};
+                await Promise.all(hikes.map(async (hike) => {
+                    try {
+                        const traceRes = await fetch(`/api/step2/hike/${hike.id}/trace`);
+                        if (!traceRes.ok) return;
+                        const traceData = await traceRes.json();
+                        if (traceData.points && traceData.points.length > 0) {
+                            tracesByHikeId[hike.id] = traceData.points.map(p => [p.lat, p.lon]);
+                        }
+                    } catch (err) {
+                        console.error(`Erreur chargement tracé GPX pour la randonnée ${hike.id}:`, err);
+                    }
+                }));
+
+                try {
+                    sessionStorage.setItem(cacheKey, JSON.stringify({ hikes, traces: tracesByHikeId }));
+                } catch (e) {
+                    console.warn('Cache des randonnées non sauvegardé (sessionStorage plein ?)', e);
+                }
             }
-            const hikes = await response.json();
-            
-            // Afficher les randonnées dans la liste
-            displayHikes(hikes);
-            
+
+            // Charger les jours déjà planifiés sur la carte, puis afficher les randos
+            const planId = localStorage.getItem('planId');
+            const plannedHikeIds = await loadPreviousDaysOnMap(hikeMap, currentDay, planId);
+            displayHikes(hikes, plannedHikeIds);
+            applyFilters();
+
             // Ajouter les marqueurs verts sur la carte pour chaque randonnée
             if (hikeMap && hikes.length > 0) {
-                hikes.forEach(hike => {
-                    // Créer une icône personnalisée verte pour les randonnées
-                    const hikeIcon = L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<div style="background-color: #51cf66; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
-                        iconSize: [16, 16],
-                        iconAnchor: [8, 8]
-                    });
-                    
-                    // Ajouter le marqueur avec popup contenant les infos de la randonnée
-                    const marker = L.marker([hike.start_latitude, hike.start_longitude], { icon: hikeIcon })
+                hikes.forEach((hike, idx) => {
+                    const baseColor = getHikeBaseColor(idx, hikes.length);
+                    const marker = L.marker([hike.start_latitude, hike.start_longitude], { icon: buildHikeDivIcon() })
                         .addTo(hikeMap)
-                        .bindPopup(`<b>🥾 ${hike.name}</b><br>${hike.distance_km} km - ${hike.duration}h`);
-                    
-                    // Stocker le marqueur pour manipulation ultérieure
-                    hikingMarkers.push({ marker, hike });
+                        .bindPopup(buildHikePopupContent(hike, false))
+                        .on('mouseover', function () {
+                            const isSelected = localStorage.getItem('selectedHiking') == hike.id;
+                            if (!isSelected) this.setIcon(buildHikeHoveredDivIcon());
+                            highlightHikeTrace(hike.id, true);
+                            const btn = document.getElementById(`select-hike-btn-${hike.id}`);
+                            if (btn) {
+                                const card = btn.closest('.hiking-card');
+                                if (card && !card.classList.contains('selected')) {
+                                    card.classList.add('map-hover');
+                                }
+                            }
+                        })
+                        .on('mouseout', function () {
+                            const isSelected = localStorage.getItem('selectedHiking') == hike.id;
+                            if (!isSelected) this.setIcon(buildHikeDivIcon());
+                            highlightHikeTrace(hike.id, false);
+                            const btn = document.getElementById(`select-hike-btn-${hike.id}`);
+                            if (btn) btn.closest('.hiking-card')?.classList.remove('map-hover');
+                        });
+                    hikingMarkers.push({ marker, hike, polyline: null, baseColor });
+
+                    // Survol de la carte liste → marqueur orange (handler attaché ici pour capturer marker directement)
+                    const btn = document.getElementById(`select-hike-btn-${hike.id}`);
+                    if (btn) {
+                        const card = btn.closest('.hiking-card');
+                        if (card) {
+                            card.addEventListener('mouseenter', () => {
+                                const isSelected = localStorage.getItem('selectedHiking') == hike.id;
+                                highlightHikeTrace(hike.id, true);
+                                if (isSelected) return;
+                                marker.setIcon(buildHikeHoveredDivIcon());
+                                if (!hikeMap.getBounds().contains(marker.getLatLng())) {
+                                    hikeMap.panTo(marker.getLatLng(), { animate: true });
+                                }
+                            });
+                            card.addEventListener('mouseleave', () => {
+                                const isSelected = localStorage.getItem('selectedHiking') == hike.id;
+                                highlightHikeTrace(hike.id, false);
+                                if (!isSelected) marker.setIcon(buildHikeDivIcon());
+                            });
+                        }
+                    }
                 });
+
+                // Dessiner le tracé GPX de chaque randonnée sur la carte (déjà en mémoire :
+                // venant du réseau ou du cache de session)
+                hikes.forEach(hike => {
+                    const latlngs = tracesByHikeId[hike.id];
+                    if (!latlngs || latlngs.length === 0) return;
+                    const entry = hikingMarkers.find(m => m.hike.id === hike.id);
+                    const baseColor = entry ? entry.baseColor : '#339af0';
+                    const polyline = L.polyline(latlngs, { color: baseColor, weight: 3, opacity: 0.8 })
+                        .addTo(hikeMap)
+                        .bindPopup(buildHikePopupContent(hike, localStorage.getItem('selectedHiking') == hike.id))
+                        .on('mouseover', function () { highlightHikeTrace(hike.id, true); })
+                        .on('mouseout', function () { highlightHikeTrace(hike.id, false); });
+                    if (entry) entry.polyline = polyline;
+                });
+
+                // Refléter sur la carte et les boutons une éventuelle sélection déjà faite
+                const previouslySelected = localStorage.getItem('selectedHiking');
+                if (previouslySelected && previouslySelected !== 'no-hiking') {
+                    updateSelectionUI(previouslySelected);
+                    // Centrer la carte sur la rando déjà sélectionnée
+                    const selectedMarkerData = hikingMarkers.find(m => m.hike.id == previouslySelected);
+                    if (selectedMarkerData) {
+                        hikeMap.setView(
+                            [selectedMarkerData.hike.start_latitude, selectedMarkerData.hike.start_longitude],
+                            14
+                        );
+                        selectedMarkerData.marker.openPopup();
+                    }
+                } else {
+                    // Aucune sélection : recadrer pour montrer tous les marqueurs et tracés
+                    const allLayers = hikingMarkers.flatMap(m => m.polyline ? [m.marker, m.polyline] : [m.marker]);
+                    const group = L.featureGroup(allLayers);
+                    hikeMap.fitBounds(group.getBounds(), { padding: [40, 40] });
+                }
             }
         } catch (error) {
             console.error('Erreur:', error);
             document.getElementById('hikingList').innerHTML = '<p style="text-align: center; color: red;">Erreur lors du chargement des randonnées</p>';
+            const subtitleEl = document.getElementById('step2Subtitle');
+            if (subtitleEl) subtitleEl.textContent = 'Erreur lors du chargement des randonnées';
         }
 
         // Fonction pour afficher les randonnées
-        function displayHikes(hikes) {
+        // plannedDays : Map<hikeId → dayNumber> pour les randos déjà planifiées
+        function displayHikes(hikes, plannedDays = new Map()) {
             const hikingList = document.getElementById('hikingList');
             hikingList.innerHTML = '';
-            
+
             if (hikes.length === 0) {
                 hikingList.innerHTML = '<p style="text-align: center;">Aucune randonnée disponible pour cette ville</p>';
                 return;
             }
-            
+
             hikes.forEach(hike => {
                 const difficultyClass = hike.difficulte ? hike.difficulte.toLowerCase() : 'facile';
                 const durationCategory = hike.duration < 2 ? 'court' : (hike.duration <= 4 ? 'moyen' : 'long');
@@ -272,6 +482,9 @@
                 const statusClass = hike.verifie ? 'verified' : 'pending';
                 const selectedHiking = localStorage.getItem('selectedHiking');
                 const isSelected = selectedHiking && selectedHiking == hike.id;
+                const plannedDay = plannedDays.get(hike.id);
+                const plannedBadge = plannedDay
+                    ? `<span class="status-badge planned">📌 Planifié J${plannedDay}</span>` : '';
 
                 const card = document.createElement('div');
                 card.className = 'hiking-card' + (isSelected ? ' selected' : '');
@@ -281,36 +494,23 @@
                 card.innerHTML = `
                     <div class="hiking-status">
                         <span class="status-badge ${statusClass}">${verifiedBadge}</span>
+                        ${plannedBadge}
                     </div>
                     <div class="hiking-info">
                         <h3>${hike.name}</h3>
                         <p class="hiking-description">${hike.description || 'Randonnée sans description'}</p>
                         <div class="hiking-stats">
-                            <span class="stat">
-                                <i class="fas fa-clock"></i>
-                                ${hike.duration}h
-                            </span>
-                            <span class="stat">
-                                <i class="fas fa-route"></i>
-                                ${hike.distance_km} km
-                            </span>
-                            <span class="stat">
-                                <i class="fas fa-mountain"></i>
-                                +${hike.elevation_gain_m}m
-                            </span>
+                            <span class="stat"><i class="fas fa-clock"></i>${hike.duration}h</span>
+                            <span class="stat"><i class="fas fa-route"></i>${hike.distance_km} km</span>
+                            <span class="stat"><i class="fas fa-mountain"></i>+${hike.elevation_gain_m}m</span>
                             <span class="stat difficulty-${difficultyClass}">
-                                <i class="fas fa-signal"></i>
-                                ${hike.difficulte || 'N/A'}
+                                <i class="fas fa-signal"></i>${hike.difficulte || 'N/A'}
                             </span>
                         </div>
                     </div>
                     <div class="hiking-actions">
-                        <button class="btn btn-outline" onclick="showHikingMap(${hike.id}, ${hike.start_latitude}, ${hike.start_longitude})">
-                            <i class="fas fa-map"></i>
-                            Voir
-                        </button>
-                        <button class="btn btn-primary" onclick="selectHiking(${hike.id})">
-                            Choisir
+                        <button class="btn ${isSelected ? 'btn-selected' : 'btn-primary'}" id="select-hike-btn-${hike.id}" onclick="selectHiking(${hike.id})">
+                            ${isSelected ? '✅ Sélectionné' : (plannedDay ? `Choisir aussi` : 'Choisir')}
                         </button>
                     </div>
                 `;
@@ -319,22 +519,53 @@
             });
         }
 
-        // Fonction pour afficher une randonnée sur la carte
+        // Charge les jours déjà planifiés sur la carte avec badges Jx
+        async function loadPreviousDaysOnMap(map, currentDay, planId) {
+            if (!map || currentDay <= 1 || !planId) return new Map();
+            try {
+                const res = await fetch(`/api/result/?plan_id=${planId}`);
+                if (!res.ok) return new Map();
+                const plan = await res.json();
+                const plannedHikeIds = new Map();
+                (plan.days || []).forEach(day => {
+                    if (day.day_number >= currentDay) return;
+                    const jLabel = `J${day.day_number}`;
+                    if (day.hike_latitude && day.hike_longitude) {
+                        L.marker([day.hike_latitude, day.hike_longitude], { icon: buildHikeDivIcon(jLabel) })
+                            .addTo(map)
+                            .bindPopup(`<b>🥾 ${day.hike_name || 'Randonnée'}</b><br>${jLabel} — déjà planifié`);
+                    }
+                    if (day.spot_latitude && day.spot_longitude) {
+                        L.marker([day.spot_latitude, day.spot_longitude], { icon: buildSpotDivIcon(jLabel) })
+                            .addTo(map)
+                            .bindPopup(`<b>🛏️ ${day.spot_name || 'Hébergement'}</b><br>${jLabel} — déjà planifié`);
+                    }
+                    if (day.hike_id) plannedHikeIds.set(day.hike_id, day.day_number);
+                });
+                return plannedHikeIds;
+            } catch { return new Map(); }
+        }
+
+        // Bouton "Détail" du popup carte : amène à la carte de la randonnée dans la liste
+        window.showHikeDetail = function (hikeId) {
+            const btn = document.getElementById(`select-hike-btn-${hikeId}`);
+            if (!btn) return;
+            const card = btn.closest('.hiking-card');
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.classList.add('highlight-flash');
+            setTimeout(() => card.classList.remove('highlight-flash'), 1400);
+        };
+
+        // Clic sur un marqueur de la carte : centrer et ouvrir le popup
         window.showHikingMap = function(hikeId, lat, lon) {
             if (hikeMap) {
                 hikeMap.setView([lat, lon], 14);
-                // Ouvrir le popup du marqueur correspondant
                 const markerData = hikingMarkers.find(m => m.hike.id === hikeId);
-                if (markerData) {
-                    markerData.marker.openPopup();
-                }
+                if (markerData) markerData.marker.openPopup();
             }
         };
 
         // Gestion des filtres
-        let activeDifficultyFilter = 'all';
-        let activeDurationFilter = 'all';
-        
         const filterButtons = document.querySelectorAll('.filter-btn');
         filterButtons.forEach(btn => {
             btn.addEventListener('click', function () {
@@ -361,20 +592,96 @@
         // Fonction pour appliquer les filtres
         function applyFilters() {
             const hikingCards = document.querySelectorAll('.hiking-card');
-            
+            let matchCount = 0;
+
             hikingCards.forEach(card => {
                 const difficulty = card.getAttribute('data-difficulty');
                 const duration = card.getAttribute('data-duration');
-                
+
                 // Vérifier si la carte correspond aux filtres
                 const matchesDifficulty = activeDifficultyFilter === 'all' || difficulty === activeDifficultyFilter;
                 const matchesDuration = activeDurationFilter === 'all' || duration === activeDurationFilter;
-                
+
                 // Afficher ou masquer la carte
                 if (matchesDifficulty && matchesDuration) {
                     card.style.display = 'flex';
+                    matchCount++;
                 } else {
                     card.style.display = 'none';
+                }
+            });
+
+            // Phrase dynamique indiquant le nombre de randonnées correspondant aux filtres actifs
+            const subtitleEl = document.getElementById('step2Subtitle');
+            if (subtitleEl) {
+                subtitleEl.textContent = matchCount === 0
+                    ? 'Aucune randonnée ne correspond à vos critères'
+                    : `${matchCount} randonnée${matchCount > 1 ? 's' : ''} correspond${matchCount > 1 ? 'ent' : ''} à vos critères`;
+            }
+
+            // Répercuter le même filtre sur la carte : masquer marqueurs et tracés
+            // des randonnées qui ne correspondent pas (sinon la carte continue d'afficher
+            // toutes les randos même quand la liste est filtrée).
+            if (hikeMap) {
+                hikingMarkers.forEach(({ marker, hike, polyline }) => {
+                    const difficultyClass = hike.difficulte ? hike.difficulte.toLowerCase() : 'facile';
+                    const durationCategory = hike.duration < 2 ? 'court' : (hike.duration <= 4 ? 'moyen' : 'long');
+                    const matches = (activeDifficultyFilter === 'all' || difficultyClass === activeDifficultyFilter)
+                        && (activeDurationFilter === 'all' || durationCategory === activeDurationFilter);
+
+                    if (matches) {
+                        if (!hikeMap.hasLayer(marker)) marker.addTo(hikeMap);
+                        if (polyline && !hikeMap.hasLayer(polyline)) polyline.addTo(hikeMap);
+                    } else {
+                        if (hikeMap.hasLayer(marker)) hikeMap.removeLayer(marker);
+                        if (polyline && hikeMap.hasLayer(polyline)) hikeMap.removeLayer(polyline);
+                    }
+                });
+            }
+        }
+
+        // Contenu du popup d'une randonnée, avec le bouton "Choisir" qui reflète l'état sélectionné
+        function buildHikePopupContent(hike, isSelected) {
+            return `<b>🥾 ${hike.name}</b><br>${hike.distance_km} km - ${hike.duration}h
+                <div style="margin-top:6px;display:flex;gap:6px;">
+                    <button class="btn btn-outline btn-sm" onclick="showHikeDetail(${hike.id})">Détail</button>
+                    <button class="btn btn-sm ${isSelected ? 'btn-selected' : 'btn-primary'}" onclick="selectHiking(${hike.id})">
+                        ${isSelected ? '✅ Sélectionné' : 'Choisir'}
+                    </button>
+                </div>`;
+        }
+
+        // Survol d'un tracé (marqueur ou carte de liste) : le met en évidence sur la carte
+        function highlightHikeTrace(hikeId, hovered) {
+            const entry = hikingMarkers.find(m => m.hike.id == hikeId);
+            if (!entry || !entry.polyline) return;
+            const isSelected = localStorage.getItem('selectedHiking') == hikeId;
+            if (isSelected) return; // le tracé sélectionné garde son style vert
+            entry.polyline.setStyle(hovered
+                ? { color: '#ff9800', weight: 5, opacity: 0.95 }
+                : { color: entry.baseColor, weight: 3, opacity: 0.8 });
+            if (hovered) entry.polyline.bringToFront();
+        }
+
+        // Met à jour l'icône des marqueurs, le style des tracés, le contenu des popups et les boutons des cartes
+        function updateSelectionUI(hikingId) {
+            hikingMarkers.forEach(({ marker, hike, polyline, baseColor }) => {
+                const isSelected = hike.id == hikingId;
+                marker.setIcon(isSelected ? buildHikeSelectedDivIcon() : buildHikeDivIcon());
+                marker.setPopupContent(buildHikePopupContent(hike, isSelected));
+                if (polyline) {
+                    polyline.setPopupContent(buildHikePopupContent(hike, isSelected));
+                    polyline.setStyle(isSelected
+                        ? { color: '#4CAF50', weight: 5, opacity: 0.9 }
+                        : { color: baseColor, weight: 3, opacity: 0.8 });
+                    if (isSelected) polyline.bringToFront();
+                }
+
+                const cardBtn = document.getElementById(`select-hike-btn-${hike.id}`);
+                if (cardBtn) {
+                    cardBtn.textContent = isSelected ? '✅ Sélectionné' : 'Choisir';
+                    cardBtn.classList.toggle('btn-selected', isSelected);
+                    cardBtn.classList.toggle('btn-primary', !isSelected);
                 }
             });
         }
@@ -382,40 +689,59 @@
         // Gestion de la sélection de randonnée
         window.selectHiking = function (hikingId) {
             console.log('Randonnée sélectionnée:', hikingId);
-            // Enregistrer la sélection dans le localStorage
             localStorage.setItem('selectedHiking', hikingId);
-            // Marquer la randonnée sélectionnée visuellement
             document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
-            // Retirer la sélection du bouton "Pas de rando"
             document.getElementById('noHikingCard').classList.remove('selected');
-            // Trouver la carte correspondante et ajouter la classe
-            const cards = document.querySelectorAll('.hiking-card');
-            cards.forEach(card => {
-                const title = card.querySelector('h3');
-                if (title && title.textContent && title.textContent.includes(hikingId)) {
-                    card.classList.add('selected');
-                } else if (card.querySelector('button.btn-primary') && card.querySelector('button.btn-primary').getAttribute('onclick') === `selectHiking(${hikingId})`) {
-                    card.classList.add('selected');
-                }
-            });
-            // Afficher le bouton "Continuer"
+            const selectedBtn = document.getElementById(`select-hike-btn-${hikingId}`);
+            if (selectedBtn) {
+                const card = selectedBtn.closest('.hiking-card');
+                card.classList.add('selected');
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
             document.getElementById('nextStepBtn').style.display = 'flex';
+            updateSelectionUI(hikingId);
+
+            // Centrer la carte sur la randonnée sélectionnée et ouvrir son popup
+            const selectedMarkerData = hikingMarkers.find(m => m.hike.id == hikingId);
+            if (hikeMap && selectedMarkerData) {
+                hikeMap.setView(
+                    [selectedMarkerData.hike.start_latitude, selectedMarkerData.hike.start_longitude],
+                    14,
+                    { animate: true }
+                );
+                selectedMarkerData.marker.openPopup();
+            }
+
+            // Sauvegarde en base de données
+            const planId = localStorage.getItem('planId');
+            if (planId) {
+                fetch(`/api/step2/update_plan/${planId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hike_id: hikingId, day_number: currentDay })
+                }).catch(err => console.error('Erreur sauvegarde randonnée:', err));
+            }
         };
 
         window.selectNoHiking = function () {
             console.log('Aucune randonnée sélectionnée');
             localStorage.setItem('selectedHiking', 'no-hiking');
-            // Retirer la classe 'selected' des autres cartes
             document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
-            // Ajouter la classe 'selected' au bouton no-hiking
             document.getElementById('noHikingCard').classList.add('selected');
             document.getElementById('nextStepBtn').style.display = 'flex';
+            updateSelectionUI(null);
+
+            // Réinitialise hike_id en base
+            const planId = localStorage.getItem('planId');
+            if (planId) {
+                fetch(`/api/step2/update_plan/${planId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hike_id: null, day_number: currentDay })
+                }).catch(err => console.error('Erreur reset randonnée:', err));
+            }
         };
 
-        window.showHikingMap = function (hikingId) {
-            console.log('Afficher la carte de la randonnée:', hikingId);
-            // TODO: Centrer la carte sur cette randonnée
-        };
     });
 </script>
 {% endblock %}

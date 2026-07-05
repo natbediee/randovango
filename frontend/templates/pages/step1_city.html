@@ -15,52 +15,13 @@
             </div>
             <div class="hero-content">
                 <h1 class="hero-title">Planificateur RandoVanGo</h1>
-                <p class="hero-subtitle">Choisissez votre destination pour commencer l'aventure</p>
-            </div>
-            
-            <!-- Widget d'authentification et upload GPX -->
-            <div id="floatingLogin" style="position: absolute; bottom: 20px; top: 50%; transform: translateY(-50%); right: 20px; z-index: 1000; background: rgba(255,255,255,0.98); padding: 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 400px;min-height: 230px;">
-                <!-- Formulaire de connexion (visible si non connecté) -->
-                <div id="loginForm" class="stepper-login" style="position: static !important; transform: none !important;">
-                    <p style="text-align: center; font-size: 0.9rem; color: #555; margin-bottom: 1rem; padding: 0 0.5rem;">
-                        Pour insérer <br>de nouvelles randonnées !
-                    </p>
-                    <form id="stepperLoginForm" class="stepper-login-form" style="display: flex; flex-direction: column; gap: 1rem;">
-                        <input type="text" id="stepperLogin" class="form-input" placeholder="Identifiant" required style="width: 100%;">
-                        <input type="password" id="stepperLoginPassword" class="form-input" placeholder="Mot de passe" required style="width: 100%;">
-                        <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-sign-in-alt"></i> Connexion Contributeur</button>
-                    </form>
-                    <div id="stepperLoginError" class="alert alert-danger" style="display:none; margin-top: 0.5rem; font-size: 0.85em;"></div>
-                </div>
-                
-                <!-- Menu utilisateur et upload GPX (visible si connecté) -->
-                <div id="userMenu" class="user-menu" style="display: none;">
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch;">
-                        <div class="user-info" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f0f0f0; border-radius: 4px;">
-                            <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
-                            <span id="userName" style="font-weight: 500;">Contributeur</span>
-                        </div>
-                        <!-- Formulaire d'upload GPX -->
-                        <form id="gpxUploadForm" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 0.2rem;">
-                            <label for="gpxFileInput" class="btn btn-outline" style="margin: 0; cursor: pointer; text-align: center; padding: 0.5rem; font-size: 0.9rem;">
-                                <i class="fas fa-file-upload"></i> Choisir un fichier GPX
-                            </label>
-                            <input type="file" id="gpxFileInput" accept=".gpx" style="display: none;" required>
-                            <div id="fileName" style="font-size: 0.9em; color: #666; text-align: center;  font-weight: 500;"></div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;" disabled id="uploadBtn">
-                                <i class="fas fa-cloud-upload-alt"></i> Envoyer la rando                            </button>
-                        </form>
-                        <div id="gpxUploadError" class="alert alert-danger" style="display:none; padding: 0.75rem; font-size: 0.9em;"></div>
-                        <div id="gpxUploadSuccess" class="alert alert-success" style="display:none; padding: 0.75rem; font-size: 0.9em;"></div>
-
-                        <button id="logoutBtn" class="btn btn-outline" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;"><i class="fas fa-sign-out-alt"></i> Se déconnecter</button>
-                    </div>
-                </div>
+                <p class="hero-subtitle">Votre aventure van life</p>
             </div>
         </div>
     </div>
-    
+
     <div class="planning-stepper">
+        <div class="day-badge" id="dayBadge">Jour 1</div>
         <div class="stepper-container">
             <div class="step active">
                 <div class="step-circle">1</div>
@@ -81,64 +42,78 @@
                 <div class="step-circle">4</div>
                 <div class="step-label">Services</div>
             </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">📋</div>
-                <div class="step-label">Résultat</div>
-            </div>
         </div>
     </div>
     
     <div class="planning-content">
 <div class="step-section">
-    <div class="step-header">
-        <h2>Planifiez votre séjour RandoVanGo</h2>
-        <p>Choisissez votre destination et la durée de votre aventure</p>
+    <div class="step-header" style="margin-bottom:0.75rem;">
+        <h2>Étape 1 : où partez-vous ?</h2>
     </div>
 
-    <!-- Recherche de ville -->
+    <!-- Données villes (cachées, utilisées par la carte et la recherche) -->
+    <select id="citySelect" style="display:none;">
+        {% for city in cities %}
+            <option value="{{ city.id }}"
+                    data-lat="{{ city.latitude }}"
+                    data-lon="{{ city.longitude }}"
+                    data-name="{{ city.name }}"
+                    data-dept="{{ city.department or '' }}"
+                    data-country="{{ city.country or '' }}"
+                    data-hikes="{{ city.stats.hikes }}"
+                    data-spots="{{ city.stats.spots }}"
+                    data-poi="{{ city.stats.poi }}"
+                    data-meteo='{{ city.meteo | tojson }}'>
+                {{ city.name }}
+            </option>
+        {% endfor %}
+    </select>
 
-    <div class="search-container">
+    <!-- Recherche de ville -->
+    <div class="search-container" style="position:relative;margin-top:0;">
         <div class="search-input-group">
-            <i class="fas fa-map-marker-alt"></i>
-            <select id="citySelect" class="search-input">
-                {% for city in cities %}
-                    <option value="{{ city.id }}" 
-                            data-lat="{{ city.latitude }}" 
-                            data-lon="{{ city.longitude }}" 
-                            data-name="{{ city.name }}" 
-                            data-dept="{{ city.department or '' }}" 
-                            data-country="{{ city.country or '' }}" 
-                            data-hikes="{{ city.stats.hikes }}" 
-                            data-spots="{{ city.stats.spots }}" 
-                            data-poi="{{ city.stats.poi }}"
-                            data-meteo='{{ city.meteo | tojson }}'>
-                        {{ city.name }}
-                    </option>
-                {% endfor %}
-            </select>
+            <i class="fas fa-search"></i>
+            <input type="text" id="citySearch" class="search-input"
+                   placeholder="Recherchez une ville..." autocomplete="off">
+        </div>
+        <div id="citySuggestions" style="display:none;position:absolute;left:50%;transform:translateX(-50%);
+            top:100%;width:500px;max-width:calc(100vw - 2rem);
+            background:#fff;border:1px solid #e0e0e0;border-radius:0 0 8px 8px;
+            box-shadow:0 4px 12px #0002;z-index:1000;max-height:280px;overflow-y:auto;"></div>
+        <div id="cityNotFound" style="display:none;margin-top:0.75rem;
+            background:#f0f7ff;border:1px solid #c8e1fb;border-radius:8px;
+            padding:0.9rem 1.2rem;max-width:500px;margin-left:auto;margin-right:auto;text-align:left;">
+            <p style="margin:0 0 0.4rem 0;font-weight:600;color:#1565C0;font-size:0.95rem;">
+                <i class="fas fa-map-marker-alt"></i> Cette ville n'est pas encore disponible
+            </p>
+            <p style="margin:0;color:#444;font-size:0.88rem;line-height:1.5;">
+                Vous pouvez l'ajouter en devenant contributeur&nbsp;: connectez-vous avec vos identifiants
+                puis uploadez un fichier <strong>GPX</strong> d'une randonnée dans cette ville, 
+                elle sera créée automatiquement dans RandoVanGo avec Spots et Services associés.
+            </p>
         </div>
     </div>
 
+    <!-- Carte interactive (sélection des villes) -->
+    <div class="map-page-container" style="margin: 0.75rem 0;">
+        <div id="map" style="height: 50vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
+    </div>
+
     <!-- Ville sélectionnée -->
-    <div class="selected-city" id="selectedCity">
+    <div class="selected-city" id="selectedCity" style="display:none;">
         <div class="card selected">
             <div class="city-header">
-                <h3 id="cityName">{{ cities[0].name if cities else '' }}</h3>
-                <p id="cityDept">
-                    {{ cities[0].department if cities else '' }}
-                    {% if cities and cities[0].region %} - {{ cities[0].region }}{% endif %}
-                    {% if cities and cities[0].country %} - {{ cities[0].country }}{% endif %}
-                </p>
+                <h3 id="cityName"></h3>
+                <p id="cityDept"></p>
             </div>
             <div class="city-stats">
                 <div class="stat-item">
                     <i class="fas fa-hiking"></i>
-                    <span id="cityHikes">{{ cities[0].stats.hikes if cities else 0 }} {% if cities and cities[0].stats.hikes < 2 %} randonnée {% else %} randonnées {% endif %}</span>
+                    <span id="cityHikes"></span>
                 </div>
                 <div class="stat-item">
                     <i class="fas fa-bed"></i>
-                    <span id="citySpots">{{ cities[0].stats.spots if cities else 0 }} spots nuit</span>
+                    <span id="citySpots"></span>
                 </div>
                 <div class="stat-item">
                     <i class="fas fa-map-pin"></i>
@@ -148,103 +123,22 @@
         </div>
     </div>
 
-     <!-- Carte interactive -->
-    <div class="map-page-container" style="margin: 2rem 0;">
-        <h3 class="map-title">Visualisation sur la carte</h3>
-        <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
-    </div>
     <!-- Météo 7 jours -->
-    <div class="weather-section">
-        <h3 id="weatherTitle">🌤️ Météo à {{ cities[0].name if cities else '' }} - Prochains jours</h3>
-        <p>Consultez les prévisions locales pour choisir la durée idéale de votre séjour</p>
-        <div class="weather-grid" id="weatherGrid">
-            {% if cities and cities[0].meteo %}
-                {% for forecast in cities[0].meteo %}
-                <div class="weather-day {% if forecast.weather_code < 45 %}good-weather{% elif forecast.weather_code <= 65 %}acceptable-weather{% else %}bad-weather{% endif %}">
-                    <div class="day-name">{% if loop.index == 1 %}Aujourd'hui{% else %}Jour {{ loop.index }}{% endif %}</div>
-                    <div class="weather-icon">
-                        <img src="/static/images/wheather/{{ forecast.picto }}.png" alt="{{ forecast.picto }}" style="width: 100%; max-width: 80px; height: auto;">
-                    </div>
-                    <div class="temperatures">
-                        <span class="temp-max">{{ forecast.temp_max|round|int }}°</span>
-                        <span class="temp-min">{{ forecast.temp_min|round|int }}°</span>
-                    </div>
-                    <div class="weather-details">
-                        
-                        <div class="weather-info">
-                            <i class="fas fa-tint"></i> {{ forecast.precipitation_sum|round(1) }} mm
-                        </div>
-                      
-
-                        <div class="weather-info">
-                            <i class="fas fa-wind"></i> {{ forecast.wind_speed_max|round|int }} km/h
-                        </div>
-                    </div>
-                    <div class="weather-advice">
-                        {% if forecast.picto == 'sun' %}
-                            <i class="fas fa-check-circle"></i> Parfait pour randonner
-                         {% elif forecast.picto == 'partly_cloudy' %}
-                            <i class="fas fa-check-circle"></i> Parfait pour randonner
-                        {% elif forecast.picto == 'storm' %}
-                            <i class="fas fa-exclamation-triangle"></i> Éviter les randos
-                        {% elif forecast.picto == 'rain' or forecast.picto == 'snow' %}
-                            <i class="fas fa-info-circle"></i> Équipements conseillés
-                        {% elif forecast.picto == 'fog' %}
-                            <i class="fas fa-eye-slash"></i> Avec prudence
-                        {% elif forecast.picto == 'cloud' %}
-                            <i class="fas fa-cloud"></i> Conditions correctes
-                        {% elif forecast.picto == 'indisponible' %}
-                            <i class="fas fa-question-circle"></i> Météo indisponible
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p>Aucune donnée météo disponible</p>
-            {% endif %}
-        </div>
+    <div class="weather-section" id="weatherSection" style="display:none;">
+        <h3 id="weatherTitle">🌤️ Météo - Prochains jours</h3>
+        <div class="weather-grid" id="weatherGrid"></div>
     </div>
 
-    <!-- Durée du séjour -->
-    <div class="duration-section">
-        <h3>📅 Combien de jours voulez-vous rester ?</h3>
-        <p>Consultez la météo ci-dessus pour choisir la durée idéale de votre séjour</p>
-        <div class="duration-options">
-            <div class="duration-card" data-days="1">
-                <div class="duration-number">1</div>
-                <div class="duration-label">jour</div>
-                <div class="duration-desc">Escapade express</div>
-            </div>
-            <div class="duration-card active" data-days="2">
-                <div class="duration-number">2</div>
-                <div class="duration-label">jours</div>
-                <div class="duration-desc">Week-end parfait</div>
-            </div>
-            <div class="duration-card" data-days="3">
-                <div class="duration-number">3</div>
-                <div class="duration-label">jours</div>
-                <div class="duration-desc">Long week-end</div>
-            </div>
-            <div class="duration-card" data-days="7">
-                <div class="duration-number">7</div>
-                <div class="duration-label">jours</div>
-                <div class="duration-desc">Semaine complète</div>
-            </div>
-            <div class="duration-card" data-days="custom">
-                <div class="duration-number">
-                    <input type="number" id="customDays" min="1" max="30" placeholder="?">
-                </div>
-                <div class="duration-label">jours</div>
-                <div class="duration-desc">Durée personnalisée</div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <div class="planning-navigation">
-    <div class="navigation-buttons navigation-right">
-        <button id="planButton" class="btn btn-primary btn-large">
-            Planifier ces 2 jours
+    <div class="navigation-buttons">
+        <a href="{{ url_for('duration') }}" class="btn btn-outline">
+            <i class="fas fa-arrow-left"></i>
+            Étape précédente
+        </a>
+        <button id="planButton" class="btn btn-primary btn-large" style="display:none;">
+            Planifier ce séjour
             <i class="fas fa-arrow-right"></i>
         </button>
     </div>
@@ -254,319 +148,235 @@
 {% endblock %}
 
 {% block scripts %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-    // ========================================
-    // GESTION DE L'AUTHENTIFICATION JWT
-    // ========================================
-    
     document.addEventListener('DOMContentLoaded', function() {
-        // Récupération des éléments DOM pour l'authentification
-        const loginForm = document.getElementById('loginForm');
-        const userMenu = document.getElementById('userMenu');
-        const stepperLoginForm = document.getElementById('stepperLoginForm');
-        const stepperLoginError = document.getElementById('stepperLoginError');
-        const logoutBtn = document.getElementById('logoutBtn');
-        
-        // Récupération des éléments DOM pour l'upload GPX
-        const gpxUploadForm = document.getElementById('gpxUploadForm');
-        const gpxFileInput = document.getElementById('gpxFileInput');
-        const fileName = document.getElementById('fileName');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const gpxUploadError = document.getElementById('gpxUploadError');
-        const gpxUploadSuccess = document.getElementById('gpxUploadSuccess');
+        // Mode "changement de ville mi-séjour" : l'utilisateur a déjà un plan en cours
+        // (déclenché depuis /results, bouton "Changer de ville") et vient simplement
+        // choisir la ville du jour suivant, sans redéfinir la durée du séjour.
+        const changingCityForNextDay = localStorage.getItem('changingCityForNextDay') === '1';
 
-        /**
-         * Vérifie si un token JWT est expiré
-         * Décode le payload base64 et compare le timestamp d'expiration
-         * @param {string} token - Le token JWT à vérifier
-         * @returns {boolean} - true si expiré ou invalide, false sinon
-         */
-        function isJwtExpired(token) {
-            if (!token) return true;
-            try {
-                const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-                if (!payload.exp) return true;
-                // exp est en secondes depuis epoch
-                const now = Math.floor(Date.now() / 1000);
-                return payload.exp < now;
-            } catch (e) {
-                return true;
-            }
-        }
+        // ========================================
+        // GESTION DE LA SÉLECTION DE VILLE (Carte interactive + Recherche)
+        // ========================================
 
-        // Récupération du token et username depuis sessionStorage
-        let token = sessionStorage.getItem('jwtToken');
-        const username = sessionStorage.getItem('username');
-
-        // Nettoyage automatique si le token est expiré
-        if (token && isJwtExpired(token)) {
-            sessionStorage.removeItem('jwtToken');
-            sessionStorage.removeItem('username');
-            token = null;
-        }
-
-        // Affichage conditionnel : menu utilisateur OU formulaire de connexion
-        if (token && username) {
-            // Utilisateur connecté : afficher le menu utilisateur avec upload GPX
-            loginForm.style.display = 'none';
-            userMenu.style.display = 'block';
-            document.getElementById('userName').textContent = username;
-        } else {
-            // Utilisateur non connecté : afficher le formulaire de connexion
-            loginForm.style.display = 'block';
-            userMenu.style.display = 'none';
-        }
-        
-        // ========================================
-        // GESTION DU FORMULAIRE DE CONNEXION
-        // ========================================
-        
-        if (stepperLoginForm) {
-            stepperLoginForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                stepperLoginError.style.display = 'none';
-                const login = document.getElementById('stepperLogin').value;
-                const password = document.getElementById('stepperLoginPassword').value;
-                
-                try {
-                    // Appel API de connexion via le proxy Flask
-                    const response = await fetch('/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: login, password: password })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (response.ok && data.success) {
-                        // Succès : stocker le token JWT et le username en sessionStorage
-                        sessionStorage.setItem('jwtToken', data.token);
-                        sessionStorage.setItem('username', data.username);
-                        // Recharger la page pour afficher le menu utilisateur et les données filtrées par rôle
-                        location.reload();
-                    } else {
-                        // Échec : afficher le message d'erreur
-                        stepperLoginError.textContent = data.message || 'Erreur de connexion';
-                        stepperLoginError.style.display = 'block';
-                    }
-                } catch (err) {
-                    console.error('Erreur connexion:', err);
-                    stepperLoginError.textContent = 'Erreur réseau ou serveur';
-                    stepperLoginError.style.display = 'block';
-                }
-            });
-        }
-        
-        // ========================================
-        // GESTION DE LA DÉCONNEXION
-        // ========================================
-        
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', function() {
-                // Supprimer le token et le username du sessionStorage
-                sessionStorage.removeItem('jwtToken');
-                sessionStorage.removeItem('username');
-                // Recharger la page pour afficher le formulaire de connexion
-                location.reload();
-            });
-        }
-        
-        // ========================================
-        // GESTION DE L'UPLOAD GPX (Admin/Contributeur uniquement)
-        // ========================================
-        
-        // Gestion de la sélection de fichier GPX
-        if (gpxFileInput) {
-            gpxFileInput.addEventListener('change', function() {
-                if (this.files && this.files[0]) {
-                    fileName.textContent = this.files[0].name;
-                    uploadBtn.disabled = false;
-                } else {
-                    fileName.textContent = '';
-                    uploadBtn.disabled = true;
-                }
-            });
-        }
-        
-        // Gestion de la soumission du formulaire d'upload GPX
-        if (gpxUploadForm) {
-            gpxUploadForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                // Masquer les messages d'erreur/succès précédents
-                gpxUploadError.style.display = 'none';
-                gpxUploadSuccess.style.display = 'none';
-                
-                // Validation : fichier sélectionné
-                const file = gpxFileInput.files[0];
-                if (!file) {
-                    gpxUploadError.textContent = 'Veuillez sélectionner un fichier';
-                    gpxUploadError.style.display = 'block';
-                    return;
-                }
-                
-                // Validation : utilisateur authentifié (token JWT requis)
-                if (!token) {
-                    gpxUploadError.textContent = 'Vous devez être connecté pour uploader un fichier. Veuillez vous reconnecter.';
-                    gpxUploadError.style.display = 'block';
-                    return;
-                }
-                
-                // Préparation des données : création d'un FormData avec le fichier GPX
-                const formData = new FormData();
-                formData.append('file', file);
-                
-                try {
-                    // Désactiver le bouton pendant l'upload et afficher un indicateur de chargement
-                    uploadBtn.disabled = true;
-                    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Upload en cours...';
-                    
-                    // Appel API pour uploader le fichier GPX via le proxy Flask
-                    // Le token JWT est envoyé dans le header Authorization pour authentifier la requête
-                    const response = await fetch('/upload_gpx', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': 'Bearer ' + token
-                        },
-                        body: formData
-                    });
-                    
-                    // Traitement de la réponse : gestion des différents types de contenu (JSON ou texte brut)
-                    let data = null;
-                    const contentType = response.headers.get('content-type') || '';
-                    
-                    if (contentType.includes('application/json')) {
-                        // Réponse JSON : parser les données
-                        try {
-                            data = await response.json();
-                        } catch (e) {
-                            // Erreur de parsing JSON : afficher l'erreur et le contenu brut
-                            console.error('Erreur parsing JSON:', e);
-                            const text = await response.text();
-                            gpxUploadError.textContent = `Réponse serveur non valide (status ${response.status}): ${text}`;
-                            gpxUploadError.style.display = 'block';
-                            uploadBtn.disabled = false;
-                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
-                            return;
-                        }
-                    } else {
-                        // Réponse non-JSON (HTML ou texte brut)
-                        const text = await response.text();
-                        if (response.ok) {
-                            // Succès mais réponse non-JSON : afficher le texte brut et recharger la page
-                            gpxUploadSuccess.textContent = text;
-                            gpxUploadSuccess.style.display = 'block';
-                            gpxUploadForm.reset();
-                            fileName.textContent = '';
-                            uploadBtn.disabled = true;
-                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
-                            setTimeout(() => { location.reload(); }, 2000);
-                            return;
-                        } else {
-                            // Erreur serveur avec réponse non-JSON : afficher le message d'erreur
-                            gpxUploadError.textContent = `Erreur serveur (status ${response.status}): ${text}`;
-                            gpxUploadError.style.display = 'block';
-                            uploadBtn.disabled = false;
-                            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
-                            return;
-                        }
-                    }
-
-                    // Traitement du succès de l'upload
-                    if (response.ok && data && data.success) {
-                        // Construire le message de succès avec la ville détectée si disponible
-                        const cityMsg = data.city ? ` - Ville détectée : ${data.city}. Vous pouvez maintenant la sélectionner dans la liste pour voir les nouveaux résultats.` : '';
-                        gpxUploadSuccess.textContent = data.message + cityMsg;
-                        gpxUploadSuccess.style.display = 'block';
-                        
-                        // Réinitialiser le formulaire d'upload
-                        gpxUploadForm.reset();
-                        fileName.textContent = '';
-                        uploadBtn.disabled = true;
-                        uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
-                        
-                        // Si une ville a été détectée, la sélectionner automatiquement dans le dropdown
-                        if (data.city) {
-                            const citySelect = document.getElementById('citySelect');
-                            if (citySelect) {
-                                // Parcourir les options pour trouver la ville correspondante
-                                for (let i = 0; i < citySelect.options.length; i++) {
-                                    if (citySelect.options[i].getAttribute('data-name') === data.city) {
-                                        citySelect.selectedIndex = i;
-                                        // Déclencher l'événement change pour mettre à jour la carte et les statistiques
-                                        citySelect.dispatchEvent(new Event('change'));
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // Traitement de l'échec de l'upload
-                        gpxUploadError.textContent = data.message || 'Erreur lors de l\'upload';
-                        gpxUploadError.style.display = 'block';
-                        uploadBtn.disabled = false;
-                        uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
-                    }
-                } catch (err) {
-                    console.error('Erreur upload:', err);
-                    gpxUploadError.textContent = 'Erreur réseau ou serveur';
-                    gpxUploadError.style.display = 'block';
-                    uploadBtn.disabled = false;
-                    uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Uploader le tracé';
-                }
-            });
-        }
-        // ========================================
-        // GESTION DE LA SÉLECTION DE VILLE (Carte et Météo)
-        // ========================================
-        
         const select = document.getElementById('citySelect');
         if (!select) return;
-        
-        // Variables pour la carte Leaflet
+
+        // Extraire toutes les villes depuis le select caché
+        const allCities = Array.from(select.options).map(opt => ({
+            id: opt.value,
+            name: opt.getAttribute('data-name'),
+            lat: parseFloat(opt.getAttribute('data-lat')),
+            lon: parseFloat(opt.getAttribute('data-lon')),
+            dept: opt.getAttribute('data-dept') || '',
+            country: opt.getAttribute('data-country') || '',
+            hikes: opt.getAttribute('data-hikes'),
+            spots: opt.getAttribute('data-spots'),
+            poi: opt.getAttribute('data-poi'),
+            option: opt
+        }));
+
         let cityMap = null;
-        let cityMarker = null;
-        
-        // Initialisation de la carte Leaflet sur la première ville sélectionnée
+        const cityMarkers = {};
+
+        function buildCityDivIcon(selected) {
+            if (selected) {
+                return L.divIcon({
+                    className: 'custom-map-marker',
+                    html: `<div style="background:#28a745;width:34px;height:34px;border-radius:50% 50% 50% 0;
+                                transform:rotate(-45deg);box-shadow:0 2px 6px #0006;
+                                display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                              <i class="fas fa-check" style="color:#fff;transform:rotate(45deg);font-size:13px;"></i>
+                           </div>`,
+                    iconSize: [34, 34],
+                    iconAnchor: [17, 34],
+                    popupAnchor: [0, -36]
+                });
+            }
+            return L.divIcon({
+                className: 'custom-map-marker',
+                html: `<div style="background:#5C3D99;width:30px;height:30px;border-radius:50% 50% 50% 0;
+                            transform:rotate(-45deg);box-shadow:0 2px 5px #0005;
+                            display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                          <i class="fas fa-van-shuttle" style="color:#fff;transform:rotate(45deg);font-size:11px;"></i>
+                       </div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 30],
+                popupAnchor: [0, -32]
+            });
+        }
+
+        // Initialiser la carte avec cluster de marqueurs
         const mapElement = document.getElementById('map');
+        let clusterGroup = null;
         if (window.L && mapElement && !mapElement._leaflet_id) {
-            // Récupérer les coordonnées de la ville sélectionnée par défaut
-            const opt = select.options[select.selectedIndex];
-            const lat = parseFloat(opt.getAttribute('data-lat'));
-            const lon = parseFloat(opt.getAttribute('data-lon'));
-            
-            // Créer la carte centrée sur la ville avec zoom niveau 12
-            cityMap = L.map('map').setView([lat, lon], 12);
-            // Ajouter les tuiles OpenStreetMap
+            cityMap = L.map('map').setView([46.5, 2.5], 6);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(cityMap);
-            // Ajouter un marqueur sur la position de la ville
-            cityMarker = L.marker([lat, lon]).addTo(cityMap);
+
+            clusterGroup = L.markerClusterGroup({
+                maxClusterRadius: 40,
+                disableClusteringAtZoom: 11,
+                spiderfyOnMaxZoom: true
+            });
+
+            allCities.forEach(city => {
+                if (isNaN(city.lat) || isNaN(city.lon)) return;
+                const marker = L.marker([city.lat, city.lon], { icon: buildCityDivIcon(false) })
+                    .bindPopup(`<b>${city.name}</b><br><small>${city.dept}</small><br>
+                                <small>${city.hikes} randonnées · ${city.spots} spots nuit</small>`)
+                    .on('click', () => selectCity(city.id));
+                cityMarkers[city.id] = marker;
+                clusterGroup.addLayer(marker);
+            });
+
+            cityMap.addLayer(clusterGroup);
+
+            // Centrer sur le cluster de villes (maxZoom évite de trop dézoomer si villes éparpillées)
+            if (Object.keys(cityMarkers).length > 0) {
+                cityMap.fitBounds(clusterGroup.getBounds(), { padding: [40, 40], maxZoom: 10 });
+            }
         }
-        
-        // Écouter le changement de ville dans le dropdown
-        select.addEventListener('change', function() {
-            const opt = select.options[select.selectedIndex];
-            const cityName = opt.getAttribute('data-name');
-            
-            // Mise à jour des informations de la ville (nom, département, statistiques)
-            document.getElementById('cityName').textContent = cityName;
-            const dept = opt.getAttribute('data-dept') || '';
-            const country = opt.getAttribute('data-country') || '';
-            document.getElementById('cityDept').textContent = dept + (country ? ' - ' + country : '');
-            
-            // Mise à jour des statistiques : nombre de randonnées, spots nuit, POI
-            document.getElementById('cityHikes').textContent = opt.getAttribute('data-hikes') + ' randonnées';
-            document.getElementById('citySpots').textContent = opt.getAttribute('data-spots') + ' spots nuit';
-            document.getElementById('cityServices').textContent = opt.getAttribute('data-poi') + " points d'intérêt";
-            
-            // Mise à jour du titre de la section météo
-            document.getElementById('weatherTitle').textContent = '🌤️ Météo à ' + cityName + ' - Prochains jours';
-            
-            // Mettre à jour l'affichage de la météo et de la carte
-            updateWeatherDisplay(opt);
-            updateMap(opt);
+
+        // Sélection d'une ville (depuis carte ou recherche)
+        async function selectCity(cityId) {
+            const city = allCities.find(c => c.id == cityId);
+            if (!city) return;
+
+            // Synchroniser le select caché (utilisé par le bouton Planifier et l'upload GPX)
+            for (let i = 0; i < select.options.length; i++) {
+                if (select.options[i].value == cityId) { select.selectedIndex = i; break; }
+            }
+
+            // Mettre à jour le champ de recherche
+            const citySearch = document.getElementById('citySearch');
+            if (citySearch) citySearch.value = city.name;
+
+            // Mettre à jour les icônes des marqueurs
+            Object.entries(cityMarkers).forEach(([id, marker]) => {
+                marker.setIcon(buildCityDivIcon(id == cityId));
+            });
+
+            // Zoomer sur la ville et ouvrir le popup
+            if (cityMap) {
+                cityMap.setView([city.lat, city.lon], 12, { animate: true });
+                if (cityMarkers[cityId]) cityMarkers[cityId].openPopup();
+            }
+
+            // Mémoriser la ville dans sessionStorage (survit au retour arrière, pas aux nouvelles sessions)
+            sessionStorage.setItem('step1_cityId', cityId);
+
+            // Révéler la fiche ville, la météo et le bouton au premier choix
+            // (la durée est déjà fixée, choisie sur la page précédente).
+            document.getElementById('selectedCity').style.display = '';
+            document.getElementById('weatherSection').style.display = '';
+            const planBtn = document.getElementById('planButton');
+            if (planBtn) planBtn.style.display = '';
+
+            // Mettre à jour la carte ville sélectionnée
+            document.getElementById('cityName').textContent = city.name;
+            document.getElementById('cityDept').textContent =
+                city.dept + (city.country ? ' - ' + city.country : '');
+            document.getElementById('cityHikes').textContent = city.hikes + ' randonnées';
+            document.getElementById('citySpots').textContent = city.spots + ' spots nuit';
+            document.getElementById('cityServices').textContent = city.poi + " points d'intérêt";
+            document.getElementById('weatherTitle').textContent = '🌤️ Météo à ' + city.name + ' - Prochains jours';
+
+            // Charger la météo si nécessaire
+            let meteoData = [];
+            try { meteoData = JSON.parse(city.option.getAttribute('data-meteo')) || []; } catch(e) {}
+
+            if (!meteoData || meteoData.length === 0) {
+                const weatherGrid = document.getElementById('weatherGrid');
+                weatherGrid.innerHTML = '<p style="grid-column:1/-1;text-align:center;"><i class="fas fa-spinner fa-spin"></i> Chargement météo...</p>';
+                try {
+                    const resp = await fetch(`/api/step1/refresh-meteo/${cityId}`);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        city.option.setAttribute('data-meteo', JSON.stringify(data.meteo));
+                    } else {
+                        weatherGrid.innerHTML = '<p style="grid-column:1/-1;text-align:center;">⚠️ Météo indisponible</p>';
+                        return;
+                    }
+                } catch(err) {
+                    document.getElementById('weatherGrid').innerHTML =
+                        '<p style="grid-column:1/-1;text-align:center;">⚠️ Erreur réseau</p>';
+                    return;
+                }
+            }
+            updateWeatherDisplay(city.option);
+        }
+
+        // Compatibilité : upload GPX déclenche un change sur le select caché
+        select.addEventListener('change', () => selectCity(select.value));
+
+        // --- Recherche textuelle ---
+        const citySearch = document.getElementById('citySearch');
+        const citySuggestions = document.getElementById('citySuggestions');
+        const cityNotFound = document.getElementById('cityNotFound');
+
+        citySearch.addEventListener('input', () => {
+            const q = citySearch.value.trim().toLowerCase();
+            cityNotFound.style.display = 'none';
+            if (q.length < 2) { citySuggestions.style.display = 'none'; return; }
+
+            const matches = allCities.filter(c =>
+                c.name.toLowerCase().includes(q) || c.dept.toLowerCase().includes(q)
+            ).slice(0, 8);
+
+            if (matches.length === 0) {
+                citySuggestions.style.display = 'none';
+                cityNotFound.style.display = 'block';
+                return;
+            }
+
+            citySuggestions.innerHTML = matches.map(c =>
+                `<div class="city-suggestion-item" data-id="${c.id}" style="
+                    padding:0.65rem 1rem;cursor:pointer;border-bottom:1px solid #f5f5f5;
+                    display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:0.95rem;"><b>${c.name}</b> <small style="color:#999;">${c.dept}</small></span>
+                    <small style="color:#bbb;">${c.hikes} randos</small>
+                </div>`
+            ).join('');
+            citySuggestions.style.display = 'block';
         });
+
+        citySuggestions.addEventListener('click', e => {
+            const item = e.target.closest('.city-suggestion-item');
+            if (!item) return;
+            citySuggestions.style.display = 'none';
+            cityNotFound.style.display = 'none';
+            selectCity(item.dataset.id);
+        });
+
+        // Hover sur les suggestions
+        citySuggestions.addEventListener('mouseover', e => {
+            const item = e.target.closest('.city-suggestion-item');
+            if (item) item.style.background = '#f0f7ff';
+        });
+        citySuggestions.addEventListener('mouseout', e => {
+            const item = e.target.closest('.city-suggestion-item');
+            if (item) item.style.background = '';
+        });
+
+        document.addEventListener('click', e => {
+            if (!e.target.closest('#citySearch') && !e.target.closest('#citySuggestions')) {
+                citySuggestions.style.display = 'none';
+            }
+        });
+
+        // Initialisation : restaurer la ville si retour arrière depuis step2 (sessionStorage)
+        (async () => {
+            await new Promise(r => setTimeout(r, 100));
+            const savedCityId = sessionStorage.getItem('step1_cityId');
+            if (savedCityId && allCities.find(c => c.id == savedCityId)) {
+                await selectCity(savedCityId);
+            }
+        })();
         
         /**
          * Met à jour l'affichage de la météo pour la ville sélectionnée
@@ -617,8 +427,14 @@
                         'cloud': { icon: 'fa-cloud', text: 'Conditions correctes' },
                         'indisponible': { icon: 'fa-question-circle', text: 'Météo indisponible' }
                     };
-                    const advice = adviceMap[forecast.picto] || adviceMap['indisponible'];
-                    
+                    let advice = adviceMap[forecast.picto] || adviceMap['indisponible'];
+
+                    // Par beau temps (soleil/nuage), avertir de la chaleur en conseillant de partir tôt
+                    const GOOD_WEATHER_PICTOS = ['sun', 'partly_cloudy', 'cloud'];
+                    if (GOOD_WEATHER_PICTOS.includes(forecast.picto) && forecast.temp_max >= 25) {
+                        advice = { icon: 'fa-sun', text: 'Partez de bonne heure' };
+                    }
+
                     // Créer la carte météo HTML pour ce jour
                     const dayDiv = document.createElement('div');
                     dayDiv.className = 'weather-day ' + weatherClass;
@@ -651,99 +467,106 @@
             }
         }
         
-        /**
-         * Met à jour la carte Leaflet avec les coordonnées de la ville sélectionnée
-         * Centre la carte sur la nouvelle position et met à jour le marqueur
-         * @param {HTMLOptionElement} option - L'option sélectionnée contenant les coordonnées lat/lon
-         */
-        function updateMap(option) {
-            if (!cityMap || !window.L) return;
-            
-            // Récupérer les coordonnées latitude/longitude depuis les attributs data
-            const lat = parseFloat(option.getAttribute('data-lat'));
-            const lon = parseFloat(option.getAttribute('data-lon'));
-            
-            if (!isNaN(lat) && !isNaN(lon)) {
-                // Centrer la carte sur la nouvelle ville
-                cityMap.setView([lat, lon], 12);
-                // Supprimer l'ancien marqueur s'il existe
-                if (cityMarker) {
-                    cityMap.removeLayer(cityMarker);
-                }
-                // Créer un nouveau marqueur sur la position de la ville
-                cityMarker = L.marker([lat, lon]).addTo(cityMap);
-            }
-        }
-        
         // ========================================
-        // GESTION DE LA SÉLECTION DE LA DURÉE DU SÉJOUR
+        // DURÉE DU SÉJOUR (déjà choisie sur la page précédente)
         // ========================================
-        
-        let selectedDays = 2; // Durée par défaut : 2 jours
-        const durationCards = document.querySelectorAll('.duration-card');
+
         const planButton = document.getElementById('planButton');
-        
-        // Écouter les clics sur les cartes de durée
-        durationCards.forEach(card => {
-            card.addEventListener('click', function() {
-                // Retirer la classe active de toutes les cartes
-                durationCards.forEach(c => c.classList.remove('active'));
-                
-                // Ajouter la classe active à la carte cliquée
-                this.classList.add('active');
-                
-                // Récupérer le nombre de jours sélectionné
-                const days = this.getAttribute('data-days');
-                
-                if (days === 'custom') {
-                    // Durée personnalisée : focus sur l'input et écouter les changements
-                    const customInput = document.getElementById('customDays');
-                    customInput.focus();
-                    customInput.addEventListener('input', function() {
-                        selectedDays = parseInt(this.value) || 2;
-                        updatePlanButton();
-                    });
-                } else {
-                    // Durée prédéfinie : mettre à jour directement
-                    selectedDays = parseInt(days);
-                    updatePlanButton();
-                }
-            });
-        });
-        
-        /**
-         * Met à jour le texte du bouton de planification selon la durée sélectionnée
-         * Affiche "jour" au singulier si 1 jour, "jours" au pluriel sinon
-         */
-        function updatePlanButton() {
-            if (planButton) {
-                const dayText = selectedDays === 1 ? 'jour' : 'jours';
-                planButton.innerHTML = `Planifier ces ${selectedDays} ${dayText} <i class="fas fa-arrow-right"></i>`;
-            }
+        // La durée est fixée sur /duration ; si elle est absente (accès direct à
+        // cette page), on renvoie l'utilisateur la choisir avant de continuer.
+        const selectedDaysRaw = localStorage.getItem('selectedDays');
+        if (!changingCityForNextDay && !selectedDaysRaw) {
+            window.location.href = "{{ url_for('duration') }}";
+            return;
         }
-        
+        const selectedDays = parseInt(selectedDaysRaw || '1');
+
+        // Badge "Jour X/N" en haut à gauche du stepper. En mode "changer de ville",
+        // currentDay est encore le dernier jour complété (pas encore incrémenté par
+        // continueWithNewCity()) : le jour en cours de planification est donc +1.
+        const currentDay = parseInt(localStorage.getItem('currentDay') || '1');
+        const displayDay = changingCityForNextDay ? currentDay + 1 : currentDay;
+        const dayBadge = document.getElementById('dayBadge');
+        if (dayBadge && selectedDaysRaw) dayBadge.textContent = `Jour ${displayDay}/${selectedDays}`;
+
+        function updatePlanButton() {
+            if (!planButton) return;
+            planButton.innerHTML = changingCityForNextDay
+                ? `Continuer avec cette ville <i class="fas fa-arrow-right"></i>`
+                : `Planifier ce séjour <i class="fas fa-arrow-right"></i>`;
+        }
+        updatePlanButton();
+
+        // Si la page est restaurée depuis le cache navigateur (retour arrière après
+        // avoir cliqué "Planifier"/"Continuer"), le bouton peut rester bloqué en
+        // désactivé avec son spinner : on le réinitialise dans ce cas.
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted && planButton) {
+                planButton.disabled = false;
+                updatePlanButton();
+            }
+        });
+
         // ========================================
         // CRÉATION DU PLAN ET NAVIGATION VERS ÉTAPE 2
         // ========================================
-        
+
         // Écouter le clic sur le bouton de planification
         if (planButton) {
             planButton.addEventListener('click', function(e) {
                 e.preventDefault();
-                
+
                 // Récupérer l'ID de la ville sélectionnée
                 const selectedOption = select.options[select.selectedIndex];
                 const cityId = selectedOption.value;
-                
-                // Stocker la ville et la durée dans localStorage pour les étapes suivantes
+
+                if (changingCityForNextDay) {
+                    // Changement de ville mi-séjour : plan existant conservé, pas de nouvelle durée
+                    continueWithNewCity(cityId);
+                    return;
+                }
+
+                // Stocker la ville dans localStorage pour les étapes suivantes
+                // (la durée est déjà en localStorage depuis /duration)
                 localStorage.setItem('selectedCityId', cityId);
-                localStorage.setItem('selectedDays', selectedDays);
-                
+
                 // Lancer la création du plan via API
                 createPlan(cityId, selectedDays);
             });
         }
-        
+
+        /**
+         * Change la ville du jour suivant pour un plan déjà en cours (mi-séjour).
+         * Met à jour trip_days.city_id via l'API, puis redirige vers l'étape 2.
+         * @param {number} cityId - L'ID de la nouvelle ville sélectionnée
+         */
+        async function continueWithNewCity(cityId) {
+            const planId = localStorage.getItem('planId');
+            const currentDay = parseInt(localStorage.getItem('currentDay') || '1');
+            const nextDay = currentDay + 1;
+            try {
+                planButton.disabled = true;
+                planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Changement de ville...';
+                const resp = await fetch(`/api/step1/update_day_city/${planId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ day_number: nextDay, city_id: parseInt(cityId) })
+                });
+                if (!resp.ok) throw new Error('Erreur mise à jour de la ville du jour');
+                localStorage.setItem('selectedCityId', cityId);
+                localStorage.setItem('currentDay', nextDay);
+                localStorage.removeItem('selectedHiking');
+                localStorage.removeItem('selectedSpot');
+                localStorage.removeItem('changingCityForNextDay');
+                window.location.href = "{{ url_for('step2') }}";
+            } catch (e) {
+                console.error('Erreur lors du changement de ville:', e);
+                alert('Le changement de ville a échoué. Veuillez réessayer.');
+                planButton.disabled = false;
+                updatePlanButton();
+            }
+        }
+
         /**
          * Appelle l'API create_plan pour créer un nouveau plan de voyage
          * Génère un userToken invité si nécessaire et redirige vers l'étape 2
@@ -811,7 +634,13 @@
 
                 // Stocker le plan_id dans localStorage pour les étapes suivantes
                 localStorage.setItem('planId', data.plan_id);
-                
+                localStorage.setItem('currentDay', 1);
+
+                // Réinitialiser les sélections des étapes suivantes (nouveau plan = nouveau départ)
+                localStorage.removeItem('selectedHiking');
+                localStorage.removeItem('selectedSpot');
+                localStorage.removeItem('selectedServices');
+
                 // Rediriger vers l'étape 2 (sélection des randonnées)
                 window.location.href = "{{ url_for('step2') }}";
 

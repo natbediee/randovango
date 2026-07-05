@@ -13,10 +13,66 @@ SERVICE_CATEGORY_LABEL_MAP = {
     'viewpoint': 'Point de vue',
     'attraction': 'Attraction',
     'beach': 'Plage',
+    'drinking_water': "Point d'eau potable",
+    'toilets': 'Toilettes',
+    'shower': 'Douche publique',
+    'sanitary_dump_station': 'Vidange camping-car',
+    'waste_disposal': 'Poubelle',
+    'shelter': 'Abri',
+    'supermarket': 'Supermarché',
+    'laundry': 'Laverie',
 }
 
 # Mapping label -> type OSM/Wikidata (pour import ou reverse)
 SERVICE_LABEL_TO_CATEGORY_MAP = {v: k for k, v in SERVICE_CATEGORY_LABEL_MAP.items()}
+
+# Mapping service_category DB (raw OSM/Wikidata) -> onglet frontend (étape 4 + bilan).
+# Volontairement non mappés (= ignorés, pas de catégorie "Autres" fourre-tout) :
+# parking (doublon avec les spots pour dormir de l'étape 3), shelter, waste_disposal
+# hors vidange officielle, internet_access, power_supply, pets, etc.
+POI_FRONTEND_CATEGORY_MAP = {
+    # Eau
+    "drinking_water":         "eau",
+    "water":                  "eau",
+    # Vidange (séparée de l'eau : point dédié, souvent pas au même endroit)
+    "sanitary_dump_station":  "vidange",
+    # Gasoil
+    "fuel":                   "gasoil",
+    # Supermarché (séparé du commerce de proximité)
+    "supermarket":            "supermarche",
+    # Commerce
+    "convenience":            "commerce",
+    "bakery":                 "commerce",
+    "shop":                   "commerce",
+    # Restauration
+    "restaurant":             "restauration",
+    "cafe":                   "restauration",
+    "fast_food":              "restauration",
+    # Toilettes (séparée des douches : pas toujours au même endroit)
+    "toilets":                "toilettes",
+    # Hygiène (douches + baignade/piscine)
+    "shower":                 "hygiene",
+    "swimming":               "hygiene",
+    "swimming_pool":          "hygiene",
+    # Culture & Loisirs
+    "tourism":                "culture",
+    "attraction":             "culture",
+    "museum":                 "culture",
+    "viewpoint":              "culture",
+    "hiking":                 "culture",
+    "bicycle":                "culture",
+    "motorcycle":             "culture",
+    "climbing":               "culture",
+    "watersport":             "culture",
+    "canoe":                  "culture",
+    "fishing":                "culture",
+    "playground":             "culture",
+    "beach":                  "culture",
+    # Urgences
+    "pharmacy":               "urgence",
+    "hospital":               "urgence",
+    "doctors":                "urgence",
+}
 
  # Mapping service → catégorie (p4n)
 SERVICE_CATEGORY_MAP = {
