@@ -30,27 +30,42 @@ def main():
     all_cities = get_all_city_ids()  # [(id, name), ...]
     all_city_ids = set(city_id for city_id, _ in all_cities)
     logger.info(f"[ETL] Total de villes en base : {len(all_city_ids)}")
-    histo_poi_city_ids = set(get_histo_poi_city_ids())
-    logger.info(f"[POI] Villes déjà traitées (OSM/Wiki déjà chargés) : {len(histo_poi_city_ids)}")
+
+    # Rattrapage OSM et Wikidata suivis indépendamment : une ville où une seule
+    # des deux sources a réussi (ex. Wikidata OK, OSM vide/échoué) doit pouvoir
+    # être retentée pour la source manquante, sans être considérée "déjà traitée".
+    histo_osm_city_ids = set(get_histo_poi_city_ids('osm'))
+    histo_wikidata_city_ids = set(get_histo_poi_city_ids('wikidata'))
     histo_scrap_city_ids = set(get_histo_scrap_city_ids())
+    logger.info(f"[POI] Villes déjà traitées (OSM) : {len(histo_osm_city_ids)}")
+    logger.info(f"[POI] Villes déjà traitées (Wikidata) : {len(histo_wikidata_city_ids)}")
     logger.info(f"[SCRAP] Villes déjà traitées (P4N déjà scrapé) : {len(histo_scrap_city_ids)}")
 
-    # Rattrapage OSM + Wiki (si city_id absent de histo_poi)
-    missing_poi = all_city_ids - histo_poi_city_ids
-    logger.info(f"[POI] Villes restant à rattraper pour OSM/Wiki : {len(missing_poi)}")
+    missing_osm = all_city_ids - histo_osm_city_ids
+    missing_wikidata = all_city_ids - histo_wikidata_city_ids
+    logger.info(f"[POI] Villes restant à rattraper pour OSM : {len(missing_osm)}")
+    logger.info(f"[POI] Villes restant à rattraper pour Wikidata : {len(missing_wikidata)}")
+
     for city_id, city_name in all_cities:
-        if city_id in missing_poi:
-            logger.info(f"[POI] OSM/Wiki pour city_id={city_id} ({city_name})")
-            # Extraction OSM
-            osm_json = extract_osm(city_name)
-            if osm_json:
-                df_osm = transform_osm(osm_json, city=city_name)
-                load_osm_poi(df_osm, city_name=city_name)
-            # Extraction Wikidata
-            wikidata_json = extract_wikidata(city_name)
-            if wikidata_json:
-                df_wiki = transform_wikidata(wikidata_json, city_name=city_name)
-                load_wikidata_poi(df_wiki, city_name=city_name)
+        if city_id in missing_osm:
+            logger.info(f"[POI] OSM pour city_id={city_id} ({city_name})")
+            try:
+                osm_json = extract_osm(city_name)
+                if osm_json:
+                    df_osm = transform_osm(osm_json, city=city_name)
+                    load_osm_poi(df_osm, city_name=city_name)
+            except Exception as e:
+                # Un échec sur une ville ne doit pas interrompre le rattrapage des suivantes.
+                logger.error(f"[POI][OSM] Échec pour city_id={city_id} ({city_name}) : {e}")
+        if city_id in missing_wikidata:
+            logger.info(f"[POI] Wikidata pour city_id={city_id} ({city_name})")
+            try:
+                wikidata_json = extract_wikidata(city_name)
+                if wikidata_json:
+                    df_wiki = transform_wikidata(wikidata_json, city_name=city_name)
+                    load_wikidata_poi(df_wiki, city_name=city_name)
+            except Exception as e:
+                logger.error(f"[POI][Wikidata] Échec pour city_id={city_id} ({city_name}) : {e}")
 
     # Rattrapage P4N (si city_id absent de histo_scrap)
     missing_scrap = all_city_ids - histo_scrap_city_ids

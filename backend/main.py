@@ -3,9 +3,12 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
+from dotenv import load_dotenv
 
 from api.routers import step1, step2, step3, step4, result, auth, etl
 from utils.logger_util import LoggerUtil
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 app = FastAPI(
     title="RandoVanGo API",
@@ -13,9 +16,11 @@ app = FastAPI(
 )
 
 # Configuration CORS pour autoriser les requêtes depuis le frontend
+# ALLOWED_ORIGINS = liste d'origines séparées par des virgules (ex: prod AWS via variable d'env)
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5000", "http://localhost:8000"],  # Origines autorisées
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],  # Toutes les méthodes HTTP
     allow_headers=["*"],  # Tous les headers

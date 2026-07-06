@@ -44,6 +44,7 @@ def _fetch_plan_data(plan_id: int):
             h.estimated_duration_h AS hike_duration_h,
             h.start_latitude     AS hike_latitude,
             h.start_longitude    AS hike_longitude,
+            h.mongo_id           AS hike_mongo_id,
             p.name               AS spot_name,
             p.description        AS spot_description,
             p.type                AS spot_type,

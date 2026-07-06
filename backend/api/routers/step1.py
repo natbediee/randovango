@@ -4,11 +4,10 @@ from utils.db_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
 from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
-from utils.geo_utils import get_bounding_box
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from services.plan_service import set_day_city
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import time
 import threading
 
@@ -45,58 +44,87 @@ def refresh_all_cities_meteo_background():
         with meteo_refresh_lock:
             meteo_refresh_in_progress = False
 
-def get_city_stats(cursor, latitude, longitude, distance_km=5):
-    min_lat, min_lon, max_lat, max_lon = get_bounding_box(latitude, longitude, distance_km)
-    # Randonnées vérifiées
-    cursor.execute("""
-        SELECT COUNT(*) as count FROM hikes WHERE verifie = 1 AND start_latitude BETWEEN %s AND %s AND start_longitude BETWEEN %s AND %s
-    """, (min_lat, max_lat, min_lon, max_lon))
-    hikes_verified = cursor.fetchone()['count']
-    # Randonnées en attente
-    cursor.execute("""
-        SELECT COUNT(*) as count FROM hikes WHERE verifie = 0 AND start_latitude BETWEEN %s AND %s AND start_longitude BETWEEN %s AND %s
-    """, (min_lat, max_lat, min_lon, max_lon))
-    hikes_in_waiting = cursor.fetchone()['count']
-    # Spots (POI) en attente
-    cursor.execute("""
-        SELECT COUNT(*) as count FROM spots WHERE verifie = 0 AND latitude BETWEEN %s AND %s AND longitude BETWEEN %s AND %s
-    """, (min_lat, max_lat, min_lon, max_lon))
-    spots_in_waiting = cursor.fetchone()['count']
-    # Spots (POI) vérifiés
-    cursor.execute("""
-        SELECT COUNT(*) as count FROM spots WHERE verifie = 1 AND latitude BETWEEN %s AND %s AND longitude BETWEEN %s AND %s
-    """, (min_lat, max_lat, min_lon, max_lon))
-    spots_verified = cursor.fetchone()['count']
+def get_all_city_stats(cursor, cities, distance_km=5):
+    """
+    Calcule les stats (randonnées, spots, POI) pour TOUTES les villes en une poignée
+    de requêtes agrégées (une par table), au lieu d'une boucle de 6 requêtes par ville.
+    Scalable même si la base grossit avec de nouveaux départements : le nombre de
+    requêtes ne dépend plus du nombre de villes.
+    Retourne un dict {city_id: {"hikes", "spots", "poi"}}.
+    """
+    city_ids = [c["id"] for c in cities]
+    stats = {cid: {"hikes": 0, "spots": 0, "poi": 0} for cid in city_ids}
+    if not city_ids:
+        return stats
+
+    # Delta de latitude constant (même distance_km pour toutes les villes) ; le delta de
+    # longitude varie par ville car il dépend du cosinus de sa latitude (calculé en SQL).
+    lat_delta = distance_km / 111.32
+    def bbox_on(alias, lat_col, lon_col):
+        return f"""
+            ON {alias}.{lat_col} BETWEEN c.latitude - %s AND c.latitude + %s
+           AND {alias}.{lon_col} BETWEEN c.longitude - (%s / COS(RADIANS(c.latitude))) AND c.longitude + (%s / COS(RADIANS(c.latitude)))
+        """
+    bbox_params = (lat_delta, lat_delta, lat_delta, lat_delta)
+
+    cursor.execute(f"""
+        SELECT c.id AS city_id, COUNT(*) AS cnt
+        FROM cities c
+        JOIN hikes h {bbox_on("h", "start_latitude", "start_longitude")}
+        GROUP BY c.id
+    """, bbox_params)
+    for row in cursor.fetchall():
+        if row["city_id"] in stats:
+            stats[row["city_id"]]["hikes"] = row["cnt"]
+
+    cursor.execute(f"""
+        SELECT c.id AS city_id, COUNT(*) AS cnt
+        FROM cities c
+        JOIN spots sp {bbox_on("sp", "latitude", "longitude")}
+        GROUP BY c.id
+    """, bbox_params)
+    for row in cursor.fetchall():
+        if row["city_id"] in stats:
+            stats[row["city_id"]]["spots"] = row["cnt"]
+
     # Services (POI) : uniquement les catégories affichées en step4 (même règle que POI_FRONTEND_CATEGORY_MAP)
     valid_categories = list(POI_FRONTEND_CATEGORY_MAP.keys())
     placeholders = ",".join(["%s"] * len(valid_categories))
     cursor.execute(f"""
-        SELECT COUNT(DISTINCT p.id) AS count
-        FROM poi p
+        SELECT c.id AS city_id, COUNT(DISTINCT p.id) AS cnt
+        FROM cities c
+        JOIN poi p {bbox_on("p", "latitude", "longitude")}
         JOIN poi_service ps ON p.id = ps.poi_id
         JOIN services s ON ps.service_id = s.id
-        WHERE p.verifie = 0
-        AND p.latitude BETWEEN %s AND %s
-        AND p.longitude BETWEEN %s AND %s
-        AND s.category IN ({placeholders})
-    """, (min_lat, max_lat, min_lon, max_lon, *valid_categories))
-    poi_in_waiting = cursor.fetchone()['count']
-    cursor.execute(f"""
-        SELECT COUNT(DISTINCT p.id) AS count
-        FROM poi p
-        JOIN poi_service ps ON p.id = ps.poi_id
-        JOIN services s ON ps.service_id = s.id
-        WHERE p.verifie = 1
-        AND p.latitude BETWEEN %s AND %s
-        AND p.longitude BETWEEN %s AND %s
-        AND s.category IN ({placeholders})
-    """, (min_lat, max_lat, min_lon, max_lon, *valid_categories))
-    poi_verified = cursor.fetchone()['count']
-    return {
-        "hikes": hikes_in_waiting + hikes_verified,
-        "spots": spots_in_waiting + spots_verified,
-        "poi": poi_in_waiting + poi_verified
-    }
+        WHERE s.category IN ({placeholders})
+        GROUP BY c.id
+    """, bbox_params + tuple(valid_categories))
+    for row in cursor.fetchall():
+        if row["city_id"] in stats:
+            stats[row["city_id"]]["poi"] = row["cnt"]
+
+    return stats
+
+@router.get("/cities/bounds", summary="Returns the bounding box covering all available cities.")
+def get_cities_bounds():
+    """
+    Emprise géographique de toutes les villes en base (min/max lat/lon). Utilisée
+    par le front pour brider le panoramique/zoom des cartes à la zone réellement
+    couverte (pas de sens d'aller voir les États-Unis, aucune ville n'y est
+    référencée) — calculée dynamiquement, pas codée en dur, pour suivre l'ajout
+    de nouveaux départements sans changement de code.
+    """
+    cnx = MySQLUtils.connect()
+    cursor = cnx.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT MIN(latitude) AS min_lat, MAX(latitude) AS max_lat,
+               MIN(longitude) AS min_lon, MAX(longitude) AS max_lon
+        FROM cities
+    """)
+    bounds = cursor.fetchone()
+    cursor.close()
+    MySQLUtils.disconnect(cnx)
+    return bounds
 
 @router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
 async def get_ville_list(
@@ -127,16 +155,23 @@ async def get_ville_list(
             logger.info("Rafraîchissement météo déjà en cours en arrière-plan.")
 
     cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
-    cities = []
-    for row in cursor.fetchall():
-        row["stats"] = get_city_stats(cursor, row["latitude"], row["longitude"], distance_km)
+    cities = cursor.fetchall()
 
-        # Récupération des prévisions météo pour cette ville
-        cursor.execute("SELECT * FROM weather WHERE city_id = %s AND DATE >= CURDATE() ORDER BY date ASC", (row['id'],))
-        meteo_data = cursor.fetchall()
-        forecasts = []
-        for m in meteo_data:
-            forecasts.append({
+    # Stats de toutes les villes en une poignée de requêtes agrégées (voir get_all_city_stats)
+    # au lieu d'une boucle de 6 requêtes par ville.
+    all_stats = get_all_city_stats(cursor, cities, distance_km)
+
+    # Météo de toutes les villes en une seule requête, regroupée ensuite par ville en Python.
+    city_ids = [c["id"] for c in cities]
+    meteo_by_city = {cid: [] for cid in city_ids}
+    if city_ids:
+        placeholders = ",".join(["%s"] * len(city_ids))
+        cursor.execute(
+            f"SELECT * FROM weather WHERE city_id IN ({placeholders}) AND DATE >= CURDATE() ORDER BY city_id, date ASC",
+            tuple(city_ids)
+        )
+        for m in cursor.fetchall():
+            meteo_by_city[m["city_id"]].append({
                 "date": m["date"],
                 "temp_max": m["temp_max_c"],
                 "temp_min": m["temp_min_c"],
@@ -145,9 +180,11 @@ async def get_ville_list(
                 "precipitation_sum": m.get("precipitation_mm", 0.0),
                 "wind_speed_max": m.get("wind_max_kmh", 0.0)
             })
-        row["meteo"] = forecasts
 
-        cities.append(row)
+    for row in cities:
+        row["stats"] = all_stats[row["id"]]
+        row["meteo"] = meteo_by_city[row["id"]]
+
     cursor.close()
     MySQLUtils.disconnect(cnx)
     return cities
@@ -158,7 +195,8 @@ def create_plan(
     city_id: int = Body(...),
     duration_days: int = Body(...),
     user_token: str = Body(None),
-    user_id: int = Body(None)
+    user_id: int = Body(None),
+    start_date: date = Body(None)
 ):
     """Créer un nouveau plan (trip_plans + jours vides pour l'étape 1)"""
     # On doit avoir soit user_id (connecté), soit user_token (invité)
@@ -174,13 +212,12 @@ def create_plan(
     try:
         cnx = MySQLUtils.connect()
         cursor = cnx.cursor()
-        from datetime import date
-        today = date.today()
+        plan_start_date = start_date or date.today()
         insert_plan = """
             INSERT INTO trip_plans (start_date, duration_days, city_id, user_token, user_id, created_at)
             VALUES (%s, %s, %s, %s, %s, NOW())
         """
-        cursor.execute(insert_plan, (today, duration_days, city_id, user_token_to_insert, user_id_to_insert))
+        cursor.execute(insert_plan, (plan_start_date, duration_days, city_id, user_token_to_insert, user_id_to_insert))
         plan_id = cursor.lastrowid
         insert_day = """
             INSERT INTO trip_days (trip_plan_id, day_number, hike_id, spot_id, city_id)

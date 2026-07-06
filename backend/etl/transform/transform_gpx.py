@@ -68,14 +68,6 @@ def transform_gpx(gpx_content, fname) -> dict:
 	if not city_name:
 		return None
 
-	for waypoint in gpx.waypoints:
-		waypoints.append({
-			'name': waypoint.name,
-			'lat': waypoint.latitude,
-			'lon': waypoint.longitude,
-			'ele': waypoint.elevation,
-			'desc': waypoint.description
-		})
 	if gpx.tracks:
 		# Calcul de la distance totale en 3D (prend en compte l'altitude)
 		total_distance = 0

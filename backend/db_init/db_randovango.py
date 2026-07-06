@@ -117,6 +117,7 @@ def init_database():
                 source_id INT,
                 verifie BOOL DEFAULT FALSE,
                 UNIQUE (p4n_id),
+                INDEX idx_spots_latlon (latitude, longitude),
                 FOREIGN KEY (source_id) REFERENCES sources(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
@@ -160,6 +161,7 @@ def init_database():
                 city_id INT,
                 verifie BOOL DEFAULT FALSE,
                 imported_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_hikes_latlon (start_latitude, start_longitude),
                 FOREIGN KEY (source_id) REFERENCES sources(id),
                 FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -178,6 +180,7 @@ def init_database():
                 source_id INT,
                 verifie BOOL DEFAULT FALSE,
                 unique (original_id, source_id),
+                INDEX idx_poi_latlon (latitude, longitude),
                 FOREIGN KEY (source_id) REFERENCES sources(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,

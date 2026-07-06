@@ -89,14 +89,19 @@ def extract_wikidata(city) -> dict:
             return data
             
         except requests.exceptions.HTTPError as e:
-            if response.status_code == 504 and attempt < MAX_RETRIES - 1:
-                logger.warning(f"[Extract] : Erreur 504, tentative de réessai dans 5 secondes ({attempt + 1}/{MAX_RETRIES})...")
+            if response.status_code in (500, 502, 503, 504) and attempt < MAX_RETRIES - 1:
+                logger.warning(f"[Extract] : Erreur {response.status_code}, tentative de réessai dans 5 secondes ({attempt + 1}/{MAX_RETRIES})...")
                 time.sleep(5)
                 continue
-            logger.error(f"[Extract] : Erreur HTTP {response.status_code}: {e}")
-            raise Exception(f"[Extract] : Erreur HTTP {response.status_code}: {e}")
+            # Échec définitif : on logue et on renvoie None plutôt que de lever une
+            # exception, pour qu'un échec Wikidata sur une ville n'interrompe pas
+            # tout le traitement en lot (etl_rattrapage.py notamment).
+            logger.error(f"[Extract] : Erreur HTTP {response.status_code} pour '{city}', abandon après {attempt + 1} tentative(s) : {e}")
+            return None
 
         except requests.exceptions.RequestException as e:
-            raise Exception(f"[Extract] : Erreur de connexion : {e}")
+            logger.error(f"[Extract] : Erreur de connexion pour '{city}' : {e}")
+            return None
         except Exception as e:
-            raise Exception(f"[Extract] : Erreur de traitement des données : {e}")
+            logger.error(f"[Extract] : Erreur de traitement des données pour '{city}' : {e}")
+            return None

@@ -15,11 +15,32 @@
 <body>
     {% block page_content %}{% endblock %}
     
+    <!-- Positionnement des tuiles en left/top plutôt qu'en transform 3D : supprime les
+         fins liserés blancs entre tuiles sur les écrans à mise à l'échelle fractionnaire
+         (Windows 125/150 % : chaque tuile étant sa propre couche GPU, leurs arrondis au
+         pixel physique divergent d'1px aux jointures). Contrepartie : le zoom n'est plus
+         animé (instantané). Doit être défini AVANT le chargement de leaflet.js. -->
+    <script>window.L_DISABLE_3D = true;</script>
+
     <!-- Script Leaflet (doit être chargé avant les scripts des pages) -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
         crossorigin=""></script>
-    
+
+    <!-- URLs Flask exposées au JS statique (fichiers hors du moteur de templates Jinja) -->
+    <script>
+        window.APP_URLS = {
+            duration: "{{ url_for('duration') }}",
+            step1: "{{ url_for('step1') }}",
+            step2: "{{ url_for('step2') }}",
+            step3: "{{ url_for('step3') }}",
+            step4: "{{ url_for('step4') }}",
+            results: "{{ url_for('results') }}"
+        };
+        // URL de l'API FastAPI, jointe directement par le navigateur (plus de relais Flask)
+        window.API_BASE = "{{ public_api_base_url }}";
+    </script>
+
     {% block scripts %}
     {% endblock %}
 </body>

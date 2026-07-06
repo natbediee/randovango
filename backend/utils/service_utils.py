@@ -125,10 +125,16 @@ class ServiceUtil:
     @staticmethod
     def load_env() -> None:
         """
-        Charge le fichier d'environnement (.env) et affiche un log si absent.
+        Charge le fichier d'environnement (.env). Chemin absolu ancré sur ce fichier
+        (et non relatif au répertoire courant) : un chemin relatif ne fonctionnait
+        que par accident, grâce à db_utils.py qui charge le même .env en absolu et
+        s'importe généralement avant (python-dotenv ne réécrit pas les variables
+        déjà présentes) — mais cassait dès qu'un module appelait load_env() sans
+        que db_utils ait été importé au préalable (ex: script isolé, ou MongoUtils
+        appelé depuis un chemin de code qui n'importe jamais MySQLUtils).
         """
         from pathlib import Path
-        env_path = Path(".env")
+        env_path = Path(__file__).resolve().parents[2] / ".env"
         load_dotenv(str(env_path))
 
 

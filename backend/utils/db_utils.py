@@ -53,13 +53,25 @@ def get_all_city_ids():
     MySQLUtils.disconnect(conn)
     return [(row[0], row[1]) for row in rows]
 
-def get_histo_poi_city_ids():
+def get_histo_poi_city_ids(source: str):
     """
-    Retourne la liste des city_id présents dans histo_poi.
+    Retourne la liste des city_id ayant déjà au moins un POI chargé pour la
+    source donnée ('osm' ou 'wikidata'). Suivi par source (et non par ville
+    seule) : une ville où seule Wikidata a réussi doit pouvoir être retentée
+    pour OSM, et inversement.
     """
     conn = MySQLUtils.connect()
     cursor = MySQLUtils.get_cursor(conn)
-    cursor.execute("SELECT DISTINCT city_id FROM histo_poi")
+    cursor.execute(
+        """
+        SELECT DISTINCT hp.city_id
+        FROM histo_poi hp
+        JOIN poi p ON hp.poi_id = p.id
+        JOIN sources s ON p.source_id = s.id
+        WHERE s.name = %s
+        """,
+        (source,)
+    )
     ids = [row[0] for row in cursor.fetchall()]
     cursor.close()
     MySQLUtils.disconnect(conn)
