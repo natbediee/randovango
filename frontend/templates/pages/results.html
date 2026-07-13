@@ -4,46 +4,15 @@
 
 {% block page_content %}
 <div class="main-container">
-    <div class="page-header">
-        <div class="hero-section">
-            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
-            <div class="hero-overlay"></div>
-            <div class="hero-logo-container">
-                <div class="hero-logo-white">
-                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
-                </div>
-            </div>
-            <div class="hero-content">
-                <h1 class="hero-title">Planificateur RandoVanGo</h1>
-                <p class="hero-subtitle">Votre voyage est prêt !</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="planning-stepper">
-        <div class="day-badge" id="dayBadge">Jour 1</div>
-        <div class="stepper-container">
-            <div class="step completed">
-                <div class="step-circle">✓</div>
-                <div class="step-label">Ville</div>
-            </div>
-            <div class="step-line completed"></div>
-            <div class="step completed">
-                <div class="step-circle">✓</div>
-                <div class="step-label">Randonnée</div>
-            </div>
-            <div class="step-line completed"></div>
-            <div class="step completed">
-                <div class="step-circle">✓</div>
-                <div class="step-label">Spot</div>
-            </div>
-            <div class="step-line completed"></div>
-            <div class="step completed">
-                <div class="step-circle">✓</div>
-                <div class="step-label">Services</div>
-            </div>
-        </div>
-    </div>
+    {% with hero_subtitle='Votre voyage est prêt !' %}
+    {% include 'partials/hero.html' %}
+    {% endwith %}
+
+    {# active_step=5 : les quatre étapes sont complétées (aucune n'est active) #}
+    {% with active_step=5 %}
+    {% include 'partials/stepper.html' %}
+    {% endwith %}
+
 <div class="step-section">
     <div class="step-header">
         <h2>📋 Récapitulatif du voyage</h2>
@@ -68,9 +37,7 @@
     </div>
 </div>
 <!-- Carte interactive -->
-    <div class="map-page-container" style="margin: 0 0 2rem 0;">
-        <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
-    </div>
+    {% include 'partials/map_container.html' %}
 
 <div id="nextDaySection" style="display:none;">
     <div class="step-header">

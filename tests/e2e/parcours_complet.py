@@ -3,11 +3,17 @@ Parcours de bout en bout du planificateur RandoVanGo (filet de sécurité).
 
 Lancé MANUELLEMENT (pas par pytest — pas de préfixe test_) :
     .venv/bin/python tests/e2e/parcours_complet.py
+    .venv/bin/python tests/e2e/parcours_complet.py --changer-de-ville
 
 Déroule le parcours complet d'un utilisateur invité dans un navigateur headless :
     /duration (2 jours) → /step1 (recherche d'une ville) → /step2 (choix rando)
     → /step3 (choix spot) → /step4 (choix service) → /results (jour 1)
     → "Rester dans la même ville" → step2..step4 → /results (jour 2, fin de séjour)
+
+Avec --changer-de-ville, le jour 2 se planifie dans une AUTRE ville : au
+récapitulatif du jour 1, on clique "Changer de ville" au lieu de "Rester",
+ce qui repasse par /step1 en mode changement de ville mi-séjour
+(changingCityForNextDay, la zone la plus délicate du parcours).
 
 Échoue (exit code 1) si :
   - un élément attendu n'apparaît pas,
@@ -25,12 +31,7 @@ FRONT = "http://localhost"
 
 # Erreurs console préexistantes tolérées (bugs connus AVANT la refonte).
 # À retirer au fur et à mesure des corrections — la liste doit finir vide.
-ERREURS_CONNUES = [
-    # step4 goToNextDayOrResults : la sauvegarde est lancée puis la page navigue
-    # aussitôt, ce qui avorte la requête. Sans conséquence (chaque clic sauvegarde
-    # déjà au fil de l'eau) ; corrigé lors de la réécriture de step4_services.js.
-    "Erreur sauvegarde services: TypeError: Failed to fetch",
-]
+ERREURS_CONNUES = []
 
 console_errors = []
 js_page_errors = []
@@ -96,7 +97,38 @@ def derouler_une_journee(page, jour):
     log(f"results jour {jour}: tableau OK ({lignes} ligne(s))")
 
 
+def selectionner_ville(page, nom_a_eviter=None):
+    """Sur /step1, choisit une ville via la recherche et renvoie son nom.
+
+    Par défaut la première ville de la liste ; si `nom_a_eviter` est donné
+    (scénario changement de ville), prend la première ville différente.
+    """
+    page.wait_for_selector("#citySearch", timeout=10000)
+    # Attendre que le JS de la page ait rempli le <select> caché avec les
+    # villes de l'API (la recherche ne trouve rien tant qu'il est vide).
+    page.wait_for_function(
+        "document.getElementById('citySelect').options.length > 0",
+        timeout=20000,
+    )
+    a_eviter_js = "null" if nom_a_eviter is None else repr(nom_a_eviter)
+    ville = page.evaluate(
+        f"""Array.from(document.getElementById('citySelect').options)
+                .map(o => o.dataset.name)
+                .find(name => name !== {a_eviter_js})"""
+    )
+    page.locator("#citySearch").fill(ville[:6])
+    page.wait_for_selector(".city-suggestion-item", timeout=10000)
+    page.locator(".city-suggestion-item").first.click()
+    page.wait_for_selector("#weatherGrid .weather-day", timeout=15000)
+    log(f"step1: ville '{ville}' sélectionnée, météo affichée")
+    page.wait_for_selector("#planButton", state="visible", timeout=5000)
+    page.locator("#planButton").click()
+    return ville
+
+
 def main():
+    changer_de_ville = "--changer-de-ville" in sys.argv
+
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 1400, "height": 900})
@@ -116,32 +148,23 @@ def main():
         log("duration: 2 jours choisis")
 
         # --- /step1 : rechercher une ville et lancer le plan ---
-        page.wait_for_selector("#citySearch", timeout=10000)
-        # Attendre que le JS de la page ait rempli le <select> caché avec les
-        # villes de l'API (la recherche ne trouve rien tant qu'il est vide).
-        page.wait_for_function(
-            "document.getElementById('citySelect').options.length > 0",
-            timeout=20000,
-        )
         # On prend la première ville de la liste (peu importe laquelle,
         # le parcours doit marcher pour toutes).
-        ville = page.evaluate(
-            "document.getElementById('citySelect').options[0].dataset.name"
-        )
-        page.locator("#citySearch").fill(ville[:6])
-        page.wait_for_selector(".city-suggestion-item", timeout=10000)
-        page.locator(".city-suggestion-item").first.click()
-        page.wait_for_selector("#weatherGrid .weather-day", timeout=15000)
-        log(f"step1: ville '{ville}' sélectionnée, météo affichée")
-        page.wait_for_selector("#planButton", state="visible", timeout=5000)
-        page.locator("#planButton").click()
+        ville = selectionner_ville(page)
 
         # --- Jour 1 complet ---
         derouler_une_journee(page, jour=1)
 
-        # --- Jour 2 : rester dans la même ville ---
+        # --- Jour 2 : rester dans la même ville, ou en changer ---
         page.wait_for_selector("#nextDaySection", state="visible", timeout=5000)
-        page.locator("#stayButton").click()
+        if changer_de_ville:
+            # Repasse par /step1 en mode changement de ville mi-séjour
+            page.locator("button[onclick='changeCityForNextDay()']").click()
+            nouvelle_ville = selectionner_ville(page, nom_a_eviter=ville)
+            assert nouvelle_ville != ville, "le scénario doit changer de ville"
+            log(f"jour 2: changement de ville '{ville}' → '{nouvelle_ville}'")
+        else:
+            page.locator("#stayButton").click()
         derouler_une_journee(page, jour=2)
 
         # --- Fin de séjour : section de fin + lien PDF ---

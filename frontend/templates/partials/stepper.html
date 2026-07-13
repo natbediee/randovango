@@ -1,0 +1,42 @@
+{# Fil d'étapes (stepper) affiché sous le bandeau, avec le badge "Jour X/N"
+   (rempli par le JS de chaque page via showDayBadge).
+   Paramètres (passés via {% with %} avant le {% include %}) :
+     - active_step   : numéro (1 à 4) de l'étape en cours ; 5 = tout est complété
+                       (page récapitulatif). Les étapes précédentes sont cochées.
+     - duration_page : si vrai, variante 6 étapes de la page d'accueil /duration
+                       (badge masqué, étape "Jours" active, étape "Résultat" en plus) #}
+<div class="planning-stepper">
+    {% if duration_page %}
+    <div class="day-badge" id="dayBadge" style="display:none;">Jours</div>
+    <div class="stepper-container">
+        {% for label in ['Jours', 'Ville', 'Randonnée', 'Spot', 'Services'] %}
+        {% if not loop.first %}
+        <div class="step-line"></div>
+        {% endif %}
+        <div class="step{% if loop.first %} active{% endif %}">
+            <div class="step-circle">{{ loop.index }}</div>
+            <div class="step-label">{{ label }}</div>
+        </div>
+        {% endfor %}
+        <div class="step-line step-resultat-only"></div>
+        <div class="step step-resultat-only">
+            <div class="step-circle">📋</div>
+            <div class="step-label">Résultat</div>
+        </div>
+    </div>
+    {% else %}
+    <div class="day-badge" id="dayBadge">Jour 1</div>
+    <div class="stepper-container">
+        {% for label in ['Ville', 'Randonnée', 'Spot', 'Services'] %}
+        {# La ligne qui précède une étape est "complétée" si l'étape d'avant l'est #}
+        {% if not loop.first %}
+        <div class="step-line{% if loop.index <= active_step %} completed{% endif %}"></div>
+        {% endif %}
+        <div class="step{% if loop.index < active_step %} completed{% elif loop.index == active_step %} active{% endif %}">
+            <div class="step-circle">{% if loop.index < active_step %}✓{% else %}{{ loop.index }}{% endif %}</div>
+            <div class="step-label">{{ label }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>

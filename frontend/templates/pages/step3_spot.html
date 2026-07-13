@@ -1,51 +1,17 @@
-
 {% extends "base.html" %}
 
 {% block title %}Étape 3 - Choix de la Nuit - RandoVanGo{% endblock %}
 
 {% block page_content %}
 <div class="main-container">
-    <div class="page-header">
-        <div class="hero-section">
-            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
-            <div class="hero-overlay"></div>
-            <div class="hero-logo-container">
-                <div class="hero-logo-white">
-                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
-                </div>
-            </div>
-            <div class="hero-content">
-                <h1 class="hero-title">Planificateur RandoVanGo</h1>
-                <p class="hero-subtitle">Trouvez l'endroit parfait pour passer la nuit</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="planning-stepper">
-        <div class="day-badge" id="dayBadge">Jour 1</div>
-        <div class="stepper-container">
-            <div class="step completed">
-                <div class="step-circle">✓</div>
-                <div class="step-label">Ville</div>
-            </div>
-            <div class="step-line completed"></div>
-            <div class="step completed">
-                <div class="step-circle">✓</div>
-                <div class="step-label">Randonnée</div>
-            </div>
-            <div class="step-line completed"></div>
-            <div class="step active">
-                <div class="step-circle">3</div>
-                <div class="step-label">Spot</div>
-            </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">4</div>
-                <div class="step-label">Services</div>
-            </div>
-        </div>
-    </div>
-    
+    {% with hero_subtitle="Trouvez l'endroit parfait pour passer la nuit" %}
+    {% include 'partials/hero.html' %}
+    {% endwith %}
+
+    {% with active_step=3 %}
+    {% include 'partials/stepper.html' %}
+    {% endwith %}
+
     <div class="planning-content">
 <div class="step-section">
     <div class="step-header" style="margin-bottom:0.75rem;">
@@ -63,9 +29,7 @@
     </div>
     <p id="step3Subtitle" style="text-align:center; color: var(--gray-500); margin: -1rem 0 1.5rem;">Choisissez votre spot pour terminer parfaitement cette journée</p>
     <!-- Carte interactive -->
-    <div class="map-page-container" style="margin: 0 0 2rem 0;">
-        <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
-    </div>
+    {% include 'partials/map_container.html' %}
     <!-- Spots de bivouac -->
     <div class="spots-section" id="spotsSection" style="display: none;">
         <h3>Spots disponibles près de votre randonnée</h3>
@@ -91,19 +55,10 @@
     </div>
 </div>
 
-<div class="planning-navigation">
-    <div class="navigation-buttons">
-        <a href="{{ url_for('step2') }}" class="btn btn-outline">
-            <i class="fas fa-arrow-left"></i>
-            Étape précédente
-        </a>
-
-        <a href="{{ url_for('step4') }}" class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;">
-            Étape suivante : Services
-            <i class="fas fa-arrow-right"></i>
-        </a>
-    </div>
-</div>
+{% with back_url=url_for('step2'), back_label='Étape précédente',
+        next_url=url_for('step4'), next_label='Étape suivante : Services' %}
+{% include 'partials/step_nav.html' %}
+{% endwith %}
 
 </div>
 {% endblock %}

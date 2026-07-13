@@ -1,11 +1,21 @@
 from fastapi import APIRouter, Query, Body
 from services.plan_service import insert_or_update_plan
 from utils.db_utils import MySQLUtils
+from utils.display_utils import enrich_poi, poi_subtitle
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
 router = APIRouter()
 
 MAX_POI_PER_CATEGORY = 10
+
+
+def _build_subtitles(categorized_poi: dict) -> dict:
+    """Phrases "X services disponibles pour cette journée" par catégorie,
+    prêtes à afficher (le frontend n'a plus qu'à piocher selon l'onglet actif).
+    La clé "tout" totalise l'ensemble des catégories."""
+    counts = {cat: len(pois) for cat, pois in categorized_poi.items()}
+    counts["tout"] = sum(counts.values())
+    return {cat: poi_subtitle(cat, count) for cat, count in counts.items()}
 
 @router.get("/poi", summary="Returns the POI (points of interest/services) categorized by service type.")
 def get_poi(
@@ -39,7 +49,7 @@ def get_poi(
     if not city:
         cursor.close()
         MySQLUtils.disconnect(cnx)
-        return {
+        empty = {
             "eau": [], "vidange": [], "gasoil": [], "supermarche": [], "commerce": [],
             "restauration": [],
             "toilettes": [],
@@ -47,6 +57,8 @@ def get_poi(
             "culture": [],
             "urgence": []
         }
+        empty["subtitles"] = _build_subtitles(empty)
+        return empty
     
     # Calculer la bounding box autour de la ville
     from utils.geo_utils import get_bounding_box, haversine_distance_km
@@ -115,7 +127,7 @@ def get_poi(
 
         distance_km = haversine_distance_km(ref_lat, ref_lon, poi['latitude'], poi['longitude'])
 
-        categorized_poi[frontend_category].append({
+        categorized_poi[frontend_category].append(enrich_poi({
             "id": poi_id,
             "name": poi['name'],
             "description": poi['description'],
@@ -127,12 +139,16 @@ def get_poi(
             "address": poi['address'],
             "service_type": poi['service_name'],
             "distance_km": round(distance_km, 2)
-        })
+        }))
 
     # Ne garder que les POI les plus proches du point de référence, par catégorie
     for category, pois in categorized_poi.items():
         pois.sort(key=lambda p: p['distance_km'])
         categorized_poi[category] = pois[:MAX_POI_PER_CATEGORY]
+
+    # Phrases de sous-titre par catégorie, calculées APRÈS la troncature à
+    # MAX_POI_PER_CATEGORY pour correspondre au nombre réellement affiché.
+    categorized_poi["subtitles"] = _build_subtitles(categorized_poi)
 
     return categorized_poi
 

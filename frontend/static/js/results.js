@@ -1,5 +1,13 @@
-// Icônes alignées sur celles des étapes 2/3 (rando, spot) et 4 (poi par catégorie).
+// Page récapitulatif : tableau des journées complétées + carte de tous les choix
+// (randonnées, spots nuit, services), puis navigation vers le jour suivant ou la
+// fin du séjour. Les textes du tableau arrivent prêts à afficher depuis l'API
+// (champ day.display, préparé par backend/utils/display_utils.py).
+
+// ---------------------------------------------------------------------------
+// Icônes de la carte : mêmes pastilles que les étapes 2/3 (rando, spot) et 4
+// (services par catégorie), avec une étiquette "Jx" sous la pastille.
 // POI_MARKER_STYLES vient de map-helpers.js (partagé avec l'étape 4).
+// ---------------------------------------------------------------------------
 const HIKE_STYLE = { color: 'var(--blue)', icon: 'fa-hiking' };
 const SPOT_STYLE  = { color: '#26C6A6',    icon: 'fa-bed' };
 
@@ -32,63 +40,44 @@ function buildDivIcon(type, category, dayNumber) {
 }
 
 document.addEventListener('DOMContentLoaded', async function () {
-    const planId = localStorage.getItem('planId');
+    // --- 1. Contexte du séjour ---
+    const { planId, currentDay, selectedDays } = getTripContext();
     const tableBody = document.getElementById('days-table-body');
-
     if (!planId) {
         tableBody.innerHTML = '<tr><td colspan="5">Aucun plan trouvé. Retour à l\'étape 1.</td></tr>';
         window.location.href = window.APP_URLS.step1;
         return;
     }
 
-    // Initialiser la carte Leaflet
-    const mapElement = document.getElementById('map');
-    let resultMap = null;
-    if (mapElement && window.L && !mapElement._leaflet_id) {
-        const boundsOptions = await getCityBoundsOptions();
-        resultMap = L.map('map', { minZoom: 3, ...boundsOptions }).setView([48.4, -4.5], 11);
-        L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(resultMap);
-        fixMapSizeOnLoad(resultMap);
-    }
+    // --- 2. Badge "Jour X/N" ---
+    showDayBadge(currentDay, selectedDays);
+
+    // --- 3. Carte ---
+    const resultMap = await createStepMap(48.4, -4.5, 11);
 
     try {
-        const response = await fetch(`${window.API_BASE}/api/result/?plan_id=${planId}`);
-        if (!response.ok) throw new Error('Erreur API result');
-        const plan = await response.json();
-
+        // --- 4. Chargement API ---
+        // create_plan pré-crée tous les jours du séjour (vides) dès le départ :
+        // up_to_day fait filtrer côté serveur les jours réellement complétés
+        // jusqu'ici (currentDay n'est incrémenté qu'en continuant le séjour).
+        const plan = await apiGet(`/api/result/?plan_id=${planId}&up_to_day=${currentDay}`);
         if (!plan || !plan.days) {
             tableBody.innerHTML = '<tr><td colspan="5">Aucune donnée pour ce plan.</td></tr>';
             return;
         }
 
+        // --- 5. Affichage : une ligne de tableau et des marqueurs par journée ---
         tableBody.innerHTML = '';
         const markerPositions = [];
 
-        // create_plan pré-crée tous les jours du séjour (vides) dès le départ : on
-        // n'affiche que les jours réellement complétés jusqu'ici, pas ceux à venir.
-        const currentDay = parseInt(localStorage.getItem('currentDay') || '1');
-        const completedDays = plan.days.filter(d => d.day_number <= currentDay);
-
-        completedDays.forEach(day => {
-            const activity = day.hike_id
-                ? `${day.hike_name} (${day.distance_km ?? '?'} km, ${day.difficulte || ''})`
-                : 'Pas de randonnée - Détente';
-            const accommodation = day.spot_id
-                ? `${day.spot_name}${day.spot_address ? `<br><small>📍 ${day.spot_address}</small>` : ''}`
-                : 'Aucun spot sélectionné';
-            const services = (day.pois && day.pois.length > 0)
-                ? day.pois.map(p => `${p.name}${p.address ? ` <small>📍 ${p.address}</small>` : ''}`).join('<br>')
-                : 'Aucun service';
-
+        plan.days.forEach(day => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td><strong>Jour ${day.day_number}</strong></td>
+                <td><strong>${day.display.day_title}</strong></td>
                 <td>${day.city_name || '?'}</td>
-                <td>${activity}</td>
-                <td>${accommodation}</td>
-                <td>${services}</td>
+                <td>${day.display.activity_html}</td>
+                <td>${day.display.accommodation_html}</td>
+                <td>${day.display.services_html}</td>
             `;
             tableBody.appendChild(row);
 
@@ -127,15 +116,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
         }
 
-        // Le jour qui vient d'être complété est le dernier jour affiché dans le récap
-        // (currentDay n'est incrémenté qu'au moment où l'utilisateur choisit de continuer,
-        // voir stayInSameCity()/changeCityForNextDay() ci-dessous).
-        const selectedDays = parseInt(localStorage.getItem('selectedDays') || '1');
-        const lastDay = completedDays.find(d => d.day_number === currentDay) || completedDays[completedDays.length - 1];
-
-        // Badge "Jour X/N" en haut à gauche du stepper (dynamique, depuis localStorage)
-        const dayBadge = document.getElementById('dayBadge');
-        if (dayBadge) dayBadge.textContent = `Jour ${currentDay}/${selectedDays}`;
+        // --- 7. Navigation : jour suivant ou fin du séjour ---
+        // Le jour qui vient d'être complété est le dernier jour affiché dans le récap.
+        const lastDay = plan.days.find(d => d.day_number === currentDay) || plan.days[plan.days.length - 1];
 
         if (currentDay < selectedDays) {
             document.getElementById('nextDayTitle').textContent = `Planifier jour ${currentDay + 1}`;
@@ -149,25 +132,24 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // Centrer la page sur la carte une fois le tableau rempli (sinon la mise en
         // page grandit après le scroll et la carte ne se retrouve plus centrée)
-        mapElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (err) {
         console.error('Erreur chargement plan:', err);
         tableBody.innerHTML = '<tr><td colspan="5">Erreur lors du chargement du plan.</td></tr>';
     }
 });
 
+// --- 8. Fonctions appelées par les boutons de la page (attributs onclick) ---
+
 // Continue le séjour dans la même ville : le jour suivant hérite explicitement de la
 // ville du jour qui vient d'être complété (au cas où celle-ci aurait changé en cours de route).
 async function stayInSameCity() {
-    const planId = localStorage.getItem('planId');
-    const currentDay = parseInt(localStorage.getItem('currentDay') || '1');
-    const cityId = localStorage.getItem('selectedCityId');
+    const { planId, cityId, currentDay } = getTripContext();
     const nextDay = currentDay + 1;
     try {
-        await fetch(`${window.API_BASE}/api/step1/update_day_city/${planId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ day_number: nextDay, city_id: parseInt(cityId) })
+        await apiPut(`/api/step1/update_day_city/${planId}`, {
+            day_number: nextDay,
+            city_id: parseInt(cityId)
         });
     } catch (err) {
         console.error('Erreur lors de la propagation de la ville:', err);

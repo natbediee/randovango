@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query, Body
 from services.plan_service import insert_or_update_plan
 from utils.db_utils import MySQLUtils
+from utils.display_utils import enrich_hike
 from utils.logger_util import LoggerUtil
 
 router = APIRouter()
@@ -64,11 +65,13 @@ def get_hikes(
 
     cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
     hikes = cursor.fetchall()
-    
+
     cursor.close()
     MySQLUtils.disconnect(cnx)
-    
-    return hikes
+
+    # Champs prêts à afficher (badge, catégories, libellés) calculés en Python :
+    # le frontend n'a plus qu'à les insérer dans la page.
+    return [enrich_hike(h, i, len(hikes)) for i, h in enumerate(hikes)]
 
 @router.get("/hike/{hike_id}/trace", summary="Get GPS trace points for a hike from MongoDB.")
 def get_hike_trace(hike_id: int):

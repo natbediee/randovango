@@ -4,48 +4,13 @@
 
 {% block page_content %}
 <div class="main-container">
-    <div class="page-header">
-        <div class="hero-section">
-            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life"
-                class="hero-background">
-            <div class="hero-overlay"></div>
-            <div class="hero-logo-container">
-                <div class="hero-logo-white">
-                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo"
-                        class="hero-logo-img">
-                </div>
-            </div>
-            <div class="hero-content">
-                <h1 class="hero-title">Planificateur RandoVanGo</h1>
-                <p class="hero-subtitle">Sélectionnez votre randonnée préférée</p>
-            </div>
-        </div>
-    </div>
+    {% with hero_subtitle='Sélectionnez votre randonnée préférée' %}
+    {% include 'partials/hero.html' %}
+    {% endwith %}
 
-    <div class="planning-stepper">
-        <div class="day-badge" id="dayBadge">Jour 1</div>
-        <div class="stepper-container">
-            <div class="step completed">
-                <div class="step-circle">✓</div>
-                <div class="step-label">Ville</div>
-            </div>
-            <div class="step-line completed"></div>
-            <div class="step active">
-                <div class="step-circle">2</div>
-                <div class="step-label">Randonnée</div>
-            </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">3</div>
-                <div class="step-label">Spot</div>
-            </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">4</div>
-                <div class="step-label">Services</div>
-            </div>
-        </div>
-    </div>
+    {% with active_step=2 %}
+    {% include 'partials/stepper.html' %}
+    {% endwith %}
 
     <div class="planning-content">
         <div class="planning-step">
@@ -73,10 +38,7 @@
             </div>
             <p id="step2Subtitle" style="text-align:center; color: var(--gray-500); margin: -1rem 0 1.5rem;">Sélectionnez l'activité principale qui rythmera votre première journée</p>
             <!-- Carte interactive -->
-            <div class="map-page-container" style="margin: 0 0 2rem 0;">
-                <div id="map" style="height: 40vh; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;">
-                </div>
-            </div>
+            {% include 'partials/map_container.html' %}
             <!-- Liste des randonnées -->
             <div class="hiking-list" id="hikingList">
                 <!-- Les randonnées seront chargées dynamiquement via l'API -->
@@ -112,20 +74,10 @@
             </div>
         </div>
 
-        <div class="planning-navigation">
-            <div class="navigation-buttons">
-                <a href="{{ url_for('step1') }}" class="btn btn-outline">
-                    <i class="fas fa-arrow-left"></i>
-                    Retour à la ville
-                </a>
-
-                <a href="{{ url_for('step3') }}" class="btn btn-primary btn-large" id="nextStepBtn"
-                    style="display: none;">
-                    Valider la rando et continuer
-                    <i class="fas fa-arrow-right"></i>
-                </a>
-            </div>
-        </div>
+        {% with back_url=url_for('step1'), back_label='Retour à la ville',
+                next_url=url_for('step3'), next_label='Valider la rando et continuer' %}
+        {% include 'partials/step_nav.html' %}
+        {% endwith %}
 
     </div> <!-- .planning-content -->
 </div> <!-- .main-container -->

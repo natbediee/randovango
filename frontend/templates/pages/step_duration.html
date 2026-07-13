@@ -4,96 +4,14 @@
 
 {% block page_content %}
 <div class="main-container">
-    <div class="page-header">
-        <div class="hero-section">
-            <img src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Planificateur Van Life" class="hero-background">
-            <div class="hero-overlay"></div>
-            <div class="hero-logo-container">
-                <div class="hero-logo-white">
-                    <img src="{{ url_for('static', filename='images/logo_randovango.png') }}" alt="RandoVanGo" class="hero-logo-img">
-                </div>
-            </div>
-            <div class="hero-content">
-                <h1 class="hero-title">Planificateur RandoVanGo</h1>
-                <p class="hero-subtitle">Votre aventure van life</p>
-            </div>
+    {# hero_login : cette page accueille le widget de connexion contributeur #}
+    {% with hero_subtitle='Votre aventure van life', hero_login=True %}
+    {% include 'partials/hero.html' %}
+    {% endwith %}
 
-            <!-- Widget d'authentification et upload GPX -->
-            <div id="floatingLogin" style="position: absolute; bottom: 20px; top: 50%; transform: translateY(-50%); right: 20px; z-index: 1000; background: rgba(255,255,255,0.98); padding: 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 400px;min-height: 230px;">
-                <!-- Formulaire de connexion (visible si non connecté) -->
-                <div id="loginForm" class="stepper-login" style="position: static !important; transform: none !important;">
-                    <p style="text-align: center; font-size: 0.9rem; color: #555; margin-bottom: 1rem; padding: 0 0.5rem;">
-                        Pour insérer <br>de nouvelles randonnées !
-                    </p>
-                    <form id="stepperLoginForm" class="stepper-login-form" style="display: flex; flex-direction: column; gap: 1rem;">
-                        <input type="text" id="stepperLogin" class="form-input" placeholder="Identifiant" required style="width: 100%;">
-                        <input type="password" id="stepperLoginPassword" class="form-input" placeholder="Mot de passe" required style="width: 100%;">
-                        <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-sign-in-alt"></i> Connexion Contributeur</button>
-                    </form>
-                    <div id="stepperLoginError" class="alert alert-danger" style="display:none; margin-top: 0.5rem; font-size: 0.85em;"></div>
-                </div>
-
-                <!-- Menu utilisateur et upload GPX (visible si connecté) -->
-                <div id="userMenu" class="user-menu" style="display: none;">
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch;">
-                        <div class="user-info" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f0f0f0; border-radius: 4px;">
-                            <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
-                            <span id="userName" style="font-weight: 500;">Contributeur</span>
-                        </div>
-                        <!-- Formulaire d'upload GPX -->
-                        <form id="gpxUploadForm" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 0.2rem;">
-                            <label for="gpxFileInput" class="btn btn-outline" style="margin: 0; cursor: pointer; text-align: center; padding: 0.5rem; font-size: 0.9rem;">
-                                <i class="fas fa-file-upload"></i> Choisir un fichier GPX
-                            </label>
-                            <input type="file" id="gpxFileInput" accept=".gpx" style="display: none;" required>
-                            <div id="fileName" style="font-size: 0.9em; color: #666; text-align: center;  font-weight: 500;"></div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;" disabled id="uploadBtn">
-                                <i class="fas fa-cloud-upload-alt"></i> Envoyer la rando                            </button>
-                        </form>
-                        <div id="gpxUploadError" class="alert alert-danger" style="display:none; padding: 0.75rem; font-size: 0.9em;"></div>
-                        <div id="gpxUploadSuccess" class="alert alert-success" style="display:none; padding: 0.75rem; font-size: 0.9em;"></div>
-
-                        <button id="logoutBtn" class="btn btn-outline" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;"><i class="fas fa-sign-out-alt"></i> Se déconnecter</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="planning-stepper">
-        <div class="day-badge" id="dayBadge" style="display:none;">Jours</div>
-        <div class="stepper-container">
-            <div class="step active">
-                <div class="step-circle">1</div>
-                <div class="step-label">Jours</div>
-            </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">2</div>
-                <div class="step-label">Ville</div>
-            </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">3</div>
-                <div class="step-label">Randonnée</div>
-            </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">4</div>
-                <div class="step-label">Spot</div>
-            </div>
-            <div class="step-line"></div>
-            <div class="step">
-                <div class="step-circle">5</div>
-                <div class="step-label">Services</div>
-            </div>
-            <div class="step-line step-resultat-only"></div>
-            <div class="step step-resultat-only">
-                <div class="step-circle">📋</div>
-                <div class="step-label">Résultat</div>
-            </div>
-        </div>
-    </div>
+    {% with duration_page=True %}
+    {% include 'partials/stepper.html' %}
+    {% endwith %}
 
     <div class="planning-content">
         <div class="step-section">

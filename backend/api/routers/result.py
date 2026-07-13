@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import Response
 from utils.db_utils import MySQLUtils
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
+from utils.display_utils import result_day_display
 from services.pdf_service import render_trip_pdf_html
 
 router = APIRouter()
@@ -78,6 +79,9 @@ def _fetch_plan_data(plan_id: int):
             raw_category = (poi.pop("service_category") or "").lower()
             poi["category"] = POI_FRONTEND_CATEGORY_MAP.get(raw_category)
         day["pois"] = pois
+        # Textes prêts à afficher pour le tableau récapitulatif de la page
+        # results (le PDF, lui, utilise son propre gabarit et ignore ce champ).
+        day["display"] = result_day_display(day)
 
     plan["days"] = days
     cursor.close()
@@ -86,8 +90,16 @@ def _fetch_plan_data(plan_id: int):
 
 
 @router.get("/", summary="Retrieve the trip plan details by plan ID.")
-def get_plan(plan_id: int = Query(...)):
-    return _fetch_plan_data(plan_id)
+def get_plan(
+    plan_id: int = Query(...),
+    up_to_day: int = Query(None, description="Ne renvoyer que les jours 1 à up_to_day (récapitulatif partiel)")
+):
+    plan = _fetch_plan_data(plan_id)
+    # Sans up_to_day, comportement inchangé : tous les jours sont renvoyés
+    # (l'endpoint est aussi utilisé ailleurs sans filtre).
+    if plan and up_to_day is not None:
+        plan["days"] = [d for d in plan["days"] if d["day_number"] <= up_to_day]
+    return plan
 
 
 @router.get("/pdf", summary="Download the trip plan as a printable PDF booklet.")

@@ -5,11 +5,13 @@ from etl.etl_meteo import run_meteo_etl
 from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
+from utils.display_utils import enrich_meteo_forecasts, city_stats_labels
 from services.plan_service import set_day_city
 from typing import List
 from datetime import datetime, timedelta, date
 import time
 import threading
+import uuid
 
 router = APIRouter()
 logger = LoggerUtil.get_logger("router")
@@ -181,9 +183,12 @@ async def get_ville_list(
                 "wind_speed_max": m.get("wind_max_kmh", 0.0)
             })
 
+    # Champs prêts à afficher (libellés des stats, entêtes et conseils météo)
+    # calculés en Python : le frontend n'a plus qu'à les insérer dans la page.
     for row in cities:
         row["stats"] = all_stats[row["id"]]
-        row["meteo"] = meteo_by_city[row["id"]]
+        row["stats_labels"] = city_stats_labels(all_stats[row["id"]])
+        row["meteo"] = enrich_meteo_forecasts(meteo_by_city[row["id"]])
 
     cursor.close()
     MySQLUtils.disconnect(cnx)
@@ -199,9 +204,11 @@ def create_plan(
     start_date: date = Body(None)
 ):
     """Créer un nouveau plan (trip_plans + jours vides pour l'étape 1)"""
-    # On doit avoir soit user_id (connecté), soit user_token (invité)
+    # Invité (pas de user_id) sans jeton : on génère le jeton ici, côté Python.
+    # Historiquement c'était le JavaScript qui créait cet UUID ; le renvoyer
+    # dans la réponse permet au frontend de simplement le stocker.
     if user_id is None and (user_token is None or user_token.strip() == ""):
-        raise HTTPException(status_code=400, detail="Un identifiant utilisateur ou un jeton invité est requis.")
+        user_token = str(uuid.uuid4())
     # Si user_id est None, on met 0 (pour invités)
     if user_id is None:
         user_id_to_insert = 0
@@ -228,7 +235,7 @@ def create_plan(
         cnx.commit()
         cursor.close()
         MySQLUtils.disconnect(cnx)
-        return {"plan_id": plan_id, "message": "Plan créé avec succès."}
+        return {"plan_id": plan_id, "user_token": user_token_to_insert, "message": "Plan créé avec succès."}
     except Exception as e:
         if 'cnx' in locals():
             cnx.rollback()
@@ -287,11 +294,13 @@ async def refresh_city_meteo(city_id: int):
         
         cursor.close()
         MySQLUtils.disconnect(cnx)
-        
+
+        # Même enrichissement que /cities : le frontend remplace son cache météo
+        # tel quel, la forme des deux réponses doit donc être identique.
         return {
             "city_id": city_id,
             "city_name": city_name,
-            "meteo": forecasts,
+            "meteo": enrich_meteo_forecasts(forecasts),
             "etl_result": etl_result,
             "message": f"Données météo actualisées pour {city_name}"
         }

@@ -1,0 +1,34 @@
+{# Barre de navigation en bas des étapes 1 à 4 : bouton retour + bouton suivant.
+   Le bouton suivant est masqué au chargement (style display:none) : c'est le JS
+   de la page qui le révèle une fois un choix fait.
+   Paramètres (passés via {% with %} avant le {% include %}) :
+     - back_url, back_label : lien et texte du bouton retour
+     - next_label           : texte du bouton suivant, puis UN des trois modes :
+     - next_url             : le bouton est un lien <a id="nextStepBtn"> (étapes 2 et 3)
+     - next_onclick         : le bouton appelle une fonction JS (étape 4)
+     - next_button_id       : simple <button> géré par le JS de la page (étape 1) #}
+<div class="planning-navigation">
+    <div class="navigation-buttons">
+        <a href="{{ back_url }}" class="btn btn-outline">
+            <i class="fas fa-arrow-left"></i>
+            {{ back_label }}
+        </a>
+
+        {% if next_url %}
+        <a href="{{ next_url }}" class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;">
+            {{ next_label }}
+            <i class="fas fa-arrow-right"></i>
+        </a>
+        {% elif next_onclick %}
+        <button class="btn btn-primary btn-large" id="nextStepBtn" style="display: none;" onclick="{{ next_onclick }}">
+            <span id="nextStepLabel">{{ next_label }}</span>
+            <i class="fas fa-check-circle"></i>
+        </button>
+        {% elif next_button_id %}
+        <button id="{{ next_button_id }}" class="btn btn-primary btn-large" style="display:none;">
+            {{ next_label }}
+            <i class="fas fa-arrow-right"></i>
+        </button>
+        {% endif %}
+    </div>
+</div>

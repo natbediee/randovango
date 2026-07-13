@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query, Body
 from services.plan_service import insert_or_update_plan
+from utils.display_utils import enrich_spot
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 
@@ -69,10 +70,11 @@ def get_spots(
                 services_map[spot_id] = []
             services_map[spot_id].append(service)
 
-    # Construire la réponse
+    # Construire la réponse, avec les champs prêts à afficher (catégorie prix,
+    # badge, icônes des services...) calculés en Python par enrich_spot.
     result = []
     for spot in spots:
-        result.append({
+        result.append(enrich_spot({
             "id": spot["id"],
             "name": spot["name"],
             "description": spot["description"],
@@ -84,7 +86,7 @@ def get_spots(
             "verifie": spot["verifie"],
             "address": spot["address"],
             "services": services_map.get(spot["id"], [])
-        })
+        }))
 
     cursor.close()
     MySQLUtils.disconnect(cnx)
