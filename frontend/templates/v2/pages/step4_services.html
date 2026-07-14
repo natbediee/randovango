@@ -1,0 +1,79 @@
+{% extends "v2/base.html" %}
+{% block title %}Étape 4 — Services — RandoVanGo{% endblock %}
+{% block main_class %}has-mobile-nav{% endblock %}
+
+{% block header %}
+  {% with nav_mode='wizard', active_step=4 %}
+    {% include 'v2/partials/header.html' %}
+  {% endwith %}
+{% endblock %}
+
+{% block page_content %}
+<div class="container stack" style="gap:20px;">
+
+  <div class="step-head">
+    <div class="stack-sm" style="gap:5px;">
+      <h1 id="step4Title" style="font-size:27px;">Les services utiles autour de ton spot</h1>
+      <p class="muted" id="step4Subtitle" style="font-size:14.5px;">Ajoute les commerces et équipements utiles pour réussir cette journée.</p>
+    </div>
+    <span class="pill pill--teal" id="dayBadge"></span>
+  </div>
+
+  {# Deux colonnes desktop : liste à gauche, carte carrée sticky à droite.
+     Parcours en 2 temps : on choisit d'abord un TYPE de service (tuiles), puis on
+     entre dans la sous-liste des points de ce type (voir step4_services.js). #}
+  <div class="map-list-layout">
+    <div class="map-list-layout__main">
+
+      {# VUE 1 — choix du type de service (tuiles générées par step4_services.js) #}
+      <div id="categoryTilesView">
+        <div class="category-tiles" id="categoryTiles">
+          <p class="list-loading"><i class="fas fa-spinner fa-spin"></i> Chargement des services…</p>
+        </div>
+        {# Option "aucun service" #}
+        <div class="no-service-option" onclick="selectNoService()">
+          <button class="btn btn--ghost">Aucun service nécessaire</button>
+        </div>
+      </div>
+
+      {# VUE 2 — sous-liste d'un type (masquée tant qu'aucune catégorie n'est ouverte) #}
+      <div id="serviceSublistView" style="display:none;">
+        <button type="button" class="sublist-back" onclick="showCategoryTiles()">
+          <i class="fas fa-arrow-left"></i> Catégories
+        </button>
+        <h2 class="sublist-title" id="sublistTitle"></h2>
+        {# Une grille de cartes par catégorie (générées par step4_services.js) ;
+           seule celle de la catégorie ouverte est affichée. #}
+        <div class="services-lists">
+          {% for category in ['eau', 'vidange', 'gasoil', 'supermarche', 'commerce',
+                              'restauration', 'toilettes', 'hygiene', 'culture', 'urgence'] %}
+          <div class="services-grid" id="{{ category }}" style="display:none;"></div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    <div class="map-col">
+      <div class="map-box map-box--square">
+        <div id="map" style="width:100%; height:100%;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="container">
+  <div class="step-nav mobile-nav">
+    <a href="{{ url_for('step3') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
+    <button id="nextStepBtn" class="btn btn--primary btn--block" style="display:none;" onclick="goToNextDayOrResults()">
+      <span id="nextStepLabel">Récapitulatif</span> <i class="fas fa-arrow-right"></i>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='v2/js/step4_services.js') }}"></script>
+{% endblock %}

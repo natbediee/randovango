@@ -1,0 +1,65 @@
+{% extends "v2/base.html" %}
+{% block title %}Connexion contributeur — RandoVanGo{% endblock %}
+
+{% block header %}
+  {% with nav_mode='minimal', back_url=url_for('duration') %}
+    {% include 'v2/partials/header.html' %}
+  {% endwith %}
+{% endblock %}
+
+{% block page_content %}
+<div class="container">
+  <div class="login-layout">
+
+    {# Formulaire #}
+    <form class="card login-card" id="contribLoginForm" autocomplete="on">
+      <div class="stack-sm" style="gap:6px;">
+        <span class="eyebrow">Espace contributeur</span>
+        <h1 style="font-size:26px;">Content de te revoir.</h1>
+        <p class="muted" style="font-size:14px;">Connecte-toi pour partager tes spots et tes randonnées.</p>
+      </div>
+
+      <label class="stack-sm" style="gap:5px;">
+        <span class="label" style="text-transform:none; font-size:12px;">Identifiant ou e-mail</span>
+        <span class="field"><input type="text" id="loginUser" name="username" autocomplete="username" placeholder="gwen.lagadec ou e-mail" required></span>
+      </label>
+
+      <label class="stack-sm" style="gap:5px;">
+        <span class="label" style="text-transform:none; font-size:12px;">Mot de passe</span>
+        <span class="field">
+          <input type="password" id="loginPass" name="password" autocomplete="current-password" placeholder="••••••••••" required>
+          <button type="button" class="link-btn" id="togglePass" tabindex="-1">Afficher</button>
+        </span>
+      </label>
+
+      <div class="login-row">
+        <label class="login-remember"><input type="checkbox" id="rememberMe" checked> Se souvenir de moi</label>
+        <a href="#" class="login-link">Mot de passe oublié ?</a>
+      </div>
+
+      <div class="login-error" id="loginError" style="display:none;"></div>
+
+      <button type="submit" class="btn btn--primary btn--block" id="loginSubmit">Se connecter</button>
+
+      <div class="login-footer">
+        <span class="muted">Pas encore contributeur ?</span>
+        <a href="{{ url_for('contributor_add_hike') }}" class="login-link">Demande ton accès →</a>
+      </div>
+    </form>
+
+    {# Carte bénéfices #}
+    <aside class="card card--mint login-benefits">
+      <h2 style="font-size:18px; font-weight:700;">Contribuer, ça change quoi ?</h2>
+      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Tes spots et randonnées guident de vrais voyageurs, chaque semaine.</span></div>
+      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Tu suis ton impact : nuits passées sur tes spots, carnets générés.</span></div>
+      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Le chat 100% IA avec Vany t'est offert, via ton code contributeur.</span></div>
+      <p class="login-quote">« 214 nuits passées sur les spots de Gwen ce mois-ci. » — chaque contribution compte.</p>
+    </aside>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/contrib.js') }}"></script>
+{% endblock %}

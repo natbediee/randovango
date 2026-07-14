@@ -1,0 +1,62 @@
+{# Header sombre commun. Paramètres (via {% with %} avant l'include) :
+     - nav_mode : 'home' (défaut, liens) | 'wizard' (stepper 5 étapes) | 'minimal' (logo + retour)
+     - active_step : 1..5, étape courante du wizard (nav_mode='wizard')
+     - back_url : URL du bouton retour (nav_mode='minimal')
+   Le stepper mobile (barre 5 segments) est rendu par v2/partials/stepper.html. #}
+{% set nav_mode = nav_mode | default('home') %}
+{% set steps = [('Ville', url_for('step1')), ('Randonnée', url_for('step2')), ('Spot', url_for('step3')), ('Services', url_for('step4')), ('Récapitulatif', url_for('results'))] %}
+
+<header class="rvg-header">
+  <div class="rvg-header__inner">
+    {% include 'v2/partials/logo.html' %}
+
+    {% if nav_mode == 'wizard' %}
+      {# Stepper desktop : cercles horizontaux #}
+      <nav class="stepper" aria-label="Étapes du parcours">
+        {% for label, href in steps %}
+          {% set n = loop.index %}
+          <div class="stepper__item {% if n == active_step %}is-active{% elif n < active_step %}is-done{% endif %}">
+            <span class="stepper__num">{% if n < active_step %}✓{% else %}{{ n }}{% endif %}</span>
+            <span class="stepper__label">{{ label }}</span>
+          </div>
+        {% endfor %}
+      </nav>
+      <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" data-burger>
+        <span></span><span></span><span></span>
+      </button>
+
+    {% elif nav_mode == 'minimal' %}
+      <a href="{{ back_url | default(url_for('duration')) }}" class="rvg-nav"><span style="color:var(--on-dark);font-weight:600;font-size:13.5px;">← Retour</span></a>
+
+    {% elif nav_mode == 'contrib' %}
+      <div class="contrib-header-right">
+        <span class="contrib-badge">Espace contributeur</span>
+        <span class="contrib-avatar" id="contribInitials">··</span>
+        <a href="#" id="contribLogout" class="rvg-nav" title="Se déconnecter"><i class="fas fa-sign-out-alt" style="color:var(--on-dark);"></i></a>
+      </div>
+
+    {% else %}
+      {# nav_mode == 'home' #}
+      <nav class="rvg-nav rvg-nav--desktop" aria-label="Navigation principale">
+        <a href="{{ url_for('how_it_works') }}">Comment ça marche</a>
+        <a href="{{ url_for('contributor_login') }}" class="nav-cta">Contributeur ? Connexion</a>
+      </nav>
+      <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" data-burger>
+        <span></span><span></span><span></span>
+      </button>
+    {% endif %}
+  </div>
+
+  {% if nav_mode == 'home' or nav_mode == 'wizard' %}
+    {# Panneau de nav mobile (déplié au tap sur le burger) #}
+    <nav class="rvg-nav rvg-nav--mobile" data-mobile-nav aria-label="Menu mobile">
+      <a href="{{ url_for('how_it_works') }}">Comment ça marche</a>
+      <a href="{{ url_for('contributor_add_hike') }}">Devenir contributeur</a>
+      <a href="{{ url_for('contributor_login') }}" class="nav-cta">Contributeur ? Connexion</a>
+    </nav>
+  {% endif %}
+
+  {% if nav_mode == 'wizard' %}
+    {% include 'v2/partials/stepper.html' %}
+  {% endif %}
+</header>

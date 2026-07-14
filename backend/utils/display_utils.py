@@ -8,7 +8,7 @@ Le JavaScript ne fait plus que recevoir ces champs et les insérer dans la page.
 Conventions de nommage des champs ajoutés aux réponses API :
   - *_label : texte prêt à afficher ("350 m", "⭐ 4.2/5", "Lundi 7 juil")
   - *_css   : nom de classe CSS à appliquer ("good-weather", "facile")
-  - badge   : dictionnaire {"text": "✅ Vérifié", "css": "verified"}
+  - badge   : dictionnaire {"text": "Vérifié", "css": "verified"}
 
 Les fonctions sont pures (pas d'accès base de données) : elles sont testées
 dans tests/utils/test_display_utils.py.
@@ -41,8 +41,8 @@ def js_round(value) -> int:
 def verified_badge(verifie) -> dict:
     """Badge de vérification affiché sur les cartes randonnée/spot/service."""
     if verifie:
-        return {"text": "✅ Vérifié", "css": "verified"}
-    return {"text": "⚠️ En attente", "css": "pending"}
+        return {"text": "Vérifié", "css": "verified"}
+    return {"text": "En attente", "css": "pending"}
 
 
 # ---------------------------------------------------------------------------
@@ -148,11 +148,11 @@ def duration_category(duration_h) -> str:
 
 
 def hike_trace_color(index, total) -> str:
-    """Teinte de bleu propre à chaque randonnée (dégradé clair → foncé) pour
-    distinguer les tracés GPX qui se chevauchent sur la carte. Stable car les
-    randonnées sont triées par nom dans la requête SQL."""
-    lightness = 70 - (index / (total - 1)) * 35 if total > 1 else 55
-    return f"hsl(207, 75%, {js_num(lightness)}%)"
+    """Teinte de teal propre à chaque randonnée (dégradé clair → foncé), assortie
+    à l'identité Vany, pour distinguer les tracés GPX qui se chevauchent sur la
+    carte. Stable car les randonnées sont triées par nom dans la requête SQL."""
+    lightness = 50 - (index / (total - 1)) * 20 if total > 1 else 40
+    return f"hsl(187, 55%, {js_num(lightness)}%)"
 
 
 def enrich_hike(hike, index, total) -> dict:

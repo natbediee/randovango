@@ -37,8 +37,8 @@ def test_js_round_demi_vers_le_haut() -> None:
 # --- Badge de vérification ---
 
 def test_verified_badge() -> None:
-    assert verified_badge(1) == {"text": "✅ Vérifié", "css": "verified"}
-    assert verified_badge(0) == {"text": "⚠️ En attente", "css": "pending"}
+    assert verified_badge(1) == {"text": "Vérifié", "css": "verified"}
+    assert verified_badge(0) == {"text": "En attente", "css": "pending"}
     assert verified_badge(None)["css"] == "pending"
 
 
@@ -93,9 +93,9 @@ def test_duration_category_seuils() -> None:
 
 
 def test_hike_trace_color() -> None:
-    assert hike_trace_color(0, 1) == "hsl(207, 75%, 55%)"
-    assert hike_trace_color(0, 3) == "hsl(207, 75%, 70%)"
-    assert hike_trace_color(2, 3) == "hsl(207, 75%, 35%)"
+    assert hike_trace_color(0, 1) == "hsl(187, 55%, 40%)"
+    assert hike_trace_color(0, 3) == "hsl(187, 55%, 50%)"
+    assert hike_trace_color(2, 3) == "hsl(187, 55%, 30%)"
 
 
 def test_enrich_hike_fallbacks() -> None:

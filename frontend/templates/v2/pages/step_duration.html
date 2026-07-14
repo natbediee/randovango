@@ -1,0 +1,87 @@
+{% extends "v2/base.html" %}
+{% block title %}RandoVanGo — Ton voyage en van, prêt en quelques minutes{% endblock %}
+
+{% block page_content %}
+<div class="container stack" style="gap:26px;">
+
+  {# Hero #}
+  <section class="home-hero">
+    <div class="stack-sm" style="gap:14px;">
+      <span class="eyebrow">Planificateur van life + rando</span>
+      <h1 style="font-size:38px; line-height:1.15;">Ton voyage en van, prêt en quelques minutes.</h1>
+      <p class="muted" style="font-size:15.5px; max-width:520px;">Pour chaque jour : une ville, une randonnée, un spot pour la nuit et les services utiles. À la fin, tu repars avec ton carnet de voyage complet.</p>
+    </div>
+    <img class="home-hero__img" src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Van aménagé face à la mer">
+  </section>
+
+  {# Parcours en 6 étapes #}
+  <div class="home-steps">
+    {% set parcours = ['Durée', 'Ville', 'Randonnée', 'Spot', 'Services', 'Carnet de voyage'] %}
+    {% for label in parcours %}
+      <div class="home-steps__item">
+        <span class="home-steps__num {% if loop.first %}is-first{% endif %}">{{ loop.index }}</span>
+        <span class="home-steps__label {% if loop.first %}is-first{% endif %}">{{ label }}</span>
+      </div>
+      {% if not loop.last %}<span class="home-steps__line"></span>{% endif %}
+    {% endfor %}
+  </div>
+
+  {# Carte de sélection de la durée #}
+  <div class="card" id="durationSection">
+    <div class="card__title">Combien de jours pars-tu ?</div>
+    <div class="duration-grid">
+      <div class="duration-card pick" data-days="1">
+        <span class="duration-card__num">1</span>
+        <span class="duration-card__unit">jour</span>
+        <span class="duration-card__desc muted">Escapade express</span>
+      </div>
+      <div class="duration-card pick" data-days="2">
+        <span class="duration-card__num">2</span>
+        <span class="duration-card__unit">jours</span>
+        <span class="duration-card__desc muted">Week-end parfait</span>
+      </div>
+      <div class="duration-card pick" data-days="3">
+        <span class="duration-card__num">3</span>
+        <span class="duration-card__unit">jours</span>
+        <span class="duration-card__desc muted">Long week-end</span>
+      </div>
+      <div class="duration-card pick" data-days="7">
+        <span class="duration-card__num">7</span>
+        <span class="duration-card__unit">jours</span>
+        <span class="duration-card__desc muted">Semaine complète</span>
+      </div>
+      <div class="duration-card pick duration-card--custom" data-days="custom">
+        <input type="number" id="customDays" class="duration-card__num" min="1" max="30" placeholder="?">
+        <span class="duration-card__unit muted">jours</span>
+        <span class="duration-card__desc muted">Personnalisée</span>
+      </div>
+    </div>
+
+    <div class="duration-footer">
+      <div class="duration-date">
+        <span style="font-family:var(--font-head); font-weight:700; font-size:15.5px;">À partir du</span>
+        <label class="field" style="padding:9px 16px; width:auto;">
+          <i class="fas fa-calendar-alt muted"></i>
+          <input type="date" id="startDate" style="font-family:var(--font-mono); font-weight:600;">
+        </label>
+      </div>
+      <button id="nextButton" class="btn btn--primary" disabled>
+        Choisissez une durée <i class="fas fa-arrow-right"></i>
+      </button>
+    </div>
+  </div>
+
+  {# Bandeau Vany #}
+  {% with vany_title='Ou laisse Vany composer ton voyage',
+          vany_text="Dis-lui où et combien de temps : il propose l'itinéraire complet, tu valides étape par étape.",
+          vany_cta_label='Discuter avec Vany',
+          vany_cta_url=url_for('unlock_vany') %}
+    {% include 'v2/partials/vany_banner.html' %}
+  {% endwith %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/step_duration.js') }}"></script>
+{% endblock %}

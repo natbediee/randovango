@@ -1,0 +1,119 @@
+{% extends "v2/base.html" %}
+{% block title %}Espace contributeur — RandoVanGo{% endblock %}
+
+{% block header %}
+  {% with nav_mode='contrib' %}
+    {% include 'v2/partials/header.html' %}
+  {% endwith %}
+{% endblock %}
+
+{% block page_content %}
+{# data-contrib-dashboard : contrib.js redirige vers la connexion si pas de token #}
+<div class="container stack" data-contrib-dashboard style="gap:22px;">
+
+  {# Salutation + CTA #}
+  <div class="dash-head">
+    <div class="stack-sm" style="gap:5px;">
+      <h1 style="font-size:27px;">Bonjour <span id="contribName">contributeur</span>.</h1>
+      <p class="muted" style="font-size:14.5px;">Contributeur RandoVanGo · Merci pour tes partages</p>
+    </div>
+    <div class="dash-cta">
+      <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--primary btn--sm">+ Ajouter un spot</a>
+      <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--outline btn--sm">+ Ajouter une randonnée</a>
+    </div>
+  </div>
+
+  {# Stats (factices) #}
+  <div class="dash-stats">
+    <div class="card card--sm dash-stat"><span class="dash-stat__num">12</span><span class="dash-stat__label">spots partagés</span></div>
+    <div class="card card--sm dash-stat"><span class="dash-stat__num">5</span><span class="dash-stat__label">randonnées décrites</span></div>
+    <div class="card card--sm dash-stat"><span class="dash-stat__num">214</span><span class="dash-stat__label">nuits passées sur tes spots</span></div>
+  </div>
+
+  <div class="dash-grid">
+    {# Contributions récentes (factices) #}
+    <div class="card">
+      <div class="dash-card-head">
+        <h2 style="font-size:17px; font-weight:700;">Tes contributions récentes</h2>
+        <a href="#" class="login-link">Tout voir</a>
+      </div>
+      <div class="contrib-list">
+        {% set contribs = [
+          ('Aire de Kérity — port', "Spot nuit · Penmarc'h", 'En ligne', 'ok'),
+          ('Boucle de Penhors', 'Randonnée · 9 km · Pouldreuzic', 'En relecture', 'warn'),
+          ('Parking de la chapelle de la Joie', 'Spot nuit · Saint-Guénolé', 'En ligne', 'ok')
+        ] %}
+        {% for name, meta, status, kind in contribs %}
+          <div class="contrib-item">
+            <div class="stack-sm" style="gap:2px;">
+              <span style="font-size:14.5px; font-weight:600;">{{ name }}</span>
+              <span class="muted" style="font-size:12px;">{{ meta }}</span>
+            </div>
+            <span class="tag tag--{{ kind }}">{{ status }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Ajout de spot condensé (démo, non branché) #}
+    <div class="card">
+      <h2 style="font-size:17px; font-weight:700; margin-bottom:13px;">Ajouter un spot</h2>
+      <form class="stack-sm" style="gap:13px;" onsubmit="event.preventDefault(); this.querySelector('.form-note').textContent='Merci ! Ton spot part en relecture (démo).';">
+        <label class="stack-sm" style="gap:5px;">
+          <span class="label" style="text-transform:none;">Nom du spot</span>
+          <span class="field"><input type="text" placeholder="Aire de la pointe de la Torche"></span>
+        </label>
+        <div class="dash-form-row">
+          <label class="stack-sm" style="gap:5px;">
+            <span class="label" style="text-transform:none;">Type</span>
+            <span class="field"><select><option>Parking jour et nuit</option><option>Aire camping-car</option><option>Camping</option><option>Bivouac</option></select></span>
+          </label>
+          <label class="stack-sm" style="gap:5px;">
+            <span class="label" style="text-transform:none;">Prix</span>
+            <span class="field"><select><option>Gratuit</option><option>Payant</option></select></span>
+          </label>
+        </div>
+        <div class="stack-sm" style="gap:6px;">
+          <span class="label" style="text-transform:none;">Équipements sur place</span>
+          <div class="equip-tags">
+            {% for e in ['Eau potable', 'Toilettes', 'Poubelle', 'Électricité', 'Vue mer'] %}
+              <button type="button" class="equip-tag" data-on="false">{{ e }}</button>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="dropzone">Glisse 1 à 3 photos du spot ici</div>
+        <div class="dash-form-submit">
+          <button type="submit" class="btn btn--primary btn--sm">Envoyer en relecture</button>
+          <span class="muted" style="font-size:12px;">Publication après vérification, sous 48 h.</span>
+        </div>
+        <p class="form-note" style="font-size:13px; color:var(--teal); font-weight:600; margin:0;"></p>
+      </form>
+    </div>
+  </div>
+
+  {# Le mot de Vany #}
+  {% with vany_pose='celebrating-soft.png',
+          vany_eyebrow='Le mot de Vany',
+          vany_title='38 voyageurs ont dormi sur tes spots ce mois-ci',
+          vany_text="Chaque spot que tu vérifies améliore les recommandations que je propose aux autres voyageurs.",
+          vany_cta_label='Voir ton impact',
+          vany_cta_url='#' %}
+    {% include 'v2/partials/vany_banner.html' %}
+  {% endwith %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/contrib.js') }}"></script>
+<script>
+  // Toggle des tags d'équipement (démo)
+  document.querySelectorAll('.equip-tag').forEach(function (t) {
+    t.addEventListener('click', function () {
+      var on = t.getAttribute('data-on') === 'true';
+      t.setAttribute('data-on', on ? 'false' : 'true');
+      t.classList.toggle('is-on', !on);
+    });
+  });
+</script>
+{% endblock %}

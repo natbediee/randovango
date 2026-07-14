@@ -1,0 +1,39 @@
+{% extends "v2/base.html" %}
+{% block title %}Voyage 100% IA — Vany — RandoVanGo{% endblock %}
+{% block footer %}{% endblock %}  {# pas de footer : le chat occupe la hauteur #}
+
+{% block header %}
+  <header class="rvg-header">
+    <div class="rvg-header__inner">
+      {% include 'v2/partials/logo.html' %}
+      <div class="chat-header-right">
+        <span class="chat-badge"><img src="{{ url_for('static', filename='images/vany/avatar.png') }}" alt="Vany"> Voyage 100% IA</span>
+        <a href="{{ url_for('duration') }}" class="rvg-nav"><span style="color:var(--on-dark); font-weight:600; font-size:13px;">Passer en mode manuel</span></a>
+      </div>
+    </div>
+  </header>
+{% endblock %}
+
+{% block main_class %}chat-main{% endblock %}
+
+{% block page_content %}
+<div class="chat" data-chat>
+  <div class="chat-thread" id="chatThread">
+    <div class="chat-daysep">Aujourd'hui · nouveau voyage</div>
+  </div>
+
+  <div class="chat-quickreplies" id="chatQuick"></div>
+
+  <div class="chat-inputbar">
+    <form class="chat-inputwrap" id="chatForm">
+      <input type="text" id="chatInput" placeholder="Écris à Vany — destination, durée, envies…" autocomplete="off">
+      <button type="submit" class="chat-send" aria-label="Envoyer">→</button>
+    </form>
+    <p class="chat-disclaimer">Vany propose, tu décides — chaque étape reste modifiable à la main.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/chat.js') }}"></script>
+{% endblock %}

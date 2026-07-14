@@ -1,0 +1,66 @@
+{% extends "v2/base.html" %}
+{% block title %}Étape 3 — Spot pour la nuit — RandoVanGo{% endblock %}
+{% block main_class %}has-mobile-nav{% endblock %}
+
+{% block header %}
+  {% with nav_mode='wizard', active_step=3 %}
+    {% include 'v2/partials/header.html' %}
+  {% endwith %}
+{% endblock %}
+
+{% block page_content %}
+<div class="container stack" style="gap:20px;">
+
+  <div class="step-head">
+    <div class="stack-sm" style="gap:5px;">
+      <h1 id="step3Title" style="font-size:27px;">Où dormir cette nuit ?</h1>
+      <p class="muted" id="step3Subtitle" style="font-size:14.5px;">Choisis ton spot pour terminer parfaitement cette journée.</p>
+    </div>
+    <span class="pill pill--teal" id="dayBadge"></span>
+  </div>
+
+  {# Filtre prix #}
+  <div class="hiking-filters accommodation-filters">
+    <div class="filter-group">
+      <label class="label">Prix :</label>
+      <button class="filter-btn active" data-filter="all">Tout</button>
+      <button class="filter-btn" data-filter="gratuit">Gratuit</button>
+      <button class="filter-btn" data-filter="payant">Payant</button>
+    </div>
+  </div>
+
+  {# Deux colonnes desktop : liste à gauche, carte carrée sticky à droite #}
+  <div class="map-list-layout">
+    <div class="map-list-layout__main">
+      {# Spots (générés par step3_spot.js) #}
+      <div class="spots-section" id="spotsSection" style="display:none;">
+        <div class="spots-list"></div>
+      </div>
+
+      {# Option "autre spot" #}
+      <div class="no-spot-option" id="noSpotCard">
+        <button class="btn btn--ghost no-spot-btn" onclick="selectNoSpot()">Autre spot (ami, hôtel, chez soi…)</button>
+      </div>
+    </div>
+
+    <div class="map-col">
+      <div class="map-box map-box--square">
+        <div id="map" style="width:100%; height:100%;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="container">
+  <div class="step-nav mobile-nav">
+    <a href="{{ url_for('step2') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
+    <a href="{{ url_for('step4') }}" id="nextStepBtn" class="btn btn--primary btn--block" style="display:none;">Étape suivante : services <i class="fas fa-arrow-right"></i></a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='v2/js/step3_spot.js') }}"></script>
+{% endblock %}

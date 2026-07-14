@@ -1,0 +1,11 @@
+{# Stepper mobile : barre de progression 5 segments + libellé « x/5 · Nom ».
+   Affiché uniquement en mobile (le stepper desktop est dans le header). Attend `active_step`. #}
+{% set step_names = ['Ville', 'Randonnée', 'Spot', 'Services', 'Récapitulatif'] %}
+<div class="stepper-mobile" aria-hidden="true">
+  <div class="stepper-mobile__bar">
+    {% for i in range(5) %}
+      <span class="stepper-mobile__seg {% if i < active_step %}is-done{% endif %}"></span>
+    {% endfor %}
+  </div>
+  <span class="stepper-mobile__label">Étape {{ active_step }}/5 · {{ step_names[active_step - 1] }}</span>
+</div>

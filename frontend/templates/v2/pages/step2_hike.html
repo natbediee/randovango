@@ -1,0 +1,76 @@
+{% extends "v2/base.html" %}
+{% block title %}Étape 2 — Randonnée — RandoVanGo{% endblock %}
+{% block main_class %}has-mobile-nav{% endblock %}
+
+{% block header %}
+  {% with nav_mode='wizard', active_step=2 %}
+    {% include 'v2/partials/header.html' %}
+  {% endwith %}
+{% endblock %}
+
+{% block page_content %}
+<div class="container stack" style="gap:20px;">
+
+  <div class="step-head">
+    <div class="stack-sm" style="gap:5px;">
+      <h1 id="step2Title" style="font-size:27px;">Choisis ta randonnée</h1>
+      <p class="muted" id="step2Subtitle" style="font-size:14.5px;">Sélectionne l'activité principale qui rythmera ta journée.</p>
+    </div>
+    <span class="pill pill--teal" id="dayBadge"></span>
+  </div>
+
+  {# Filtres segmentés #}
+  <div class="hiking-filters">
+    <div class="filter-group">
+      <label class="label">Difficulté :</label>
+      <button class="filter-btn active" data-filter="all">Toutes</button>
+      <button class="filter-btn" data-filter="facile">Facile</button>
+      <button class="filter-btn" data-filter="moyen">Moyen</button>
+      <button class="filter-btn" data-filter="difficile">Difficile</button>
+    </div>
+    <div class="filter-group">
+      <label class="label">Durée :</label>
+      <button class="filter-btn active" data-filter="all">Toutes</button>
+      <button class="filter-btn" data-filter="court">&lt; 2h</button>
+      <button class="filter-btn" data-filter="moyen">2–4h</button>
+      <button class="filter-btn" data-filter="long">&gt; 4h</button>
+    </div>
+  </div>
+
+  {# Deux colonnes desktop : liste à gauche, carte carrée collée à droite.
+     En mobile, une colonne avec la carte au-dessus (voir CSS .map-col order). #}
+  <div class="map-list-layout">
+    <div class="map-list-layout__main">
+      {# Liste des randonnées (générée par step2_hike.js) #}
+      <div class="hiking-list" id="hikingList">
+        <div class="list-loading"><i class="fas fa-spinner fa-spin"></i><p>Chargement des randonnées…</p></div>
+      </div>
+
+      {# Option "pas de rando" #}
+      <div class="no-hiking-option" id="noHikingCard">
+        <button class="btn btn--ghost no-hiking-btn" onclick="selectNoHiking()">Pas de rando aujourd'hui</button>
+      </div>
+    </div>
+
+    {# Carte des tracés (Leaflet réel), carrée et sticky #}
+    <div class="map-col">
+      <div class="map-box map-box--square">
+        <div id="map" style="width:100%; height:100%;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="container">
+  <div class="step-nav mobile-nav">
+    <a href="{{ url_for('step1') }}" class="mobile-nav__back step-nav__back" aria-label="Retour à la ville">←</a>
+    <a href="{{ url_for('step3') }}" id="nextStepBtn" class="btn btn--primary btn--block" style="display:none;">Valider la rando et continuer <i class="fas fa-arrow-right"></i></a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='v2/js/step2_hike.js') }}"></script>
+{% endblock %}

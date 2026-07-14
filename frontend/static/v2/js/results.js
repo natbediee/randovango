@@ -39,6 +39,18 @@ function buildDivIcon(type, category, dayNumber) {
     });
 }
 
+// Date d'une journée du séjour = date de départ du plan + (numéro du jour - 1).
+// Rendu court en français, ex. « Lun. 14 juil. ». Renvoie null si la date de départ
+// est absente/invalide (on retombe alors sur « Jour N »).
+function formatDayDate(startDateStr, dayNumber) {
+    if (!startDateStr) return null;
+    const d = new Date(startDateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() + (dayNumber - 1));
+    const label = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
     // --- 1. Contexte du séjour ---
     const { planId, currentDay, selectedDays } = getTripContext();
@@ -72,8 +84,10 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         plan.days.forEach(day => {
             const row = document.createElement('tr');
+            // Date de la journée (repli sur « Jour N » si la date de départ manque)
+            const dateLabel = formatDayDate(plan.start_date, day.day_number) || day.display.day_title;
             row.innerHTML = `
-                <td><strong>${day.display.day_title}</strong></td>
+                <td><strong>${dateLabel}</strong></td>
                 <td>${day.city_name || '?'}</td>
                 <td>${day.display.activity_html}</td>
                 <td>${day.display.accommodation_html}</td>

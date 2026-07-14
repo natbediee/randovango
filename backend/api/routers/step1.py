@@ -204,21 +204,33 @@ def create_plan(
     start_date: date = Body(None)
 ):
     """Créer un nouveau plan (trip_plans + jours vides pour l'étape 1)"""
-    # Invité (pas de user_id) sans jeton : on génère le jeton ici, côté Python.
-    # Historiquement c'était le JavaScript qui créait cet UUID ; le renvoyer
-    # dans la réponse permet au frontend de simplement le stocker.
-    if user_id is None and (user_token is None or user_token.strip() == ""):
-        user_token = str(uuid.uuid4())
-    # Si user_id est None, on met 0 (pour invités)
-    if user_id is None:
-        user_id_to_insert = 0
-    else:
+    # Un plan appartient SOIT à un compte (user_id), SOIT à un invité (user_token
+    # UUID) — jamais les deux. Pour un utilisateur connecté on ignore donc tout
+    # user_token reçu : le frontend peut transmettre par erreur son JWT d'auth, qui
+    # déborde la colonne user_token (varchar 64) et n'a rien à faire ici.
+    if user_id is not None:
         user_id_to_insert = user_id
-    # Si user_token est None, on met None (pour connectés)
-    user_token_to_insert = user_token if user_token else None
+        user_token_to_insert = None
+    else:
+        # Invité : on génère l'UUID ici (le renvoyer dans la réponse permet au
+        # frontend de simplement le stocker) et user_id 0 = « invité ».
+        user_id_to_insert = 0
+        if user_token is None or user_token.strip() == "":
+            user_token = str(uuid.uuid4())
+        user_token_to_insert = user_token
+    # Garde-fous : une durée valide et une ville qui existe réellement. Sans ces
+    # contrôles, une ville absente déclenche une violation de contrainte FK que
+    # l'on renvoyait en 500 opaque au frontend (« Erreur lors de la création du
+    # plan : 500 »). On préfère un 400 explicite et actionnable.
+    if duration_days is None or duration_days < 1:
+        raise HTTPException(status_code=400, detail="La durée du séjour doit être d'au moins 1 jour.")
     try:
         cnx = MySQLUtils.connect()
         cursor = cnx.cursor()
+        cursor.execute("SELECT 1 FROM cities WHERE id = %s", (city_id,))
+        if cursor.fetchone() is None:
+            cursor.close()
+            raise HTTPException(status_code=400, detail=f"Ville introuvable (id={city_id}). Choisis une ville dans la liste.")
         plan_start_date = start_date or date.today()
         insert_plan = """
             INSERT INTO trip_plans (start_date, duration_days, city_id, user_token, user_id, created_at)
@@ -236,6 +248,12 @@ def create_plan(
         cursor.close()
         MySQLUtils.disconnect(cnx)
         return {"plan_id": plan_id, "user_token": user_token_to_insert, "message": "Plan créé avec succès."}
+    except HTTPException:
+        # Erreur client déjà formée (ville introuvable, etc.) : la laisser passer
+        # telle quelle plutôt que de la ré-emballer en 500.
+        if 'cnx' in locals():
+            MySQLUtils.disconnect(cnx)
+        raise
     except Exception as e:
         if 'cnx' in locals():
             cnx.rollback()

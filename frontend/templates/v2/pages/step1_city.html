@@ -1,0 +1,87 @@
+{% extends "v2/base.html" %}
+{% block title %}Étape 1 — Ville de départ — RandoVanGo{% endblock %}
+{% block main_class %}has-mobile-nav{% endblock %}
+
+{% block header %}
+  {% with nav_mode='wizard', active_step=1 %}
+    {% include 'v2/partials/header.html' %}
+  {% endwith %}
+{% endblock %}
+
+{% block page_content %}
+<div class="container stack" style="gap:22px;">
+
+  {# Titre + recherche de ville (à droite du titre) + badge jour #}
+  <div class="step-head">
+    <div class="stack-sm" style="gap:5px;">
+      <h1 style="font-size:27px;">Où pars-tu ?</h1>
+      <p class="muted" style="font-size:14.5px;">Choisis la ville de départ de ta première journée.</p>
+    </div>
+
+    {# Recherche de ville #}
+    <div class="search-wrap" style="flex:1;">
+      <label class="field field--search">
+        <i class="fas fa-search muted"></i>
+        <input type="text" id="citySearch" placeholder="Recherche une ville…" autocomplete="off">
+        <button type="button" class="btn btn--primary btn--sm" id="citySearchBtn" tabindex="-1">Rechercher</button>
+      </label>
+      <div id="citySuggestions" class="city-suggestions" style="display:none;"></div>
+      <div id="cityNotFound" class="city-notfound" style="display:none;">
+        <p class="city-notfound__title"><i class="fas fa-map-marker-alt"></i> Cette ville n'est pas encore disponible</p>
+        <p class="city-notfound__text">Tu peux l'ajouter en devenant contributeur : connecte-toi puis dépose un fichier <strong>GPX</strong> d'une randonnée dans cette ville — elle sera créée automatiquement avec ses spots et services.</p>
+      </div>
+    </div>
+
+    <span class="pill pill--teal" id="dayBadge"></span>
+  </div>
+
+  {# Données villes (cachées, alimentées par step1_city.js) #}
+  <select id="citySelect" class="hidden"></select>
+
+  {# Deux colonnes desktop : carte carrée collée à gauche, liste des villes à droite.
+     En mobile, une colonne avec la carte au-dessus (voir CSS .map-col order). #}
+  <div class="map-list-layout map-list-layout--map-left">
+    {# Carte interactive réelle (Leaflet), carrée et sticky #}
+    <div class="map-col">
+      <div class="map-box map-box--square">
+        <div id="map" style="width:100%; height:100%;"></div>
+      </div>
+    </div>
+
+    <div class="map-list-layout__main">
+      {# Villes de la zone visible — synchronisé avec la carte par step1_city.js #}
+      <div class="nearby" id="nearbyCities">
+        <div class="nearby__head">
+          <span class="nearby__count" data-nearby-count>Déplace la carte pour voir les villes</span>
+          <span class="nearby__hint" data-nearby-hint style="display:none;"></span>
+        </div>
+        <div class="nearby__list" data-nearby-list></div>
+      </div>
+    </div>
+  </div>
+
+  {# Météo #}
+  <div class="card weather-section" id="weatherSection" style="display:none;">
+    <h3 id="weatherTitle" style="font-size:17px; font-weight:700;">Météo — prochains jours</h3>
+    <div class="weather-grid" id="weatherGrid"></div>
+  </div>
+
+</div>
+
+{# Barre de navigation basse (desktop : inline ; mobile : fixe) #}
+<div class="container">
+  <div class="step-nav mobile-nav">
+    <a href="{{ url_for('duration') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
+    {# Masqué tant qu'aucune ville n'est choisie ; révélé par selectCity (comme le legacy) #}
+    <button id="planButton" class="btn btn--primary btn--block" style="display:none;">Planifier ce séjour <i class="fas fa-arrow-right"></i></button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="{{ url_for('static', filename='v2/js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='v2/js/step1_city.js') }}"></script>
+{% endblock %}

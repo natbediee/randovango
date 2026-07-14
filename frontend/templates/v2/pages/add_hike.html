@@ -1,0 +1,103 @@
+{% extends "v2/base.html" %}
+{% block title %}Ajouter une randonnée — RandoVanGo{% endblock %}
+
+{% block header %}
+  {% with nav_mode='contrib' %}
+    {% include 'v2/partials/header.html' %}
+  {% endwith %}
+{% endblock %}
+
+{% block page_content %}
+<div class="container stack" data-add-hike style="gap:20px;">
+
+  <a href="{{ url_for('contributor_dashboard') }}" class="login-link">← Ton espace contributeur</a>
+  <div class="stack-sm" style="gap:5px;">
+    <h1 style="font-size:27px;">Ajouter une randonnée</h1>
+    <p class="muted" style="font-size:14.5px;">Décris-la comme tu la raconterais à un ami van-lifer — l'équipe relit avant publication.</p>
+  </div>
+
+  <div class="addhike-grid">
+    {# L'essentiel #}
+    <div class="card">
+      <h2 style="font-size:17px; font-weight:700; margin-bottom:14px;">L'essentiel</h2>
+      <div class="stack-sm" style="gap:14px;">
+        <label class="stack-sm" style="gap:5px;">
+          <span class="label" style="text-transform:none;">Nom de la randonnée</span>
+          <span class="field"><input type="text" id="hikeName" placeholder="Boucle de la Pointe de la Torche"></span>
+        </label>
+        <label class="stack-sm" style="gap:5px;">
+          <span class="label" style="text-transform:none;">Ville de départ</span>
+          <span class="field"><input type="text" id="hikeCity" placeholder="Saint-Jean-Trolimon"></span>
+        </label>
+        <div class="addhike-triple">
+          <label class="stack-sm" style="gap:5px;"><span class="label" style="text-transform:none;">Distance</span><span class="field"><input type="text" placeholder="9,5 km"></span></label>
+          <label class="stack-sm" style="gap:5px;"><span class="label" style="text-transform:none;">Durée</span><span class="field"><input type="text" placeholder="2 h 45"></span></label>
+          <label class="stack-sm" style="gap:5px;"><span class="label" style="text-transform:none;">Dénivelé</span><span class="field"><input type="text" placeholder="+120 m"></span></label>
+        </div>
+        <div class="stack-sm" style="gap:6px;">
+          <span class="label" style="text-transform:none;">Difficulté</span>
+          <div class="pick-tags" data-single>
+            {% for d in ['Facile', 'Moyenne', 'Difficile'] %}<button type="button" class="equip-tag {% if loop.index==2 %}is-on{% endif %}">{{ d }}</button>{% endfor %}
+          </div>
+        </div>
+        <div class="stack-sm" style="gap:6px;">
+          <span class="label" style="text-transform:none;">Type de parcours</span>
+          <div class="pick-tags" data-single>
+            {% for t in ['Boucle', 'Aller-retour', 'Traversée'] %}<button type="button" class="equip-tag {% if loop.first %}is-on{% endif %}">{{ t }}</button>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Tracé GPS (upload réel) #}
+    <div class="card">
+      <h2 style="font-size:17px; font-weight:700; margin-bottom:14px;">Tracé GPS</h2>
+      <div class="stack-sm" style="gap:14px;">
+        <div class="dropzone dropzone--gpx" id="gpxDropzone">
+          <span style="font-size:13.5px; font-weight:600; color:var(--ink);" id="gpxDropLabel">Glisse ton fichier .gpx ici</span>
+          <span style="font-size:12px; color:var(--muted-3);">ou clique pour le chercher sur ton ordinateur</span>
+          <input type="file" id="gpxFileInput" accept=".gpx" hidden>
+        </div>
+        <div class="gpx-preview mono">aperçu du tracé — départ · arrivée</div>
+        <div class="gpx-advice">
+          <span class="gpx-advice__badge">P</span>
+          <span>Le point de départ doit être accessible et stationnable en van.</span>
+        </div>
+        <div class="addhike-msg" id="gpxMsg" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  {# Récit #}
+  <div class="card addhike-story">
+    <div class="stack-sm" style="gap:12px;">
+      <h2 style="font-size:17px; font-weight:700;">Ton récit du parcours</h2>
+      <textarea class="field" style="min-height:96px; align-items:flex-start;" placeholder="Départ du parking, on longe la plage puis on remonte par les dunes…"></textarea>
+      <div class="stack-sm" style="gap:6px;">
+        <span class="label" style="text-transform:none;">Sur le chemin</span>
+        <div class="pick-tags">
+          {% for t in ['Point de vue', 'Site mégalithique', 'Baignade', 'Chapelle', 'Ombre'] %}<button type="button" class="equip-tag {% if loop.index<3 %}is-on{% endif %}">{{ t }}</button>{% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="dropzone" style="align-self:stretch; display:flex; flex-direction:column; justify-content:center;">
+      <span style="font-size:13.5px; font-weight:600; color:var(--ink);">Glisse 1 à 3 photos</span>
+      <span style="font-size:12px; color:var(--muted-3);">Le départ, le sentier, la vue.</span>
+    </div>
+  </div>
+
+  {# Actions #}
+  <div class="addhike-actions">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <button type="button" class="btn btn--primary btn--sm" id="submitHike">Envoyer en relecture</button>
+      <span class="muted" style="font-size:12px;">Publication après vérification, sous 48 h.</span>
+    </div>
+    <button type="button" class="btn btn--outline btn--sm" id="saveDraft">Enregistrer le brouillon</button>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/contrib.js') }}"></script>
+{% endblock %}

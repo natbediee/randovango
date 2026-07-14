@@ -1,0 +1,101 @@
+{% extends "v2/base.html" %}
+{% block title %}Comment ça marche — RandoVanGo{% endblock %}
+
+{% block page_content %}
+<div class="container stack" style="gap:22px;">
+
+  {# Intro #}
+  <header class="stack-sm">
+    <span class="eyebrow">Comment ça marche</span>
+    <h1 class="hiw-title">Un jour de voyage = une ville, une rando, un spot pour la nuit.</h1>
+    <p class="muted hiw-subtitle">Tu construis ton itinéraire jour par jour, étape par étape. À la fin, tu repars avec un carnet de voyage complet, consultable hors connexion.</p>
+  </header>
+
+  {# Les 6 étapes #}
+  <div class="card" style="padding:8px 30px;">
+    {% set etapes = [
+      ('Choisis la durée', "D'une escapade d'un jour à la semaine complète, à partir de la date de ton choix.", '~10 secondes', false),
+      ("Pars d'une ville", "Cherche-la ou pointe-la sur la carte — la météo des prochains jours s'affiche direct.", '', false),
+      ('Choisis ta randonnée', "Distance, dénivelé, difficulté, points d'intérêt : des randos décrites par des van-lifers qui les ont faites.", '', false),
+      ('Trouve ton spot pour la nuit', "Parkings, aires, coins nature : chaque spot indique équipements, prix et accès van.", '', false),
+      ('Ajoute les services utiles', "Eau, vidange, boulangerie, laverie — ce qu'il te faut autour de ton spot.", '', false),
+      ('Repars avec ton carnet de voyage', "Toutes tes journées récapitulées, en PDF, consultables hors connexion.", '', true)
+    ] %}
+    {% for titre, desc, meta, inclus in etapes %}
+      <div class="hiw-step {% if not loop.last %}hiw-step--sep{% endif %}">
+        <span class="hiw-step__num">{{ loop.index }}</span>
+        <div class="hiw-step__body">
+          <span class="hiw-step__title">{{ titre }}</span>
+          <span class="hiw-step__desc muted">{{ desc }}</span>
+        </div>
+        {% if inclus %}<span class="tag tag--ok">Inclus</span>
+        {% elif meta %}<span class="hiw-step__meta">{{ meta }}</span>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {# Comparatif classique / IA #}
+  <div class="hiw-compare">
+    <div class="card">
+      <span class="eyebrow">Parcours classique</span>
+      <h3 style="font-size:20px; font-weight:700; margin-top:8px;">Tu choisis tout, toi-même.</h3>
+      <ul class="hiw-check">
+        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Les 6 étapes, jour par jour</li>
+        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Carnet de voyage inclus</li>
+        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Gratuit, sans compte</li>
+      </ul>
+      <a href="{{ url_for('duration') }}" class="btn btn--primary btn--sm" style="margin-top:auto;">Planifier mon voyage</a>
+    </div>
+
+    <div class="card card--mint">
+      <div class="hiw-vany-head">
+        <img src="{{ url_for('static', filename='images/vany/front-soft.png') }}" alt="Vany" class="hiw-vany-img">
+        <div>
+          <span class="eyebrow">Voyage 100% IA</span>
+          <h3 style="font-size:20px; font-weight:700;">Ou laisse Vany composer.</h3>
+        </div>
+      </div>
+      <ul class="hiw-check">
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Itinéraire complet proposé en discutant</li>
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Tu valides ou ajustes chaque étape</li>
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> 4,90 € par voyage — offert aux contributeurs</li>
+      </ul>
+      <a href="{{ url_for('unlock_vany') }}" class="btn btn--outline btn--sm" style="margin-top:auto;">Discuter avec Vany</a>
+    </div>
+  </div>
+
+  {# Réassurance contributeurs #}
+  <div class="card hiw-reassurance">
+    <div class="stack-sm" style="gap:4px;">
+      <h3 style="font-size:17px; font-weight:700;">Des spots vérifiés par de vrais van-lifers</h3>
+      <p class="muted" style="max-width:640px;">Chaque spot et chaque rando sont partagés par des contributeurs locaux, puis relus avant publication. Tu connais le coin ? Rejoins-les.</p>
+    </div>
+    <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--outline btn--sm">Devenir contributeur</a>
+  </div>
+
+  {# FAQ #}
+  <div class="stack-sm">
+    <h3 style="font-size:19px; font-weight:700;">Questions fréquentes</h3>
+    <div class="hiw-faq">
+      {% set faq = [
+        ("C'est vraiment gratuit ?", "Oui — le parcours classique et le carnet sont gratuits, sans compte. Seul le voyage 100% IA avec Vany est payant."),
+        ("Ça marche sans réseau ?", "Ton carnet de voyage est un PDF : cartes, tracés et adresses restent lisibles hors connexion."),
+        ("D'où viennent les spots ?", "De contributeurs van-lifers qui y ont dormi. Chaque fiche est relue avant d'être publiée.")
+      ] %}
+      {% for q, a in faq %}
+        <div class="card card--sm stack-sm" style="gap:6px;">
+          <span style="font-size:14px; font-weight:700;">{{ q }}</span>
+          <span class="muted" style="font-size:13px;">{{ a }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# CTA final #}
+  <div class="stack-sm text-center" style="align-items:center; padding:10px 0;">
+    <a href="{{ url_for('duration') }}" class="btn btn--primary">Planifier mon premier voyage →</a>
+    <span style="font-size:12.5px; color:var(--muted-3);">2 minutes, sans compte.</span>
+  </div>
+
+</div>
+{% endblock %}

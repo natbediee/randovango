@@ -1,0 +1,17 @@
+{# Bandeau menthe avec la mascotte Vany. Paramètres (via {% with %}) :
+     - vany_pose    : nom de fichier dans images/vany/ (défaut 'front-soft.png')
+     - vany_eyebrow : libellé majuscule (défaut 'Voyage 100% IA')
+     - vany_title   : titre
+     - vany_text    : description
+     - vany_cta_label / vany_cta_url : bouton (optionnel) #}
+<div class="vany-banner">
+  <img class="vany-banner__img" src="{{ url_for('static', filename='images/vany/' ~ (vany_pose | default('front-soft.png'))) }}" alt="Vany, l'assistant IA de RandoVanGo">
+  <div class="vany-banner__body">
+    <span class="eyebrow">{{ vany_eyebrow | default('Voyage 100% IA') }}</span>
+    <div class="vany-banner__title">{{ vany_title }}</div>
+    <div class="vany-banner__text">{{ vany_text }}</div>
+  </div>
+  {% if vany_cta_label %}
+    <a href="{{ vany_cta_url | default(url_for('chat')) }}" class="btn btn--outline btn--sm">{{ vany_cta_label }}</a>
+  {% endif %}
+</div>
