@@ -1,7 +1,0 @@
-{# Conteneur de la carte Leaflet (élément #map initialisé par le JS de la page).
-   Paramètres optionnels (passés via {% with %} avant le {% include %}) :
-     - map_height : hauteur de la carte (par défaut 40vh ; 50vh sur l'étape 1)
-     - map_margin : marges du conteneur (par défaut "0 0 2rem 0") #}
-<div class="map-page-container" style="margin: {{ map_margin|default('0 0 2rem 0') }};">
-    <div id="map" style="height: {{ map_height|default('40vh') }}; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px #0002;"></div>
-</div>
