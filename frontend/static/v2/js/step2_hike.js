@@ -99,6 +99,17 @@ document.addEventListener('DOMContentLoaded', async function () {
         displayHikes(hikes, plannedHikeIds);
         applyFilters();
 
+        // Revenir sur cette étape (ex. depuis l'étape spot) avec un choix déjà fait :
+        // réafficher le bouton « Valider la rando et continuer », masqué au chargement.
+        // Il n'était sinon révélé que par selectHiking/selectNoHiking, jamais au retour.
+        const restoredSelection = localStorage.getItem('selectedHiking');
+        if (restoredSelection) {
+            document.getElementById('nextStepBtn').style.display = 'flex';
+            if (restoredSelection === 'no-hiking') {
+                document.getElementById('noHikingCard').classList.add('selected');
+            }
+        }
+
         if (hikeMap && hikes.length > 0) {
             hikes.forEach(hike => {
                 // Tooltip d'aperçu au survol : nom + infos de base (distance, durée, difficulté).

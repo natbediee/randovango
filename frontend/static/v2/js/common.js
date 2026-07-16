@@ -1,4 +1,4 @@
-/* Front v2 — comportements communs (chargé sur toutes les pages via base.html). */
+/* Front v2 - comportements communs (chargé sur toutes les pages via base.html). */
 (function () {
   'use strict';
 
@@ -74,7 +74,7 @@
   });
 
   // ===== Helpers exposés =====
-  // Déblocage du chat Vany (payé ou code contributeur validé) — mock front-only pour l'instant.
+  // Déblocage du chat Vany (payé ou code contributeur validé) - mock front-only pour l'instant.
   window.RVG = window.RVG || {};
   window.RVG.isVanyUnlocked = function () {
     return localStorage.getItem('vanyUnlocked') === '1';

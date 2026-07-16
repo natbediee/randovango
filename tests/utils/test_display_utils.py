@@ -166,7 +166,7 @@ def test_result_day_display_complet() -> None:
     assert display["day_title"] == "Jour 2"
     assert display["activity_html"] == "GR34 (13 km, moyen)"
     assert display["accommodation_html"] == "Aire du port<br><small>📍 1 rue du Quai</small>"
-    assert display["services_html"] == "Folavoine <small>📍 Place de l'Église</small>"
+    assert display["services_html"] == "Folavoine<br><small>📍 Place de l'Église</small>"
 
 
 def test_result_day_display_jour_vide() -> None:

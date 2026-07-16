@@ -1,6 +1,7 @@
 """
-Script ponctuel : comble la colonne `address` sur `poi` et `spots` via
-géocodage inverse (Nominatim). Respecte la limite d'usage (max 1 req/s).
+Script ponctuel : comble la colonne `address` sur `poi`, `spots` et `hikes`
+(point de départ) via géocodage inverse (Nominatim). Respecte la limite d'usage
+(max 1 req/s).
 Interruptible et rejouable : ne traite que les lignes encore à NULL.
 
 Optimisation : géocode une seule fois par localisation unique (arrondissement
@@ -18,12 +19,14 @@ logger = LoggerUtil.get_logger("etl_backfill_addresses")
 DELAY_BETWEEN_CALLS_S = 1.1
 
 
-def _backfill_table(table: str):
+def _backfill_table(table: str, lat_col: str = "latitude", lon_col: str = "longitude"):
+    # hikes stocke le point de départ dans start_latitude/start_longitude ; poi et
+    # spots dans latitude/longitude. On paramètre donc les colonnes de coordonnées.
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor(dictionary=True)
     cursor.execute(
-        f"SELECT id, latitude, longitude FROM {table} WHERE address IS NULL"
-        f" AND latitude IS NOT NULL AND longitude IS NOT NULL"
+        f"SELECT id, {lat_col} AS lat, {lon_col} AS lon FROM {table} WHERE address IS NULL"
+        f" AND {lat_col} IS NOT NULL AND {lon_col} IS NOT NULL"
     )
     rows = cursor.fetchall()
     cursor.close()
@@ -32,7 +35,7 @@ def _backfill_table(table: str):
     # Regrouper les IDs par localisation arrondie (≈ 111 m)
     location_groups: dict[tuple, list[int]] = defaultdict(list)
     for row in rows:
-        key = (round(float(row["latitude"]), 3), round(float(row["longitude"]), 3))
+        key = (round(float(row["lat"]), 3), round(float(row["lon"]), 3))
         location_groups[key].append(row["id"])
 
     total_locations = len(location_groups)
@@ -82,6 +85,7 @@ def _backfill_table(table: str):
 def main():
     _backfill_table("poi")
     _backfill_table("spots")
+    _backfill_table("hikes", lat_col="start_latitude", lon_col="start_longitude")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 {% extends "v2/base.html" %}
-{% block title %}Récapitulatif — RandoVanGo{% endblock %}
+{% block title %}Récapitulatif - RandoVanGo{% endblock %}
+{% block main_class %}has-mobile-nav has-results-nav{% endblock %}
 
 {% block header %}
   {% with nav_mode='wizard', active_step=5 %}
@@ -21,7 +22,7 @@
       <table class="results-table">
         <thead>
           <tr>
-            <th>Date</th><th>Ville</th><th>Activité</th><th>Spot</th><th>Services</th>
+            <th>Date</th><th>Ville</th><th>Rando</th><th>Spot</th><th>Services</th>
           </tr>
         </thead>
         <tbody id="days-table-body">
@@ -39,7 +40,7 @@
     </div>
 
     <div class="results-side">
-      {# Cerise sur le gâteau — recommandation Vany #}
+      {# Cerise sur le gâteau - recommandation Vany #}
       {% with vany_pose='waiting-soft.png',
               vany_eyebrow='La cerise sur le gâteau',
               vany_title='Vany te suggère un détour',
@@ -48,19 +49,6 @@
               vany_cta_url=url_for('unlock_vany') %}
         {% include 'v2/partials/vany_banner.html' %}
       {% endwith %}
-
-      {# Jour suivant : rester ou changer de ville #}
-      <div id="nextDaySection" class="card" style="display:none;">
-        <h2 id="nextDayTitle" style="font-size:19px; font-weight:700; margin-bottom:14px;"></h2>
-        <div class="results-actions">
-          <button class="btn btn--outline" id="stayButton" onclick="stayInSameCity()">
-            <i class="fas fa-map-marker-alt"></i> <span id="stayButtonLabel">Rester</span>
-          </button>
-          <button class="btn btn--primary" onclick="changeCityForNextDay()">
-            <i class="fas fa-exchange-alt"></i> Changer de ville
-          </button>
-        </div>
-      </div>
 
       {# Fin du séjour : téléchargement du carnet #}
       <div id="tripEndSection" style="display:none;">
@@ -77,11 +65,24 @@
     </div>
   </div>
 
-  {# Bandeau bas « Étape précédente » — cohérent avec les autres étapes #}
-  <div class="step-nav results-back-nav">
-    <a href="{{ url_for('step4') }}" class="step-nav__back"><i class="fas fa-arrow-left"></i> Étape précédente</a>
-  </div>
+</div>
 
+{# Barre basse, hors du .container ci-dessus pour être le dernier enfant de .page-main :
+   c'est ce qui permet au sticky desktop de la coller en bas du viewport (cf. app.css).
+   Elle porte le choix « jour suivant », qui doit rester atteignable sans dérouler le récap. #}
+<div class="container step-nav-wrap">
+  <div class="step-nav mobile-nav">
+    <a href="{{ url_for('step4') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
+    <div id="nextDaySection" class="results-nav__next" style="display:none;">
+      <span id="nextDayTitle" class="results-nav__title"></span>
+      <button class="btn btn--outline" id="stayButton" onclick="stayInSameCity()">
+        <i class="fas fa-map-marker-alt"></i> <span id="stayButtonLabel">Rester</span>
+      </button>
+      <button class="btn btn--primary" onclick="changeCityForNextDay()">
+        <i class="fas fa-exchange-alt"></i> Changer de ville
+      </button>
+    </div>
+  </div>
 </div>
 {% endblock %}
 

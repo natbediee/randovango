@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 : `${inView.length} ville${inView.length > 1 ? 's' : ''} dans cette zone`;
             const overflow = inView.length > NEARBY_MAX;
             hintEl.style.display = overflow ? '' : 'none';
-            if (overflow) hintEl.textContent = `+ ${inView.length - NEARBY_MAX} autres — zoome pour affiner`;
+            if (overflow) hintEl.textContent = `+ ${inView.length - NEARBY_MAX} autres - zoome pour affiner`;
 
             listEl.innerHTML = '';
             nearbyPanel.classList.toggle('is-empty', inView.length === 0);
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         // Révéler la météo et le bouton au premier choix (la durée est déjà fixée).
         // La ville choisie est désormais indiquée par le marqueur/popup sur la carte et
-        // le badge « ✓ Sélectionnée » du panneau — plus besoin d'une fiche dédiée.
+        // le badge « ✓ Sélectionnée » du panneau - plus besoin d'une fiche dédiée.
         document.getElementById('weatherSection').style.display = '';
         const planBtn = document.getElementById('planButton');
         if (planBtn) planBtn.style.display = '';

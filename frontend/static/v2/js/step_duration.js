@@ -1,4 +1,4 @@
-/* Front v2 — Accueil / choix de la durée (écran 01).
+/* Front v2 - Accueil / choix de la durée (écran 01).
    Reprend la logique métier du legacy step_duration.js : purge de l'état d'un séjour
    précédent, sélection de durée (cartes data-days), date de départ, navigation vers step1.
    Le widget de connexion/upload GPX du legacy n'est PAS repris ici : il vit désormais dans

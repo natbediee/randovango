@@ -9,7 +9,8 @@
 // POI_MARKER_STYLES vient de map-helpers.js (partagé avec l'étape 4).
 // ---------------------------------------------------------------------------
 const HIKE_STYLE = { color: 'var(--blue)', icon: 'fa-hiking' };
-const SPOT_STYLE  = { color: '#26C6A6',    icon: 'fa-bed' };
+// Spot en encre (#22424B), distinct du teal de la rando (cf. SPOT_COLOR dans map-helpers.js).
+const SPOT_STYLE  = { color: '#22424B',    icon: 'fa-bed' };
 
 function buildDivIcon(type, category, dayNumber) {
     const style = type === 'hike' ? HIKE_STYLE
@@ -86,12 +87,14 @@ document.addEventListener('DOMContentLoaded', async function () {
             const row = document.createElement('tr');
             // Date de la journée (repli sur « Jour N » si la date de départ manque)
             const dateLabel = formatDayDate(plan.start_date, day.day_number) || day.display.day_title;
+            // data-label : en mobile le tableau est déplié en blocs (un par jour) et ces
+            // libellés sont réaffichés devant chaque cellule, l'en-tête étant masqué.
             row.innerHTML = `
-                <td><strong>${dateLabel}</strong></td>
-                <td>${day.city_name || '?'}</td>
-                <td>${day.display.activity_html}</td>
-                <td>${day.display.accommodation_html}</td>
-                <td>${day.display.services_html}</td>
+                <td data-label="Date"><strong>${dateLabel}</strong></td>
+                <td data-label="Ville">${day.city_name || '?'}</td>
+                <td data-label="Rando">${day.display.activity_html}</td>
+                <td data-label="Spot">${day.display.accommodation_html}</td>
+                <td data-label="Services">${day.display.services_html}</td>
             `;
             tableBody.appendChild(row);
 
@@ -143,10 +146,8 @@ document.addEventListener('DOMContentLoaded', async function () {
             document.getElementById('downloadPdfBtn').href = `${window.API_BASE}/api/result/pdf?plan_id=${planId}`;
             document.getElementById('tripEndSection').style.display = '';
         }
-
-        // Centrer la page sur la carte une fois le tableau rempli (sinon la mise en
-        // page grandit après le scroll et la carte ne se retrouve plus centrée)
-        document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Pas de scroll automatique ici : cet écran est une relecture avant PDF, on doit
+        // arriver en haut sur le récapitulatif. La carte reste accessible plus bas.
     } catch (err) {
         console.error('Erreur chargement plan:', err);
         tableBody.innerHTML = '<tr><td colspan="5">Erreur lors du chargement du plan.</td></tr>';

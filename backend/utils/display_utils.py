@@ -297,12 +297,16 @@ def result_day_display(day) -> dict:
     """Contenu prêt à afficher des cellules du tableau récapitulatif.
 
     Les champs *_html peuvent contenir du HTML simple (<br>, <small>) inséré
-    tel quel par le JS (innerHTML) — même comportement que l'ancien affichage,
+    tel quel par le JS (innerHTML) - même comportement que l'ancien affichage,
     les données venant de nos propres bases.
     """
     if day.get("hike_id"):
         distance = js_num(day["distance_km"]) if day.get("distance_km") is not None else "?"
         activity = f"{day.get('hike_name')} ({distance} km, {day.get('difficulte') or ''})"
+        # Adresse du point de départ de la rando (géocodée depuis start_latitude/longitude,
+        # cf. etl/backfill_addresses.py) : affichée quand elle est connue, comme le spot.
+        if day.get("hike_address"):
+            activity += f"<br><small>📍 {day['hike_address']}</small>"
     else:
         activity = "Pas de randonnée - Détente"
 
@@ -316,7 +320,7 @@ def result_day_display(day) -> dict:
     pois = day.get("pois") or []
     if pois:
         services = "<br>".join(
-            f"{p.get('name')}" + (f" <small>📍 {p['address']}</small>" if p.get("address") else "")
+            f"{p.get('name')}" + (f"<br><small>📍 {p['address']}</small>" if p.get("address") else "")
             for p in pois
         )
     else:

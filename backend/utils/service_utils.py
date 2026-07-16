@@ -129,7 +129,7 @@ class ServiceUtil:
         (et non relatif au répertoire courant) : un chemin relatif ne fonctionnait
         que par accident, grâce à db_utils.py qui charge le même .env en absolu et
         s'importe généralement avant (python-dotenv ne réécrit pas les variables
-        déjà présentes) — mais cassait dès qu'un module appelait load_env() sans
+        déjà présentes) - mais cassait dès qu'un module appelait load_env() sans
         que db_utils ait été importé au préalable (ex: script isolé, ou MongoUtils
         appelé depuis un chemin de code qui n'importe jamais MySQLUtils).
         """

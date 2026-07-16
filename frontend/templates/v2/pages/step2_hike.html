@@ -1,5 +1,5 @@
 {% extends "v2/base.html" %}
-{% block title %}Étape 2 — Randonnée — RandoVanGo{% endblock %}
+{% block title %}Étape 2 - Randonnée - RandoVanGo{% endblock %}
 {% block main_class %}has-mobile-nav{% endblock %}
 
 {% block header %}
@@ -62,7 +62,7 @@
 
 </div>
 
-<div class="container">
+<div class="container step-nav-wrap">
   <div class="step-nav mobile-nav">
     <a href="{{ url_for('step1') }}" class="mobile-nav__back step-nav__back" aria-label="Retour à la ville">←</a>
     <a href="{{ url_for('step3') }}" id="nextStepBtn" class="btn btn--primary btn--block" style="display:none;">Valider la rando et continuer <i class="fas fa-arrow-right"></i></a>

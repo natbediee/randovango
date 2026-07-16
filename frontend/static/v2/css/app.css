@@ -1,5 +1,5 @@
 /* ==========================================================================
-   RandoVanGo — Front v2 (identité « Vany »)
+   RandoVanGo - Front v2 (identité « Vany »)
    Design tokens + composants réutilisables. Recrée en CSS les styles inline du
    handoff (design_handoff_randovango/). Palette crème / menthe / teal.
    ========================================================================== */
@@ -242,7 +242,7 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--ink);
 }
 
-/* Barre de progression mobile (5 segments) — masquée en desktop */
+/* Barre de progression mobile (5 segments) - masquée en desktop */
 .stepper-mobile { display: none; }
 
 /* ===== BOUTONS ===== */
@@ -395,6 +395,12 @@ button { font-family: inherit; cursor: pointer; }
   border: 1px solid var(--card-border);
   border-radius: var(--r-card-sm);
   overflow: hidden;
+  /* Contexte d'empilement : Leaflet monte ses panes à z-index 400 (jusqu'à 800 pour les
+     contrôles). Sans ça ces valeurs remontent au contexte racine et passent devant la
+     barre basse (z-index 40). Les étapes 2 à 4 y échappaient par accident, leur carte
+     étant dans un .map-col sticky - qui, lui, crée bien un contexte. */
+  position: relative;
+  z-index: 0;
 }
 .map-box .leaflet-container { border-radius: var(--r-card-sm); }
 
@@ -532,13 +538,22 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .home-hero { grid-template-columns: 1fr; gap: 18px; }
   .home-hero__img { width: 100%; height: 170px; }
   .home-hero h1 { font-size: 28px; }
-  .home-steps { gap: 8px 10px; }
+  /* Les traits de liaison sont des frères des items : en flex-wrap ils resteraient
+     orphelins en fin de rangée. On les masque et on passe en grille 2 colonnes. */
+  .home-steps {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    justify-items: start;
+    gap: 14px 10px;
+    padding: 16px 20px;
+  }
+  .home-steps__line { display: none; }
   .duration-grid { grid-template-columns: repeat(3, 1fr); }
   .duration-footer { flex-direction: column; align-items: stretch; }
   .duration-footer .btn { width: 100%; }
 }
 
-/* ===== WIZARD — commun ===== */
+/* ===== WIZARD - commun ===== */
 .step-head {
   display: flex;
   align-items: flex-end;
@@ -562,9 +577,23 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 .step-nav .btn { flex: none; }
 @media (min-width: 769px) {
-  /* En desktop, la barre basse n'est pas fixe : elle s'affiche en fin de contenu.
-     display:flex explicite pour annuler le `.mobile-nav { display:none }` desktop. */
-  .step-nav.mobile-nav { display: flex; position: static; box-shadow: none; padding: 16px 24px; }
+  /* Comme en mobile, la barre d'action reste atteignable pendant le défilement : sans
+     ça, une sélection faite en haut d'une longue liste oblige à tout dérouler pour
+     rejoindre le CTA. Le wrapper est le dernier enfant de .page-main, donc `sticky` le
+     colle en bas du viewport pendant le scroll puis le repose en fin de contenu (il ne
+     recouvre jamais le footer, qui est hors de .page-main). */
+  .step-nav-wrap { position: sticky; bottom: 20px; z-index: 40; }
+  /* Récap : un peu d'air entre la rangée carte/bannières et la barre basse, qui
+     sinon se colle au bas de la carte quand on arrive en fin de page. */
+  .page-main.has-results-nav .step-nav-wrap { margin-top: 22px; }
+  /* display:flex explicite pour annuler le `.mobile-nav { display:none }` desktop.
+     position:static : c'est le wrapper qui porte le sticky, pas la barre elle-même. */
+  .step-nav.mobile-nav {
+    display: flex;
+    position: static;
+    padding: 16px 24px;
+    box-shadow: 0 6px 20px rgba(34, 66, 75, .12);
+  }
   .step-nav.mobile-nav .mobile-nav__back {
     width: auto; height: auto; border: 0; border-radius: 0;
     background: transparent; font-size: 14px; color: var(--muted);
@@ -572,7 +601,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .step-nav.mobile-nav .btn { flex: none; width: auto; }
 }
 
-/* ===== STEP1 — VILLE ===== */
+/* ===== STEP1 - VILLE ===== */
 .search-wrap { position: relative; }
 .field--search #citySearch { min-width: 0; }
 .city-suggestions {
@@ -672,7 +701,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .leaflet-popup-content h4 { font-family: var(--font-head); font-weight: 800; color: var(--ink); }
 .leaflet-popup-content small { color: var(--muted); }
 
-/* Boutons d'action dans les popups Leaflet (ville/rando/spot/poi) — style unifié */
+/* Boutons d'action dans les popups Leaflet (ville/rando/spot/poi) - style unifié */
 .map-popup-actions { margin-top: 8px; display: flex; gap: 6px; }
 .leaflet-popup-content .btn {
   border-radius: var(--r-pill);
@@ -708,6 +737,10 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .weather-day .weather-details { display: flex; flex-direction: column; gap: 2px; }
 .weather-day .weather-info { font-size: 12px; color: var(--muted); }
 .weather-day .weather-advice {
+  /* Collé en bas de la carte : le nombre de lignes de détails varie (pluie
+     parfois absente) mais les cartes d'une rangée ont la même hauteur (grille),
+     donc les badges restent alignés d'une carte à l'autre. */
+  margin-top: auto;
   width: 100%;
   font-size: 11.5px;
   font-weight: 700;
@@ -750,7 +783,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .map-box--square { aspect-ratio: 4 / 3; }         /* moins haute sur petit écran */
 }
 
-/* ===== STEP2 — RANDONNÉE (markup injecté par step2_hike.js) ===== */
+/* ===== STEP2 - RANDONNÉE (markup injecté par step2_hike.js) ===== */
 .hiking-filters { display: flex; flex-wrap: wrap; gap: 20px; }
 .filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .filter-group .label { margin-right: 2px; }
@@ -852,7 +885,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .hiking-actions .btn { width: 100%; }
 }
 
-/* ===== STEP3 — SPOT & STEP4 — SERVICES (markup injecté) ===== */
+/* ===== STEP3 - SPOT & STEP4 - SERVICES (markup injecté) ===== */
 .spots-section { display: flex; flex-direction: column; }
 .spots-list, .services-grid { display: flex; flex-direction: column; gap: 14px; }
 .services-lists { display: flex; flex-direction: column; gap: 14px; }
@@ -913,14 +946,14 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .service-address, .service-distance { font-size: 12.5px; line-height: 1.4; }
 .service-center { gap: 3px; }
 
-/* Onglets de catégories (step4) — chip + icône */
+/* Onglets de catégories (step4) - chip + icône */
 .category-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
 .category-tab.active { color: var(--teal); background: var(--mint); border-color: var(--teal); }
 
 .no-spot-option, .no-service-option { text-align: center; }
 .no-spot-btn { text-decoration: underline; }
 
-/* Étape 4 — parcours en 2 temps : tuiles de catégories (vue 1) puis sous-liste (vue 2) */
+/* Étape 4 - parcours en 2 temps : tuiles de catégories (vue 1) puis sous-liste (vue 2) */
 .category-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -981,16 +1014,45 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 .results-map { height: 100%; min-height: 360px; }
 .results-side { display: flex; flex-direction: column; gap: 20px; }
+/* Bannière Vany dans la colonne latérale étroite du récap : la disposition par
+   défaut (image | texte | bouton sur une seule rangée) y comprime la colonne texte,
+   et le titre « Vany te suggère un détour » passait sur deux lignes. On réagence en
+   plaçant le bouton sous le texte (l'image occupe les deux rangées), ce qui élargit
+   la colonne texte : le titre tient alors sur une seule ligne, sans rien rogner. */
+.results-side .vany-banner {
+  grid-template-columns: 88px 1fr;
+  grid-template-areas: "img body" "img cta";
+  gap: 4px 22px;
+  align-items: center;
+}
+.results-side .vany-banner__img { grid-area: img; align-self: center; width: 88px; }
+.results-side .vany-banner__body { grid-area: body; padding: 20px 0 6px; }
+.results-side .vany-banner .btn { grid-area: cta; justify-self: start; margin-bottom: 20px; }
 .trip-end__hat { height: 1.1em; vertical-align: -0.15em; }
-/* Bandeau bas « Étape précédente » (une seule action, alignée à gauche) */
-.results-back-nav { justify-content: flex-start; }
+/* Choix du jour suivant, logé dans la barre basse : results.js le révèle en retirant
+   le `display:none` inline, d'où le display porté par la classe et non par le JS. */
+.results-nav__next { display: flex; align-items: center; gap: 12px; }
+.results-nav__title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+  white-space: nowrap;
+}
 @media (max-width: 900px) {
   .results-map-row { grid-template-columns: 1fr; }
   .results-map { height: 340px; min-height: 0; }
 }
 
 .results-table-wrap { overflow-x: auto; }
-.results-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.results-table { width: 100%; border-collapse: collapse; min-width: 640px; table-layout: fixed; }
+/* Répartition fixe : Date/Ville sont courtes, les trois colonnes de contenu
+   (Activité, Spot, Services) se partagent le reste à parts égales. */
+.results-table th:nth-child(1) { width: 11%; }
+.results-table th:nth-child(2) { width: 11%; }
+.results-table th:nth-child(3),
+.results-table th:nth-child(4),
+.results-table th:nth-child(5) { width: 26%; }
 .results-table th, .results-table td {
   padding: 14px 18px;
   text-align: left;
@@ -1012,6 +1074,42 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
    cette teinte. */
 .results-table tbody tr:nth-child(even) { background: var(--mint-2); }
 .results-table td strong { font-family: var(--font-head); }
+
+/* Écran de relecture avant PDF : à 390px les 5 colonnes (min-width 640px) imposeraient
+   un scroll latéral et « Spot »/« Services » passeraient inaperçus. On déplie donc le
+   tableau en blocs, un par jour, l'en-tête étant remplacé par les data-label posés sur
+   chaque cellule par results.js. Tout reste visible sans interaction. */
+@media (max-width: 768px) {
+  .results-table-wrap { overflow-x: visible; }
+  .results-table { display: block; min-width: 0; }
+  .results-table thead { display: none; }
+  .results-table tbody, .results-table tr, .results-table td { display: block; }
+
+  .results-table tbody tr { padding: 6px 0 14px; border-bottom: 1px solid var(--divider); }
+  .results-table tbody tr:last-child { border-bottom: 0; }
+  .results-table td { padding: 7px 18px; border-bottom: 0; }
+
+  .results-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-head);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  /* La date sert de titre au bloc : pas de libellé, et un filet la sépare des champs. */
+  .results-table td[data-label="Date"] {
+    padding-top: 14px;
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--divider);
+    font-size: 15.5px;
+  }
+  .results-table td[data-label="Date"]::before { display: none; }
+}
 
 .results-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .trip-end { display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -1407,6 +1505,28 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .mobile-nav .btn { flex: 1; }
   /* Réserve l'espace de la nav basse pour ne pas masquer le contenu */
   .page-main.has-mobile-nav { padding-bottom: 92px; }
+
+  /* Récap : la barre basse porte un titre + deux CTA (« Rester » / « Changer de
+     ville »), qui débordent d'une seule ligne à côté de la flèche retour (le
+     dernier bouton se retrouvait coupé hors écran). On laisse le bloc grandir et
+     passer à la ligne : titre sur sa propre ligne, puis les deux boutons se
+     partageant la ligne suivante. */
+  .results-nav__next {
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .results-nav__next .results-nav__title { flex-basis: 100%; }
+  .results-nav__next .btn { flex: 1; min-width: 0; }
+  /* La barre récap fait alors deux rangées : on réserve plus de hauteur. */
+  .page-main.has-results-nav.has-mobile-nav { padding-bottom: 140px; }
+
+  /* Filtres (étape rando) : sur mobile, le libellé (« Difficulté : ») partageait la
+     ligne des boutons, qui débordaient alors sur deux rangées de façon désordonnée.
+     On force le libellé à occuper toute la largeur (comme un « Difficulté :<br> »),
+     les boutons se regroupant proprement sur la ou les lignes suivantes. */
+  .filter-group .label { flex-basis: 100%; margin-right: 0; }
 }
 
 /* Nav basse : desktop uniquement quand on est ≥ 768 -> cachée */

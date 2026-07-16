@@ -1,4 +1,4 @@
-/* Front v2 — espace contributeur (connexion + garde du dashboard).
+/* Front v2 - espace contributeur (connexion + garde du dashboard).
    Login branché sur le vrai endpoint FastAPI POST /api/auth/login (JWT).
    NB: l'API attend `username` ; on envoie la saisie telle quelle (le passage à
    l'email se fera côté backend plus tard). Le token est stocké de façon unifiée

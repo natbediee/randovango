@@ -147,7 +147,7 @@ async function addChosenHikeToMap(map, cityId, hikeId, currentDay) {
         const traceData = await apiGet(`/api/step2/hike/${hikeId}/trace`);
         if (traceData.points && traceData.points.length > 0) {
             const latlngs = traceData.points.map(p => [p.lat, p.lon]);
-            L.polyline(latlngs, { color: '#339af0', weight: 3, opacity: 0.8 }).addTo(map);
+            L.polyline(latlngs, { color: '#2E7D86', weight: 3, opacity: 0.8 }).addTo(map);
         }
     } catch (err) {
         console.error('Erreur chargement tracé GPX:', err);
@@ -167,17 +167,20 @@ function matchCountSubtitle(count, noun, gender) {
     return `${count} ${noun}${s} correspond${count > 1 ? 'ent' : ''} à vos critères`;
 }
 
+// Teintes naturelles de la charte, chaque catégorie restant distinguable de ses
+// voisines. À garder synchronisé avec POI_CATEGORY_STYLES (backend/services/
+// map_service.py) : la carte du carnet PDF rejoue celle du site.
 const POI_MARKER_STYLES = {
-    eau:          { color: '#E91E63', icon: 'fa-tint' },
-    vidange:      { color: '#EE3575', icon: 'fa-recycle' },
-    gasoil:       { color: '#F24D89', icon: 'fa-gas-pump' },
-    supermarche:  { color: '#F5659C', icon: 'fa-cart-arrow-down' },
-    commerce:     { color: '#F77DB0', icon: 'fa-shopping-basket' },
-    restauration: { color: '#F990C1', icon: 'fa-utensils' },
-    toilettes:    { color: '#FAA5CE', icon: 'fa-toilet' },
-    hygiene:      { color: '#FBBAD9', icon: 'fa-shower' },
-    culture:      { color: '#FCCFE5', icon: 'fa-camera' },
-    urgence:      { color: '#FDE3F0', icon: 'fa-first-aid' }
+    eau:          { color: '#3D8EA8', icon: 'fa-tint' },
+    vidange:      { color: '#5B7C99', icon: 'fa-recycle' },
+    gasoil:       { color: '#A3563C', icon: 'fa-gas-pump' },
+    supermarche:  { color: '#6E9A3C', icon: 'fa-cart-arrow-down' },
+    commerce:     { color: '#9A6E3C', icon: 'fa-shopping-basket' },
+    restauration: { color: '#C58A2E', icon: 'fa-utensils' },
+    toilettes:    { color: '#6E8CA0', icon: 'fa-toilet' },
+    hygiene:      { color: '#4FA3A0', icon: 'fa-shower' },
+    culture:      { color: '#8A6BA1', icon: 'fa-camera' },
+    urgence:      { color: '#B04A4A', icon: 'fa-first-aid' }
 };
 
 function buildHikeDivIcon(dayLabel) {
@@ -201,18 +204,23 @@ function buildHikeDivIcon(dayLabel) {
     });
 }
 
+// Couleur du spot : encre de la charte (#22424B), distincte du teal de la
+// randonnée (var --blue) pour qu'on ne confonde pas les deux marqueurs sur une
+// carte qui les affiche ensemble (étapes 3, 4 et récapitulatif). À garder
+// synchronisé avec SPOT_STYLE (results.js) et map_service.py (carnet PDF).
+const SPOT_COLOR = '#22424B';
+
 function buildSpotDivIcon(dayLabel) {
-    // Couleur du spot alignée sur la page récapitulatif (results.js SPOT_STYLE = #26C6A6).
     const label = dayLabel
         ? `<span style="position:absolute;left:50%;transform:translateX(-50%);top:30px;
-                        background:#26C6A6;color:#fff;font-size:9px;font-weight:700;
+                        background:${SPOT_COLOR};color:#fff;font-size:9px;font-weight:700;
                         padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 3px #0004;">
                ${dayLabel}
            </span>` : '';
     return L.divIcon({
         className: 'custom-map-marker',
         html: `<div style="position:relative;width:28px;">
-                  <div style="background:#26C6A6;width:28px;height:28px;border-radius:50% 50% 50% 0;
+                  <div style="background:${SPOT_COLOR};width:28px;height:28px;border-radius:50% 50% 50% 0;
                               transform:rotate(-45deg);box-shadow:0 1px 4px #0006;display:flex;align-items:center;justify-content:center;">
                     <i class="fas fa-bed" style="color:#fff;transform:rotate(45deg);font-size:13px;"></i>
                   </div>${label}
@@ -252,13 +260,14 @@ function buildHikeSelectedDivIcon() {
     });
 }
 
-// Icône de survol d'un spot : teal clair (accent), icône encre pour le contraste.
+// Icône de survol d'un spot : encre plus claire (même famille que le spot au
+// repos, pour ne pas virer au teal de la rando), agrandie et bordée de blanc.
 function buildSpotHoveredDivIcon() {
     return L.divIcon({
         className: 'custom-map-marker',
-        html: `<div style="background:#7FC4CC;width:34px;height:34px;border-radius:50% 50% 50% 0;
+        html: `<div style="background:#3D5C66;width:34px;height:34px;border-radius:50% 50% 50% 0;
                     transform:rotate(-45deg);box-shadow:0 2px 8px #0008;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
-                  <i class="fas fa-bed" style="color:#22424B;transform:rotate(45deg);font-size:15px;"></i>
+                  <i class="fas fa-bed" style="color:#fff;transform:rotate(45deg);font-size:15px;"></i>
                </div>`,
         iconSize: [34, 34],
         iconAnchor: [17, 34],
@@ -266,12 +275,11 @@ function buildSpotHoveredDivIcon() {
     });
 }
 
-// Marqueur du spot sélectionné : couleur du spot (#26C6A6, comme le récapitulatif),
-// plus grand, avec un ✓.
+// Marqueur du spot sélectionné : couleur du spot (encre), plus grand, avec un ✓.
 function buildSpotSelectedDivIcon() {
     return L.divIcon({
         className: 'custom-map-marker',
-        html: `<div style="background:#26C6A6;width:40px;height:40px;border-radius:50% 50% 50% 0;
+        html: `<div style="background:${SPOT_COLOR};width:40px;height:40px;border-radius:50% 50% 50% 0;
                     transform:rotate(-45deg);box-shadow:0 3px 10px #0009;display:flex;align-items:center;justify-content:center;border:3px solid #fff;">
                   <i class="fas fa-check" style="color:#fff;transform:rotate(45deg);font-size:16px;"></i>
                </div>`,
@@ -330,12 +338,12 @@ async function loadPreviousDaysOnMap(map, currentDay, planId) {
             if (day.hike_latitude && day.hike_longitude) {
                 L.marker([day.hike_latitude, day.hike_longitude], { icon: buildHikeDivIcon(jLabel), zIndexOffset: 1000 })
                     .addTo(map)
-                    .bindPopup(`<b>🥾 ${day.hike_name || 'Randonnée'}</b><br>${jLabel} — déjà planifié`);
+                    .bindPopup(`<b>🥾 ${day.hike_name || 'Randonnée'}</b><br>${jLabel} - déjà planifié`);
             }
             if (day.spot_latitude && day.spot_longitude) {
                 L.marker([day.spot_latitude, day.spot_longitude], { icon: buildSpotDivIcon(jLabel), zIndexOffset: 500 })
                     .addTo(map)
-                    .bindPopup(`<b>🛏️ ${day.spot_name || 'Spot'}</b><br>${jLabel} — déjà planifié`);
+                    .bindPopup(`<b>🛏️ ${day.spot_name || 'Spot'}</b><br>${jLabel} - déjà planifié`);
             }
             if (day.hike_id) plannedHikeIds.set(day.hike_id, day.day_number);
             if (day.spot_id) plannedSpotIds.set(day.spot_id, day.day_number);

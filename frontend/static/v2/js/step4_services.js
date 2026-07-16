@@ -1,4 +1,4 @@
-// Étape 4 : choix des services (POI) utiles pour la journée en cours — eau,
+// Étape 4 : choix des services (POI) utiles pour la journée en cours - eau,
 // vidange, carburant, commerces... Les textes des cartes et les phrases de
 // sous-titre par catégorie arrivent prêts à afficher depuis l'API (champs badge,
 // distance_label, subtitles... préparés par display_utils.py).
@@ -269,7 +269,7 @@ function renderCategoryTiles() {
         const count = list.length;
         const selectedCount = list.filter(p => selectedPoiIds.has(p.id)).length;
         return `
-            <button type="button" class="category-tile" onclick="openCategory('${cat}')" aria-label="${meta.label} — ${count} points">
+            <button type="button" class="category-tile" onclick="openCategory('${cat}')" aria-label="${meta.label} - ${count} points">
                 ${selectedCount ? `<span class="category-tile__selected">✓ ${selectedCount}</span>` : ''}
                 <span class="category-tile__icon"><i class="fas ${meta.icon}"></i></span>
                 <span class="category-tile__label">${meta.label}</span>
@@ -310,7 +310,11 @@ function openCategory(category) {
         serviceMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
 
-    sublist.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Cadrer sur le bloc carte+liste, pas sur la sous-liste seule : en mobile la carte
+    // est au-dessus de la liste (.map-col order:-1) et un scroll sur la sous-liste la
+    // pousserait hors écran, juste après l'avoir recadrée sur la catégorie.
+    document.querySelector('.map-list-layout')
+        .scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Retour à la vue tuiles (recalcule les pastilles « déjà ajouté »).

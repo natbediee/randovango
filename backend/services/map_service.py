@@ -25,26 +25,31 @@ OSM_TILE_URL = "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
 FA_SOLID_TTF = os.path.join(
     os.path.dirname(fontawesomefree.__file__), "static", "fontawesomefree", "webfonts", "fa-solid-900.ttf"
 )
-# Police standard (chiffres lisibles) pour numéroter les étapes sur la carte de la rando —
+# Police standard (chiffres lisibles) pour numéroter les étapes sur la carte de la rando -
 # fa-solid-900.ttf est une police d'icônes, pas adaptée à l'affichage de chiffres.
 DEJAVU_BOLD_TTF = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# (couleur, glyphe Font Awesome solid, libellé) — mêmes couleurs/icônes que la carte Leaflet
-HIKE_STYLE = ("#4B6F8E", "", "Randonnée")   # fa-hiking
-SPOT_STYLE = ("#26C6A6", "", "Spot")  # fa-bed
-DEFAULT_POI_STYLE = ("#9E9E9E", "", "Service")  # fa-map-marker-alt
+# (couleur, glyphe Font Awesome solid, libellé) - mêmes couleurs/icônes que la carte Leaflet
+# (POI_MARKER_STYLES dans frontend/static/v2/js/map-helpers.js : les deux palettes
+# doivent rester synchronisées, la carte du carnet rejouant celle du site).
+# Palette de la charte RandoVanGo : teal pour le parcours (rando + spot), teintes
+# naturelles désaturées pour les services, chaque catégorie restant distinguable
+# de ses voisines. Le glyphe, lui, reste le repère principal sur la carte.
+HIKE_STYLE = ("#2E7D86", "", "Randonnée")   # fa-hiking
+SPOT_STYLE = ("#22424B", "", "Spot")  # fa-bed
+DEFAULT_POI_STYLE = ("#7A8C89", "", "Service")  # fa-map-marker-alt
 
 POI_CATEGORY_STYLES = {
-    "eau":          ("#E91E63", "", "Eau potable"),       # fa-tint
-    "vidange":      ("#EE3575", "", "Vidange"),           # fa-recycle
-    "gasoil":       ("#F24D89", "", "Carburant"),         # fa-gas-pump
-    "supermarche":  ("#F5659C", "", "Supermarché"),       # fa-cart-arrow-down
-    "commerce":     ("#F77DB0", "", "Commerce"),          # fa-shopping-basket
-    "restauration": ("#F990C1", "", "Restauration"),      # fa-utensils
-    "toilettes":    ("#FAA5CE", "", "Toilettes"),         # fa-toilet
-    "hygiene":      ("#FBBAD9", "", "Hygiène / douche"),  # fa-shower
-    "culture":      ("#FCCFE5", "", "Culture / visite"),  # fa-camera
-    "urgence":      ("#FDE3F0", "", "Urgence"),           # fa-first-aid
+    "eau":          ("#3D8EA8", "", "Eau potable"),       # fa-tint
+    "vidange":      ("#5B7C99", "", "Vidange"),           # fa-recycle
+    "gasoil":       ("#A3563C", "", "Carburant"),         # fa-gas-pump
+    "supermarche":  ("#6E9A3C", "", "Supermarché"),       # fa-cart-arrow-down
+    "commerce":     ("#9A6E3C", "", "Commerce"),          # fa-shopping-basket
+    "restauration": ("#C58A2E", "", "Restauration"),      # fa-utensils
+    "toilettes":    ("#6E8CA0", "", "Toilettes"),         # fa-toilet
+    "hygiene":      ("#4FA3A0", "", "Hygiène / douche"),  # fa-shower
+    "culture":      ("#8A6BA1", "", "Culture / visite"),  # fa-camera
+    "urgence":      ("#B04A4A", "", "Urgence"),           # fa-first-aid
 }
 
 _icon_file_cache = {}
@@ -155,9 +160,16 @@ def _numbered_pin_file_path(number: int, color: str, size: int) -> str:
     return _numbered_pin_cache[key]
 
 
+def _marker_scale(width: int, reference_width: int) -> float:
+    """Facteur d'agrandissement des marqueurs et des tracés. Leurs tailles sont
+    exprimées en pixels : sans cette mise à l'échelle, une carte rendue plus large
+    (pour l'impression) afficherait des marqueurs proportionnellement plus petits."""
+    return max(1.0, width / reference_width)
+
+
 def render_hike_map_png(mongo_id: str, width: int = 700, height: int = 420) -> bytes | None:
     """Carte dédiée à la rando (dissociée de la carte générale du jour) : uniquement
-    le tracé, zoomé dessus, avec les étapes du GPX (waypoints) numérotées — les
+    le tracé, zoomé dessus, avec les étapes du GPX (waypoints) numérotées - les
     numéros renvoient à la liste d'indications sous la carte (cf. pdf_service.py)."""
     try:
         from staticmap import StaticMap, IconMarker, Line
@@ -169,13 +181,15 @@ def render_hike_map_png(mongo_id: str, width: int = 700, height: int = 420) -> b
     if len(trace_points) < 2:
         return None
 
+    scale = _marker_scale(width, 700)
     m = StaticMap(width, height, url_template=OSM_TILE_URL)
-    m.add_line(Line(trace_points, HIKE_STYLE[0], 4))
+    m.add_line(Line(trace_points, HIKE_STYLE[0], round(4 * scale)))
 
     waypoints = fetch_hike_waypoints(mongo_id)
+    pin_size = round(26 * scale)
     for i, wp in enumerate(waypoints, start=1):
-        path = _numbered_pin_file_path(i, HIKE_STYLE[0], 26)
-        m.add_marker(IconMarker((wp["lon"], wp["lat"]), path, 13, 13))
+        path = _numbered_pin_file_path(i, HIKE_STYLE[0], pin_size)
+        m.add_marker(IconMarker((wp["lon"], wp["lat"]), path, pin_size // 2, pin_size // 2))
 
     try:
         image = m.render()
@@ -200,10 +214,12 @@ def render_overview_map_png(days: list, width: int = 900, height: int = 550) -> 
         logger.warning("[map] Librairie staticmap non disponible, carte ignorée")
         return None
 
+    scale = _marker_scale(width, 900)
     m = StaticMap(width, height, url_template=OSM_TILE_URL)
     has_marker = False
 
     def add_icon(lon, lat, color, glyph, size):
+        size = round(size * scale)
         path = _icon_file_path(color, glyph, size)
         m.add_marker(IconMarker((lon, lat), path, size // 2, size // 2))
 
@@ -211,7 +227,7 @@ def render_overview_map_png(days: list, width: int = 900, height: int = 550) -> 
         if day.get("hike_id"):
             trace_points = _fetch_hike_trace(day.get("hike_mongo_id"))
             if len(trace_points) >= 2:
-                m.add_line(Line(trace_points, HIKE_STYLE[0], 3))
+                m.add_line(Line(trace_points, HIKE_STYLE[0], round(3 * scale)))
                 has_marker = True
         if day.get("hike_latitude") and day.get("hike_longitude"):
             add_icon(day["hike_longitude"], day["hike_latitude"], *HIKE_STYLE[:2], 42)
@@ -239,13 +255,22 @@ def render_overview_map_png(days: list, width: int = 900, height: int = 550) -> 
     return buffer.getvalue()
 
 
+LEGEND_ICON_SIZE = 18
+
+
 def legend_entries(days: list) -> list:
-    """Retourne les entrées de légende (icône PNG, libellé) pertinentes pour ce
-    voyage : Randonnée/Spot toujours présents, puis les catégories de
-    services effectivement utilisées."""
+    """Retourne les entrées de légende pertinentes pour ce voyage : la randonnée
+    (le tracé, d'où une barre et non une pastille), le spot, puis les catégories
+    de services effectivement utilisées.
+
+    Chaque entrée est un dict {shape, color, label, icon_png} : `shape` vaut
+    "bar" pour le tracé et "pin" pour les marqueurs, dont l'icône PNG reprend le
+    marqueur exact posé sur la carte (glyphe compris, seul repère fiable là où
+    deux catégories partagent une teinte proche)."""
     entries = [
-        (_render_pin_png(*HIKE_STYLE[:2], 28), HIKE_STYLE[2]),
-        (_render_pin_png(*SPOT_STYLE[:2], 28), SPOT_STYLE[2]),
+        {"shape": "bar", "color": HIKE_STYLE[0], "label": HIKE_STYLE[2], "icon_png": None},
+        {"shape": "pin", "color": SPOT_STYLE[0], "label": SPOT_STYLE[2],
+         "icon_png": _render_pin_png(*SPOT_STYLE[:2], LEGEND_ICON_SIZE)},
     ]
     seen_categories = set()
     for day in days:
@@ -254,5 +279,6 @@ def legend_entries(days: list) -> list:
             if category and category not in seen_categories and category in POI_CATEGORY_STYLES:
                 seen_categories.add(category)
                 color, glyph, label = POI_CATEGORY_STYLES[category]
-                entries.append((_render_pin_png(color, glyph, 28), label))
+                entries.append({"shape": "pin", "color": color, "label": label,
+                                "icon_png": _render_pin_png(color, glyph, LEGEND_ICON_SIZE)})
     return entries

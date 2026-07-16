@@ -1,5 +1,5 @@
 {% extends "v2/base.html" %}
-{% block title %}Étape 1 — Ville de départ — RandoVanGo{% endblock %}
+{% block title %}Étape 1 - Ville de départ - RandoVanGo{% endblock %}
 {% block main_class %}has-mobile-nav{% endblock %}
 
 {% block header %}
@@ -28,7 +28,7 @@
       <div id="citySuggestions" class="city-suggestions" style="display:none;"></div>
       <div id="cityNotFound" class="city-notfound" style="display:none;">
         <p class="city-notfound__title"><i class="fas fa-map-marker-alt"></i> Cette ville n'est pas encore disponible</p>
-        <p class="city-notfound__text">Tu peux l'ajouter en devenant contributeur : connecte-toi puis dépose un fichier <strong>GPX</strong> d'une randonnée dans cette ville — elle sera créée automatiquement avec ses spots et services.</p>
+        <p class="city-notfound__text">Tu peux l'ajouter en devenant contributeur : connecte-toi puis dépose un fichier <strong>GPX</strong> d'une randonnée dans cette ville - elle sera créée automatiquement avec ses spots et services.</p>
       </div>
     </div>
 
@@ -49,7 +49,7 @@
     </div>
 
     <div class="map-list-layout__main">
-      {# Villes de la zone visible — synchronisé avec la carte par step1_city.js #}
+      {# Villes de la zone visible - synchronisé avec la carte par step1_city.js #}
       <div class="nearby" id="nearbyCities">
         <div class="nearby__head">
           <span class="nearby__count" data-nearby-count>Déplace la carte pour voir les villes</span>
@@ -62,14 +62,14 @@
 
   {# Météo #}
   <div class="card weather-section" id="weatherSection" style="display:none;">
-    <h3 id="weatherTitle" style="font-size:17px; font-weight:700;">Météo — prochains jours</h3>
+    <h3 id="weatherTitle" style="font-size:17px; font-weight:700;">Météo - prochains jours</h3>
     <div class="weather-grid" id="weatherGrid"></div>
   </div>
 
 </div>
 
 {# Barre de navigation basse (desktop : inline ; mobile : fixe) #}
-<div class="container">
+<div class="container step-nav-wrap">
   <div class="step-nav mobile-nav">
     <a href="{{ url_for('duration') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
     {# Masqué tant qu'aucune ville n'est choisie ; révélé par selectCity (comme le legacy) #}

@@ -1,4 +1,4 @@
-/* Front v2 — Chat « Voyage 100% IA » avec Vany.
+/* Front v2 - Chat « Voyage 100% IA » avec Vany.
    Démo scriptée front-only (aucun appel LLM) : bulles, indicateur de saisie,
    quick-replies, carte de proposition jour par jour. Le vrai service IA viendra plus tard.
    Accès conditionné au déverrouillage (paiement / code) : sinon redirection vers /unlock-vany. */
@@ -46,9 +46,9 @@
     row.innerHTML =
       '<img class="chat-avatar" src="' + AVATAR + '" alt="Vany">' +
       '<div class="chat-proposal-wrap">' +
-        '<div class="bubble bubble--vany">Voici ma proposition pour le jour ' + n + ' — chaque élément se change d\'un mot.</div>' +
+        '<div class="bubble bubble--vany">Voici ma proposition pour le jour ' + n + ' - chaque élément se change d\'un mot.</div>' +
         '<div class="proposal">' +
-          '<div class="proposal__head"><span class="proposal__title">Jour ' + n + ' — Saint-Jean-Trolimon</span>' +
+          '<div class="proposal__head"><span class="proposal__title">Jour ' + n + ' - Saint-Jean-Trolimon</span>' +
           '<span class="tag tag--verified">Proposition de Vany</span></div>' +
           '<div class="proposal__body">' +
             '<div class="proposal__line"><span class="proposal__k">Randonnée</span><span><strong>Circuit de Tréminou</strong> <span class="muted">· 14 km · moyen · 4h</span></span></div>' +
@@ -120,7 +120,7 @@
     if (/valide/i.test(text)) { validateDay(day || 1); return; }
     if (day === 0) {
       vanyThink(function () {
-        addVany('Parfait pour le Pays Bigouden. Voici ma proposition pour le jour 1 — chaque élément se change d\'un mot.');
+        addVany('Parfait pour le Pays Bigouden. Voici ma proposition pour le jour 1 - chaque élément se change d\'un mot.');
         setTimeout(function () { addProposalCard(1); day = 1; setQuick(['Plutôt une rando facile', 'Un spot avec vue mer', 'Valide, passe au jour 2']); }, 400);
       }, 'Vany compose ton voyage…');
     } else {
@@ -140,6 +140,6 @@
   });
 
   // Amorce de la conversation
-  addVany('Salut ! Dis-moi où tu veux partir, combien de temps, et ce que tu aimes — je compose ton voyage, tu valides chaque étape.');
+  addVany('Salut ! Dis-moi où tu veux partir, combien de temps, et ce que tu aimes - je compose ton voyage, tu valides chaque étape.');
   setQuick(['Un week-end dans le Finistère sud, 2 jours', 'Une semaine sur la côte atlantique', 'Surprends-moi !']);
 })();

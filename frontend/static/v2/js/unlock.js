@@ -1,4 +1,4 @@
-/* Front v2 — Accès à Vany (déblocage du chat).
+/* Front v2 - Accès à Vany (déblocage du chat).
    Démo front-only : le paiement et la validation du code sont factices ; on pose le flag
    localStorage.vanyUnlocked puis on redirige vers le chat. Le vrai paiement (prestataire)
    et la vérification serveur du code contributeur viendront plus tard. */

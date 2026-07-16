@@ -150,10 +150,20 @@ function displaySpots(spots, map, hikeMarkerPosition, plannedSpotIds = new Map()
         }
     }
 
-    // Refléter sur la carte et les boutons une éventuelle sélection déjà faite
+    // Refléter une sélection déjà faite (cas du retour arrière depuis l'étape
+    // services) : marqueurs, boutons, fiche sélectionnée, météo de la nuit ET
+    // bouton « étape suivante ». Ce dernier restait caché jusqu'ici, car seul un
+    // clic sur « Choisir » l'affichait, d'où l'impossibilité de repartir vers
+    // l'étape 4 sans re-cliquer sur le spot déjà retenu.
     const previouslySelected = localStorage.getItem('selectedSpot');
-    if (previouslySelected && previouslySelected !== 'autre_hebergement') {
+    if (previouslySelected === 'autre_hebergement') {
+        document.querySelector('.no-spot-option')?.classList.add('selected');
+        revealNextStep(false);
+    } else if (previouslySelected) {
+        const selectedCard = document.getElementById(`select-spot-btn-${previouslySelected}`)?.closest('.spot-card');
+        if (selectedCard) selectedCard.classList.add('selected');
         updateSpotSelectionUI(previouslySelected);
+        revealNextStep(true);
     }
 }
 
@@ -264,6 +274,16 @@ function filterSpotsByType(filter) {
 
 // --- 7. Sélection et sauvegarde ---
 
+// Affiche le bouton « étape suivante » (toujours) et la météo de la nuit (seulement
+// si un vrai spot est retenu, pas pour « autre hébergement »). Appelé au clic de
+// sélection comme à la restauration d'un choix existant.
+function revealNextStep(showNightWeather) {
+    const nightWeather = document.getElementById('nightWeather');
+    if (nightWeather) nightWeather.style.display = showNightWeather ? 'block' : 'none';
+    const nextBtn = document.getElementById('nextStepBtn');
+    if (nextBtn) nextBtn.style.display = 'block';
+}
+
 // Met à jour l'icône des marqueurs, le contenu des popups et les boutons des cartes
 function updateSpotSelectionUI(spotId) {
     const TIP_OPTS = { direction: 'top', offset: [0, -30], className: 'map-tip', opacity: 1 };
@@ -303,12 +323,7 @@ function selectSpot(spotId) {
 
     localStorage.setItem('selectedSpot', spotId);
     updateSpotSelectionUI(spotId);
-
-    const nightWeather = document.getElementById('nightWeather');
-    if (nightWeather) nightWeather.style.display = 'block';
-
-    const nextBtn = document.getElementById('nextStepBtn');
-    if (nextBtn) nextBtn.style.display = 'block';
+    revealNextStep(true);
 
     // Concept unifié : après le choix, le popup se ferme (marqueur vert + fiche verte = sélection).
     if (spotMap) spotMap.closePopup();
@@ -324,12 +339,7 @@ function selectNoSpot() {
 
     localStorage.setItem('selectedSpot', 'autre_hebergement');
     updateSpotSelectionUI(null);
-
-    const nightWeather = document.getElementById('nightWeather');
-    if (nightWeather) nightWeather.style.display = 'none';
-
-    const nextBtn = document.getElementById('nextStepBtn');
-    if (nextBtn) nextBtn.style.display = 'block';
+    revealNextStep(false);
 
     // Réinitialise spot_id en base
     saveDayChoice('step3', { spot_id: null, day_number: currentDay }, 'spot');

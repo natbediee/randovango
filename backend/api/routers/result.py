@@ -14,7 +14,8 @@ def _fetch_plan_data(plan_id: int):
 
     # Plan principal (avec la ville associée)
     cursor.execute("""
-        SELECT tp.*, c.name AS city_name, c.latitude AS city_latitude, c.longitude AS city_longitude
+        SELECT tp.*, c.name AS city_name, c.latitude AS city_latitude, c.longitude AS city_longitude,
+               c.department AS city_department, c.region AS city_region
         FROM trip_plans tp
         LEFT JOIN cities c ON tp.city_id = c.id
         WHERE tp.id = %s
@@ -43,8 +44,10 @@ def _fetch_plan_data(plan_id: int):
             h.difficulte,
             h.elevation_gain_m,
             h.estimated_duration_h AS hike_duration_h,
+            h.verifie            AS hike_verifie,
             h.start_latitude     AS hike_latitude,
             h.start_longitude    AS hike_longitude,
+            h.address            AS hike_address,
             h.mongo_id           AS hike_mongo_id,
             p.name               AS spot_name,
             p.description        AS spot_description,

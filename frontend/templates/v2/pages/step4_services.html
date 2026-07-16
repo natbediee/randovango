@@ -1,5 +1,5 @@
 {% extends "v2/base.html" %}
-{% block title %}Étape 4 — Services — RandoVanGo{% endblock %}
+{% block title %}Étape 4 - Services - RandoVanGo{% endblock %}
 {% block main_class %}has-mobile-nav{% endblock %}
 
 {% block header %}
@@ -25,7 +25,7 @@
   <div class="map-list-layout">
     <div class="map-list-layout__main">
 
-      {# VUE 1 — choix du type de service (tuiles générées par step4_services.js) #}
+      {# VUE 1 - choix du type de service (tuiles générées par step4_services.js) #}
       <div id="categoryTilesView">
         <div class="category-tiles" id="categoryTiles">
           <p class="list-loading"><i class="fas fa-spinner fa-spin"></i> Chargement des services…</p>
@@ -36,7 +36,7 @@
         </div>
       </div>
 
-      {# VUE 2 — sous-liste d'un type (masquée tant qu'aucune catégorie n'est ouverte) #}
+      {# VUE 2 - sous-liste d'un type (masquée tant qu'aucune catégorie n'est ouverte) #}
       <div id="serviceSublistView" style="display:none;">
         <button type="button" class="sublist-back" onclick="showCategoryTiles()">
           <i class="fas fa-arrow-left"></i> Catégories
@@ -63,7 +63,7 @@
 
 </div>
 
-<div class="container">
+<div class="container step-nav-wrap">
   <div class="step-nav mobile-nav">
     <a href="{{ url_for('step3') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
     <button id="nextStepBtn" class="btn btn--primary btn--block" style="display:none;" onclick="goToNextDayOrResults()">

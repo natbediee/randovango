@@ -113,7 +113,7 @@ def get_cities_bounds():
     Emprise géographique de toutes les villes en base (min/max lat/lon). Utilisée
     par le front pour brider le panoramique/zoom des cartes à la zone réellement
     couverte (pas de sens d'aller voir les États-Unis, aucune ville n'y est
-    référencée) — calculée dynamiquement, pas codée en dur, pour suivre l'ajout
+    référencée) - calculée dynamiquement, pas codée en dur, pour suivre l'ajout
     de nouveaux départements sans changement de code.
     """
     cnx = MySQLUtils.connect()
@@ -205,7 +205,7 @@ def create_plan(
 ):
     """Créer un nouveau plan (trip_plans + jours vides pour l'étape 1)"""
     # Un plan appartient SOIT à un compte (user_id), SOIT à un invité (user_token
-    # UUID) — jamais les deux. Pour un utilisateur connecté on ignore donc tout
+    # UUID) - jamais les deux. Pour un utilisateur connecté on ignore donc tout
     # user_token reçu : le frontend peut transmettre par erreur son JWT d'auth, qui
     # déborde la colonne user_token (varchar 64) et n'a rien à faire ici.
     if user_id is not None:

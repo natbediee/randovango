@@ -1,7 +1,7 @@
 """
 Parcours de bout en bout du planificateur RandoVanGo (filet de sécurité).
 
-Lancé MANUELLEMENT (pas par pytest — pas de préfixe test_) :
+Lancé MANUELLEMENT (pas par pytest - pas de préfixe test_) :
     .venv/bin/python tests/e2e/parcours_complet.py
     .venv/bin/python tests/e2e/parcours_complet.py --changer-de-ville
 
@@ -30,7 +30,7 @@ from playwright.sync_api import sync_playwright
 FRONT = "http://localhost"
 
 # Erreurs console préexistantes tolérées (bugs connus AVANT la refonte).
-# À retirer au fur et à mesure des corrections — la liste doit finir vide.
+# À retirer au fur et à mesure des corrections - la liste doit finir vide.
 ERREURS_CONNUES = []
 
 console_errors = []

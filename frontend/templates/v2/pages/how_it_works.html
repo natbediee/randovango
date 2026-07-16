@@ -1,5 +1,5 @@
 {% extends "v2/base.html" %}
-{% block title %}Comment ça marche — RandoVanGo{% endblock %}
+{% block title %}Comment ça marche - RandoVanGo{% endblock %}
 
 {% block page_content %}
 <div class="container stack" style="gap:22px;">
@@ -15,10 +15,10 @@
   <div class="card" style="padding:8px 30px;">
     {% set etapes = [
       ('Choisis la durée', "D'une escapade d'un jour à la semaine complète, à partir de la date de ton choix.", '~10 secondes', false),
-      ("Pars d'une ville", "Cherche-la ou pointe-la sur la carte — la météo des prochains jours s'affiche direct.", '', false),
+      ("Pars d'une ville", "Cherche-la ou pointe-la sur la carte - la météo des prochains jours s'affiche direct.", '', false),
       ('Choisis ta randonnée', "Distance, dénivelé, difficulté, points d'intérêt : des randos décrites par des van-lifers qui les ont faites.", '', false),
       ('Trouve ton spot pour la nuit', "Parkings, aires, coins nature : chaque spot indique équipements, prix et accès van.", '', false),
-      ('Ajoute les services utiles', "Eau, vidange, boulangerie, laverie — ce qu'il te faut autour de ton spot.", '', false),
+      ('Ajoute les services utiles', "Eau, vidange, boulangerie, laverie - ce qu'il te faut autour de ton spot.", '', false),
       ('Repars avec ton carnet de voyage', "Toutes tes journées récapitulées, en PDF, consultables hors connexion.", '', true)
     ] %}
     {% for titre, desc, meta, inclus in etapes %}
@@ -58,7 +58,7 @@
       <ul class="hiw-check">
         <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Itinéraire complet proposé en discutant</li>
         <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Tu valides ou ajustes chaque étape</li>
-        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> 4,90 € par voyage — offert aux contributeurs</li>
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> 4,90 € par voyage - offert aux contributeurs</li>
       </ul>
       <a href="{{ url_for('unlock_vany') }}" class="btn btn--outline btn--sm" style="margin-top:auto;">Discuter avec Vany</a>
     </div>
@@ -78,7 +78,7 @@
     <h3 style="font-size:19px; font-weight:700;">Questions fréquentes</h3>
     <div class="hiw-faq">
       {% set faq = [
-        ("C'est vraiment gratuit ?", "Oui — le parcours classique et le carnet sont gratuits, sans compte. Seul le voyage 100% IA avec Vany est payant."),
+        ("C'est vraiment gratuit ?", "Oui - le parcours classique et le carnet sont gratuits, sans compte. Seul le voyage 100% IA avec Vany est payant."),
         ("Ça marche sans réseau ?", "Ton carnet de voyage est un PDF : cartes, tracés et adresses restent lisibles hors connexion."),
         ("D'où viennent les spots ?", "De contributeurs van-lifers qui y ont dormi. Chaque fiche est relue avant d'être publiée.")
       ] %}
