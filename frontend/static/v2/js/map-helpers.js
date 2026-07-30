@@ -289,15 +289,26 @@ function buildSpotSelectedDivIcon() {
     });
 }
 
-function buildPoiDivIcon(category) {
+// dayLabel (ex. "J1") : étiquette de jour affichée sous le marqueur, comme pour la
+// rando/le spot. Utilisée à l'étape 4 pour les services déjà planifiés les jours
+// précédents, qu'on veut reconnaître d'un coup d'œil sans ouvrir le popup.
+function buildPoiDivIcon(category, dayLabel) {
     const style = POI_MARKER_STYLES[category] || POI_MARKER_STYLES.commerce;
+    const label = dayLabel
+        ? `<span style="position:absolute;left:50%;transform:translateX(-50%);top:30px;
+                        background:${style.color};color:#fff;font-size:9px;font-weight:700;
+                        padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 3px #0004;">
+               ${dayLabel}
+           </span>` : '';
     return L.divIcon({
         className: 'custom-map-marker',
-        html: `<div style="background:${style.color};width:28px;height:28px;border-radius:50% 50% 50% 0;
-                    transform:rotate(-45deg);box-shadow:0 1px 4px #0006;display:flex;align-items:center;justify-content:center;">
-                  <i class="fas ${style.icon}" style="color:#fff;transform:rotate(45deg);font-size:13px;"></i>
+        html: `<div style="position:relative;width:28px;">
+                  <div style="background:${style.color};width:28px;height:28px;border-radius:50% 50% 50% 0;
+                       transform:rotate(-45deg);box-shadow:0 1px 4px #0006;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas ${style.icon}" style="color:#fff;transform:rotate(45deg);font-size:13px;"></i>
+                  </div>${label}
                </div>`,
-        iconSize: [28, 28],
+        iconSize: [28, dayLabel ? 46 : 28],
         iconAnchor: [14, 28],
         popupAnchor: [0, -26]
     });
@@ -324,13 +335,17 @@ function buildPoiSelectedDivIcon(category) {
 // Affiche sur la carte les jours déjà planifiés (badges Jx) et renvoie les randos/spots
 // déjà utilisés, pour que les étapes 2 et 3 puissent afficher un badge "Planifié Jx"
 // sur les cartes correspondantes.
-async function loadPreviousDaysOnMap(map, currentDay, planId) {
+async function loadPreviousDaysOnMap(map, currentDay, planId, options = {}) {
+    const { showPois = false } = options;
     const plannedHikeIds = new Map();
     const plannedSpotIds = new Map();
-    if (!map || currentDay <= 1 || !planId) return { plannedHikeIds, plannedSpotIds };
+    // Positions de tout ce qui a été ajouté pour les jours précédents (rando, spot,
+    // services) : l'appelant peut les inclure dans le cadrage pour qu'on les voie.
+    const previousPositions = [];
+    if (!map || currentDay <= 1 || !planId) return { plannedHikeIds, plannedSpotIds, previousPositions };
     try {
         const res = await fetch(`${window.API_BASE}/api/result/?plan_id=${planId}`);
-        if (!res.ok) return { plannedHikeIds, plannedSpotIds };
+        if (!res.ok) return { plannedHikeIds, plannedSpotIds, previousPositions };
         const plan = await res.json();
         (plan.days || []).forEach(day => {
             if (day.day_number >= currentDay) return;
@@ -339,17 +354,32 @@ async function loadPreviousDaysOnMap(map, currentDay, planId) {
                 L.marker([day.hike_latitude, day.hike_longitude], { icon: buildHikeDivIcon(jLabel), zIndexOffset: 1000 })
                     .addTo(map)
                     .bindPopup(`<b>🥾 ${day.hike_name || 'Randonnée'}</b><br>${jLabel} - déjà planifié`);
+                previousPositions.push([day.hike_latitude, day.hike_longitude]);
             }
             if (day.spot_latitude && day.spot_longitude) {
                 L.marker([day.spot_latitude, day.spot_longitude], { icon: buildSpotDivIcon(jLabel), zIndexOffset: 500 })
                     .addTo(map)
                     .bindPopup(`<b>🛏️ ${day.spot_name || 'Spot'}</b><br>${jLabel} - déjà planifié`);
+                previousPositions.push([day.spot_latitude, day.spot_longitude]);
+            }
+            // Services (POI) retenus les jours précédents : affichés en repère (étape 4),
+            // estompés pour ne pas les confondre avec les points sélectionnables du jour.
+            if (showPois) {
+                (day.pois || []).forEach(poi => {
+                    if (!poi.latitude || !poi.longitude) return;
+                    L.marker([poi.latitude, poi.longitude], {
+                        icon: buildPoiDivIcon(poi.category, jLabel), opacity: 0.55, zIndexOffset: 100
+                    })
+                        .addTo(map)
+                        .bindPopup(`<b>${poi.name}</b><br>${poi.service_type || ''}<br><small>${jLabel} - déjà planifié</small>`);
+                    previousPositions.push([poi.latitude, poi.longitude]);
+                });
             }
             if (day.hike_id) plannedHikeIds.set(day.hike_id, day.day_number);
             if (day.spot_id) plannedSpotIds.set(day.spot_id, day.day_number);
         });
-        return { plannedHikeIds, plannedSpotIds };
+        return { plannedHikeIds, plannedSpotIds, previousPositions };
     } catch {
-        return { plannedHikeIds, plannedSpotIds };
+        return { plannedHikeIds, plannedSpotIds, previousPositions };
     }
 }

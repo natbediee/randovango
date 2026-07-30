@@ -103,6 +103,10 @@ SERVICE_CATEGORY_MAP = {
     "Piscine": "swimming_pool",
     "Belle balade à moto": "motorcycle",
     "Escalade (Sites d')": "climbing",
+    # Deux services P4N restés sans catégorie jusqu'ici (28 et 4 spots concernés) :
+    # ils entraient en base via get_or_create_service_with_category avec category NULL.
+    "Lavage pour camping-car": "car_wash",
+    "Caravaneige": "caravan_site",
 }
 
 

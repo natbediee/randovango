@@ -43,8 +43,9 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
 
     # Prépare les requêtes
     insert_spot_sql = """
-        INSERT INTO spots (name, description, type, latitude, longitude, p4n_id, rating, url, source_id, verifie)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,1)
+        INSERT INTO spots (name, description, type, latitude, longitude, p4n_id, rating, url, source_id, verifie,
+                           postal_code, city_label, place_label)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,1, %s, %s, %s)
     """
     # select_service_sql = "SELECT id FROM services WHERE name=%s"
     # insert_service_sql = "INSERT INTO services (name, category) VALUES (%s, %s)"
@@ -80,7 +81,10 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
             row['p4n_id'],
             row['note'],
             row['URL_fiche'],
-            source_id
+            source_id,
+            row.get('postal_code'),
+            row.get('city_label'),
+            row.get('place_label'),
         )
         cursor.execute(insert_spot_sql, spot_values)
         spot_id = cursor.lastrowid

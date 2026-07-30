@@ -99,4 +99,9 @@ def unlock_vany():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Mode debug piloté par variable d'environnement, DÉSACTIVÉ par défaut : le
+    # débogueur Werkzeug permet l'exécution de code arbitraire et ne doit JAMAIS
+    # être actif sur une instance exposée (ngrok, prod). En local, mettre
+    # FLASK_DEBUG=1 dans le .env pour retrouver le reload + les tracebacks.
+    debug_mode = os.getenv('FLASK_DEBUG', '0') == '1'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)

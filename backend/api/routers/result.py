@@ -49,8 +49,11 @@ def _fetch_plan_data(plan_id: int):
             h.start_longitude    AS hike_longitude,
             h.address            AS hike_address,
             h.mongo_id           AS hike_mongo_id,
-            p.name               AS spot_name,
-            p.description        AS spot_description,
+            -- Le nom Park4Night est un gabarit "(29200) Brest - 172 Rue de Quimper"
+            -- et la description du texte contributeur brut : on préfère la couche
+            -- éditoriale quand elle existe, en retombant sur la source sinon.
+            COALESCE(p.display_name, p.place_label, p.name) AS spot_name,
+            COALESCE(p.description_ia, p.description)       AS spot_description,
             p.type                AS spot_type,
             p.rating              AS spot_rating,
             p.url                 AS spot_url,

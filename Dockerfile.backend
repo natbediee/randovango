@@ -13,12 +13,12 @@ COPY requirements.backend.txt ./
 RUN pip install --no-cache-dir -r requirements.backend.txt
 
 # Installe Chromium et chromedriver depuis les dépôts Debian (version stable)
-#RUN apt-get update && \
-#    apt-get install -y chromium chromium-driver && \
-#    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y chromium chromium-driver && \
+    rm -rf /var/lib/apt/lists/*
 
-#ENV CHROME_BIN=/usr/bin/chromium
-#ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 COPY ./backend .
 

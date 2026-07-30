@@ -166,7 +166,36 @@ def test_result_day_display_complet() -> None:
     assert display["day_title"] == "Jour 2"
     assert display["activity_html"] == "GR34 (13 km, moyen)"
     assert display["accommodation_html"] == "Aire du port<br><small>📍 1 rue du Quai</small>"
-    assert display["services_html"] == "Folavoine<br><small>📍 Place de l'Église</small>"
+    # POI sans catégorie ni type : marqueur générique et libellé de repli.
+    assert display["services_html"] == (
+        '<i class="fas fa-map-marker-alt"></i> Folavoine'
+        ' <small class="muted">· service</small>'
+        "<br><small>📍 Place de l'Église</small>"
+    )
+
+
+def test_result_day_display_service_montre_icone_et_type() -> None:
+    # Un nom seul ne dit pas de quoi il s'agit : la ligne porte l'icône de la
+    # catégorie et le type précis du service.
+    display = result_day_display({
+        "day_number": 1, "hike_id": None, "spot_id": None,
+        "pois": [{"name": "Glenn", "category": "restauration", "service_type": "Restaurant"}],
+    })
+    assert display["services_html"] == (
+        '<i class="fas fa-utensils"></i> Glenn <small class="muted">· Restaurant</small>'
+    )
+
+
+def test_result_day_display_service_ne_repete_pas_le_nom() -> None:
+    # Quand le type ne fait que répéter le nom ("Plage" / "Plage"), on affiche le
+    # libellé de catégorie à la place plutôt que deux fois le même mot.
+    display = result_day_display({
+        "day_number": 1, "hike_id": None, "spot_id": None,
+        "pois": [{"name": "Plage", "category": "culture", "service_type": "plage"}],
+    })
+    assert display["services_html"] == (
+        '<i class="fas fa-camera"></i> Plage <small class="muted">· site culturel</small>'
+    )
 
 
 def test_result_day_display_jour_vide() -> None:

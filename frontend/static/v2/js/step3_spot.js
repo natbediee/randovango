@@ -105,7 +105,7 @@ function displaySpots(spots, map, hikeMarkerPosition, plannedSpotIds = new Map()
         if (map && spot.latitude && spot.longitude) {
             // Tooltip d'aperçu au survol : nom + infos de base (type, note si dispo).
             const spotTipHtml =
-                `<span class="map-tip__name">${spot.name}</span>` +
+                `<span class="map-tip__name">${spot.name_label}</span>` +
                 `<span class="map-tip__stats">${spot.type_label}${spot.rating_label ? ' · ' + spot.rating_label : ''}</span>`;
             const TIP_OPTS = { direction: 'top', offset: [0, -30], className: 'map-tip', opacity: 1 };
             const marker = L.marker([spot.latitude, spot.longitude], { icon: buildSpotDivIcon(), zIndexOffset: 600 })
@@ -185,16 +185,15 @@ function createSpotCard(spot, plannedDay) {
 
     card.innerHTML = `
         <div class="spot-content-grid">
-            <!-- Colonne gauche : Type + Vérifié + Planifié -->
+            <!-- Colonne gauche : Type + Vérifié -->
             <div class="spot-left">
                 <span class="hiking-stats"><span class="stat">${spot.type_label}</span></span>
                 <span class="status-badge ${spot.badge.css}">${spot.badge.text}</span>
-                ${plannedBadge}
             </div>
 
             <!-- Colonne centre : Infos bivouac -->
             <div class="spot-center">
-                <h4>${spot.name}</h4>
+                <h4>${spot.name_label}</h4>
                 ${spot.address ? `<p class="spot-address"><i class="fas fa-map-marker-alt"></i> ${spot.address}</p>` : ''}
                 <p class="spot-description">${spot.description_label}</p>
                 <div class="spot-features">
@@ -205,13 +204,14 @@ function createSpotCard(spot, plannedDay) {
                 </div>
             </div>
 
-            <!-- Colonne droite : Boutons -->
+            <!-- Colonne droite : Planifié + Boutons -->
             <div class="spot-right">
+                ${plannedBadge}
                 ${spot.url
                     ? `<a href="${spot.url}" target="_blank" class="btn btn-outline btn-sm">
                         <i class="fas fa-external-link-alt"></i> Voir
                        </a>`
-                    : `<button class="btn btn-outline btn-sm" onclick="showSpotOnMap(${spot.latitude}, ${spot.longitude}, '${spot.name}')">
+                    : `<button class="btn btn-outline btn-sm" onclick="showSpotOnMap(${spot.latitude}, ${spot.longitude}, '${spot.name_label}')">
                         <i class="fas fa-map"></i> Carte
                        </button>`
                 }
@@ -358,7 +358,7 @@ function showSpotDetail(spotId) {
 
 // Contenu du popup d'un spot, avec le bouton "Choisir" qui reflète l'état sélectionné
 function buildSpotPopupContent(spot, isSelected) {
-    return `<b>${spot.name}</b><br>${spot.type}
+    return `<b>${spot.name_label}</b><br>${spot.type}
         ${spot.address ? `<br><small>📍 ${spot.address}</small>` : ''}
         <div style="margin-top:6px;display:flex;gap:6px;">
             <button class="btn btn-outline btn-sm" onclick="showSpotDetail(${spot.id})">Détail</button>

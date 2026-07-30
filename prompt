@@ -1,0 +1,108 @@
+1. Ce qui est déjà propre
+
+┌─────────────┬───────────────────────────────────────────────────────┐
+│    Champ    │                         État                          │
+├─────────────┼───────────────────────────────────────────────────────┤
+│ type        │ 11 valeurs, issues de l'énum P4N — pas besoin d'agent │
+├─────────────┼───────────────────────────────────────────────────────┤
+│ Coordonnées │ 0 lat/lon nulles                                      │
+├─────────────┼───────────────────────────────────────────────────────┤
+│ Encodage    │ 3 lignes en mojibake seulement (sur 1708)             │
+├─────────────┼───────────────────────────────────────────────────────┤
+│ p4n_id      │ unique, contrainte DB                                 │
+└─────────────┴───────────────────────────────────────────────────────┘
+
+2. Les vrais problèmes
+
+Les noms ne sont pas des noms (1704/1708) :
+(56890) Saint-Avé - 7 Rue Max Jacob
+(29200) Brest - 172 Rue de Quimper
+() Poullaouen -                      ← 4 spots avec CP vide
+C'est un code postal + adresse. Sur les cartes et le PDF, l'utilisateur lit une adresse, pas un lieu.
+
+Les descriptions sont du texte contributeur brut — c'est le gros morceau :
+
+┌───────────────────────────┬─────────────────────────┬────────────────────────────────────────────────────────────────┐
+│         Symptôme          │         Volume          │                          Exemple réel                          │
+├───────────────────────────┼─────────────────────────┼────────────────────────────────────────────────────────────────┤
+│ Très courtes (<50 car.)   │ 217                     │ "Petit parking", "wc\nparking"                                 │
+├───────────────────────────┼─────────────────────────┼────────────────────────────────────────────────────────────────┤
+│ Récit personnel (je/nous) │ 119                     │ "Nous avons dormis 1 nuit assez calme"                         │
+├───────────────────────────┼─────────────────────────┼────────────────────────────────────────────────────────────────┤
+│ Info datée / périssable   │ 41                      │ "(07/2021 certaines prises HS)", "En ce moment pas de parking" │
+├───────────────────────────┼─────────────────────────┼────────────────────────────────────────────────────────────────┤
+│ Prix en dur               │ 39                      │ "L'accès au réseau : 5 € valable à vie"                        │
+├───────────────────────────┼─────────────────────────┼────────────────────────────────────────────────────────────────┤
+│ Pas de ponctuation finale │ 586                     │                                                                │
+├───────────────────────────┼─────────────────────────┼────────────────────────────────────────────────────────────────┤
+│ Longueur                  │ moy. 183, max 2123 car. │ copie marketing de camping                                     │
+└───────────────────────────┴─────────────────────────┴────────────────────────────────────────────────────────────────┘
+
+Registres incompatibles côté à côté : "war zone passant par un parking désaffecté avec t'as de sables et débris" voisine avec la brochure officielle CAMPING-CAR PARK. Le PDF et les cartes affichent ça tel quel (display_utils.py:234, pdf_service.py:594).
+
+Complétude : 321 spots sans note (19 %), 293 sans aucun service (17 %).
+
+Doublons géographiques : 68 paires de spots à moins de ~80 m.
+
+Table services polluée : 29 services P4N réels, mais ~47 lignes orphelines issues d'OSM (townhall, croix, yes, site archéologique, fortification…) avec 0 liaison. Et 2 services P4N n'ont pas de catégorie car absents de SERVICE_CATEGORY_MAP (service_utils.py:78) : Lavage pour camping-car (28 spots) et Caravaneige (4).
+
+3. Ce qui ne mérite PAS un agent
+
+À faire en SQL/Python d'abord, c'est déterministe et gratuit :
+- Purger les 47 services orphelins, ajouter les 2 catégories manquantes au mapping
+- Parser name → postal_code + city + address (regex, format constant)
+- Corriger les 3 mojibake
+- Détecter les 68 doublons géo (Haversine) — la décision de fusion, elle, mérite un arbitrage
+
+4. Ce qui justifie vraiment l'agent
+
+Une seule tâche, mais elle est irréductible : produire un champ éditorial homogène à partir d'un texte libre hétérogène. Concrètement, par spot, l'agent sort du JSON structuré :
+
+┌───────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│            Sortie             │                                                Rôle                                                 │
+├───────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ display_name                  │ "Parking du jardin botanique" au lieu de "(29200) Brest - 172 Rue de Quimper"                       │
+├───────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ summary (≤ 200 car.)          │ Résumé neutre, 3e personne, présent — homogène pour carte + PDF                                     │
+├───────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ tags[]                        │ calme, bruyant, vue_mer, ombragé, interdiction_signalée, payant — extraits du texte, filtrables     │
+├───────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ noise_level,                  │ Échelles ordinales déduites de la prose                                                             │
+│ access_difficulty             │                                                                                                     │
+├───────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ services_inferred[]           │ Services décrits en texte mais absents de spot_service — attaque directement les 293 spots sans     │
+│                               │ service                                                                                             │
+├───────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ stale_info (bool)             │ Signale les 41 descriptions à info datée                                                            │
+├───────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ confidence                    │ Pour ne publier que ce qui est fiable                                                               │
+└───────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Deux garde-fous non négociables :
+- Ne jamais écraser description. Nouvelles colonnes (description_ia, display_name, enriched_at, confidence) — la source P4N reste intacte et re-jouable.
+- Pas d'invention. Un spot avec "Petit parking" doit sortir un résumé pauvre, pas une description inventée. Le prompt doit l'interdire explicitement et confidence doit le refléter.
+
+5. Architecture proposée
+
+Ça s'insère naturellement dans l'ETL existant, en 4e étape :
+
+extract → transform → load → enrich  ← nouveau
+backend/etl/enrich/enrich_spots.py
+backend/services/llm_service.py   (client Anthropic partagé)
+
+- Modèle : claude-opus-5 avec output_config.format (JSON schema) — la sortie est garantie parsable, pas de post-parsing fragile.
+- Batch API pour le backfill des 1708 spots : asynchrone, -50 % de coût, et ça n'impacte pas le temps de réponse du front.
+- Temps réel pour les nouveaux spots scrapés : appel unitaire dans etl_pipeline.py après load_p4n_to_mysql.
+- Idempotence : enriched_at + hash de la description source → on ne ré-enrichit que si P4N a changé le texte.
+
+Coût du backfill complet (~150 tok in / 250 tok out par spot) : ≈ 12 $ en direct, 6 $ via Batch API. Puis quelques centimes par nouvelle ville scrapée.
+
+Note : backend/services/perplexity_agent.py est un stub mort (aucun appelant, URL et modèle obsolètes) — à supprimer plutôt qu'à faire cohabiter avec le nouveau service.
+
+---
+Deux points à trancher avant que je code :
+
+1. Le nettoyage déterministe d'abord ou tout en même temps ? Je recommande de le faire d'abord — ça réduit le bruit que l'agent doit gérer et c'est vérifiable immédiatement.
+2. Les doublons géo (68 paires) : suppression automatique sur critère de distance, ou arbitrage par l'agent qui compare noms/descriptions/services ? Les 80 m peuvent être deux vrais parkings distincts.
+
+Dis-moi si tu veux que je démarre, et par quel bout.

@@ -39,13 +39,18 @@ def get_spots(
     # Récupérer les spots dans la bounding box (vérifiés et non vérifiés)
     excluded_types = ('AIRE DE SERVICES SANS STAT.', "SERVICES D'APPOINT")
 
+    # duplicate_of_spot_id : spots marqués comme doublon d'un voisin par
+    # etl.enrich.dedupe_spots. Ils restent en base (rien n'est supprimé), on ne
+    # les affiche simplement pas deux fois sur la carte.
     query = '''
-            SELECT s.id, s.name, s.description, s.type, s.latitude, s.longitude, s.rating, s.url, s.verifie, s.address
+            SELECT s.id, s.name, s.description, s.type, s.latitude, s.longitude, s.rating, s.url, s.verifie, s.address,
+                   s.place_label, s.display_name, s.description_ia
             FROM spots s
             WHERE s.latitude BETWEEN %s AND %s
                 AND s.longitude BETWEEN %s AND %s
                 AND s.type IS NOT NULL
                 AND s.type NOT IN (%s, %s)
+                AND s.duplicate_of_spot_id IS NULL
             ORDER BY s.name ASC
         '''
     cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, *excluded_types))
@@ -85,6 +90,9 @@ def get_spots(
             "url": spot["url"],
             "verifie": spot["verifie"],
             "address": spot["address"],
+            "place_label": spot["place_label"],
+            "display_name": spot["display_name"],
+            "description_ia": spot["description_ia"],
             "services": services_map.get(spot["id"], [])
         }))
 

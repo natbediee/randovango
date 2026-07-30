@@ -41,6 +41,13 @@ let subtitlesByCategory = {};
 let poisByCategory = {};
 // Catégorie ouverte dans la sous-liste (null = vue tuiles = tous les marqueurs).
 let activeCategory = null;
+// Services retenus les jours précédents, pour le rappel lecture seule (vue tuiles).
+// Purement informatif : ces POI ne sont JAMAIS ajoutés à selectedPoiIds.
+let previousDaysServices = [];
+// poiId -> numéro du 1er jour où ce service a déjà été planifié. Sert à signaler
+// « déjà planifié Jx » sur la carte de la liste quand un point du jour en cours a
+// déjà été retenu un jour précédent (cohérence avec le marqueur/popup de la carte).
+let previousPoiDay = new Map();
 
 // N'affiche sur la carte que les marqueurs de la catégorie ouverte. En vue tuiles
 // (activeCategory === null), tous les marqueurs sont visibles (vue d'ensemble).
@@ -109,9 +116,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }
 
-    // Afficher les jours déjà planifiés sur la carte
+    // Afficher les jours déjà planifiés sur la carte (rando, spot ET services), et
+    // récupérer leurs positions pour les inclure dans le cadrage plus bas.
     const { planId } = getTripContext();
-    loadPreviousDaysOnMap(serviceMap, currentDay, planId);
+    const { previousPositions = [] } =
+        await loadPreviousDaysOnMap(serviceMap, currentDay, planId, { showPois: true });
 
     // Restaurer les POI déjà sauvegardés pour ce jour (retour depuis results)
     if (planId) {
@@ -121,6 +130,16 @@ document.addEventListener('DOMContentLoaded', async function () {
             if (savedDay && savedDay.pois) {
                 savedDay.pois.forEach(p => selectedPoiIds.add(p.id));
             }
+            // Services des jours précédents → rappel lecture seule. On ne les met pas
+            // dans selectedPoiIds : ils ne comptent pas dans la sélection du jour en cours.
+            previousDaysServices = (plan.days || [])
+                .filter(d => d.day_number < currentDay && (d.pois || []).length > 0)
+                .map(d => ({ day: d.day_number, pois: d.pois }));
+            previousPoiDay = new Map();
+            previousDaysServices.forEach(d => (d.pois || []).forEach(p => {
+                if (!previousPoiDay.has(p.id)) previousPoiDay.set(p.id, d.day);
+            }));
+            renderPreviousServices();
         } catch (e) { /* pas bloquant */ }
     }
 
@@ -150,12 +169,25 @@ document.addEventListener('DOMContentLoaded', async function () {
         // Vue d'ensemble au départ : tous les marqueurs visibles (activeCategory = null)
         updateMapMarkersVisibility();
 
-        // Centrer la carte sur la rando et le spot du jour (les POI restent affichés
-        // mais n'influencent plus le zoom : à l'utilisateur de se déplacer pour en voir plus)
-        if (serviceMap && referencePositions.length === 1) {
-            serviceMap.setView(referencePositions[0], 15);
-        } else if (serviceMap && referencePositions.length > 1) {
-            serviceMap.fitBounds(referencePositions, { padding: [60, 60], maxZoom: 16 });
+        // Positions à cadrer : rando/spot du jour + repères des jours précédents
+        // (services J-1 inclus) PROCHES (≤ 30 km), pour qu'on les voie sans dézoomer à
+        // l'extrême quand le jour suivant est dans une autre ville.
+        const framePositions = [...referencePositions];
+        if (serviceMap && referencePositions.length > 0) {
+            const anchor = referencePositions[0];
+            previousPositions.forEach(pos => {
+                if (serviceMap.distance(anchor, pos) <= 30000) framePositions.push(pos);
+            });
+        } else {
+            framePositions.push(...previousPositions);
+        }
+
+        // Centrer la carte sur la rando/le spot du jour et les repères précédents proches
+        // (les POI du jour restent affichés mais n'influencent pas le zoom).
+        if (serviceMap && framePositions.length === 1) {
+            serviceMap.setView(framePositions[0], 15);
+        } else if (serviceMap && framePositions.length > 1) {
+            serviceMap.fitBounds(framePositions, { padding: [60, 60], maxZoom: 16 });
         } else if (serviceMap) {
             // Repli si ni rando ni spot n'est sélectionné (ex. jour libre, hébergement hors liste)
             const poiPositions = POI_CATEGORIES
@@ -198,6 +230,7 @@ function renderCategory(categoryId, poiList) {
                 <div class="service-left">
                     <span class="hiking-stats"><span class="stat">${poi.service_type_label}</span></span>
                     <span class="status-badge ${poi.badge.css}">${poi.badge.text}</span>
+                    ${previousPoiDay.has(poi.id) ? `<span class="status-badge planned"><i class="fas fa-check"></i> J${previousPoiDay.get(poi.id)} déjà planifié</span>` : ''}
                 </div>
                 <div class="service-center">
                     <h4>${poi.name}</h4>
@@ -276,6 +309,34 @@ function renderCategoryTiles() {
                 <span class="category-tile__count">${count} ${count > 1 ? 'points' : 'point'}</span>
             </button>`;
     }).join('');
+}
+
+// Rappel lecture seule (vue tuiles) des services retenus les jours précédents,
+// groupés par jour. Aucun bouton Ajouter/Retirer : c'est un repère, pas une sélection.
+function renderPreviousServices() {
+    const el = document.getElementById('previousServices');
+    if (!el) return;
+    if (previousDaysServices.length === 0) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML =
+        '<p class="previous-services__title">Services déjà planifiés les jours précédents</p>' +
+        previousDaysServices.map(d => {
+            const chips = d.pois.map(p => {
+                const meta = CATEGORY_META[p.category] || { icon: 'fa-map-marker-alt', label: '' };
+                // Type précis ("Restaurant", "Plage") s'il n'est pas une simple reprise du
+                // nom, sinon le libellé de catégorie ("Restauration") : un nom seul comme
+                // « Glenn » ne dit pas de quel type de service il s'agit.
+                const rawType = (p.service_type || '').trim();
+                const kind = rawType && rawType.toLowerCase() !== (p.name || '').toLowerCase()
+                    ? rawType : (meta.label || '');
+                return `<span class="previous-chip"><i class="fas ${meta.icon}"></i>${p.name}` +
+                       `${kind ? ` <small class="previous-chip__type">· ${kind}</small>` : ''}</span>`;
+            }).join('');
+            return `<div class="previous-day">
+                        <div class="previous-day__label">Jour ${d.day}</div>
+                        <div class="previous-chips">${chips}</div>
+                    </div>`;
+        }).join('');
 }
 
 // Vue 2 : ouvrir la sous-liste d'un type de service.
@@ -400,6 +461,17 @@ function selectNoService() {
 // changer pour le jour suivant (voir stayInSameCity()/changeCityForNextDay()).
 async function goToNextDayOrResults() {
     await saveToDB();
+    // Fin d'une édition de jour (lancée depuis le récap) : on restaure le jour de
+    // progression réel et on nettoie les repères d'édition, pour revenir au récap
+    // complet plutôt que de rester sur le jour édité (voir editDay dans results.js).
+    const editingDay = localStorage.getItem('editingDay');
+    if (editingDay) {
+        const ret = localStorage.getItem('editReturnDay');
+        if (ret) localStorage.setItem('currentDay', ret);
+        localStorage.removeItem('editingDay');
+        localStorage.removeItem('editReturnDay');
+        localStorage.removeItem('editOriginalCity');
+    }
     window.location.href = window.APP_URLS.results;
 }
 

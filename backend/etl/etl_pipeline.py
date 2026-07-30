@@ -71,6 +71,15 @@ def scraping_background(city):
                     df_transformed = transform_p4n(df_p4n)
                     load_p4n_to_mysql(df_transformed, city)
                     logger.info(f"[ETL-SC] P4N chargé pour la ville : {city}")
+                    # 4e étape : enrichissement éditorial des spots qui viennent
+                    # d'entrer. Volontairement non bloquant - un scraping réussi ne
+                    # doit pas échouer parce que la clé d'API manque ou que le
+                    # modèle est indisponible ; les spots restent affichables sans.
+                    try:
+                        from etl.enrich.enrich_spots import run_sample
+                        run_sample(len(df_transformed))
+                    except Exception as enrich_error:
+                        logger.warning(f"[ETL-SC] Enrichissement IA ignoré : {enrich_error}")
                 else:
                     logger.warning(f"[ETL-SC] Scraping P4N a échoué pour la ville : {city}")
             except Exception as e:

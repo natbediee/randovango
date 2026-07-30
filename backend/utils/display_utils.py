@@ -203,6 +203,7 @@ SPOT_SERVICE_ICONS = {
     "Parking": "🅿️",
     "Plage": "🏖️",
     "Vue mer": "🌅",
+    "Lavage": "🧽",
 }
 
 
@@ -228,11 +229,23 @@ def spot_service_display(service_name) -> dict:
 
 
 def enrich_spot(spot) -> dict:
-    """Ajoute à un spot ses champs prêts à afficher."""
+    """
+    Ajoute à un spot ses champs prêts à afficher.
+
+    Le nom et la description issus de l'enrichissement IA (`display_name`,
+    `description_ia`) priment quand ils existent : le nom Park4Night est un
+    gabarit "(29200) Brest - 172 Rue de Quimper", et la description est du texte
+    contributeur brut. La source reste disponible dans `name` / `description`.
+    """
     spot["category"] = spot_category(spot.get("type"))
     spot["type_label"] = spot.get("type") or "Bivouac"
     spot["badge"] = verified_badge(spot.get("verifie"))
-    spot["description_label"] = spot.get("description") or "Aucune description disponible"
+    spot["name_label"] = spot.get("display_name") or spot.get("place_label") or spot.get("name")
+    spot["description_label"] = (
+        spot.get("description_ia")
+        or spot.get("description")
+        or "Aucune description disponible"
+    )
     rating = spot.get("rating")
     spot["rating_label"] = f"⭐ {js_num(rating)}/5" if rating else None
     spot["services_display"] = [spot_service_display(s) for s in spot.get("services", [])]
@@ -258,6 +271,35 @@ POI_CATEGORY_LABELS = {
     "culture":      {"singular": "site culturel",       "plural": "sites culturels",      "gender": "m"},
     "urgence":      {"singular": "service d'urgence",   "plural": "services d'urgence",   "gender": "m"},
 }
+
+
+# Icône Font Awesome de chaque catégorie de services, alignée sur CATEGORY_META
+# (frontend/static/v2/js/step4_services.js) : sert au récapitulatif pour qu'on
+# reconnaisse d'un coup d'œil le type d'un service (restaurant, plage, eau...) et
+# pas seulement son nom.
+POI_CATEGORY_ICONS = {
+    "eau":          "fa-tint",
+    "vidange":      "fa-recycle",
+    "gasoil":       "fa-gas-pump",
+    "supermarche":  "fa-cart-arrow-down",
+    "commerce":     "fa-shopping-basket",
+    "restauration": "fa-utensils",
+    "toilettes":    "fa-toilet",
+    "hygiene":      "fa-shower",
+    "culture":      "fa-camera",
+    "urgence":      "fa-first-aid",
+}
+
+
+def poi_category_icon(category) -> str:
+    """Classe d'icône Font Awesome d'une catégorie (repli : marqueur générique)."""
+    return POI_CATEGORY_ICONS.get(category, "fa-map-marker-alt")
+
+
+def poi_category_label(category) -> str:
+    """Libellé court d'une catégorie de service (ex. "restaurant", "site culturel")."""
+    labels = POI_CATEGORY_LABELS.get(category)
+    return labels["singular"] if labels else "service"
 
 
 def distance_label(distance_km) -> str:
@@ -319,10 +361,24 @@ def result_day_display(day) -> dict:
 
     pois = day.get("pois") or []
     if pois:
-        services = "<br>".join(
-            f"{p.get('name')}" + (f"<br><small>📍 {p['address']}</small>" if p.get("address") else "")
-            for p in pois
-        )
+        # Icône de catégorie + nom + type, pour reconnaître le service (un nom comme
+        # « Glenn » ou « Plage de Trémazan » ne dit pas s'il s'agit d'un restaurant,
+        # d'un site culturel, d'un point d'eau...).
+        def _service_line(p):
+            icon = poi_category_icon(p.get("category"))
+            name = p.get("name") or ""
+            # Type précis ("Restaurant") s'il n'est pas une simple répétition du nom,
+            # sinon le libellé de catégorie ("site culturel").
+            raw_type = (p.get("service_type") or "").strip()
+            kind = raw_type if raw_type and raw_type.lower() != name.lower() \
+                else poi_category_label(p.get("category"))
+            line = f'<i class="fas {icon}"></i> {name}'
+            if kind:
+                line += f' <small class="muted">· {kind}</small>'
+            if p.get("address"):
+                line += f"<br><small>📍 {p['address']}</small>"
+            return line
+        services = "<br>".join(_service_line(p) for p in pois)
     else:
         services = "Aucun service"
 

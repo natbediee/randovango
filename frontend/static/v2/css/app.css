@@ -997,6 +997,26 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .sublist-back:hover { color: var(--teal-dark); }
 .sublist-title { font-size: 19px; font-weight: 700; color: var(--ink); margin: 6px 0 14px; }
 
+/* Rappel lecture seule des services des jours précédents (vue tuiles de l'étape 4).
+   Séparé des tuiles sélectionnables : purement informatif, sans bouton d'action. */
+.previous-services {
+  margin-top: 18px;
+  border-top: 1px dashed var(--card-border);
+  padding-top: 14px;
+}
+.previous-services__title { font-size: 13.5px; font-weight: 700; color: var(--muted); margin-bottom: 10px; }
+.previous-day { margin-bottom: 10px; }
+.previous-day__label { font-size: 12.5px; font-weight: 800; color: var(--teal); margin-bottom: 6px; }
+.previous-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.previous-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--mint); color: var(--ink);
+  border: 1px solid var(--card-border); border-radius: var(--r-pill);
+  padding: 5px 10px; font-size: 12.5px; opacity: .85;
+}
+.previous-chip i { color: var(--teal); }
+.previous-chip__type { color: var(--muted); font-weight: 600; }
+
 @media (max-width: 768px) {
   .spot-content-grid, .service-content-grid { grid-template-columns: 1fr; gap: 12px; }
   .spot-right, .service-right { flex-direction: row; flex-wrap: wrap; }
@@ -1047,12 +1067,15 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .results-table-wrap { overflow-x: auto; }
 .results-table { width: 100%; border-collapse: collapse; min-width: 640px; table-layout: fixed; }
 /* Répartition fixe : Date/Ville sont courtes, les trois colonnes de contenu
-   (Activité, Spot, Services) se partagent le reste à parts égales. */
-.results-table th:nth-child(1) { width: 11%; }
-.results-table th:nth-child(2) { width: 11%; }
+   (Activité, Spot, Services) se partagent le reste, et une dernière colonne étroite
+   porte le bouton « Modifier » de chaque jour. */
+.results-table th:nth-child(1) { width: 10%; }
+.results-table th:nth-child(2) { width: 10%; }
 .results-table th:nth-child(3),
 .results-table th:nth-child(4),
-.results-table th:nth-child(5) { width: 26%; }
+.results-table th:nth-child(5) { width: 22%; }
+.results-table th:nth-child(6) { width: 14%; }
+.results-table__edit { text-align: center; white-space: nowrap; }
 .results-table th, .results-table td {
   padding: 14px 18px;
   text-align: left;

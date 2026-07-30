@@ -52,12 +52,28 @@ function formatDayDate(startDateStr, dayNumber) {
     return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+// Contexte de chaque jour affiché (rempli au chargement), pour que le bouton
+// « Modifier » du récap puisse ré-amorcer les étapes avec les choix de ce jour.
+let planDaysByNumber = {};
+
 document.addEventListener('DOMContentLoaded', async function () {
+    // Nettoyage défensif : si on atterrit sur le récap alors qu'une édition d'un jour
+    // avait été lancée mais non terminée (jour rouvert puis abandon), on restaure la
+    // progression réelle avant de lire le contexte, pour ne pas rester bloqué sur le
+    // jour édité (voir editDay / step4 goToNextDayOrResults).
+    if (localStorage.getItem('editingDay')) {
+        const ret = localStorage.getItem('editReturnDay');
+        if (ret) localStorage.setItem('currentDay', ret);
+        localStorage.removeItem('editingDay');
+        localStorage.removeItem('editReturnDay');
+        localStorage.removeItem('editOriginalCity');
+    }
+
     // --- 1. Contexte du séjour ---
     const { planId, currentDay, selectedDays } = getTripContext();
     const tableBody = document.getElementById('days-table-body');
     if (!planId) {
-        tableBody.innerHTML = '<tr><td colspan="5">Aucun plan trouvé. Retour à l\'étape 1.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="6">Aucun plan trouvé. Retour à l\'étape 1.</td></tr>';
         window.location.href = window.APP_URLS.step1;
         return;
     }
@@ -75,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         // jusqu'ici (currentDay n'est incrémenté qu'en continuant le séjour).
         const plan = await apiGet(`/api/result/?plan_id=${planId}&up_to_day=${currentDay}`);
         if (!plan || !plan.days) {
-            tableBody.innerHTML = '<tr><td colspan="5">Aucune donnée pour ce plan.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6">Aucune donnée pour ce plan.</td></tr>';
             return;
         }
 
@@ -84,6 +100,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         const markerPositions = [];
 
         plan.days.forEach(day => {
+            planDaysByNumber[day.day_number] = day;
             const row = document.createElement('tr');
             // Date de la journée (repli sur « Jour N » si la date de départ manque)
             const dateLabel = formatDayDate(plan.start_date, day.day_number) || day.display.day_title;
@@ -95,6 +112,11 @@ document.addEventListener('DOMContentLoaded', async function () {
                 <td data-label="Rando">${day.display.activity_html}</td>
                 <td data-label="Spot">${day.display.accommodation_html}</td>
                 <td data-label="Services">${day.display.services_html}</td>
+                <td data-label="Modifier" class="results-table__edit">
+                    <button type="button" class="btn btn--outline btn-sm" onclick="editDay(${day.day_number})">
+                        <i class="fas fa-pen"></i> Modifier
+                    </button>
+                </td>
             `;
             tableBody.appendChild(row);
 
@@ -150,11 +172,43 @@ document.addEventListener('DOMContentLoaded', async function () {
         // arriver en haut sur le récapitulatif. La carte reste accessible plus bas.
     } catch (err) {
         console.error('Erreur chargement plan:', err);
-        tableBody.innerHTML = '<tr><td colspan="5">Erreur lors du chargement du plan.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="6">Erreur lors du chargement du plan.</td></tr>';
     }
 });
 
 // --- 8. Fonctions appelées par les boutons de la page (attributs onclick) ---
+
+// Rouvre un jour DÉJÀ planifié pour le modifier (ville comprise). On repart de
+// l'étape 1 avec le contexte de ce jour, et on mémorise :
+//   - editingDay      : le jour en cours d'édition (les étapes écrivent sur ce jour) ;
+//   - editReturnDay   : le jour de progression réel, restauré à la fin de l'édition
+//                       pour revenir au récap complet (voir step4 goToNextDayOrResults) ;
+//   - editOriginalCity: la ville d'origine du jour, pour réinitialiser rando/spot si
+//                       l'utilisateur change de ville (choix devenus incohérents).
+function editDay(dayNumber) {
+    const day = planDaysByNumber[dayNumber];
+    if (!day) return;
+    const realCurrentDay = parseInt(localStorage.getItem('currentDay') || '1');
+    localStorage.setItem('editingDay', dayNumber);
+    localStorage.setItem('editReturnDay', realCurrentDay);
+    localStorage.setItem('editOriginalCity', day.city_id != null ? day.city_id : '');
+    // currentDay = jour édité : toutes les étapes (day_number, badges, jours
+    // précédents) travaillent alors naturellement sur ce jour.
+    localStorage.setItem('currentDay', dayNumber);
+
+    // Ré-amorcer le contexte du jour pour que les étapes affichent les choix actuels.
+    if (day.city_id != null) {
+        localStorage.setItem('selectedCityId', day.city_id);
+        sessionStorage.setItem('step1_cityId', day.city_id); // restaure la sélection à l'étape 1
+    }
+    localStorage.setItem('selectedHiking', day.hike_id != null ? day.hike_id : 'no-hiking');
+    if (day.spot_id != null) localStorage.setItem('selectedSpot', day.spot_id);
+    else localStorage.removeItem('selectedSpot');
+
+    // On n'est pas en mode "changement de ville pour le jour suivant".
+    localStorage.removeItem('changingCityForNextDay');
+    window.location.href = window.APP_URLS.step1;
+}
 
 // Continue le séjour dans la même ville : le jour suivant hérite explicitement de la
 // ville du jour qui vient d'être complété (au cas où celle-ci aurait changé en cours de route).

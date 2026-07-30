@@ -19,3 +19,4 @@ folium==0.20.0  # Visualisation de données géospatiales
 weasyprint==69.0 # Génération de PDF à partir de HTML/CSS
 staticmap==0.5.7 # Carte statique (tuiles OSM + marqueurs) pour le carnet PDF
 fontawesomefree==6.4.0 # Police Font Awesome (mêmes icônes que le site) pour les marqueurs de la carte PDF
+anthropic==0.75.0 # Client Anthropic (enrichissement éditorial des spots)

@@ -249,7 +249,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             card.innerHTML = `
                 <div class="hiking-status">
                     <span class="status-badge ${hike.badge.css}">${hike.badge.text}</span>
-                    ${plannedBadge}
                 </div>
                 <div class="hiking-info">
                     <h3>${hike.name}</h3>
@@ -264,6 +263,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                     </div>
                 </div>
                 <div class="hiking-actions">
+                    ${plannedBadge}
                     <button class="btn btn-outline btn-sm" onclick="showHikingMap(${hike.id}, ${hike.start_latitude}, ${hike.start_longitude})">
                         <i class="fas fa-map"></i> Voir
                     </button>

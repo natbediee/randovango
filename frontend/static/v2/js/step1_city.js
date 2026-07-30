@@ -13,6 +13,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     // (déclenché depuis /results, bouton "Changer de ville") et vient simplement
     // choisir la ville du jour suivant, sans redéfinir la durée du séjour.
     const changingCityForNextDay = localStorage.getItem('changingCityForNextDay') === '1';
+    // Mode "édition d'un jour déjà planifié" : lancé depuis /results (bouton "Modifier"),
+    // on rouvre l'étape 1 pour un jour EXISTANT (ville comprise), plan et durée conservés.
+    const editingDayRaw = localStorage.getItem('editingDay');
+    const editingDay = editingDayRaw ? parseInt(editingDayRaw) : null;
 
     const select = document.getElementById('citySelect');
     if (!select) return;
@@ -20,7 +24,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // La durée est fixée sur /duration ; si elle est absente (accès direct à
     // cette page), on renvoie l'utilisateur la choisir avant de continuer.
     const selectedDaysRaw = localStorage.getItem('selectedDays');
-    if (!changingCityForNextDay && !selectedDaysRaw) {
+    if (!changingCityForNextDay && !editingDay && !selectedDaysRaw) {
         window.location.href = window.APP_URLS.duration;
         return;
     }
@@ -31,7 +35,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // (pas encore incrémenté par continueWithNewCity()) : le jour en cours de
     // planification est donc +1.
     const currentDay = parseInt(localStorage.getItem('currentDay') || '1');
-    const displayDay = changingCityForNextDay ? currentDay + 1 : currentDay;
+    const displayDay = editingDay ? editingDay
+        : changingCityForNextDay ? currentDay + 1
+        : currentDay;
     if (selectedDaysRaw) showDayBadge(displayDay, selectedDays);
 
     // --- 3. Carte des villes disponibles ---
@@ -435,7 +441,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     function updatePlanButton() {
         if (!planButton) return;
-        planButton.innerHTML = changingCityForNextDay
+        planButton.innerHTML = editingDay
+            ? `Enregistrer et continuer <i class="fas fa-arrow-right"></i>`
+            : changingCityForNextDay
             ? `Continuer avec cette ville <i class="fas fa-arrow-right"></i>`
             : `Planifier ce séjour <i class="fas fa-arrow-right"></i>`;
     }
@@ -465,6 +473,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             // absent en base → violation de contrainte FK → 500 côté API.
             if (!cityId || !allCities.find(c => c.id == cityId)) {
                 alert('Choisis d\'abord une ville dans la liste avant de planifier ton séjour.');
+                return;
+            }
+
+            if (editingDay) {
+                // Édition d'un jour existant : on met à jour la ville de CE jour, puis
+                // on enchaîne sur l'étape 2 (rando) sans créer de plan ni toucher la durée.
+                saveEditedCity(cityId);
                 return;
             }
 
@@ -510,6 +525,41 @@ document.addEventListener('DOMContentLoaded', async function() {
         } catch (e) {
             console.error('Erreur lors du changement de ville:', e);
             alert('Le changement de ville a échoué. Veuillez réessayer.');
+            planButton.disabled = false;
+            updatePlanButton();
+        }
+    }
+
+    /**
+     * Met à jour la ville d'un jour EXISTANT (mode édition depuis le récap), puis
+     * redirige vers l'étape 2. Si la ville a changé, la rando et le spot du jour
+     * (choisis dans l'ancienne ville) sont réinitialisés pour être re-choisis.
+     * currentDay vaut déjà le jour édité (posé par editDay dans results.js), donc
+     * les étapes suivantes écrivent bien sur ce jour.
+     * @param {number} cityId - L'ID de la nouvelle ville sélectionnée
+     */
+    async function saveEditedCity(cityId) {
+        const planId = localStorage.getItem('planId');
+        try {
+            planButton.disabled = true;
+            planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
+            const resp = await fetch(`${window.API_BASE}/api/step1/update_day_city/${planId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ day_number: editingDay, city_id: parseInt(cityId) })
+            });
+            if (!resp.ok) throw new Error('Erreur mise à jour de la ville du jour');
+            localStorage.setItem('selectedCityId', cityId);
+            // Ville changée ⇒ rando et spot de l'ancienne ville n'ont plus de sens.
+            const originalCity = localStorage.getItem('editOriginalCity');
+            if (originalCity && String(originalCity) !== String(cityId)) {
+                localStorage.removeItem('selectedHiking');
+                localStorage.removeItem('selectedSpot');
+            }
+            window.location.href = window.APP_URLS.step2;
+        } catch (e) {
+            console.error('Erreur lors de l\'enregistrement de la ville:', e);
+            alert('L\'enregistrement de la ville a échoué. Veuillez réessayer.');
             planButton.disabled = false;
             updatePlanButton();
         }
