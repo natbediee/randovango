@@ -131,7 +131,9 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        # accept_downloads : le carnet PDF de fin de séjour est récupéré en blob puis
+        # téléchargé par le navigateur (cf. downloadPdfBooklet dans results.js).
+        page = browser.new_page(viewport={"width": 1400, "height": 900}, accept_downloads=True)
         page.on("dialog", lambda d: d.accept())
         page.on(
             "console",
@@ -167,11 +169,16 @@ def main():
             page.locator("#stayButton").click()
         derouler_une_journee(page, jour=2)
 
-        # --- Fin de séjour : section de fin + lien PDF ---
+        # --- Fin de séjour : section de fin + téléchargement du carnet ---
+        # Le carnet n'est plus un lien mais un bouton : il récupère le PDF en
+        # arrière-plan pour garder l'utilisateur sur le récapitulatif. On vérifie
+        # le téléchargement lui-même plutôt qu'une URL.
         page.wait_for_selector("#tripEndSection", state="visible", timeout=5000)
-        pdf_href = page.locator("#downloadPdfBtn").get_attribute("href")
-        assert pdf_href and "plan_id=" in pdf_href, f"lien PDF invalide: {pdf_href}"
-        log(f"fin de séjour: lien PDF OK ({pdf_href})")
+        with page.expect_download(timeout=180_000) as telechargement:
+            page.locator("#downloadPdfBtn").click()
+        nom_fichier = telechargement.value.suggested_filename
+        assert nom_fichier.endswith(".pdf"), f"carnet inattendu: {nom_fichier}"
+        log(f"fin de séjour: carnet téléchargé ({nom_fichier})")
 
         browser.close()
 

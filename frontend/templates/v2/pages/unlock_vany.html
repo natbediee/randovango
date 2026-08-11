@@ -2,7 +2,7 @@
 {% block title %}Accès à Vany - RandoVanGo{% endblock %}
 
 {% block header %}
-  {% with nav_mode='minimal', back_url=url_for('duration') %}
+  {% with nav_mode='minimal', back_url=url_for('duration'), show_login=true %}
     {% include 'v2/partials/header.html' %}
   {% endwith %}
 {% endblock %}

@@ -165,7 +165,8 @@ document.addEventListener('DOMContentLoaded', async function () {
                 `Rester à ${lastDay && lastDay.city_name ? lastDay.city_name : 'cette ville'}`;
             document.getElementById('nextDaySection').style.display = '';
         } else {
-            document.getElementById('downloadPdfBtn').href = `${window.API_BASE}/api/result/pdf?plan_id=${planId}`;
+            // Le bouton du carnet appelle downloadPdfBooklet(), qui relit planId
+            // depuis getTripContext() : rien à câbler ici.
             document.getElementById('tripEndSection').style.display = '';
         }
         // Pas de scroll automatique ici : cet écran est une relecture avant PDF, on doit
@@ -227,6 +228,52 @@ async function stayInSameCity() {
     localStorage.removeItem('selectedHiking');
     localStorage.removeItem('selectedSpot');
     window.location.href = window.APP_URLS.step2;
+}
+
+// Télécharge le carnet de voyage. La génération côté serveur prend une quinzaine de
+// secondes pour un court séjour (tuiles des cartes + rendu PDF), et davantage pour un
+// séjour long : on récupère donc le fichier en arrière-plan plutôt que de naviguer vers
+// l'API. L'utilisateur reste sur ce récapitulatif et peut relire son parcours pendant la
+// préparation, et un échec s'affiche ici au lieu d'une page d'erreur en plein écran.
+async function downloadPdfBooklet() {
+    const { planId } = getTripContext();
+    if (!planId) return;
+
+    const btn = document.getElementById('downloadPdfBtn');
+    const msg = document.getElementById('pdfMsg');
+    const initialLabel = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Préparation de ton carnet…';
+    msg.textContent = 'Ça prend quelques secondes, le temps de dessiner les cartes. Tu peux relire ton parcours en attendant.';
+    msg.style.display = '';
+
+    try {
+        const response = await fetch(`${window.API_BASE}/api/result/pdf?plan_id=${planId}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+
+        // Nom de fichier proposé par le backend (carnet-voyage-<ville>-<id>.pdf).
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = match ? match[1] : `carnet-voyage-${planId}.pdf`;
+        document.body.appendChild(link); // Firefox n'ouvre que les liens présents dans le document
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0); // après le démarrage du téléchargement
+
+        msg.style.display = 'none';
+    } catch (err) {
+        console.error('Erreur génération PDF:', err);
+        msg.textContent = 'La préparation du carnet a échoué. Réessaie dans un instant.';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = initialLabel;
+    }
 }
 
 // Change de ville pour le jour suivant : redirige vers l'étape 1 en mode "changement

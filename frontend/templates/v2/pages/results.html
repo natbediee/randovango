@@ -55,11 +55,15 @@
         <div class="trip-end card card--mint text-center">
           <h2 style="font-size:22px;">Ton voyage est prêt <img src="{{ url_for('static', filename='images/logo/hat-right.png') }}" alt="" class="trip-end__hat"></h2>
           <p class="muted">Ton planning est complet. Emporte ton carnet et bonne route&nbsp;!</p>
+          {# Bouton (et non lien) : le carnet est récupéré en arrière-plan par
+             downloadPdfBooklet(), pour que l'utilisateur reste sur ce récapitulatif
+             pendant la préparation au lieu d'attendre devant un onglet vide. #}
           <div class="results-actions" style="justify-content:center; margin-top:8px;">
-            <a id="downloadPdfBtn" class="btn btn--dark" href="#" target="_blank">
+            <button type="button" id="downloadPdfBtn" class="btn btn--dark" onclick="downloadPdfBooklet()">
               <i class="fas fa-file-pdf"></i> Télécharger le carnet (PDF)
-            </a>
+            </button>
           </div>
+          <p id="pdfMsg" class="muted" style="display:none; margin-top:10px;"></p>
         </div>
       </div>
     </div>

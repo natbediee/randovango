@@ -2,6 +2,7 @@
      - nav_mode : 'home' (défaut, liens) | 'wizard' (stepper 5 étapes) | 'minimal' (logo + retour)
      - active_step : 1..5, étape courante du wizard (nav_mode='wizard')
      - back_url : URL du bouton retour (nav_mode='minimal')
+     - show_login : affiche le lien Connexion à droite du retour (nav_mode='minimal')
    Le stepper mobile (barre 5 segments) est rendu par v2/partials/stepper.html. #}
 {% set nav_mode = nav_mode | default('home') %}
 {% set steps = [('Ville', url_for('step1')), ('Randonnée', url_for('step2')), ('Spot', url_for('step3')), ('Services', url_for('step4')), ('Récapitulatif', url_for('results'))] %}
@@ -26,7 +27,13 @@
       </button>
 
     {% elif nav_mode == 'minimal' %}
-      <a href="{{ back_url | default(url_for('duration')) }}" class="rvg-nav"><span style="color:var(--on-dark);font-weight:600;font-size:13.5px;">← Retour</span></a>
+      <nav class="rvg-nav" aria-label="Navigation">
+        <a href="{{ back_url | default(url_for('duration')) }}">← Retour</a>
+        {% if show_login %}
+          {# .nav-cta : common.js le transforme en « Déconnexion » si une session existe. #}
+          <a href="{{ url_for('contributor_login') }}" class="nav-cta">Connexion</a>
+        {% endif %}
+      </nav>
 
     {% elif nav_mode == 'contrib' %}
       <div class="contrib-header-right">

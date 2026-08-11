@@ -12,6 +12,8 @@ par CDN sur le site (même version 6.4.0).
 import os
 import tempfile
 from io import BytesIO
+from pathlib import Path
+from urllib.parse import urlparse
 
 import fontawesomefree
 from PIL import Image, ImageDraw, ImageFont
@@ -21,6 +23,20 @@ from utils.logger_util import LoggerUtil
 logger = LoggerUtil.get_logger("map_service")
 
 OSM_TILE_URL = "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+
+# Un carnet demande une carte par jour + la carte générale, soit ~35 tuiles
+# chacune : sans cache, un PDF déclenche plus de cent requêtes vers OSM, qui
+# bride les clients gourmands. La génération pouvait alors dépasser les deux
+# minutes et se faire couper par le proxy (504). Les tuiles étant quasi
+# immuables, on les garde sur disque sans expiration (cf. nginx/randovango.conf
+# pour le timeout côté proxy).
+TILE_CACHE_DIR = Path(__file__).resolve().parents[2] / "storage" / "tile_cache"
+# Une tuile répond normalement en quelques centaines de ms : au-delà, mieux vaut
+# abandonner (staticmap réessaie) que bloquer le rendu du carnet.
+TILE_REQUEST_TIMEOUT = 5
+# La politique d'usage d'OSM impose un User-Agent identifiant l'application ;
+# le défaut de staticmap ("StaticMap") est générique et se fait limiter.
+TILE_HEADERS = {"User-Agent": "RandoVanGo/1.0 (carnet de voyage PDF)"}
 
 FA_SOLID_TTF = os.path.join(
     os.path.dirname(fontawesomefree.__file__), "static", "fontawesomefree", "webfonts", "fa-solid-900.ttf"
@@ -160,6 +176,52 @@ def _numbered_pin_file_path(number: int, color: str, size: int) -> str:
     return _numbered_pin_cache[key]
 
 
+def _tile_cache_path(url: str) -> Path:
+    """Chemin de cache d'une tuile, nommé d'après ses coordonnées z/x/y."""
+    return TILE_CACHE_DIR / ("_".join(urlparse(url).path.strip("/").split("/")[-3:]) or "tile.png")
+
+
+_static_map_cls = None
+
+
+def _static_map(width: int, height: int):
+    """StaticMap configuré pour le carnet : tuiles OSM mises en cache sur disque,
+    timeout par tuile et User-Agent identifiant. Importe staticmap à l'appel, les
+    fonctions de rendu traitant son absence comme une carte simplement ignorée."""
+    global _static_map_cls
+    from staticmap import StaticMap
+
+    if _static_map_cls is None:
+        class CachedStaticMap(StaticMap):
+            def get(self, url, **kwargs):
+                path = _tile_cache_path(url)
+                try:
+                    return 200, path.read_bytes()
+                except OSError:
+                    pass
+                status_code, content = super().get(url, **kwargs)
+                if status_code == 200 and content:
+                    try:
+                        TILE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+                        # Écriture atomique : les tuiles sont téléchargées par
+                        # plusieurs threads, un fichier tronqué serait relu tel quel.
+                        tmp = path.with_suffix(f".{os.getpid()}.{id(content)}.tmp")
+                        tmp.write_bytes(content)
+                        tmp.replace(path)
+                    except OSError as e:
+                        logger.warning(f"[map] Tuile non mise en cache ({path.name}) : {e}")
+                return status_code, content
+
+        _static_map_cls = CachedStaticMap
+
+    return _static_map_cls(
+        width, height,
+        url_template=OSM_TILE_URL,
+        tile_request_timeout=TILE_REQUEST_TIMEOUT,
+        headers=TILE_HEADERS,
+    )
+
+
 def _marker_scale(width: int, reference_width: int) -> float:
     """Facteur d'agrandissement des marqueurs et des tracés. Leurs tailles sont
     exprimées en pixels : sans cette mise à l'échelle, une carte rendue plus large
@@ -172,7 +234,7 @@ def render_hike_map_png(mongo_id: str, width: int = 700, height: int = 420) -> b
     le tracé, zoomé dessus, avec les étapes du GPX (waypoints) numérotées - les
     numéros renvoient à la liste d'indications sous la carte (cf. pdf_service.py)."""
     try:
-        from staticmap import StaticMap, IconMarker, Line
+        from staticmap import IconMarker, Line
     except ImportError:
         logger.warning("[map] Librairie staticmap non disponible, carte ignorée")
         return None
@@ -182,7 +244,7 @@ def render_hike_map_png(mongo_id: str, width: int = 700, height: int = 420) -> b
         return None
 
     scale = _marker_scale(width, 700)
-    m = StaticMap(width, height, url_template=OSM_TILE_URL)
+    m = _static_map(width, height)
     m.add_line(Line(trace_points, HIKE_STYLE[0], round(4 * scale)))
 
     waypoints = fetch_hike_waypoints(mongo_id)
@@ -209,13 +271,13 @@ def render_overview_map_png(days: list, width: int = 900, height: int = 550) -> 
     par jour dans le PDF. Retourne None si aucune coordonnée n'est disponible,
     ou si la génération échoue (ex: pas d'accès réseau vers les tuiles OSM)."""
     try:
-        from staticmap import StaticMap, IconMarker, Line
+        from staticmap import IconMarker, Line
     except ImportError:
         logger.warning("[map] Librairie staticmap non disponible, carte ignorée")
         return None
 
     scale = _marker_scale(width, 900)
-    m = StaticMap(width, height, url_template=OSM_TILE_URL)
+    m = _static_map(width, height)
     has_marker = False
 
     def add_icon(lon, lat, color, glyph, size):
