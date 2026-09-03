@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // Label du bouton suivant
     const nextLabel = document.getElementById('nextStepLabel');
-    if (nextLabel) nextLabel.textContent = 'Récapitulatif';
+    if (nextLabel) nextLabel.textContent = 'Voir mon carnet';
 
     // --- 3. Carte ---
     serviceMap = await createStepMap(48.4, -4.5, 12);
@@ -454,7 +454,7 @@ function selectNoService() {
     saveToDB();
 }
 
-// Bouton "Récapitulatif" : sauvegarde les services puis affiche le récapitulatif.
+// Bouton "Voir mon carnet" : sauvegarde les services puis affiche le carnet.
 // On ATTEND la fin de la sauvegarde avant de quitter la page : naviguer tout de
 // suite interrompait la requête en cours ("Failed to fetch" dans la console).
 // C'est ensuite /results qui propose de continuer sur la même ville ou d'en

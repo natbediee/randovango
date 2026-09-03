@@ -1,12 +1,6 @@
 {% extends "v2/base.html" %}
 {% block title %}Espace contributeur - RandoVanGo{% endblock %}
 
-{% block header %}
-  {% with nav_mode='contrib' %}
-    {% include 'v2/partials/header.html' %}
-  {% endwith %}
-{% endblock %}
-
 {% block page_content %}
 {# data-contrib-dashboard : contrib.js redirige vers la connexion si pas de token #}
 <div class="container stack" data-contrib-dashboard style="gap:22px;">
@@ -18,7 +12,7 @@
       <p class="muted" style="font-size:14.5px;">Contributeur RandoVanGo · Merci pour tes partages</p>
     </div>
     <div class="dash-cta">
-      <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--primary btn--sm">+ Ajouter un spot</a>
+      <a href="{{ url_for('contributor_add_spot') }}" class="btn btn--primary btn--sm">+ Ajouter un spot</a>
       <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--outline btn--sm">+ Ajouter une randonnée</a>
     </div>
   </div>
@@ -55,39 +49,44 @@
       </div>
     </div>
 
-    {# Ajout de spot condensé (démo, non branché) #}
-    <div class="card">
-      <h2 style="font-size:17px; font-weight:700; margin-bottom:13px;">Ajouter un spot</h2>
-      <form class="stack-sm" style="gap:13px;" onsubmit="event.preventDefault(); this.querySelector('.form-note').textContent='Merci ! Ton spot part en relecture (démo).';">
-        <label class="stack-sm" style="gap:5px;">
-          <span class="label" style="text-transform:none;">Nom du spot</span>
-          <span class="field"><input type="text" placeholder="Aire de la pointe de la Torche"></span>
-        </label>
-        <div class="dash-form-row">
-          <label class="stack-sm" style="gap:5px;">
-            <span class="label" style="text-transform:none;">Type</span>
-            <span class="field"><select><option>Parking jour et nuit</option><option>Aire camping-car</option><option>Camping</option><option>Bivouac</option></select></span>
-          </label>
-          <label class="stack-sm" style="gap:5px;">
-            <span class="label" style="text-transform:none;">Prix</span>
-            <span class="field"><select><option>Gratuit</option><option>Payant</option></select></span>
-          </label>
+    {# Codes Vany (valeurs de démo, en attendant un endpoint) #}
+    <div class="card" id="codes-vany">
+      <div class="dash-card-head">
+        <div class="stack-sm" style="gap:3px;">
+          <h2 style="font-size:17px; font-weight:700;">Tes codes Vany</h2>
+          <span class="muted" style="font-size:12.5px;">1 contribution validée = 1 code · 1 mois de chat avec Vany</span>
         </div>
-        <div class="stack-sm" style="gap:6px;">
-          <span class="label" style="text-transform:none;">Équipements sur place</span>
-          <div class="equip-tags">
-            {% for e in ['Eau potable', 'Toilettes', 'Poubelle', 'Électricité', 'Vue mer'] %}
-              <button type="button" class="equip-tag" data-on="false">{{ e }}</button>
-            {% endfor %}
+        <span class="codes-count"><strong>2</strong><span>dispo</span></span>
+      </div>
+
+      <div class="codes-list">
+        {% set codes = [
+          ('VANY-8K3PQ2', 'Obtenu pour « Aire de Kérity - port »', true),
+          ('VANY-M4TZ7X', 'Obtenu pour « Parking de la chapelle de la Joie »', true),
+          ('VANY-QR91LD', "Utilisé le 12 août · voyage Baie d'Audierne", false)
+        ] %}
+        {% for code, meta, available in codes %}
+          <div class="code-item {% if not available %}is-used{% endif %}">
+            <div class="stack-sm" style="gap:2px; min-width:0;">
+              <span class="code-item__code mono">{{ code }}</span>
+              <span class="muted" style="font-size:12px;">{{ meta }}</span>
+            </div>
+            <div class="code-item__actions">
+              {% if available %}
+                <span class="tag tag--ok">Disponible</span>
+                <button type="button" class="code-copy" data-code="{{ code }}">Copier</button>
+              {% else %}
+                <span class="tag">Utilisé</span>
+              {% endif %}
+            </div>
           </div>
-        </div>
-        <div class="dropzone">Glisse 1 à 3 photos du spot ici</div>
-        <div class="dash-form-submit">
-          <button type="submit" class="btn btn--primary btn--sm">Envoyer en relecture</button>
-          <span class="muted" style="font-size:12px;">Publication après vérification, sous 48 h.</span>
-        </div>
-        <p class="form-note" style="font-size:13px; color:var(--teal); font-weight:600; margin:0;"></p>
-      </form>
+        {% endfor %}
+      </div>
+
+      <div class="codes-footer">
+        <button type="button" class="btn btn--primary btn--sm" id="useVanyCode">Parler à Vany</button>
+        <span class="muted" style="font-size:12px;">Le code s'applique automatiquement à ton prochain voyage.</span>
+      </div>
     </div>
   </div>
 
@@ -106,14 +105,4 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='v2/js/contrib.js') }}"></script>
-<script>
-  // Toggle des tags d'équipement (démo)
-  document.querySelectorAll('.equip-tag').forEach(function (t) {
-    t.addEventListener('click', function () {
-      var on = t.getAttribute('data-on') === 'true';
-      t.setAttribute('data-on', on ? 'false' : 'true');
-      t.classList.toggle('is-on', !on);
-    });
-  });
-</script>
 {% endblock %}

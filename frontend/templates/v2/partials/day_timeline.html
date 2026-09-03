@@ -1,0 +1,29 @@
+{# Timeline du wizard (desktop) : le jour en cours déplié en ses quatre étapes,
+   les autres jours en pastilles, puis le carnet de fin de séjour.
+   Le serveur ne connaît que `active_step` (1..5) ; le nombre de jours et le rang du
+   jour courant vivent côté client (localStorage selectedDays / currentDay), d'où les
+   pastilles des autres jours insérées par common.js (initDayTimeline).
+   Étape 5 (le carnet) : pas de jour déplié (on y repasse après chaque journée
+   pour lancer la suivante), le carnet est la position courante.
+   Les tirets de liaison sont dessinés en CSS (.timeline > * + *::before) : aucun
+   élément séparateur à gérer ici ni au moment de l'insertion. #}
+{% set day_steps = [('Ville', 1), ('Rando', 2), ('Spot', 3), ('Services', 4)] %}
+<div class="timeline" data-timeline aria-label="Progression du voyage">
+  {% if active_step < 5 %}
+    <div class="timeline__current">
+      {# Libellé réécrit par common.js quand le jour courant n'est pas le premier. #}
+      <span class="timeline__day" data-timeline-day>Jour 1</span>
+      <ol class="timeline__steps">
+        {% for label, n in day_steps %}
+          <li class="timeline__step {% if n == active_step %}is-active{% elif n < active_step %}is-done{% endif %}">
+            {% if n < active_step %}<i class="fas fa-check" aria-hidden="true"></i>{% endif %} {{ label }}
+          </li>
+        {% endfor %}
+      </ol>
+    </div>
+  {% endif %}
+
+  <span class="timeline__chip timeline__chip--book {% if active_step == 5 %}is-active{% endif %}">
+    <i class="fas fa-book" aria-hidden="true"></i> Carnet
+  </span>
+</div>

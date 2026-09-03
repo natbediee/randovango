@@ -4,27 +4,40 @@
 {% block page_content %}
 <div class="container stack" style="gap:26px;">
 
-  {# Hero #}
+  {# Hero immersif : photo plein cadre + parcours utilisateur en 3 temps #}
   <section class="home-hero">
-    <div class="stack-sm" style="gap:14px;">
-      <span class="eyebrow">Planificateur van life + rando</span>
-      <h1 style="font-size:38px; line-height:1.15;">Ton voyage en van, prêt en quelques minutes.</h1>
-      <p class="muted" style="font-size:15.5px; max-width:520px;">Pour chaque jour : une ville, une randonnée, un spot pour la nuit et les services utiles. À la fin, tu repars avec ton carnet de voyage complet.</p>
-    </div>
-    <img class="home-hero__img" src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="Van aménagé face à la mer">
-  </section>
+    <img class="home-hero__bg" src="{{ url_for('static', filename='images/van-life-liberte.jpg') }}" alt="" aria-hidden="true">
+    <div class="home-hero__veil"></div>
 
-  {# Parcours en 6 étapes #}
-  <div class="home-steps">
-    {% set parcours = ['Durée', 'Ville', 'Randonnée', 'Spot', 'Services', 'Carnet de voyage'] %}
-    {% for label in parcours %}
-      <div class="home-steps__item">
-        <span class="home-steps__num {% if loop.first %}is-first{% endif %}">{{ loop.index }}</span>
-        <span class="home-steps__label {% if loop.first %}is-first{% endif %}">{{ label }}</span>
-      </div>
-      {% if not loop.last %}<span class="home-steps__line"></span>{% endif %}
-    {% endfor %}
-  </div>
+    <div class="home-hero__content">
+      <span class="eyebrow eyebrow--on-dark">Planificateur van life + rando</span>
+      {# L'espace après le <br> est indispensable : en mobile le <br> est masqué en CSS
+         et c'est lui qui sépare alors les deux fragments. #}
+      <h1 class="home-hero__title">Ton voyage en van,<br> prêt en quelques minutes.</h1>
+      <p class="home-hero__lead">Ta <strong>randonnée</strong> et ton spot pour la nuit, jour après jour.<br>À la fin, ton carnet de voyage.</p>
+    </div>
+
+    {# Le parcours réel : une durée choisie une fois, puis N jours composés, puis le carnet #}
+    <ol class="home-journey">
+      {% set journey = [
+        ('1', 'Choisis la durée', 'une fois', false),
+        ('2', 'Compose chaque jour', 'Ville → Rando → Spot → Services', true),
+        ('icon', 'Carnet de voyage', 'à la fin', false)
+      ] %}
+      {% for badge, titre, meta, accent in journey %}
+        {% if not loop.first %}<li class="home-journey__link" aria-hidden="true"></li>{% endif %}
+        <li class="home-journey__item">
+          <span class="home-journey__badge {% if badge == 'icon' %}home-journey__badge--icon{% endif %}">
+            {% if badge == 'icon' %}<i class="fas fa-book"></i>{% else %}{{ badge }}{% endif %}
+          </span>
+          <span class="home-journey__body">
+            <span class="home-journey__title">{{ titre }}</span>
+            <span class="home-journey__meta {% if accent %}home-journey__meta--accent{% endif %}">{{ meta }}</span>
+          </span>
+        </li>
+      {% endfor %}
+    </ol>
+  </section>
 
   {# Carte de sélection de la durée #}
   <div class="card" id="durationSection">

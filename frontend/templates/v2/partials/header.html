@@ -1,67 +1,52 @@
 {# Header sombre commun. Paramètres (via {% with %} avant l'include) :
-     - nav_mode : 'home' (défaut, liens) | 'wizard' (stepper 5 étapes) | 'minimal' (logo + retour)
+     - nav_mode : 'home' (défaut) | 'wizard' (timeline du séjour) | 'minimal' (+ bouton retour)
      - active_step : 1..5, étape courante du wizard (nav_mode='wizard')
      - back_url : URL du bouton retour (nav_mode='minimal')
-     - show_login : affiche le lien Connexion à droite du retour (nav_mode='minimal')
+   Les trois liens (Comment ça marche / Créer mon voyage / Espace contributeur) sont
+   les mêmes partout : v2/partials/nav_links.html. Ils sont affichés dans la barre,
+   sauf en mode wizard où la timeline occupe la place : ils passent alors dans le
+   menu burger, seul cas où celui-ci reste visible en desktop.
+   L'avatar et la déconnexion n'apparaissent que si une session existe (common.js).
    Le stepper mobile (barre 5 segments) est rendu par v2/partials/stepper.html. #}
 {% set nav_mode = nav_mode | default('home') %}
-{% set steps = [('Ville', url_for('step1')), ('Randonnée', url_for('step2')), ('Spot', url_for('step3')), ('Services', url_for('step4')), ('Récapitulatif', url_for('results'))] %}
 
-<header class="rvg-header">
+<header class="rvg-header {% if nav_mode == 'wizard' %}rvg-header--compact{% endif %}">
   <div class="rvg-header__inner">
     {% include 'v2/partials/logo.html' %}
 
     {% if nav_mode == 'wizard' %}
-      {# Stepper desktop : cercles horizontaux #}
-      <nav class="stepper" aria-label="Étapes du parcours">
-        {% for label, href in steps %}
-          {% set n = loop.index %}
-          <div class="stepper__item {% if n == active_step %}is-active{% elif n < active_step %}is-done{% endif %}">
-            <span class="stepper__num">{% if n < active_step %}✓{% else %}{{ n }}{% endif %}</span>
-            <span class="stepper__label">{{ label }}</span>
-          </div>
-        {% endfor %}
-      </nav>
-      <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" data-burger>
-        <span></span><span></span><span></span>
-      </button>
-
+      {% include 'v2/partials/day_timeline.html' %}
     {% elif nav_mode == 'minimal' %}
-      <nav class="rvg-nav" aria-label="Navigation">
-        <a href="{{ back_url | default(url_for('duration')) }}">← Retour</a>
-        {% if show_login %}
-          {# .nav-cta : common.js le transforme en « Déconnexion » si une session existe. #}
-          <a href="{{ url_for('contributor_login') }}" class="nav-cta">Connexion</a>
-        {% endif %}
-      </nav>
+      <a class="rvg-back" href="{{ back_url | default(url_for('duration')) }}">← Retour</a>
+    {% endif %}
 
-    {% elif nav_mode == 'contrib' %}
-      <div class="contrib-header-right">
-        <span class="contrib-badge">Espace contributeur</span>
-        <span class="contrib-avatar" id="contribInitials">··</span>
-        <a href="#" id="contribLogout" class="rvg-nav" title="Se déconnecter"><i class="fas fa-sign-out-alt" style="color:var(--on-dark);"></i></a>
+    <div class="rvg-header__right">
+      {% if nav_mode != 'wizard' %}
+        <nav class="rvg-nav rvg-nav--desktop" aria-label="Navigation principale">
+          {% include 'v2/partials/nav_links.html' %}
+        </nav>
+      {% endif %}
+
+      {# Masqué au rendu serveur (qui ignore l'état d'auth, stocké côté client) et
+         révélé par common.js quand une session existe. Hors de .rvg-nav--desktop
+         pour rester visible en mobile, où la nav passe au burger. #}
+      <div class="account" data-account style="display:none;">
+        <span class="account__avatar" data-account-initials>··</span>
+        <a href="#" class="account__logout" data-account-logout title="Se déconnecter" aria-label="Se déconnecter">
+          <i class="fas fa-sign-out-alt"></i>
+        </a>
       </div>
 
-    {% else %}
-      {# nav_mode == 'home' #}
-      <nav class="rvg-nav rvg-nav--desktop" aria-label="Navigation principale">
-        <a href="{{ url_for('how_it_works') }}">Comment ça marche</a>
-        <a href="{{ url_for('contributor_login') }}" class="nav-cta">Contributeur ? Connexion</a>
-      </nav>
       <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" data-burger>
         <span></span><span></span><span></span>
       </button>
-    {% endif %}
+    </div>
   </div>
 
-  {% if nav_mode == 'home' or nav_mode == 'wizard' %}
-    {# Panneau de nav mobile (déplié au tap sur le burger) #}
-    <nav class="rvg-nav rvg-nav--mobile" data-mobile-nav aria-label="Menu mobile">
-      <a href="{{ url_for('how_it_works') }}">Comment ça marche</a>
-      <a href="{{ url_for('contributor_add_hike') }}">Devenir contributeur</a>
-      <a href="{{ url_for('contributor_login') }}" class="nav-cta">Contributeur ? Connexion</a>
-    </nav>
-  {% endif %}
+  {# Panneau du burger : plein largeur en mobile, carte ancrée à droite en wizard desktop. #}
+  <nav class="rvg-nav rvg-nav--panel" data-nav-panel aria-label="Menu">
+    {% include 'v2/partials/nav_links.html' %}
+  </nav>
 
   {% if nav_mode == 'wizard' %}
     {% include 'v2/partials/stepper.html' %}

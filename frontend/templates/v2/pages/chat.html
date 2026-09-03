@@ -3,14 +3,22 @@
 {% block footer %}{% endblock %}  {# pas de footer : le chat occupe la hauteur #}
 
 {% block header %}
-  <header class="rvg-header">
+  {# Entête propre au chat (badge + sortie du mode IA) plutôt que le header commun,
+     mais les trois liens de nav restent accessibles par le burger (--compact). #}
+  <header class="rvg-header rvg-header--compact">
     <div class="rvg-header__inner">
       {% include 'v2/partials/logo.html' %}
       <div class="chat-header-right">
         <span class="chat-badge"><img src="{{ url_for('static', filename='images/vany/avatar.png') }}" alt="Vany"> Voyage 100% IA</span>
         <a href="{{ url_for('duration') }}" class="rvg-nav"><span style="color:var(--on-dark); font-weight:600; font-size:13px;">Passer en mode manuel</span></a>
+        <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" data-burger>
+          <span></span><span></span><span></span>
+        </button>
       </div>
     </div>
+    <nav class="rvg-nav rvg-nav--panel" data-nav-panel aria-label="Menu">
+      {% include 'v2/partials/nav_links.html' %}
+    </nav>
   </header>
 {% endblock %}
 

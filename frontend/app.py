@@ -87,6 +87,11 @@ def contributor_dashboard():
     """Espace contributeur - tableau de bord"""
     return page('contrib_dashboard')
 
+@app.route('/contributor/add-spot')
+def contributor_add_spot():
+    """Ajout d'un spot par un contributeur"""
+    return page('add_spot')
+
 @app.route('/contributor/add-hike')
 def contributor_add_hike():
     """Ajout d'une randonnée par un contributeur"""

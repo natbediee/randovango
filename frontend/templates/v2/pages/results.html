@@ -1,5 +1,5 @@
 {% extends "v2/base.html" %}
-{% block title %}Récapitulatif - RandoVanGo{% endblock %}
+{% block title %}Carnet de voyage - RandoVanGo{% endblock %}
 {% block main_class %}has-mobile-nav has-results-nav{% endblock %}
 
 {% block header %}
@@ -12,11 +12,11 @@
 <div class="container stack" style="gap:22px;">
 
   <div class="stack-sm" style="gap:5px;">
-    <h1 style="font-size:28px;">Récapitulatif de ton séjour</h1>
-    <p class="muted" style="font-size:14.5px;">Voici ton itinéraire jour par jour. Télécharge ton carnet de voyage pour l'emmener partout, même hors connexion.</p>
+    <h1 style="font-size:28px;">Ton carnet de voyage</h1>
+    <p class="muted" style="font-size:14.5px;">Voici ton itinéraire jour par jour. Une fois le séjour complet, télécharge-le pour l'emmener partout, même hors connexion.</p>
   </div>
 
-  {# Tableau récapitulatif (rempli par results.js) #}
+  {# Tableau des journées composées (rempli par results.js) #}
   <div class="card" style="padding:0; overflow:hidden;">
     <div class="results-table-wrap">
       <table class="results-table">
@@ -56,7 +56,7 @@
           <h2 style="font-size:22px;">Ton voyage est prêt <img src="{{ url_for('static', filename='images/logo/hat-right.png') }}" alt="" class="trip-end__hat"></h2>
           <p class="muted">Ton planning est complet. Emporte ton carnet et bonne route&nbsp;!</p>
           {# Bouton (et non lien) : le carnet est récupéré en arrière-plan par
-             downloadPdfBooklet(), pour que l'utilisateur reste sur ce récapitulatif
+             downloadPdfBooklet(), pour que l'utilisateur reste sur cette page
              pendant la préparation au lieu d'attendre devant un onglet vide. #}
           <div class="results-actions" style="justify-content:center; margin-top:8px;">
             <button type="button" id="downloadPdfBtn" class="btn btn--dark" onclick="downloadPdfBooklet()">

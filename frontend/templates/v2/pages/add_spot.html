@@ -1,0 +1,109 @@
+{% extends "v2/base.html" %}
+{% block title %}Ajouter un spot - RandoVanGo{% endblock %}
+
+{% block page_content %}
+{# data-add-spot : contrib.js pose la garde d'authentification et branche les actions (démo). #}
+<div class="container stack" data-add-spot style="gap:20px;">
+
+  <a href="{{ url_for('contributor_dashboard') }}" class="login-link">← Ton espace contributeur</a>
+  <div class="stack-sm" style="gap:5px;">
+    <h1 style="font-size:27px;">Ajouter un spot</h1>
+    <p class="muted" style="font-size:14.5px;">Un endroit où tu as dormi et que tu recommandes - l'équipe vérifie avant publication.</p>
+  </div>
+
+  <div class="addspot-grid">
+    {# L'essentiel #}
+    <div class="card">
+      <h2 style="font-size:17px; font-weight:700; margin-bottom:14px;">L'essentiel</h2>
+      <div class="stack-sm" style="gap:14px;">
+        <label class="stack-sm" style="gap:5px;">
+          <span class="label" style="text-transform:none;">Nom du spot</span>
+          <span class="field"><input type="text" id="spotName" placeholder="Aire de la pointe de la Torche"></span>
+        </label>
+        <label class="stack-sm" style="gap:5px;">
+          <span class="label" style="text-transform:none;">Commune</span>
+          <span class="field"><input type="text" id="spotCity" placeholder="Plomeur"></span>
+        </label>
+        <div class="addspot-triple">
+          <label class="stack-sm" style="gap:5px;">
+            <span class="label" style="text-transform:none;">Type</span>
+            <span class="field"><select id="spotType"><option>Parking jour et nuit</option><option>Aire camping-car</option><option>Camping</option><option>Bivouac</option></select></span>
+          </label>
+          <label class="stack-sm" style="gap:5px;">
+            <span class="label" style="text-transform:none;">Prix</span>
+            <span class="field"><select id="spotPrice"><option>Gratuit</option><option>Payant</option></select></span>
+          </label>
+          <label class="stack-sm" style="gap:5px;">
+            <span class="label" style="text-transform:none;">Places van</span>
+            <span class="field"><input type="text" id="spotPlaces" placeholder="6 à 8"></span>
+          </label>
+        </div>
+        <div class="stack-sm" style="gap:6px;">
+          <span class="label" style="text-transform:none;">Équipements sur place</span>
+          <div class="pick-tags">
+            {% for e in ['Eau potable', 'Toilettes', 'Poubelle', 'Électricité', 'Vue mer', 'Douche'] %}
+              <button type="button" class="equip-tag">{{ e }}</button>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="stack-sm" style="gap:6px;">
+          <span class="label" style="text-transform:none;">Interdictions / vigilance</span>
+          <div class="pick-tags pick-tags--warn">
+            {% for w in ['Hauteur limitée', 'Venteux', 'Bruit route', 'Interdit 22 h - 7 h'] %}
+              <button type="button" class="equip-tag">{{ w }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Localisation + photos #}
+    <div class="stack" style="gap:20px;">
+      <div class="card">
+        <h2 style="font-size:17px; font-weight:700; margin-bottom:14px;">Localisation</h2>
+        <div class="stack-sm" style="gap:14px;">
+          <div class="dropzone dropzone--map" id="spotLocate">
+            <span style="font-size:13.5px; font-weight:600; color:var(--teal);">Place le point sur la carte</span>
+            <span style="font-size:12px; color:var(--muted-3);">ou colle des coordonnées GPS</span>
+          </div>
+          <div class="gpx-preview mono" id="spotCoords">aperçu carte - 47.8342, -4.3721</div>
+          <div class="gpx-advice">
+            <span class="gpx-advice__badge">P</span>
+            <span>Vérifie que l'accès reste praticable pour un van de 3 m.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="font-size:17px; font-weight:700; margin-bottom:14px;">Photos</h2>
+        <div class="dropzone" style="display:flex; flex-direction:column; gap:3px; padding:18px;">
+          <span style="font-size:13.5px; font-weight:600; color:var(--teal);">Glisse 1 à 3 photos du spot</span>
+          <span style="font-size:12px; color:var(--muted-3);">La vue, l'emplacement, l'accès.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Retour sur la nuit #}
+  <div class="card stack-sm" style="gap:12px;">
+    <h2 style="font-size:17px; font-weight:700;">Ton retour sur la nuit</h2>
+    <textarea class="field addspot-story" id="spotStory" placeholder="Calme après 21 h, sol plat, on entend la mer. Le matin, les surfeurs arrivent tôt…"></textarea>
+  </div>
+
+  <div class="addspot-msg" id="spotMsg" style="display:none;"></div>
+
+  {# Actions #}
+  <div class="addhike-actions">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <button type="button" class="btn btn--primary btn--sm" id="submitSpot">Envoyer en relecture</button>
+      <span class="muted" style="font-size:12px;">Publication après vérification, sous 48 h - puis 1 code Vany.</span>
+    </div>
+    <button type="button" class="btn btn--outline btn--sm" id="saveSpotDraft">Enregistrer le brouillon</button>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='v2/js/contrib.js') }}"></script>
+{% endblock %}

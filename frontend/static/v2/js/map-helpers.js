@@ -1,4 +1,4 @@
-// Icônes et helpers Leaflet partagés entre les étapes 1, 2, 3, 4 et le récapitulatif
+// Icônes et helpers Leaflet partagés entre les étapes 1, 2, 3, 4 et le carnet
 // (mêmes marqueurs rando/spot/POI et même logique d'affichage des jours déjà planifiés).
 
 // NE PAS réintroduire de patch agrandissant les tuiles de 1px (_initTile → 257px) :
@@ -206,7 +206,7 @@ function buildHikeDivIcon(dayLabel) {
 
 // Couleur du spot : encre de la charte (#22424B), distincte du teal de la
 // randonnée (var --blue) pour qu'on ne confonde pas les deux marqueurs sur une
-// carte qui les affiche ensemble (étapes 3, 4 et récapitulatif). À garder
+// carte qui les affiche ensemble (étapes 3, 4 et le carnet). À garder
 // synchronisé avec SPOT_STYLE (results.js) et map_service.py (carnet PDF).
 const SPOT_COLOR = '#22424B';
 

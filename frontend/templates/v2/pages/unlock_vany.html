@@ -2,7 +2,7 @@
 {% block title %}Accès à Vany - RandoVanGo{% endblock %}
 
 {% block header %}
-  {% with nav_mode='minimal', back_url=url_for('duration'), show_login=true %}
+  {% with nav_mode='minimal', back_url=url_for('duration') %}
     {% include 'v2/partials/header.html' %}
   {% endwith %}
 {% endblock %}
@@ -14,7 +14,7 @@
     <img src="{{ url_for('static', filename='images/vany/showing-soft.png') }}" alt="Vany présente les deux accès" class="unlock-vany">
     <span class="eyebrow">Voyage 100% IA</span>
     <h1 style="font-size:30px;">Débloque ton voyage avec Vany</h1>
-    <p class="muted" style="max-width:540px;">Vany compose l'itinéraire complet et l'ajuste avec toi. Deux façons d'y accéder :</p>
+    <p class="muted" style="max-width:540px;">Vany compose l'itinéraire complet et l'ajuste avec toi. <br>Deux façons d'y accéder :</p>
   </div>
 
   <div class="unlock-cards">

@@ -1,4 +1,4 @@
-// Page récapitulatif : tableau des journées complétées + carte de tous les choix
+// Page « carnet » : tableau des journées complétées + carte de tous les choix
 // (randonnées, spots nuit, services), puis navigation vers le jour suivant ou la
 // fin du séjour. Les textes du tableau arrivent prêts à afficher depuis l'API
 // (champ day.display, préparé par backend/utils/display_utils.py).
@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             document.getElementById('tripEndSection').style.display = '';
         }
         // Pas de scroll automatique ici : cet écran est une relecture avant PDF, on doit
-        // arriver en haut sur le récapitulatif. La carte reste accessible plus bas.
+        // arriver en haut sur le carnet. La carte reste accessible plus bas.
     } catch (err) {
         console.error('Erreur chargement plan:', err);
         tableBody.innerHTML = '<tr><td colspan="6">Erreur lors du chargement du plan.</td></tr>';
@@ -233,7 +233,7 @@ async function stayInSameCity() {
 // Télécharge le carnet de voyage. La génération côté serveur prend une quinzaine de
 // secondes pour un court séjour (tuiles des cartes + rendu PDF), et davantage pour un
 // séjour long : on récupère donc le fichier en arrière-plan plutôt que de naviguer vers
-// l'API. L'utilisateur reste sur ce récapitulatif et peut relire son parcours pendant la
+// l'API. L'utilisateur reste sur le carnet et peut relire son parcours pendant la
 // préparation, et un échec s'affiche ici au lieu d'une page d'erreur en plein écran.
 async function downloadPdfBooklet() {
     const { planId } = getTripContext();

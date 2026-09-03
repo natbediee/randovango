@@ -50,6 +50,9 @@
   --on-dark-soft: #B8CBCE;
   --accent-light: #7FC4CC;
   --accent-light-2: #9FDBE2;
+  /* Vert « c'est fait » de la timeline : le --green de la palette est trop sombre
+     sur le fond ink du header. */
+  --done-light: #A7D96C;
 
   /* Typo */
   --font-head: 'Archivo', system-ui, sans-serif;
@@ -118,6 +121,10 @@ button { font-family: inherit; cursor: pointer; }
 .rvg-header {
   background: var(--ink);
   color: var(--on-dark);
+  /* Contexte d'empilement au-dessus du contenu : le déroulant du menu compte
+     déborde du header et passerait sinon sous le hero (qui isole le sien). */
+  position: relative;
+  z-index: 500;
 }
 .rvg-header__inner {
   max-width: var(--container);
@@ -180,10 +187,53 @@ button { font-family: inherit; cursor: pointer; }
   padding: 7px 16px;
 }
 .rvg-nav .nav-cta:hover { border-color: rgba(249, 248, 241, 0.55); }
-/* Salut affiché à la place du lien Connexion quand l'utilisateur est connecté. */
-.rvg-greeting { font-size: 13.5px; font-weight: 600; color: var(--on-dark); white-space: nowrap; }
 
-/* Burger (mobile only, masqué en desktop) */
+/* Bouton retour (nav_mode='minimal'), à gauche comme la timeline du wizard. */
+.rvg-back { font-size: 13.5px; font-weight: 600; color: var(--on-dark); margin-right: auto; }
+.rvg-back:hover { color: var(--white); }
+
+/* ===== COMPTE (contributeur connecté) ===== */
+/* Groupe de droite : nav + avatar + burger, pour que le space-between du header
+   ne les écarte pas les uns des autres. */
+.rvg-header__right { display: flex; align-items: center; gap: 18px; }
+
+/* .account est masqué en inline par le template et révélé (display:flex) par
+   common.js : toute règle de largeur doit donc jouer sur les enfants. */
+.account { align-items: center; gap: 12px; }
+.account__avatar {
+  width: 32px; height: 32px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--ink);
+  font-size: 12.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.account__logout { display: flex; align-items: center; color: var(--on-dark); font-size: 15px; }
+.account__logout:hover { color: var(--white); }
+
+/* Panneau déplié par le burger. Plein largeur sous le header ; ancré à droite en
+   desktop, où seul le wizard laisse le burger visible. */
+.rvg-nav--panel {
+  display: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  background: var(--ink);
+  border-top: 1px solid rgba(249, 248, 241, 0.12);
+}
+.rvg-nav--panel.is-open { display: flex; }
+.rvg-nav--panel a {
+  padding: 14px 20px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(249, 248, 241, 0.08);
+}
+.rvg-nav--panel .nav-cta { border: 0; border-radius: 0; color: var(--accent-light-2); }
+
+/* Burger : mobile partout, et desktop en mode wizard (la timeline prend la place
+   des liens). Encadré, comme le bouton de menu de la maquette. */
 .burger {
   display: none;
   flex-direction: column;
@@ -200,46 +250,113 @@ button { font-family: inherit; cursor: pointer; }
   transition: transform .2s, opacity .2s;
 }
 
-/* ===== STEPPER (dans le header, desktop = cercles) ===== */
-.stepper {
+/* ===== TIMELINE DU SÉJOUR (header du wizard, desktop) ===== */
+/* Jour courant déplié en quatre étapes, autres jours en pastilles, carnet en fin.
+   min-width:0 + overflow-x : un séjour de 7 jours défile plutôt que de pousser le
+   burger hors de la barre. */
+.timeline {
   display: flex;
   align-items: center;
-  gap: 22px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 0;
 }
-.stepper__item {
+.timeline::-webkit-scrollbar { display: none; }
+/* Collée au logo (le space-between du header la centrerait sinon). */
+.timeline { margin-right: auto; }
+
+/* Tirets de liaison : dessinés entre les éléments (donc sur tous sauf le premier),
+   en dehors de leur boîte, ce qui évite d'avoir à insérer des séparateurs. */
+.timeline > * { position: relative; flex: none; }
+.timeline > * + * { margin-left: 26px; }
+.timeline > * + *::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 14px;
+  border-top: 1.5px dashed rgba(249, 248, 241, 0.32);
+}
+
+/* Jour courant : pastille allongée contenant le libellé du jour + ses étapes. */
+.timeline__current {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 12px;
+  border: 1.5px solid rgba(249, 248, 241, 0.28);
+  border-radius: var(--r-pill);
+  padding: 6px 16px;
 }
-.stepper__num {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: transparent;
-  border: 1px solid rgba(249, 248, 241, 0.3);
-  color: var(--on-dark-soft);
-  font-size: 10px;
+.timeline__day {
+  font-size: 11px;
   font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-dark);
+  white-space: nowrap;
+}
+.timeline__steps {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex: none;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.stepper__label {
+.timeline__step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--on-dark-soft);
+  white-space: nowrap;
 }
-.stepper__item.is-active .stepper__num {
+/* Flèche entre deux étapes du jour. */
+.timeline__step + .timeline__step::before {
+  content: "→";
+  color: var(--on-dark-soft);
+  opacity: 0.55;
+  margin-right: 5px;
+}
+.timeline__step i { font-size: 9px; }
+.timeline__step.is-done { color: var(--done-light); }
+.timeline__step.is-active {
+  color: var(--accent-light-2);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* Pastilles des autres jours + carnet. */
+.timeline__chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid rgba(249, 248, 241, 0.18);
+  border-radius: var(--r-pill);
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--on-dark-soft);
+  white-space: nowrap;
+}
+.timeline__chip i { font-size: 10px; }
+/* Le carnet reste visible même quand la timeline défile (séjour long) : collé au
+   bord droit, sur le fond du header, l'ombre masquant les tirets qui passent dessous. */
+.timeline__chip--book {
+  position: sticky;
+  right: 0;
+  background: var(--ink);
+  box-shadow: -12px 0 10px -4px var(--ink);
+}
+.timeline__chip.is-done { color: var(--done-light); border-color: rgba(167, 217, 108, 0.35); }
+.timeline__chip.is-active {
+  color: var(--ink);
   background: var(--accent-light);
   border-color: var(--accent-light);
-  color: var(--ink);
-}
-.stepper__item.is-active .stepper__label { color: var(--white); font-weight: 700; }
-.stepper__item.is-done .stepper__num {
-  background: var(--accent-light);
-  border-color: var(--accent-light);
-  color: var(--ink);
+  font-weight: 700;
 }
 
 /* Barre de progression mobile (5 segments) - masquée en desktop */
@@ -446,47 +563,101 @@ button { font-family: inherit; cursor: pointer; }
 .rvg-footer a { color: var(--accent-light); }
 
 /* ===== ACCUEIL (écran 01) ===== */
+/* Hero immersif : la photo occupe tout le cadre, le texte est posé dessus à
+   gauche (voile dégradé pour le contraste) et le parcours flotte en bas. */
 .home-hero {
-  display: grid;
-  grid-template-columns: 1fr 600px;
-  gap: 40px;
-  align-items: center;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 20px;
+  min-height: 480px;
+  padding: 56px 56px 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
-.home-hero__img {
+.home-hero__bg,
+.home-hero__veil {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.home-hero__bg {
   width: 100%;
-  height: 300px;
+  height: 100%;
   object-fit: cover;
-  border-radius: 16px;
-  border: 1px solid var(--card-border);
   display: block;
 }
+.home-hero__veil {
+  background:
+    linear-gradient(100deg,
+      rgba(34, 66, 75, 0.94) 0%,
+      rgba(34, 66, 75, 0.86) 26%,
+      rgba(34, 66, 75, 0.45) 52%,
+      rgba(34, 66, 75, 0.08) 78%,
+      rgba(34, 66, 75, 0.00) 100%);
+}
+.home-hero__content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 620px;
+}
+.eyebrow--on-dark { color: var(--accent-light); }
+.home-hero__title {
+  font-size: 46px;
+  line-height: 1.1;
+  color: var(--white);
+}
+.home-hero__lead {
+  margin: 4px 0 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--on-dark);
+  max-width: 560px;
+}
+.home-hero__lead strong { color: var(--accent-light-2); font-weight: 700; }
 
-.home-steps {
+/* Parcours utilisateur : durée (une fois) -> journées (en boucle) -> carnet */
+.home-journey {
+  margin: auto 0 0;
+  padding: 16px 30px;
+  list-style: none;
   background: var(--white);
-  border: 1px solid var(--card-border);
   border-radius: var(--r-card-sm);
-  padding: 16px 28px;
+  box-shadow: var(--shadow-soft);
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
-  flex-wrap: wrap;
+  gap: 18px;
 }
-.home-steps__item { display: flex; align-items: center; gap: 8px; }
-.home-steps__num {
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: var(--mint);
-  border: 1px solid var(--mint-border);
-  color: var(--teal);
-  font-size: 11px; font-weight: 800;
-  display: flex; align-items: center; justify-content: center;
+.home-journey__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex: none;
 }
-.home-steps__num.is-first { background: var(--teal); border-color: var(--teal); color: var(--white); }
-.home-steps__label { font-size: 13px; font-weight: 600; color: var(--muted); }
-.home-steps__label.is-first { font-weight: 700; color: var(--ink); }
-.home-steps__line { width: 26px; height: 1.5px; background: var(--line); }
+.home-journey__badge {
+  width: 30px; height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--teal);
+  color: var(--white);
+  font-family: var(--font-head);
+  font-size: 13px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.home-journey__badge--icon { border-radius: 9px; font-size: 12px; }
+.home-journey__body { display: flex; flex-direction: column; line-height: 1.35; }
+.home-journey__title { font-family: var(--font-head); font-size: 15px; font-weight: 700; color: var(--ink); }
+.home-journey__meta { font-size: 13px; color: var(--muted); }
+.home-journey__meta--accent { color: var(--teal); font-weight: 600; }
+/* Liaison en pointillés : occupe l'espace restant entre deux jalons. */
+.home-journey__link {
+  flex: 1;
+  min-width: 24px;
+  height: 0;
+  border-top: 2px dashed var(--mint-border-2);
+}
 
 .duration-grid {
   display: grid;
@@ -534,20 +705,27 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 .duration-date { display: flex; align-items: center; gap: 14px; }
 
+/* Tablette : le hero garde la photo, mais le parcours passe sur 3 lignes. */
+@media (max-width: 1080px) {
+  .home-hero { padding: 44px 34px 22px; min-height: 440px; }
+  .home-hero__title { font-size: 38px; }
+  .home-journey { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px 20px; }
+  .home-journey__link { display: none; }
+}
+
 @media (max-width: 768px) {
-  .home-hero { grid-template-columns: 1fr; gap: 18px; }
-  .home-hero__img { width: 100%; height: 170px; }
-  .home-hero h1 { font-size: 28px; }
-  /* Les traits de liaison sont des frères des items : en flex-wrap ils resteraient
-     orphelins en fin de rangée. On les masque et on passe en grille 2 colonnes. */
-  .home-steps {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    justify-items: start;
-    gap: 14px 10px;
-    padding: 16px 20px;
+  .home-hero { min-height: 0; padding: 32px 22px 18px; border-radius: 16px; }
+  .home-hero__title { font-size: 28px; }
+  .home-hero__title br { display: none; }
+  .home-hero__lead { font-size: 15px; }
+  /* Assez de contraste sur toute la largeur quand le texte occupe tout le cadre. */
+  .home-hero__veil {
+    background: linear-gradient(180deg,
+      rgba(34, 66, 75, 0.90) 0%,
+      rgba(34, 66, 75, 0.82) 60%,
+      rgba(34, 66, 75, 0.72) 100%);
   }
-  .home-steps__line { display: none; }
+  .home-journey { margin-top: 26px; }
   .duration-grid { grid-template-columns: repeat(3, 1fr); }
   .duration-footer { flex-direction: column; align-items: stretch; }
   .duration-footer .btn { width: 100%; }
@@ -1185,18 +1363,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 
 /* ===== ESPACE CONTRIBUTEUR (dashboard) ===== */
-.contrib-header-right { display: flex; align-items: center; gap: 14px; }
-.contrib-badge {
-  font-size: 12.5px; font-weight: 700; color: var(--teal);
-  background: var(--mint); border: 1px solid var(--mint-border);
-  border-radius: var(--r-pill); padding: 6px 14px;
-}
-.contrib-avatar {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: var(--accent-light); color: var(--ink);
-  font-size: 12.5px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-}
 .dash-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .dash-cta { display: flex; gap: 10px; }
 .dash-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -1211,9 +1377,30 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   padding: 12px 0; border-bottom: 1px solid var(--divider);
 }
 .contrib-item:last-child { border-bottom: 0; }
-.dash-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.dash-form-submit { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.equip-tags { display: flex; gap: 7px; flex-wrap: wrap; }
+
+/* Codes Vany, dans l'espace contributeur */
+.codes-count {
+  flex: none; display: flex; flex-direction: column; align-items: center; line-height: 1.1;
+  background: var(--mint); border: 1px solid var(--mint-border);
+  border-radius: 12px; padding: 7px 13px;
+}
+.codes-count strong { font-family: var(--font-head); font-size: 19px; color: var(--teal); }
+.codes-count span { font-size: 11px; font-weight: 600; color: var(--teal); }
+.codes-list { display: flex; flex-direction: column; }
+.code-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid var(--divider);
+}
+.code-item:last-child { border-bottom: 0; }
+.code-item.is-used { opacity: .55; }
+.code-item__code { font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+.code-item__actions { flex: none; display: flex; align-items: center; gap: 12px; }
+.code-copy {
+  font-size: 12.5px; font-weight: 700; color: var(--teal);
+  background: none; border: 0; padding: 0; cursor: pointer;
+}
+.code-copy:hover { text-decoration: underline; }
+.codes-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
 .equip-tag {
   font-size: 12.5px; font-weight: 600; color: var(--muted);
   background: var(--white); border: 1.5px solid var(--card-border);
@@ -1230,7 +1417,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .dash-head { flex-direction: column; align-items: flex-start; }
   .dash-cta { flex-wrap: wrap; }
   .dash-stats, .dash-grid { grid-template-columns: 1fr; }
-  .contrib-badge { display: none; }
 }
 
 /* ===== AJOUT DE RANDONNÉE ===== */
@@ -1267,6 +1453,23 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .addhike-triple { grid-template-columns: 1fr; }
   .addhike-actions { flex-direction: column; align-items: stretch; }
   .addhike-actions .btn { width: 100%; }
+}
+
+/* ===== AJOUT DE SPOT ===== */
+.addspot-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+.addspot-triple { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.dropzone--map { cursor: pointer; display: flex; flex-direction: column; gap: 3px; padding: 18px; transition: border-color .15s, background .15s; }
+.dropzone--map:hover { border-color: var(--teal); background: var(--mint); }
+.addspot-story { width: 100%; min-height: 96px; align-items: flex-start; resize: vertical; font-family: var(--font-body); }
+/* Vigilance : l'état actif vire à l'ambre, pour le distinguer des équipements */
+.pick-tags--warn .equip-tag.is-on { color: var(--warn-tx); background: var(--warn-bg); border-color: var(--warn-bd); }
+.addspot-msg { border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; }
+.addspot-msg.is-ok { background: var(--ok-bg); border: 1px solid var(--ok-bd); color: var(--ok-tx); }
+.addspot-msg.is-error { background: #FBEAE7; border: 1px solid #E9C4BD; color: #B4432E; }
+
+@media (max-width: 768px) {
+  .addspot-grid { grid-template-columns: 1fr; }
+  .addspot-triple { grid-template-columns: 1fr; }
 }
 
 /* ===== CHAT VANY ===== */
@@ -1435,36 +1638,27 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
    ========================================================================== */
 @media (max-width: 1000px) {
   .container, .rvg-header__inner, .rvg-footer__inner { padding-left: 20px; padding-right: 20px; }
-  .stepper { gap: 14px; }
-  .stepper__label { display: none; }
+  /* Timeline resserrée : tirets plus courts, jours à venir réduits à leur numéro
+     (leur libellé complet reste dans le title/aria). */
+  .timeline > * + * { margin-left: 18px; }
+  .timeline > * + *::before { left: -15px; width: 10px; }
+  .timeline__current { gap: 9px; padding: 6px 12px; }
+  .timeline__steps { gap: 8px; }
+  .rvg-header--compact .rvg-nav--panel { right: 20px; }
 }
 
 @media (max-width: 768px) {
   body { font-size: 14px; }
 
-  /* Header compact : burger visible, nav desktop et stepper cercles masqués */
+  /* Header compact : burger visible, nav desktop masquée. La timeline cède la place
+     à la barre de progression 5 segments (v2/partials/stepper.html). */
   .burger { display: flex; }
   .rvg-nav.rvg-nav--desktop { display: none; }
-  .stepper { display: none; }
+  .timeline { display: none; }
 
-  /* Panneau nav mobile (déplié au tap sur le burger) */
-  .rvg-nav--mobile {
-    display: none;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    background: var(--ink);
-    border-top: 1px solid rgba(249, 248, 241, 0.12);
-  }
-  .rvg-nav--mobile.is-open { display: flex; }
-  .rvg-nav--mobile a {
-    padding: 14px 20px;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid rgba(249, 248, 241, 0.08);
-  }
-  .rvg-nav--mobile .nav-cta { border: 0; border-radius: 0; }
+  /* Compte : l'avatar reste dans la barre, à côté du burger. */
+  .rvg-header__right { gap: 12px; }
+  .account { gap: 10px; }
 
   /* Stepper mobile : barre 5 segments + libellé « x/5 · Nom » */
   .stepper-mobile {
@@ -1554,5 +1748,29 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 
 /* Nav basse : desktop uniquement quand on est ≥ 768 -> cachée */
 @media (min-width: 769px) {
-  .mobile-nav, .stepper-mobile, .rvg-nav--mobile { display: none; }
+  .mobile-nav, .stepper-mobile { display: none; }
+
+  /* Header compact (wizard, chat) : les liens sont repliés dans le burger, qui
+     reste donc dans la barre ; son panneau devient une carte ancrée sous lui
+     plutôt qu'un bandeau pleine largeur. */
+  /* Encadré, comme le bouton de menu de la maquette. */
+  .rvg-header--compact .burger {
+    display: flex;
+    border: 1.5px solid rgba(249, 248, 241, 0.28);
+    border-radius: 10px;
+    padding: 9px 10px;
+  }
+  .rvg-header--compact .burger:hover { border-color: rgba(249, 248, 241, 0.55); }
+  .rvg-header--compact .rvg-nav--panel {
+    position: absolute;
+    top: 100%;
+    right: 40px;
+    width: 240px;
+    border: 1px solid rgba(249, 248, 241, 0.16);
+    border-top: 0;
+    border-radius: 0 0 var(--r-card-sm) var(--r-card-sm);
+    box-shadow: 0 14px 40px rgba(34, 66, 75, 0.35);
+    overflow: hidden;
+  }
+  .rvg-nav--panel a:last-child { border-bottom: 0; }
 }

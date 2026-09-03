@@ -80,21 +80,14 @@
     });
   }
 
-  // ===== Entête contributeur (avatar + déconnexion), commun aux pages contrib =====
-  function initContribHeader() {
-    var name = sessionStorage.getItem('username') || localStorage.getItem('username') || 'contributeur';
+  // ===== Salutation du dashboard =====
+  // Salutation du dashboard (« Bonjour <nom>. »). L'avatar et la déconnexion du
+  // header sont, eux, communs à toutes les pages (common.js initAccountMenu).
+  function initDashboardGreeting() {
     var nameEl = document.getElementById('contribName');
-    if (nameEl) nameEl.textContent = name;
-    var initialsEl = document.getElementById('contribInitials');
-    if (initialsEl) initialsEl.textContent = name.slice(0, 2).toUpperCase();
-    var logout = document.getElementById('contribLogout');
-    if (logout) {
-      logout.addEventListener('click', function (e) {
-        e.preventDefault();
-        window.RVG.logoutContrib();
-        window.location.href = window.APP_URLS.duration;
-      });
-    }
+    if (!nameEl) return;
+    nameEl.textContent = sessionStorage.getItem('username')
+      || localStorage.getItem('username') || 'contributeur';
   }
 
   // ===== Garde du dashboard : redirige vers la connexion si non authentifié =====
@@ -123,6 +116,71 @@
         });
       });
     });
+  }
+
+  // ===== Codes Vany du dashboard (démo : liste rendue par le template) =====
+  function initVanyCodes() {
+    document.querySelectorAll('.code-copy').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var code = btn.getAttribute('data-code');
+        var original = btn.textContent;
+        function done(ok) {
+          btn.textContent = ok ? 'Copié !' : 'Échec';
+          setTimeout(function () { btn.textContent = original; }, 1600);
+        }
+        // navigator.clipboard n'existe qu'en contexte sécurisé (https ou localhost)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); });
+        } else {
+          done(false);
+        }
+      });
+    });
+
+    // Démo : le code disponible est appliqué directement, comme le fera le backend
+    // au moment de composer le voyage (cf. unlock.js pour le parcours payant).
+    var useBtn = document.getElementById('useVanyCode');
+    if (useBtn) {
+      useBtn.addEventListener('click', function () {
+        if (window.RVG && window.RVG.unlockVany) window.RVG.unlockVany();
+        else localStorage.setItem('vanyUnlocked', '1');
+        window.location.href = window.APP_URLS.chat;
+      });
+    }
+  }
+
+  // ===== Page ajout de spot (démo : aucun endpoint spot n'existe encore) =====
+  function initAddSpot() {
+    var root = document.querySelector('[data-add-spot]');
+    if (!root) return;
+
+    // Garde : réservé aux contributeurs connectés.
+    if (!window.RVG.getContribToken()) {
+      window.location.href = window.APP_URLS.contributorLogin;
+      return;
+    }
+
+    var msg = document.getElementById('spotMsg');
+    function showMsg(text, ok) {
+      msg.textContent = text;
+      msg.className = 'addspot-msg ' + (ok ? 'is-ok' : 'is-error');
+      msg.style.display = 'block';
+    }
+
+    var submit = document.getElementById('submitSpot');
+    if (submit) {
+      submit.addEventListener('click', function () {
+        var name = document.getElementById('spotName').value.trim();
+        var city = document.getElementById('spotCity').value.trim();
+        if (!name || !city) { showMsg('Renseigne au moins le nom du spot et la commune.', false); return; }
+        showMsg('Merci ! Ton spot part en relecture (démo).', true);
+      });
+    }
+
+    var draft = document.getElementById('saveSpotDraft');
+    if (draft) {
+      draft.addEventListener('click', function () { showMsg('Brouillon enregistré (démo).', true); });
+    }
   }
 
   // ===== Page ajout de randonnée : upload GPX réel (/api/etl/upload_gpx) =====
@@ -214,9 +272,11 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     initLogin();
-    initContribHeader();
+    initDashboardGreeting();
     initDashboardGuard();
     initPickTags();
+    initVanyCodes();
+    initAddSpot();
     initAddHike();
   });
 })();

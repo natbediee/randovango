@@ -1,0 +1,7 @@
+{# Les trois liens de navigation, identiques sur toutes les pages. Inclus deux fois
+   par v2/partials/header.html : dans la nav desktop et dans le panneau du burger.
+   « Espace contributeur » pointe toujours vers le dashboard, dont la garde JS
+   (contrib.js initDashboardGuard) renvoie vers la connexion si aucune session. #}
+<a href="{{ url_for('how_it_works') }}">Comment ça marche</a>
+<a href="{{ url_for('duration') }}">Créer mon voyage</a>
+<a href="{{ url_for('contributor_dashboard') }}" class="nav-cta">Espace contributeur</a>
