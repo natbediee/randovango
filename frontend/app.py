@@ -14,10 +14,10 @@ app.config['TEMPLATES_FOLDER'] = 'templates'
 # URL interne Docker) : injectée dans tous les templates via window.API_BASE (voir base.html).
 PUBLIC_API_BASE_URL = os.getenv('PUBLIC_API_BASE_URL', 'http://localhost:8000')
 
-# Front unique : identité Vany, templates sous templates/v2/ et assets sous static/v2/.
+# Front unique : identité Vany, templates sous templates/ et assets sous static/.
 def page(name):
-    """Rend le template d'une page du front v2 ('v2/pages/<name>.html')."""
-    return render_template(f'v2/pages/{name}.html')
+    """Rend le template d'une page du front ('pages/<name>.html')."""
+    return render_template(f'pages/{name}.html')
 
 
 @app.context_processor

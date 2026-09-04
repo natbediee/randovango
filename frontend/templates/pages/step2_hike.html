@@ -1,10 +1,10 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}Étape 2 - Randonnée - RandoVanGo{% endblock %}
 {% block main_class %}has-mobile-nav{% endblock %}
 
 {% block header %}
   {% with nav_mode='wizard', active_step=2 %}
-    {% include 'v2/partials/header.html' %}
+    {% include 'partials/header.html' %}
   {% endwith %}
 {% endblock %}
 
@@ -71,6 +71,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='v2/js/map-helpers.js') }}"></script>
-<script src="{{ url_for('static', filename='v2/js/step2_hike.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/step2_hike.js') }}"></script>
 {% endblock %}

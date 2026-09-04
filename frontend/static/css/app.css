@@ -1,5 +1,5 @@
 /* ==========================================================================
-   RandoVanGo - Front v2 (identité « Vany »)
+   RandoVanGo - Front (identité « Vany »)
    Design tokens + composants réutilisables. Recrée en CSS les styles inline du
    handoff (design_handoff_randovango/). Palette crème / menthe / teal.
    ========================================================================== */
@@ -36,8 +36,8 @@
   --warn-bd: #ECDDB4;
   --warn-tx: #9A7A2E;
 
-  /* Compat marqueurs Leaflet : map-helpers.js (partagé legacy/v2) et results.js
-     colorent les pins via ces variables. Non définies ⇒ pins invisibles en v2.
+  /* Compat marqueurs Leaflet : map-helpers.js et results.js
+     colorent les pins via ces variables. Non définies ⇒ pins invisibles.
      On les mappe à la palette : teal par défaut, vert pour la sélection. */
   --blue: #2E7D86;
   --blue-dark: #256870;
@@ -198,19 +198,56 @@ button { font-family: inherit; cursor: pointer; }
 .rvg-header__right { display: flex; align-items: center; gap: 18px; }
 
 /* .account est masqué en inline par le template et révélé (display:flex) par
-   common.js : toute règle de largeur doit donc jouer sur les enfants. */
-.account { align-items: center; gap: 12px; }
+   common.js : toute règle de largeur doit donc jouer sur les enfants.
+   position:relative : ancre du menu déroulant. */
+.account { align-items: center; position: relative; }
 .account__avatar {
   width: 32px; height: 32px;
   flex: none;
+  border: 0;
+  padding: 0;
   border-radius: 50%;
   background: var(--accent-light);
   color: var(--ink);
+  font-family: inherit;
   font-size: 12.5px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
 }
-.account__logout { display: flex; align-items: center; color: var(--on-dark); font-size: 15px; }
-.account__logout:hover { color: var(--white); }
+.account__avatar:hover { filter: brightness(1.06); }
+
+/* Déroulant du compte : même carte que le panneau du burger en desktop, ancrée
+   sous l'avatar. Déplié par common.js (.is-open). */
+.account__menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 16px);
+  right: 0;
+  min-width: 200px;
+  flex-direction: column;
+  background: var(--ink);
+  border: 1px solid rgba(249, 248, 241, 0.16);
+  border-radius: var(--r-card-sm);
+  box-shadow: 0 14px 40px rgba(34, 66, 75, 0.35);
+  overflow: hidden;
+}
+.account__menu.is-open { display: flex; }
+.account__menu a {
+  padding: 12px 18px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--on-dark);
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(249, 248, 241, 0.08);
+}
+.account__menu a:last-child { border-bottom: 0; color: var(--accent-light-2); }
+.account__menu a:hover { background: rgba(249, 248, 241, 0.06); color: var(--white); }
+/* Lien public repris du burger : superflu là où la nav desktop l'affiche déjà,
+   il n'apparaît que dans les cas où elle est masquée (voir @media plus bas). */
+.account__menu-public { display: none; }
 
 /* Panneau déplié par le burger. Plein largeur sous le header ; ancré à droite en
    desktop, où seul le wizard laisse le burger visible. */
@@ -1579,16 +1616,21 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 
 /* ===== PAGE « COMMENT ÇA MARCHE » ===== */
-/* Titre sur UNE ligne en desktop (taille fluide pour toujours tenir), retour
-   à la ligne autorisé seulement en mobile. */
-.hiw-title { font-size: clamp(20px, 2.7vw, 32px); line-height: 1.15; letter-spacing: -0.6px; white-space: nowrap; }
-.hiw-subtitle { font-size: clamp(12px, 1.24vw, 15px); white-space: nowrap; }
+/* Titre sur deux lignes (le <br> du template) : le retour est voulu, il oppose
+   « une fois » et « chaque journée », les deux temps du planificateur. */
+.hiw-title { font-size: clamp(22px, 2.7vw, 32px); line-height: 1.2; letter-spacing: -0.6px; }
+.hiw-subtitle { font-size: clamp(13px, 1.24vw, 15px); max-width: 74ch; }
 @media (max-width: 760px) {
-  .hiw-title { font-size: 24px; white-space: normal; }
-  .hiw-subtitle { font-size: 14px; white-space: normal; }
+  .hiw-title { font-size: 24px; }
+  .hiw-subtitle { font-size: 14px; }
 }
+
+/* Le déroulé : trois temps (durée → boucle du jour → carnet) reliés par des
+   pointillés verticaux, dans une seule carte. */
+.hiw-flow { display: flex; flex-direction: column; padding: 22px 26px; }
 .hiw-step { display: flex; align-items: flex-start; gap: 16px; padding: 18px 0; }
-.hiw-step--sep { border-bottom: 1px solid var(--divider); }
+/* Dans la boucle, l'entête colle au bord de son encadré. */
+.hiw-step--flush { padding: 0 0 14px; }
 .hiw-step__num {
   flex: none;
   width: 26px; height: 26px;
@@ -1598,10 +1640,84 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   font-size: 12px; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
 }
-.hiw-step__body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.hiw-step__title { font-size: 15px; font-weight: 700; }
+.hiw-step__num i { font-size: 11px; }
+.hiw-step__body { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.hiw-step__title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .hiw-step__desc { font-size: 13.5px; line-height: 1.5; }
-.hiw-step__meta { font-size: 12px; font-weight: 600; color: var(--muted-3); padding-top: 4px; }
+.hiw-step__meta { font-size: 12px; font-weight: 600; color: var(--muted-3); padding-top: 4px; white-space: nowrap; }
+
+/* Cadence de l'étape : « une seule fois » / « à la fin », en retrait du titre. */
+.hiw-once {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted-3);
+}
+/* La cadence qui compte : celle qui se répète, donc pleine et teal. */
+.hiw-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--white);
+  background: var(--teal);
+  border-radius: var(--r-pill);
+  padding: 3px 12px;
+}
+
+/* Liaison entre deux temps du déroulé. */
+.hiw-link {
+  align-self: center;
+  width: 0;
+  height: 16px;
+  border-left: 2px dotted var(--mint-border-2);
+}
+
+/* La boucle du jour, encadrée : tout ce qui est dedans se rejoue chaque journée. */
+.hiw-loop {
+  background: var(--mint-2);
+  border: 1px solid var(--mint-border);
+  border-radius: var(--r-card-sm);
+  padding: 18px 20px;
+}
+.hiw-day-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.hiw-day {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--white);
+  border: 1px solid var(--mint-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.hiw-day__kicker {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--muted-3);
+}
+.hiw-day__title { font-size: 14px; font-weight: 700; line-height: 1.3; }
+.hiw-day__desc { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+
+/* Retour au début de la boucle : la pastille est posée sur un trait pointillé
+   qui traverse l'encadré, pour se lire comme un cycle et non comme une étape. */
+.hiw-repeat { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.hiw-repeat::before,
+.hiw-repeat::after { content: ""; flex: 1; border-top: 2px dashed var(--mint-border-2); }
+.hiw-repeat__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--teal);
+  background: var(--white);
+  border: 1px solid var(--mint-border);
+  border-radius: var(--r-pill);
+  padding: 6px 16px;
+  white-space: nowrap;
+}
+.hiw-repeat__pill i { font-size: 11px; }
 
 .hiw-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch; }
 .hiw-compare .card { display: flex; flex-direction: column; gap: 12px; }
@@ -1621,9 +1737,22 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .hiw-reassurance { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; }
 .hiw-faq { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 
+@media (max-width: 1000px) {
+  /* Les quatre étapes du jour passent en 2x2 avant de s'empiler. */
+  .hiw-day-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 @media (max-width: 768px) {
   .hiw-compare, .hiw-faq { grid-template-columns: 1fr; }
   .hiw-reassurance { grid-template-columns: 1fr; }
+  .hiw-flow { padding: 16px 18px; }
+  .hiw-loop { padding: 16px 14px; }
+  .hiw-day-grid { grid-template-columns: 1fr; }
+  /* Le trait pointillé mangerait toute la largeur : la pastille passe seule. */
+  .hiw-repeat::before, .hiw-repeat::after { display: none; }
+  .hiw-repeat { justify-content: center; }
+  .hiw-repeat__pill { white-space: normal; text-align: center; }
+  .hiw-step__meta { white-space: normal; }
 }
 
 /* ===== UTILITAIRES ===== */
@@ -1651,14 +1780,16 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   body { font-size: 14px; }
 
   /* Header compact : burger visible, nav desktop masquée. La timeline cède la place
-     à la barre de progression 5 segments (v2/partials/stepper.html). */
+     à la barre de progression 5 segments (partials/stepper.html). */
   .burger { display: flex; }
   .rvg-nav.rvg-nav--desktop { display: none; }
   .timeline { display: none; }
 
   /* Compte : l'avatar reste dans la barre, à côté du burger. */
   .rvg-header__right { gap: 12px; }
-  .account { gap: 10px; }
+  .account__menu { top: calc(100% + 14px); }
+  /* La nav desktop est masquée : le menu compte porte aussi les liens publics. */
+  .account__menu-public { display: flex; }
 
   /* Stepper mobile : barre 5 segments + libellé « x/5 · Nom » */
   .stepper-mobile {
@@ -1764,7 +1895,10 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .rvg-header--compact .rvg-nav--panel {
     position: absolute;
     top: 100%;
-    right: 40px;
+    /* Aligné sur le bord droit du contenu (conteneur centré, padding 40px), et non
+       sur celui du header, pleine largeur : sinon le panneau s'éloigne du burger
+       à mesure que l'écran dépasse --container. */
+    right: calc((100% - min(100%, var(--container))) / 2 + 40px);
     width: 240px;
     border: 1px solid rgba(249, 248, 241, 0.16);
     border-top: 0;
@@ -1773,4 +1907,8 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
     overflow: hidden;
   }
   .rvg-nav--panel a:last-child { border-bottom: 0; }
+
+  /* Wizard : la timeline remplace la nav desktop, les liens publics passent donc
+     dans le menu compte (le burger, redondant, est retiré par common.js). */
+  .rvg-header--compact .account__menu-public { display: flex; }
 }

@@ -1,10 +1,10 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}Carnet de voyage - RandoVanGo{% endblock %}
 {% block main_class %}has-mobile-nav has-results-nav{% endblock %}
 
 {% block header %}
   {% with nav_mode='wizard', active_step=5 %}
-    {% include 'v2/partials/header.html' %}
+    {% include 'partials/header.html' %}
   {% endwith %}
 {% endblock %}
 
@@ -47,7 +47,7 @@
               vany_text="Envie d'un petit plus ? Débloque le voyage 100% IA et laisse Vany peaufiner ton itinéraire avec des idées sur-mesure.",
               vany_cta_label='Découvrir Vany',
               vany_cta_url=url_for('unlock_vany') %}
-        {% include 'v2/partials/vany_banner.html' %}
+        {% include 'partials/vany_banner.html' %}
       {% endwith %}
 
       {# Fin du séjour : téléchargement du carnet #}
@@ -91,6 +91,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='v2/js/map-helpers.js') }}"></script>
-<script src="{{ url_for('static', filename='v2/js/results.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/results.js') }}"></script>
 {% endblock %}

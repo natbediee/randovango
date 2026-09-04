@@ -1,23 +1,25 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}Voyage 100% IA - Vany - RandoVanGo{% endblock %}
 {% block footer %}{% endblock %}  {# pas de footer : le chat occupe la hauteur #}
 
 {% block header %}
   {# Entête propre au chat (badge + sortie du mode IA) plutôt que le header commun,
-     mais les trois liens de nav restent accessibles par le burger (--compact). #}
+     mais les liens de nav restent accessibles par le burger (--compact), ou par le
+     menu du compte quand un contributeur est connecté. #}
   <header class="rvg-header rvg-header--compact">
     <div class="rvg-header__inner">
-      {% include 'v2/partials/logo.html' %}
+      {% include 'partials/logo.html' %}
       <div class="chat-header-right">
         <span class="chat-badge"><img src="{{ url_for('static', filename='images/vany/avatar.png') }}" alt="Vany"> Voyage 100% IA</span>
         <a href="{{ url_for('duration') }}" class="rvg-nav"><span style="color:var(--on-dark); font-weight:600; font-size:13px;">Passer en mode manuel</span></a>
+        {% include 'partials/account.html' %}
         <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" data-burger>
           <span></span><span></span><span></span>
         </button>
       </div>
     </div>
     <nav class="rvg-nav rvg-nav--panel" data-nav-panel aria-label="Menu">
-      {% include 'v2/partials/nav_links.html' %}
+      {% include 'partials/nav_links.html' %}
     </nav>
   </header>
 {% endblock %}
@@ -43,5 +45,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='v2/js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 {% endblock %}

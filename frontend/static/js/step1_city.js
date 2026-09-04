@@ -17,6 +17,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     // on rouvre l'étape 1 pour un jour EXISTANT (ville comprise), plan et durée conservés.
     const editingDayRaw = localStorage.getItem('editingDay');
     const editingDay = editingDayRaw ? parseInt(editingDayRaw) : null;
+    // Mode "reprise d'un séjour en cours" : on arrive ici avec un plan déjà créé mais
+    // sans marqueur d'édition ni de changement de ville — typiquement par le « ← » de
+    // l'étape 2, y compris au jour 2. Recréer un plan écraserait planId et repartirait
+    // à Jour 1, perdant les jours déjà composés : on se contente de (re)poser la ville
+    // du jour courant. /duration purge planId, donc sa présence signifie bien qu'un
+    // séjour est entamé.
+    const resumingPlan = !changingCityForNextDay && !editingDay && !!localStorage.getItem('planId');
 
     const select = document.getElementById('citySelect');
     if (!select) return;
@@ -187,7 +194,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // --- 5b. Panneau « villes de la zone » (front v2 uniquement) ---
+    // --- 5b. Panneau « villes de la zone » (front unique) ---
     // Liste synchronisée avec la carte : on ne garde que les villes dans le cadre
     // visible (getBounds), triées par proximité au centre, plafonnées pour rester
     // lisibles. Recalcul à chaque déplacement (debounce léger). Un clic déclenche la
@@ -443,7 +450,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (!planButton) return;
         planButton.innerHTML = editingDay
             ? `Enregistrer et continuer <i class="fas fa-arrow-right"></i>`
-            : changingCityForNextDay
+            : (changingCityForNextDay || resumingPlan)
             ? `Continuer avec cette ville <i class="fas fa-arrow-right"></i>`
             : `Planifier ce séjour <i class="fas fa-arrow-right"></i>`;
     }
@@ -489,6 +496,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                 return;
             }
 
+            if (resumingPlan) {
+                // Retour en arrière dans le jour en cours : on repose sa ville sans
+                // créer de plan (ce qui effacerait les jours déjà composés).
+                resumeWithCity(cityId);
+                return;
+            }
+
             // Stocker la ville dans localStorage pour les étapes suivantes
             // (la durée est déjà en localStorage depuis /duration)
             localStorage.setItem('selectedCityId', cityId);
@@ -496,6 +510,39 @@ document.addEventListener('DOMContentLoaded', async function() {
             // Lancer la création du plan via API
             createPlan(cityId, selectedDays);
         });
+    }
+
+    /**
+     * Reprise du jour en cours (retour arrière depuis l'étape 2) : le plan et les
+     * jours déjà composés sont conservés, seule la ville de CE jour est (re)posée.
+     * Si elle a changé, la rando et le spot retenus (ceux de l'ancienne ville) sont
+     * oubliés pour être re-choisis aux étapes suivantes.
+     * @param {number} cityId - L'ID de la ville sélectionnée
+     */
+    async function resumeWithCity(cityId) {
+        const planId = localStorage.getItem('planId');
+        try {
+            planButton.disabled = true;
+            planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
+            const resp = await fetch(`${window.API_BASE}/api/step1/update_day_city/${planId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ day_number: currentDay, city_id: parseInt(cityId) })
+            });
+            if (!resp.ok) throw new Error('Erreur mise à jour de la ville du jour');
+            const previousCity = localStorage.getItem('selectedCityId');
+            localStorage.setItem('selectedCityId', cityId);
+            if (previousCity && String(previousCity) !== String(cityId)) {
+                localStorage.removeItem('selectedHiking');
+                localStorage.removeItem('selectedSpot');
+            }
+            window.location.href = window.APP_URLS.step2;
+        } catch (e) {
+            console.error('Erreur lors de l\'enregistrement de la ville:', e);
+            alert('L\'enregistrement de la ville a échoué. Veuillez réessayer.');
+            planButton.disabled = false;
+            updatePlanButton();
+        }
     }
 
     /**

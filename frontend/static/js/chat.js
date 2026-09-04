@@ -1,4 +1,4 @@
-/* Front v2 - Chat « Voyage 100% IA » avec Vany.
+/* Front RandoVanGo - Chat « Voyage 100% IA » avec Vany.
    Démo scriptée front-only (aucun appel LLM) : bulles, indicateur de saisie,
    quick-replies, carte de proposition jour par jour. Le vrai service IA viendra plus tard.
    Accès conditionné au déverrouillage (paiement / code) : sinon redirection vers /unlock-vany. */

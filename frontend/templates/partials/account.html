@@ -1,0 +1,19 @@
+{# Avatar du contributeur connecté et son menu déroulant.
+   Masqué au rendu serveur (qui ignore l'état d'auth, stocké côté client) et révélé
+   par common.js quand une session existe ; le burger est alors retiré, son menu
+   ferait doublon. Placé hors de .rvg-nav--desktop pour rester visible en mobile,
+   où la nav passe au burger. #}
+<div class="account" data-account style="display:none;">
+  <button type="button" class="account__avatar" data-account-toggle aria-haspopup="true"
+          aria-expanded="false" aria-label="Menu du compte">
+    <span data-account-initials>··</span>
+  </button>
+  <div class="account__menu" data-account-menu>
+    {# Repris du burger : affiché par le CSS seulement là où la nav desktop
+       ne l'est pas (mobile, header compact du wizard et du chat). #}
+    <a href="{{ url_for('how_it_works') }}" class="account__menu-public">Comment ça marche</a>
+    <a href="{{ url_for('contributor_dashboard') }}">Espace contributeur</a>
+    <a href="{{ url_for('duration') }}">Créer mon voyage</a>
+    <a href="#" data-account-logout>Déconnexion</a>
+  </div>
+</div>

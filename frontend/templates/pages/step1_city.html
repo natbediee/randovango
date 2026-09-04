@@ -1,10 +1,10 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}Étape 1 - Ville de départ - RandoVanGo{% endblock %}
 {% block main_class %}has-mobile-nav{% endblock %}
 
 {% block header %}
   {% with nav_mode='wizard', active_step=1 %}
-    {% include 'v2/partials/header.html' %}
+    {% include 'partials/header.html' %}
   {% endwith %}
 {% endblock %}
 
@@ -82,6 +82,6 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="{{ url_for('static', filename='v2/js/map-helpers.js') }}"></script>
-<script src="{{ url_for('static', filename='v2/js/step1_city.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/step1_city.js') }}"></script>
 {% endblock %}

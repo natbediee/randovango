@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='v2/css/app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -24,7 +24,7 @@
 <body>
     <div class="page">
         {% block header %}
-            {% include 'v2/partials/header.html' %}
+            {% include 'partials/header.html' %}
         {% endblock %}
 
         <main class="page-main {% block main_class %}{% endblock %}">
@@ -32,7 +32,7 @@
         </main>
 
         {% block footer %}
-            {% include 'v2/partials/footer.html' %}
+            {% include 'partials/footer.html' %}
         {% endblock %}
     </div>
 
@@ -66,7 +66,7 @@
         window.API_BASE = "{{ public_api_base_url }}";
     </script>
 
-    <script src="{{ url_for('static', filename='v2/js/common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 
     {% block scripts %}{% endblock %}
 </body>

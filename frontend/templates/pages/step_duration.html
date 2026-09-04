@@ -1,4 +1,4 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}RandoVanGo - Ton voyage en van, prêt en quelques minutes{% endblock %}
 
 {% block page_content %}
@@ -89,12 +89,12 @@
           vany_text="Dis-lui où et combien de temps : il propose l'itinéraire complet, tu valides étape par étape.",
           vany_cta_label='Discuter avec Vany',
           vany_cta_url=url_for('unlock_vany') %}
-    {% include 'v2/partials/vany_banner.html' %}
+    {% include 'partials/vany_banner.html' %}
   {% endwith %}
 
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='v2/js/step_duration.js') }}"></script>
+<script src="{{ url_for('static', filename='js/step_duration.js') }}"></script>
 {% endblock %}

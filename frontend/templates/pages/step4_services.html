@@ -1,10 +1,10 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}Étape 4 - Services - RandoVanGo{% endblock %}
 {% block main_class %}has-mobile-nav{% endblock %}
 
 {% block header %}
   {% with nav_mode='wizard', active_step=4 %}
-    {% include 'v2/partials/header.html' %}
+    {% include 'partials/header.html' %}
   {% endwith %}
 {% endblock %}
 
@@ -79,6 +79,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='v2/js/map-helpers.js') }}"></script>
-<script src="{{ url_for('static', filename='v2/js/step4_services.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/step4_services.js') }}"></script>
 {% endblock %}

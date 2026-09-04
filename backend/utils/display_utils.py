@@ -274,7 +274,7 @@ POI_CATEGORY_LABELS = {
 
 
 # Icône Font Awesome de chaque catégorie de services, alignée sur CATEGORY_META
-# (frontend/static/v2/js/step4_services.js) : sert au récapitulatif pour qu'on
+# (frontend/static/js/step4_services.js) : sert au récapitulatif pour qu'on
 # reconnaisse d'un coup d'œil le type d'un service (restaurant, plage, eau...) et
 # pas seulement son nom.
 POI_CATEGORY_ICONS = {

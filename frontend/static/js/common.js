@@ -1,4 +1,4 @@
-/* Front v2 - comportements communs (chargé sur toutes les pages via base.html). */
+/* Front RandoVanGo - comportements communs (chargé sur toutes les pages via base.html). */
 (function () {
   'use strict';
 
@@ -32,10 +32,10 @@
   }
 
   // ===== État de session dans le header (accueil / planificateur) =====
-  // Le header est rendu par le serveur sans connaître l'état d'auth (côté client :
-  // localStorage). Quand un contributeur est connecté, le lien « Contributeur ?
-  // Connexion » cède la place au lien « Espace contributeur », à l'avatar et au
-  // bouton de déconnexion.
+  // Le header est rendu par le serveur dans l'état déconnecté (il ignore l'auth,
+  // stockée côté client). Connecté, le lien « Contributeur ? Connexion » disparaît
+  // au profit de l'avatar, dont le menu déroulant porte l'espace contributeur,
+  // la création de voyage et la déconnexion.
   function getUsername() {
     return localStorage.getItem('username') || sessionStorage.getItem('username');
   }
@@ -53,11 +53,44 @@
     var account = document.querySelector('[data-account]');
     if (!account || !isLoggedIn()) return;
 
+    // Le lien de connexion est rendu deux fois (nav desktop + panneau burger).
+    document.querySelectorAll('[data-nav-anon]').forEach(function (el) {
+      el.remove();
+    });
+
+    // Le burger ferait un second menu à côté de celui du compte, qui reprend les
+    // liens publics (.account__menu-public) : on le retire, panneau compris.
+    var burger = document.querySelector('[data-burger]');
+    var panel = document.querySelector('[data-nav-panel]');
+    if (burger) burger.style.display = 'none';
+    if (panel) panel.remove();
+
     var name = getUsername() || 'mon compte';
     account.querySelectorAll('[data-account-initials]').forEach(function (el) {
       el.textContent = name.slice(0, 2).toUpperCase();
     });
     account.style.display = 'flex';
+
+    var toggle = account.querySelector('[data-account-toggle]');
+    var menu = account.querySelector('[data-account-menu]');
+    if (toggle && menu) {
+      function close() {
+        menu.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+      }
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = menu.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      // Fermeture au clic en dehors (le clic sur le burger passe aussi par là).
+      document.addEventListener('click', function (e) {
+        if (!account.contains(e.target)) close();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') close();
+      });
+    }
 
     var logoutLink = account.querySelector('[data-account-logout]');
     if (logoutLink) {
@@ -122,6 +155,17 @@
     if (expanded) {
       html = chips(current + 1, total);
       if (html) book.insertAdjacentHTML('beforebegin', html);
+    }
+
+    // Séjour complet (toutes les journées composées) : le carnet devient une étape
+    // franchie, coche comprise, comme les jours terminés. Vrai sur le carnet final,
+    // mais aussi si on revient éditer un jour d'un séjour déjà bouclé. Sur les
+    // carnets intermédiaires (on y repasse après chaque journée), lastDone < total :
+    // le carnet reste à venir.
+    if (book && lastDone >= total) {
+      book.classList.add('is-done');
+      var bookIcon = book.querySelector('i');
+      if (bookIcon) bookIcon.className = 'fas fa-check';
     }
   }
 

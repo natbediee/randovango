@@ -1,4 +1,4 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}Espace contributeur - RandoVanGo{% endblock %}
 
 {% block page_content %}
@@ -97,12 +97,12 @@
           vany_text="Chaque spot que tu vérifies améliore les recommandations que je propose aux autres voyageurs.",
           vany_cta_label='Voir ton impact',
           vany_cta_url='#' %}
-    {% include 'v2/partials/vany_banner.html' %}
+    {% include 'partials/vany_banner.html' %}
   {% endwith %}
 
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='v2/js/contrib.js') }}"></script>
+<script src="{{ url_for('static', filename='js/contrib.js') }}"></script>
 {% endblock %}

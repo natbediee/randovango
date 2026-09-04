@@ -1,9 +1,9 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}Accès à Vany - RandoVanGo{% endblock %}
 
 {% block header %}
   {% with nav_mode='minimal', back_url=url_for('duration') %}
-    {% include 'v2/partials/header.html' %}
+    {% include 'partials/header.html' %}
   {% endwith %}
 {% endblock %}
 
@@ -63,5 +63,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='v2/js/unlock.js') }}"></script>
+<script src="{{ url_for('static', filename='js/unlock.js') }}"></script>
 {% endblock %}

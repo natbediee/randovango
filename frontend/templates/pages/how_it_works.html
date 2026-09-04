@@ -1,4 +1,4 @@
-{% extends "v2/base.html" %}
+{% extends "base.html" %}
 {% block title %}Comment ça marche - RandoVanGo{% endblock %}
 
 {% block page_content %}
@@ -7,40 +7,77 @@
   {# Intro #}
   <header class="stack-sm">
     <span class="eyebrow">Comment ça marche</span>
-    <h1 class="hiw-title">Un jour de voyage = une ville, une rando, un spot pour la nuit.</h1>
-    <p class="muted hiw-subtitle">Tu construis ton itinéraire jour par jour, étape par étape. À la fin, tu repars avec un carnet de voyage complet, consultable hors connexion.</p>
+    <h1 class="hiw-title">Tu choisis la durée une fois,<br>puis tu composes chaque journée.</h1>
+    <p class="muted hiw-subtitle">Une journée de voyage, c'est une ville, une randonnée, un spot pour la nuit et les services autour. Tu répètes ça autant de jours que dure ton séjour. À la fin, tout part dans un carnet de voyage consultable hors connexion.</p>
   </header>
 
-  {# Les 6 étapes #}
-  <div class="card" style="padding:8px 30px;">
-    {% set etapes = [
-      ('Choisis la durée', "D'une escapade d'un jour à la semaine complète, à partir de la date de ton choix.", '~10 secondes', false),
-      ("Pars d'une ville", "Cherche-la ou pointe-la sur la carte - la météo des prochains jours s'affiche direct.", '', false),
-      ('Choisis ta randonnée', "Distance, dénivelé, difficulté, points d'intérêt : des randos décrites par des van-lifers qui les ont faites.", '', false),
-      ('Trouve ton spot pour la nuit', "Parkings, aires, coins nature : chaque spot indique équipements, prix et accès van.", '', false),
-      ('Ajoute les services utiles', "Eau, vidange, boulangerie, laverie - ce qu'il te faut autour de ton spot.", '', false),
-      ('Repars avec ton carnet de voyage', "Toutes tes journées récapitulées, en PDF, consultables hors connexion.", '', true)
-    ] %}
-    {% for titre, desc, meta, inclus in etapes %}
-      <div class="hiw-step {% if not loop.last %}hiw-step--sep{% endif %}">
-        <span class="hiw-step__num">{{ loop.index }}</span>
-        <div class="hiw-step__body">
-          <span class="hiw-step__title">{{ titre }}</span>
-          <span class="hiw-step__desc muted">{{ desc }}</span>
-        </div>
-        {% if inclus %}<span class="tag tag--ok">Inclus</span>
-        {% elif meta %}<span class="hiw-step__meta">{{ meta }}</span>{% endif %}
+  {# Le déroulé réel du planificateur : une durée choisie une fois, puis une boucle
+     de quatre étapes répétée à chaque journée, et le carnet à l'arrivée. #}
+  <div class="card hiw-flow">
+
+    <div class="hiw-step">
+      <span class="hiw-step__num">1</span>
+      <div class="hiw-step__body">
+        <span class="hiw-step__title">Choisis la durée <span class="hiw-once">une seule fois</span></span>
+        <span class="hiw-step__desc muted">D'une escapade d'un jour à la semaine complète, à partir de la date de ton choix. C'est ce nombre de jours qui décide combien de journées tu vas composer.</span>
       </div>
-    {% endfor %}
+      <span class="hiw-step__meta">~10 secondes</span>
+    </div>
+
+    <span class="hiw-link" aria-hidden="true"></span>
+
+    {# La boucle : encadrée pour montrer d'un coup d'œil ce qui se répète. #}
+    <div class="hiw-loop">
+      <div class="hiw-step hiw-step--flush">
+        <span class="hiw-step__num">2</span>
+        <div class="hiw-step__body">
+          <span class="hiw-step__title">Compose chaque jour <span class="hiw-badge">se répète pour chaque journée</span></span>
+          <span class="hiw-step__desc muted">Les quatre mêmes étapes, dans le même ordre, pour le jour 1, puis le jour 2, et ainsi de suite. Tu peux revenir en arrière à tout moment.</span>
+        </div>
+      </div>
+
+      {% set day_steps = [
+        ('Ville', "Pars d'une ville", "Cherche-la ou pointe-la sur la carte - la météo des prochains jours s'affiche direct."),
+        ('Rando', 'Choisis ta randonnée', "Distance, dénivelé, difficulté : des randos décrites par des van-lifers qui les ont faites."),
+        ('Spot', 'Trouve ton spot pour la nuit', "Parkings, aires, coins nature : équipements, prix et accès van indiqués."),
+        ('Services', 'Ajoute les services utiles', "Eau, vidange, boulangerie, laverie - ce qu'il te faut autour de ton spot.")
+      ] %}
+      <div class="hiw-day-grid">
+        {% for kicker, titre, desc in day_steps %}
+          <div class="hiw-day">
+            <span class="hiw-day__kicker">{{ kicker }}</span>
+            <span class="hiw-day__title">{{ titre }}</span>
+            <span class="hiw-day__desc">{{ desc }}</span>
+          </div>
+        {% endfor %}
+      </div>
+
+      {# Le point clé de la page : on revient au début de la boucle, pas à l'accueil. #}
+      <div class="hiw-repeat">
+        <span class="hiw-repeat__pill"><i class="fas fa-arrows-rotate" aria-hidden="true"></i> Puis on recommence : jour 2, jour 3…</span>
+      </div>
+    </div>
+
+    <span class="hiw-link" aria-hidden="true"></span>
+
+    <div class="hiw-step">
+      <span class="hiw-step__num"><i class="fas fa-book" aria-hidden="true"></i></span>
+      <div class="hiw-step__body">
+        <span class="hiw-step__title">Repars avec ton carnet de voyage <span class="hiw-once">à la fin</span></span>
+        <span class="hiw-step__desc muted">Toutes tes journées récapitulées en PDF : cartes, tracés, adresses et services, consultables hors connexion.</span>
+      </div>
+      <span class="tag tag--ok">Inclus</span>
+    </div>
+
   </div>
 
   {# Comparatif classique / IA #}
   <div class="hiw-compare">
     <div class="card">
       <span class="eyebrow">Parcours classique</span>
-      <h3 style="font-size:20px; font-weight:700; margin-top:8px;">Tu choisis tout, toi-même.</h3>
+      <h3 style="font-size:20px; font-weight:700; margin-top:8px;">Tu composes chaque jour, toi-même.</h3>
       <ul class="hiw-check">
-        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Les 6 étapes, jour par jour</li>
+        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Les 4 étapes, autant de jours que tu veux</li>
         <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Carnet de voyage inclus</li>
         <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Gratuit, sans compte</li>
       </ul>
@@ -56,7 +93,7 @@
         </div>
       </div>
       <ul class="hiw-check">
-        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Itinéraire complet proposé en discutant</li>
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Il propose les journées complètes, en discutant</li>
         <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Tu valides ou ajustes chaque étape</li>
         <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> 4,90 € par voyage - offert aux contributeurs</li>
       </ul>
@@ -79,8 +116,8 @@
     <div class="hiw-faq">
       {% set faq = [
         ("C'est vraiment gratuit ?", "Oui - le parcours classique et le carnet sont gratuits, sans compte. Seul le voyage 100% IA avec Vany est payant."),
-        ("Ça marche sans réseau ?", "Ton carnet de voyage est un PDF : cartes, tracés et adresses restent lisibles hors connexion."),
-        ("D'où viennent les spots ?", "De contributeurs van-lifers qui y ont dormi. Chaque fiche est relue avant d'être publiée.")
+        ("Je peux modifier un jour déjà composé ?", "Oui, à tout moment : reviens sur le jour concerné et change la ville, la rando, le spot ou les services."),
+        ("Ça marche sans réseau ?", "Ton carnet de voyage est un PDF : cartes, tracés et adresses restent lisibles hors connexion.")
       ] %}
       {% for q, a in faq %}
         <div class="card card--sm stack-sm" style="gap:6px;">

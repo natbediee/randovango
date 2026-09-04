@@ -46,7 +46,7 @@ FA_SOLID_TTF = os.path.join(
 DEJAVU_BOLD_TTF = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 # (couleur, glyphe Font Awesome solid, libellé) - mêmes couleurs/icônes que la carte Leaflet
-# (POI_MARKER_STYLES dans frontend/static/v2/js/map-helpers.js : les deux palettes
+# (POI_MARKER_STYLES dans frontend/static/js/map-helpers.js : les deux palettes
 # doivent rester synchronisées, la carte du carnet rejouant celle du site).
 # Palette de la charte RandoVanGo : teal pour le parcours (rando + spot), teintes
 # naturelles désaturées pour les services, chaque catégorie restant distinguable
