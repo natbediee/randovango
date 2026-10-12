@@ -20,6 +20,11 @@ RUN apt-get update && \
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
+# CLI Claude Code (installeur natif, sans Node) : utilisée par l'harmonisation des
+# spots en mode `--engine claude-code`. S'authentifie via CLAUDE_CODE_OAUTH_TOKEN (.env).
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/root/.local/bin:${PATH}"
+
 COPY ./backend .
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

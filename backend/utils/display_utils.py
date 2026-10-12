@@ -15,6 +15,7 @@ dans tests/utils/test_display_utils.py.
 """
 
 import math
+import re
 from datetime import date, datetime
 
 # ---------------------------------------------------------------------------
@@ -207,6 +208,83 @@ SPOT_SERVICE_ICONS = {
 }
 
 
+# Types de spots jamais affichés à l'étape 3 (points de services sans
+# stationnement) : utilisé par l'API (step3) ET par l'harmonisation IA, qui
+# n'a pas à traiter des spots que personne ne verra.
+# Types de spots qui n'intéressent pas Randovango : on ne peut pas y dormir.
+# Un nouveau spot de ce type n'est pas chargé en base (etl/load/load_p4n.py).
+EXCLUDED_SPOT_TYPES = ("PARKING JOUR UNIQUEMENT",)
+
+HIDDEN_SPOT_TYPES = (
+    "AIRE DE SERVICES SANS STAT.",
+    "SERVICES D'APPOINT",
+    # Un spot déjà en base peut devenir "jour uniquement" sur Park4Night : il
+    # reste en base (un carnet de voyage peut y faire référence) mais est masqué.
+    *EXCLUDED_SPOT_TYPES,
+)
+
+# Nom commun de chaque type de spot Park4Night, utilisé pour construire un nom
+# de secours quand la description ne nomme pas le lieu ("Parking · Saint-Cava").
+SPOT_TYPE_NOUNS = {
+    "PARKING JOUR ET NUIT": "Parking",
+    "PARKING CC SANS SERVICES": "Parking camping-car",
+    "CAMPING": "Camping",
+    "AIRE CC STAT. GRATUIT": "Aire camping-car",
+    "AIRE CC STAT. PAYANT": "Aire camping-car",
+    "AIRE CC PRIVÉE": "Aire camping-car",
+    "AIRE DE SERVICES SANS STAT.": "Aire de services",
+    "AIRE DE REPOS": "Aire de repos",
+    "SERVICES D'APPOINT": "Services",
+    "PARKING JOUR UNIQUEMENT": "Parking de jour",
+    "ACCUEIL ENTRE PARTICULIERS": "Chez l'habitant",
+    "A LA FERME (FERME, VIGNOBLE ...)": "À la ferme",
+}
+
+# Numéro de rue en tête d'une adresse : "139", "54B", "33-35", "9001F".
+HOUSE_NUMBER_RE = re.compile(r"^\d+[A-Za-z]?(?:-\d+[A-Za-z]?)?\s+")
+
+
+def spot_name_label(place_label, city_label, name, spot_type):
+    """
+    Nom affiché d'un spot, construit SANS IA à partir des données Park4Night.
+
+    1. Le type du spot + le lieu, sans numéro de rue :
+         "139 Mechou Kamm Doun" (PARKING JOUR ET NUIT) -> "Parking · Mechou Kamm Doun"
+         "Camping Kermaléro"    (CAMPING)              -> "Camping Kermaléro" (inchangé)
+    2. À défaut de lieu, la commune ; en dernier recours, le nom Park4Night brut.
+    Renvoie None si le spot n'existe pas (tout est vide).
+    """
+    noun = SPOT_TYPE_NOUNS.get((spot_type or "").upper().strip(), "Spot")
+
+    # Le lieu : le libellé sans son numéro de rue, ou à défaut la commune.
+    place = HOUSE_NUMBER_RE.sub("", place_label).strip() if place_label else ""
+    place = place or city_label
+    if not place:
+        return name
+
+    # Pas de "Camping · Camping Kermaléro" : si le libellé commence déjà par le
+    # premier mot du type, il se suffit à lui-même.
+    first_word = noun.split()[0].lower()
+    if place.lower().startswith(first_word):
+        return place
+    return f"{noun} · {place}"
+
+
+def spot_description_label(description_ia, description, prompt_version) -> str:
+    """
+    Description affichée d'un spot.
+    - Harmonisée par l'IA : on l'affiche.
+    - Harmonisée mais vide (l'IA n'a rien trouvé d'utile) : on n'affiche rien,
+      le titre et les badges suffisent.
+    - Pas encore harmonisée : le texte d'origine du contributeur.
+    """
+    if description_ia:
+        return description_ia
+    if prompt_version is not None:
+        return ""
+    return description or "Aucune description disponible"
+
+
 def spot_category(spot_type) -> str:
     """Catégorie prix d'un spot : "gratuit", "payant" ou "autres"."""
     if not spot_type:
@@ -217,6 +295,69 @@ def spot_category(spot_type) -> str:
     if t in SPOT_TYPES_PAYANT:
         return "payant"
     return "autres"
+
+
+# Un badge par CATÉGORIE de service (et non par service Park4Night) : les
+# services équivalents sont ainsi fusionnés ("Coins de pêche" + "Pêche à pied"
+# -> "Pêche"). Clé = code de catégorie en base (services.category, cf.
+# SERVICE_CATEGORY_MAP), valeur = (icône, libellé français affiché).
+# L'ordre du dictionnaire est l'ordre d'affichage : équipements, puis activités.
+SPOT_SERVICE_CATEGORIES = {
+    # Équipements
+    "drinking_water":        ("💧", "Eau potable"),
+    "sanitary_dump_station": ("💧", "Vidange"),          # Eaux usées + Eaux noires
+    "toilets":               ("✓", "Toilettes"),
+    "shower":                ("🚿", "Douches"),
+    "power_supply":          ("⚡", "Électricité"),
+    "internet_access":       ("📶", "Internet"),         # WiFi + 3G/4G
+    "waste_disposal":        ("✓", "Poubelle"),
+    "laundry":               ("✓", "Laverie"),
+    "pets":                  ("✓", "Animaux autorisés"),
+    "fuel":                  ("✓", "Gaz / GPL"),         # Station GPL + Dépannage en gaz
+    "car_wash":              ("🧽", "Lavage camping-car"),
+    "bakery":                ("🥐", "Boulangerie"),
+    "shop":                  ("🥐", "Boulangerie"),
+    "caravan_site":          ("✓", "Caravaneige"),
+    # Activités
+    "hiking":                ("✓", "Randonnée"),
+    "viewpoint":             ("✓", "Point de vue"),
+    "swimming":              ("✓", "Baignade"),
+    "swimming_pool":         ("✓", "Piscine"),
+    "fishing":               ("✓", "Pêche"),             # Coins de pêche + Pêche à pied
+    "bicycle":               ("✓", "VTT"),
+    "canoe":                 ("✓", "Canoë / kayak"),
+    "watersport":            ("✓", "Windsurf / kitesurf"),
+    "climbing":              ("✓", "Escalade"),
+    "tourism":               ("✓", "Monuments"),
+    "playground":            ("✓", "Aire de jeux"),
+}
+
+
+def spot_services_display(services) -> list:
+    """
+    Badges des services d'un spot : un badge par catégorie, avec son libellé
+    français, dans l'ordre de SPOT_SERVICE_CATEGORIES.
+
+    `services` est une liste de {"name": ..., "category": ...}. Un service dont
+    la catégorie est inconnue garde son nom Park4Night (repli de
+    spot_service_display), pour ne jamais faire disparaître une information.
+    """
+    categories = {s.get("category") for s in services}
+
+    badges = []
+    for category, (icon, label) in SPOT_SERVICE_CATEGORIES.items():
+        if category in categories:
+            badges.append({"icon": icon, "name": label})
+
+    # Services sans catégorie connue : affichés tels quels, sans doublon.
+    unknown_names = []
+    for service in services:
+        if service.get("category") not in SPOT_SERVICE_CATEGORIES and service["name"] not in unknown_names:
+            unknown_names.append(service["name"])
+    for name in unknown_names:
+        badges.append(spot_service_display(name))
+
+    return badges
 
 
 def spot_service_display(service_name) -> dict:
@@ -232,23 +373,23 @@ def enrich_spot(spot) -> dict:
     """
     Ajoute à un spot ses champs prêts à afficher.
 
-    Le nom et la description issus de l'enrichissement IA (`display_name`,
-    `description_ia`) priment quand ils existent : le nom Park4Night est un
-    gabarit "(29200) Brest - 172 Rue de Quimper", et la description est du texte
-    contributeur brut. La source reste disponible dans `name` / `description`.
+    Le nom Park4Night est un gabarit "(29200) Brest - 172 Rue de Quimper" : on
+    affiche un nom lisible construit par spot_name_label. La description
+    harmonisée par l'IA (`description_ia`) prime sur le texte contributeur brut
+    quand elle existe. La source reste disponible dans `name` / `description`.
     """
     spot["category"] = spot_category(spot.get("type"))
     spot["type_label"] = spot.get("type") or "Bivouac"
     spot["badge"] = verified_badge(spot.get("verifie"))
-    spot["name_label"] = spot.get("display_name") or spot.get("place_label") or spot.get("name")
-    spot["description_label"] = (
-        spot.get("description_ia")
-        or spot.get("description")
-        or "Aucune description disponible"
+    spot["name_label"] = spot_name_label(
+        spot.get("place_label"), spot.get("city_label"), spot.get("name"), spot.get("type"),
+    )
+    spot["description_label"] = spot_description_label(
+        spot.get("description_ia"), spot.get("description"), spot.get("prompt_version"),
     )
     rating = spot.get("rating")
     spot["rating_label"] = f"⭐ {js_num(rating)}/5" if rating else None
-    spot["services_display"] = [spot_service_display(s) for s in spot.get("services", [])]
+    spot["services_display"] = spot_services_display(spot.get("services", []))
     return spot
 
 
@@ -346,7 +487,7 @@ def result_day_display(day) -> dict:
         distance = js_num(day["distance_km"]) if day.get("distance_km") is not None else "?"
         activity = f"{day.get('hike_name')} ({distance} km, {day.get('difficulte') or ''})"
         # Adresse du point de départ de la rando (géocodée depuis start_latitude/longitude,
-        # cf. etl/backfill_addresses.py) : affichée quand elle est connue, comme le spot.
+        # cf. le script ponctuel oneshot/backfill_addresses.py) : affichée quand elle est connue, comme le spot.
         if day.get("hike_address"):
             activity += f"<br><small>📍 {day['hike_address']}</small>"
     else:

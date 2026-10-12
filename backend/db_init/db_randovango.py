@@ -2,8 +2,8 @@ import sys
 import time
 from pathlib import Path
 
-from utils.logger_util import LoggerUtil
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+from utils.logger_util import LoggerUtil
 
 import mysql.connector
 from utils.db_utils import MySQLUtils
@@ -120,16 +120,16 @@ def init_database():
                 postal_code VARCHAR(5),
                 city_label VARCHAR(120),
                 place_label VARCHAR(255),
-                display_name VARCHAR(255),
                 description_ia TEXT,
-                tags JSON,
-                noise_level VARCHAR(20),
-                access_difficulty VARCHAR(20),
-                services_inferred JSON,
-                stale_info TINYINT(1),
-                confidence VARCHAR(10),
-                enriched_at DATETIME,
-                source_hash CHAR(64),
+                harmonized_at DATETIME,
+                prompt_version INT,
+                a_verifier TINYINT(1),
+                nuit_interdite TINYINT(1),
+                opening_period VARCHAR(255),
+                price_parking VARCHAR(255),
+                price_services VARCHAR(255),
+                details_scraped_at DATETIME,
+                p4n_removed TINYINT(1) NOT NULL DEFAULT 0,
                 duplicate_of_spot_id INT NULL,
                 UNIQUE (p4n_id),
                 FOREIGN KEY (duplicate_of_spot_id) REFERENCES spots(id),
@@ -154,9 +154,37 @@ def init_database():
             CREATE TABLE IF NOT EXISTS spot_service (
                 spot_id INT NOT NULL,
                 service_id INT NOT NULL,
+                source VARCHAR(10) NOT NULL DEFAULT 'p4n',
                 PRIMARY KEY (spot_id, service_id),
                 FOREIGN KEY (spot_id) REFERENCES spots(id),
                 FOREIGN KEY (service_id) REFERENCES services(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 6 bis. commentaires Park4Night des spots (échantillon, sans auteur)
+            """
+            CREATE TABLE IF NOT EXISTS spot_reviews (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                spot_id INT NOT NULL,
+                p4n_review_id VARCHAR(20) NOT NULL,
+                review_date DATE,
+                rating TINYINT,
+                text TEXT,
+                UNIQUE (p4n_review_id),
+                FOREIGN KEY (spot_id) REFERENCES spots(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 6 ter. vérifications web des situations temporaires (une ligne par vérification)
+            """
+            CREATE TABLE IF NOT EXISTS spot_verifications (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                spot_id INT NOT NULL,
+                verified_at DATETIME NOT NULL,
+                statut VARCHAR(20) NOT NULL,
+                resume TEXT,
+                sources JSON,
+                prompt_version INT,
+                model VARCHAR(50),
+                FOREIGN KEY (spot_id) REFERENCES spots(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 7. hikes (dépend de sources, cities)

@@ -1,5 +1,12 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
+
+# Le fichier .env (mots de passe, jetons, réglages) est à la racine du projet,
+# deux dossiers au-dessus de ce fichier : utils/ -> backend/ -> racine.
+# Dans Docker, c'est /usr/src/.env (voir docker-compose.yml).
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
  # Mapping OSM/Wikidata type -> label lisible (pour affichage front)
 SERVICE_CATEGORY_LABEL_MAP = {
@@ -61,7 +68,6 @@ POI_FRONTEND_CATEGORY_MAP = {
     "viewpoint":              "culture",
     "hiking":                 "culture",
     "bicycle":                "culture",
-    "motorcycle":             "culture",
     "climbing":               "culture",
     "watersport":             "culture",
     "canoe":                  "culture",
@@ -101,13 +107,24 @@ SERVICE_CATEGORY_MAP = {
     "Dépannage en gaz": "fuel",
     "Station GPL": "fuel",
     "Piscine": "swimming_pool",
-    "Belle balade à moto": "motorcycle",
     "Escalade (Sites d')": "climbing",
     # Deux services P4N restés sans catégorie jusqu'ici (28 et 4 spots concernés) :
     # ils entraient en base via get_or_create_service_with_category avec category NULL.
     "Lavage pour camping-car": "car_wash",
     "Caravaneige": "caravan_site",
 }
+
+# Services Park4Night qu'on ne veut pas dans Randovango (hors sujet pour des
+# randonneurs en van). Ils sont ignorés au chargement (etl/load/load_p4n.py) et
+# supprimés de la base existante par le script ponctuel oneshot/clean_spots.py.
+EXCLUDED_SERVICES = {
+    "Belle balade à moto",
+}
+
+
+def is_excluded_service(service_name: str) -> bool:
+    """True si ce service Park4Night ne doit pas entrer en base."""
+    return service_name in EXCLUDED_SERVICES
 
 
 class ServiceUtil:
@@ -128,25 +145,12 @@ class ServiceUtil:
 
     @staticmethod
     def load_env() -> None:
-        """
-        Charge le fichier d'environnement (.env). Chemin absolu ancré sur ce fichier
-        (et non relatif au répertoire courant) : un chemin relatif ne fonctionnait
-        que par accident, grâce à db_utils.py qui charge le même .env en absolu et
-        s'importe généralement avant (python-dotenv ne réécrit pas les variables
-        déjà présentes) - mais cassait dès qu'un module appelait load_env() sans
-        que db_utils ait été importé au préalable (ex: script isolé, ou MongoUtils
-        appelé depuis un chemin de code qui n'importe jamais MySQLUtils).
-        """
-        from pathlib import Path
-        env_path = Path(__file__).resolve().parents[2] / ".env"
-        load_dotenv(str(env_path))
-
+        """Charge les valeurs du fichier .env pour que get_env puisse les lire."""
+        load_dotenv(ENV_FILE)
 
     @staticmethod
     def get_env(var: str, default: str = "") -> str:
-        """
-        Récupère la variable d'environnement {var} ou la valeur {default} si absente.
-        """
+        """Valeur d'une variable du .env, ou `default` si elle n'existe pas."""
         return os.getenv(var, default)
 
     @staticmethod

@@ -1,8 +1,63 @@
 import pandas as pd
 
 from utils.logger_util import LoggerUtil
-from utils.service_utils import ServiceUtil
+from utils.service_utils import ServiceUtil, is_excluded_service
 from utils.db_utils import MySQLUtils
+from utils.display_utils import EXCLUDED_SPOT_TYPES
+
+# Colonnes de `spots` ajoutées pour les informations complémentaires des fiches.
+P4N_DETAIL_COLUMNS = {
+    "opening_period": "VARCHAR(255)",   # texte brut "Ouverture/Fermeture" de la fiche
+    "price_parking": "VARCHAR(255)",    # texte brut "Prix du stationnement"
+    "price_services": "VARCHAR(255)",   # texte brut "Prix des services"
+    "details_scraped_at": "DATETIME",   # date de récupération de ces informations
+    "p4n_removed": "TINYINT(1) NOT NULL DEFAULT 0",  # 1 si la fiche a disparu de Park4Night
+}
+
+
+def update_p4n_detail_schema(cursor, database: str) -> None:
+    """
+    Met la base à jour pour les informations complémentaires des fiches :
+      - ajoute à `spots` les colonnes de P4N_DETAIL_COLUMNS qui manquent ;
+      - crée la table `spot_reviews` (les commentaires) si elle n'existe pas.
+    On peut l'appeler plusieurs fois sans risque.
+    """
+    cursor.execute(
+        "SELECT column_name FROM information_schema.columns"
+        " WHERE table_schema = %s AND table_name = 'spots'",
+        (database,),
+    )
+    existing_columns = [row[0] for row in cursor.fetchall()]
+    for column, sql_type in P4N_DETAIL_COLUMNS.items():
+        if column not in existing_columns:
+            cursor.execute(f"ALTER TABLE spots ADD COLUMN {column} {sql_type}")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS spot_reviews (
+            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            spot_id INT NOT NULL,
+            p4n_review_id VARCHAR(20) NOT NULL,
+            review_date DATE,
+            rating TINYINT,
+            text TEXT,
+            UNIQUE (p4n_review_id),
+            FOREIGN KEY (spot_id) REFERENCES spots(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+
+def save_reviews(cursor, spot_id: int, reviews: list) -> None:
+    """
+    Enregistre les commentaires d'un spot. INSERT IGNORE : un commentaire déjà
+    en base (même identifiant Park4Night) n'est pas ajouté une seconde fois.
+    """
+    for review in reviews or []:
+        cursor.execute(
+            "INSERT IGNORE INTO spot_reviews (spot_id, p4n_review_id, review_date, rating, text)"
+            " VALUES (%s, %s, %s, %s, %s)",
+            (spot_id, review["p4n_review_id"], review["review_date"], review["rating"], review["text"]),
+        )
+
 
 def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     """
@@ -31,6 +86,7 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
 
     conn = MySQLUtils.connect()
     cursor = conn.cursor(buffered=True)
+    update_p4n_detail_schema(cursor, ServiceUtil.get_env("DB_NAME"))
 
     # Récupère tous les p4n_id déjà présents dans spots
     cursor.execute("SELECT p4n_id FROM spots")
@@ -39,13 +95,20 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
 
     # Filtre le DataFrame pour ne garder que les nouveaux p4n_id
     df_new = df[~df['p4n_id'].astype(str).isin(existing_ids)]
+
+    # On ne charge pas les spots où l'on ne peut pas dormir (ex : "PARKING JOUR UNIQUEMENT").
+    excluded = df_new['Type_Place'].isin(EXCLUDED_SPOT_TYPES)
+    if excluded.any():
+        logger.info(f"[load] : {int(excluded.sum())} spot(s) ignoré(s), type exclu : {sorted(set(df_new[excluded]['Type_Place']))}")
+    df_new = df_new[~excluded]
     logger.info(f"[load] : {len(df_new)} nouveaux spots à insérer")
 
     # Prépare les requêtes
     insert_spot_sql = """
         INSERT INTO spots (name, description, type, latitude, longitude, p4n_id, rating, url, source_id, verifie,
-                           postal_code, city_label, place_label)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,1, %s, %s, %s)
+                           postal_code, city_label, place_label,
+                           opening_period, price_parking, price_services, details_scraped_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,1, %s, %s, %s, %s, %s, %s, NOW())
     """
     # select_service_sql = "SELECT id FROM services WHERE name=%s"
     # insert_service_sql = "INSERT INTO services (name, category) VALUES (%s, %s)"
@@ -85,6 +148,9 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
             row.get('postal_code'),
             row.get('city_label'),
             row.get('place_label'),
+            row.get('Ouverture'),
+            row.get('Prix_stationnement'),
+            row.get('Prix_services'),
         )
         cursor.execute(insert_spot_sql, spot_values)
         spot_id = cursor.lastrowid
@@ -93,11 +159,19 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
         # 2. Insert services et liaisons
         services = [s.strip() for s in str(row['Services']).split(',') if s.strip()]
         for service in services:
+            # Services hors sujet (ex : "Belle balade à moto") : on ne les enregistre pas.
+            if is_excluded_service(service):
+                continue
             service_id = ServiceUtil.get_or_create_service_with_category(cursor, service)
             cursor.execute(insert_spot_service_sql, (spot_id, service_id))
             logger.info(f"[load] : Service lié - spot_id: {spot_id}, service: {service}, service_id: {service_id}")
 
-        # 3. Ajout dans histo_scrap (ou city_spot_scraped) avec la ville principale
+        # 3. Commentaires (échantillon choisi au scraping)
+        avis = row.get('Avis')
+        if isinstance(avis, list):
+            save_reviews(cursor, spot_id, avis)
+
+        # 4. Ajout dans histo_scrap (ou city_spot_scraped) avec la ville principale
         cursor.execute(insert_histo_sql, (spot_id, city_id))
         logger.info(f"[load] : Ajout dans histo_scrap - spot_id: {spot_id}, city_id: {city_id}")
 

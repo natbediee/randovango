@@ -37,9 +37,11 @@
     </div>
 
     <!-- Positionnement des tuiles en left/top plutôt qu'en transform 3D : supprime les
-         fins liserés blancs entre tuiles sur les écrans à mise à l'échelle fractionnaire.
-         Doit être défini AVANT le chargement de leaflet.js. -->
-    <script>window.L_DISABLE_3D = true;</script>
+         fins liserés blancs entre tuiles sur les écrans à mise à l'échelle fractionnaire
+         (Windows 125/150 %, devicePixelRatio non entier). Seulement dans ce cas : sans
+         accélération graphique, Safari redessine la carte très lentement (info-bulles qui
+         restent ouvertes, déplacements saccadés). Doit être défini AVANT leaflet.js. -->
+    <script>window.L_DISABLE_3D = window.devicePixelRatio % 1 !== 0;</script>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="

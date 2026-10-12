@@ -393,7 +393,7 @@ a {{ color: {TEAL}; text-decoration: none; }}
 .spot-rating__star {{ color: {STAR}; }}
 .spot-name {{ font-family: 'Archivo', system-ui, sans-serif; font-weight: 700; font-size: 17px; margin-bottom: 3px; }}
 .spot-address {{ font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: {MUTED}; margin-bottom: 11px; }}
-.spot-description {{ font-size: 13.5px; line-height: 1.58; color: {BODY}; margin-bottom: 12px; }}
+.spot-description {{ font-size: 13.5px; line-height: 1.58; color: {BODY}; margin-bottom: 12px; white-space: pre-line; }}
 .spot-link {{ font-size: 12.5px; font-weight: 600; color: {TEAL}; }}
 
 /* --- Services --- */
@@ -550,7 +550,7 @@ def _hike_section(day) -> str:
         tags.append(f'<span class="tag">{_fr_int(day["elevation_gain_m"])} m D+</span>')
     tags.append(_difficulty_tag(day.get("difficulte")))
 
-    # Adresse du point de départ (géocodée à l'import, cf. etl/backfill_addresses.py) :
+    # Adresse du point de départ (géocodée à l'import, cf. le script ponctuel oneshot/backfill_addresses.py) :
     # affichée quand elle est connue - un départ isolé (parking de sentier) n'en a pas.
     address_html = (f'<div class="hike-address">Départ&nbsp;: {escape(day["hike_address"])}</div>'
                     if day.get("hike_address") else "")

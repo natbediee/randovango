@@ -38,6 +38,14 @@ def parse_spot_name(name) -> tuple:
     return postal_code, None, rest or None
 
 
+def clean_place_type(raw_type) -> str:
+    """
+    Type du lieu, sans le numéro de fiche que Park4Night affiche devant :
+    "#25487 - PARKING JOUR UNIQUEMENT" -> "PARKING JOUR UNIQUEMENT".
+    """
+    return str(raw_type).split('-', 1)[-1].strip()
+
+
 def transform_p4n(df: pd.DataFrame) -> pd.DataFrame:
     """
     Transforme le DataFrame issu du scraping Park4Night selon les règles métier :
@@ -62,7 +70,7 @@ def transform_p4n(df: pd.DataFrame) -> pd.DataFrame:
     df[['latitude', 'longitude']] = df['Coordonnees'].apply(lambda x: pd.Series(split_coords(x)))
 
     # Type_Place : après le tiret
-    df['Type_Place'] = df['Type_Place'].astype(str).str.split('-', n=1).str[-1].str.strip()
+    df['Type_Place'] = df['Type_Place'].apply(clean_place_type)
 
     # note : avant /5 (gère l'ancien nom de colonne)
     if 'note' not in df.columns and 'Note_Avis' in df.columns:
@@ -74,9 +82,14 @@ def transform_p4n(df: pd.DataFrame) -> pd.DataFrame:
         lambda n: pd.Series(parse_spot_name(n), index=['postal_code', 'city_label', 'place_label'])
     )
 
+    # Ouverture, prix et commentaires (absents d'un ancien CSV : on les crée vides)
+    for column in ['Ouverture', 'Prix_stationnement', 'Prix_services', 'Avis']:
+        if column not in df.columns:
+            df[column] = None
+
     # Colonnes finales
     cols = ['URL_fiche', 'p4n_id', 'Nom_Place', 'latitude', 'longitude', 'Type_Place', 'note', 'Services', 'Description',
-            'postal_code', 'city_label', 'place_label']
+            'postal_code', 'city_label', 'place_label', 'Ouverture', 'Prix_stationnement', 'Prix_services', 'Avis']
     df_out = df[cols].drop_duplicates(subset=['p4n_id']).reset_index(drop=True)
     for i, row in df_out.iterrows():
         logger.info(f"[transform] : Spot transformé - Nom: {row['Nom_Place']}, p4n_id: {row['p4n_id']}, lat: {row['latitude']}, lon: {row['longitude']}, type: {row['Type_Place']}")

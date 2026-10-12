@@ -1,8 +1,9 @@
+import os
 import sys
 from pathlib import Path
 
-from utils.logger_util import LoggerUtil
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+from utils.logger_util import LoggerUtil
 import sqlite3
 from passlib.hash import bcrypt
 from utils.service_utils import ServiceUtil
@@ -12,11 +13,21 @@ logger = LoggerUtil.get_logger("DB_init")
 ServiceUtil.load_env()
 DB_PATH = Path("/usr/src/storage/rando_users.sqlite")
 ROLES = ["admin", "user", "contributor", "guest"]
+
+# Mots de passe de seed pris dans l'environnement (.env, non versionné) : jamais en dur
+# dans le code source. Le script échoue explicitement si une variable manque, plutôt que
+# de retomber sur un mot de passe faible connu de quiconque lit le dépôt Git.
+def _seed_password(env_var: str) -> str:
+    value = os.getenv(env_var)
+    if not value:
+        raise RuntimeError(f"Variable d'environnement manquante pour le seed: {env_var}")
+    return value
+
 USERS = [
-    ("admin", "admin123", 1, ["admin"]),
-    ("contributor1", "cont123", 1, ["contributor"]),
-    ("user1", "user123", 1, ["user"]),
-    ("contributor2", "cont123", 0, ["contributor"]),  # inactif
+    ("admin", _seed_password("SEED_ADMIN_PASSWORD"), 1, ["admin"]),
+    ("contributor1", _seed_password("SEED_CONTRIBUTOR1_PASSWORD"), 1, ["contributor"]),
+    ("user1", _seed_password("SEED_USER1_PASSWORD"), 1, ["user"]),
+    ("contributor2", _seed_password("SEED_CONTRIBUTOR2_PASSWORD"), 0, ["contributor"]),  # inactif
 ]
 
 DDL = """

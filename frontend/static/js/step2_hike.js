@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                     .on('popupclose', function () { if (!this.getTooltip()) this.bindTooltip(hikeTipHtml, TIP_OPTS); })
                     .on('mouseover', function () {
                         const isSelected = localStorage.getItem('selectedHiking') == hike.id;
-                        if (!isSelected) this.setIcon(buildHikeHoveredDivIcon());
+                        if (!isSelected) setMarkerHovered(this, true);
                         highlightHikeTrace(hike.id, true);
                         const btn = document.getElementById(`select-hike-btn-${hike.id}`);
                         if (btn) {
@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                     })
                     .on('mouseout', function () {
                         const isSelected = localStorage.getItem('selectedHiking') == hike.id;
-                        if (!isSelected) this.setIcon(buildHikeDivIcon());
+                        if (!isSelected) setMarkerHovered(this, false);
                         highlightHikeTrace(hike.id, false);
                         const btn = document.getElementById(`select-hike-btn-${hike.id}`);
                         if (btn) btn.closest('.hiking-card')?.classList.remove('map-hover');
@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                             const isSelected = localStorage.getItem('selectedHiking') == hike.id;
                             highlightHikeTrace(hike.id, true);
                             if (isSelected) return;
-                            marker.setIcon(buildHikeHoveredDivIcon());
+                            setMarkerHovered(marker, true);
                             marker.openTooltip(); // aperçu nom + infos de base sur la carte
                             if (!hikeMap.getBounds().contains(marker.getLatLng())) {
                                 hikeMap.panTo(marker.getLatLng(), { animate: true });
@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                             const isSelected = localStorage.getItem('selectedHiking') == hike.id;
                             highlightHikeTrace(hike.id, false);
                             marker.closeTooltip();
-                            if (!isSelected) marker.setIcon(buildHikeDivIcon());
+                            if (!isSelected) setMarkerHovered(marker, false);
                         });
                     }
                 }

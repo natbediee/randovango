@@ -14,6 +14,7 @@ from utils.service_utils import ServiceUtil
 
 from utils.geo_utils import get_coordinates_for_city
 from utils.db_utils import p4n_id_exists
+from utils.review_utils import STORED_SELECTION, parse_review_date, select_reviews
 
 
 ServiceUtil.load_env()
@@ -29,6 +30,93 @@ CHROMEDRIVER_PATH = '/usr/bin/chromedriver'      # Pour Docker : chromedriver De
 BASE_SEARCH_URL = "https://park4night.com/fr/search" 
 ZOOM_LEVEL = 15 # Niveau de zoom par défaut pour un affichage local
 # ---
+
+
+# --- Navigateur ---
+def create_driver(is_headless: bool = True):
+    """Crée le navigateur Chromium piloté par Selenium (installé dans le conteneur)."""
+    options = webdriver.ChromeOptions()
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--user-data-dir=/tmp/selenium_chrome_profile')
+    options.binary_location = CHROME_BINARY_PATH
+    if is_headless:
+        options.add_argument('--headless')
+        logger.info("[Extract] : Mode Headless activé (Sans interface graphique).")
+    else:
+        logger.info("[Extract] : Mode Visuel activé (Avec interface graphique, pour débogage).")
+    return webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=options)
+
+
+def dismiss_cookies(driver, wait) -> None:
+    """Refuse le bandeau de cookies s'il apparaît (sinon il masque la page)."""
+    try:
+        consent_button = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, '.cc-container .cc-btn-reject'))
+        )
+        driver.execute_script("arguments[0].click();", consent_button)
+        wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, '.cc-container')))
+        logger.info("[Extract] : Cookies gérés.")
+    except Exception:
+        pass
+
+
+# --- Extraction des informations complémentaires d'une fiche ---
+def extract_description(driver) -> str:
+    """
+    Description de la fiche : en français si elle existe, sinon dans la première
+    autre langue disponible (certaines fiches n'ont qu'une version anglaise ou allemande).
+    """
+    paragraphs = driver.find_elements(By.CSS_SELECTOR, 'div.place-info-description p[lang]')
+    texts = {}
+    for p in paragraphs:
+        # textContent et non .text : les autres langues sont masquées (d-none), et
+        # Selenium renvoie un texte vide pour un élément masqué.
+        text = (p.get_attribute('textContent') or '').strip()
+        if text:
+            texts[p.get_attribute('lang')] = text
+    if 'fr' in texts:
+        return texts['fr']
+    if texts:
+        return next(iter(texts.values()))
+    return "Description non trouvée"
+
+
+def extract_details(driver) -> dict:
+    """
+    Le bloc "détails" de la fiche : des paires titre / valeur, par exemple
+    "Ouverture/Fermeture" -> "Pitch open only from may 1st to sep 15th".
+    Renvoie {titre: valeur}.
+    """
+    titles = driver.find_elements(By.CSS_SELECTOR, 'dl.place-info-details dt')
+    values = driver.find_elements(By.CSS_SELECTOR, 'dl.place-info-details dd')
+    details = {}
+    for title, value in zip(titles, values):
+        details[title.get_attribute('textContent').strip()] = value.get_attribute('textContent').strip()
+    return details
+
+
+def extract_reviews(driver) -> list:
+    """
+    Tous les commentaires de la fiche (ils sont tous dans la page, certains masqués).
+    Chaque commentaire : identifiant Park4Night, date, note, texte. L'auteur n'est
+    volontairement PAS récupéré (donnée personnelle, inutile pour Randovango).
+    """
+    reviews = []
+    for article in driver.find_elements(By.CSS_SELECTOR, 'ul.place-feedback-list article.place-feedback-article'):
+        try:
+            date_text = article.find_element(By.CSS_SELECTOR, 'span.caption.text-gray').get_attribute('textContent')
+            text = article.find_element(By.CSS_SELECTOR, 'p.place-feedback-article-content').get_attribute('textContent')
+        except NoSuchElementException:
+            continue
+        rating = article.get_attribute('data-review-rating')
+        reviews.append({
+            'p4n_review_id': article.get_attribute('data-review-id'),
+            'review_date': parse_review_date(date_text),
+            'rating': int(rating) if rating and rating.isdigit() else None,
+            'text': text.strip(),
+        })
+    return reviews
 
 
 # --- Fonction d'Extraction des Détails d'un Emplacement ---
@@ -62,14 +150,15 @@ def scrape_place_details(driver, url, wait) -> dict:
         except NoSuchElementException:
             pass
 
-        # --- Extraction de la description (fr) ---
-        description_text = "Description non trouvée"
-        try:
-            desc_div = driver.find_element(By.CSS_SELECTOR, 'div.place-info-description.mt-4')
-            desc_p = desc_div.find_element(By.CSS_SELECTOR, 'p[lang="fr"]')
-            description_text = desc_p.text.strip()
-        except NoSuchElementException:
-            pass
+        # --- Extraction de la description (fr, sinon une autre langue) ---
+        description_text = extract_description(driver)
+
+        # --- Ouverture, prix et commentaires ---
+        details = extract_details(driver)
+        all_reviews = extract_reviews(driver)
+        # Certaines fiches ont des centaines de commentaires : on n'en garde
+        # qu'un échantillon (récents + mauvais + bons, voir utils/review_utils.py).
+        reviews = select_reviews(all_reviews, *STORED_SELECTION)
 
         # --- Extraction des services disponibles ---
         services = []
@@ -81,7 +170,7 @@ def scrape_place_details(driver, url, wait) -> dict:
                     services.append(service_name)
         except NoSuchElementException:
             services.append("Aucun service listé")
-        logger.info(f"[Extract] : Extrait: {name}")
+        logger.info(f"[Extract] : Extrait: {name} ({len(reviews)}/{len(all_reviews)} commentaires gardés)")
         result = {
             'URL_fiche': url,
             'Nom_Place': name,
@@ -89,7 +178,11 @@ def scrape_place_details(driver, url, wait) -> dict:
             'Description': description_text,
             'Type_Place': place_type,
             'Note_Avis': rating_score,
-            'Services': ', '.join(services)
+            'Services': ', '.join(services),
+            'Ouverture': details.get('Ouverture/Fermeture'),
+            'Prix_stationnement': details.get('Prix du stationnement'),
+            'Prix_services': details.get('Prix des services'),
+            'Avis': reviews,
         }
         logger.debug(f"[Extract] : Sortie scrape_place_details: type={type(result)}, keys={list(result.keys())}")
         return result
@@ -117,37 +210,14 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
     driver = None
     scraped_data = []
     try:
-        # Configuration des options du navigateur Chrome/Chromium
-        options = webdriver.ChromeOptions()
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--user-data-dir=/tmp/selenium_chrome_profile')
-        options.binary_location = CHROME_BINARY_PATH
-
-        if is_headless:
-            options.add_argument('--headless')
-            logger.info("[Extract] : Mode Headless activé (Sans interface graphique).")
-        else:
-            logger.info("[Extract] : Mode Visuel activé (Avec interface graphique, pour débogage).")
-
-        # Utilise le chromedriver installé dans le conteneur Docker
-        service = Service(CHROMEDRIVER_PATH)
-        driver = webdriver.Chrome(service=service, options=options)
+        driver = create_driver(is_headless)
 
         # 2. Accès direct à la page de résultats
         driver.get(search_url)
         wait = WebDriverWait(driver, 40) # 40s pour le chargement initial
 
         # --- Gestion des Cookies (Reste essentielle) ---
-        try:
-            consent_button = wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, '.cc-container .cc-btn-reject'))
-            )
-            driver.execute_script("arguments[0].click();", consent_button)
-            wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, '.cc-container')))
-            logger.info("[Extract] : Cookies gérés.")
-        except Exception:
-            pass
+        dismiss_cookies(driver, wait)
 
         # --- Récupération des Liens de Résultats (ancienne logique robuste) ---
         RESULT_LIST_ID = "searchmap-list-results"

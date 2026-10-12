@@ -893,6 +893,20 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .nearby-item__check { font-size: 11px; font-weight: 800; color: var(--teal); letter-spacing: .2px; }
 
 /* Aperçu carte (villes ET randos) : tooltip au survol + popup à la sélection */
+/* Survol d'un marqueur de spot ou de randonnée (classe ajoutée par setMarkerHovered,
+   map-helpers.js) : même rendu que les anciennes icônes "survolées", mais sans
+   remplacer l'icône (ce qui faisait boucler les événements de souris sous Safari).
+   !important : les pastilles ont leurs couleurs en style en ligne. */
+.custom-map-marker .map-pin { transition: transform .12s ease; }
+.custom-map-marker.is-hovered .map-pin {
+  transform: rotate(-45deg) scale(1.2) !important;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px #0008 !important;
+}
+.custom-map-marker.is-hovered .map-pin--spot { background: #3D5C66 !important; }
+.custom-map-marker.is-hovered .map-pin--hike { background: #7FC4CC !important; }
+.custom-map-marker.is-hovered .map-pin--hike i { color: #22424B !important; }
+
 .leaflet-tooltip.city-tip,
 .leaflet-tooltip.map-tip {
   background: var(--white);
@@ -1128,16 +1142,35 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   align-items: center;
 }
 .spot-left, .service-left { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+/* Colonne du type de spot à largeur fixe : un type long ("PARKING JOUR ET NUIT")
+   n'élargit plus la colonne, les cartes restent alignées entre elles. */
+.spot-content-grid { grid-template-columns: 120px 1fr auto; }
+/* Un type long passe sur deux lignes, centré, avec des coins moins arrondis
+   (une forme de pilule sur deux lignes paraîtrait disproportionnée). */
+.spot-left .hiking-stats .stat {
+  white-space: normal; text-align: center; line-height: 1.25; border-radius: 12px;
+  /* Plus discrète que les autres pastilles : c'est une étiquette, pas une info clé. */
+  font-size: 10.5px; padding: 3px 8px;
+}
 .spot-center, .service-center { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .spot-center h4, .service-center h4 { font-size: 16px; font-weight: 700; }
 .spot-address, .service-address, .spot-description, .service-distance {
   font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;
 }
-.spot-features { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+/* La description harmonisée a deux paragraphes (le lieu, puis "À savoir :") :
+   pre-line affiche ses retours à la ligne, ignorés par défaut en HTML. */
+.spot-description { white-space: pre-line; }
+/* margin-top : sépare nettement les badges du texte de la description. */
+.spot-features { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .spot-features .feature {
   font-size: 12px; font-weight: 600; color: var(--ink);
   background: var(--cream); border: 1px solid var(--card-border);
   border-radius: var(--r-pill); padding: 3px 10px;
+}
+/* Absence de services : simple mention discrète, pas une alerte. */
+.spot-features .feature--none {
+  font-weight: 400; font-style: italic; color: var(--muted);
+  background: none; border: none; padding: 3px 0;
 }
 .spot-details .rating { font-size: 13px; font-weight: 700; color: var(--warn-tx); }
 .spot-right, .service-right { display: flex; flex-direction: column; gap: 8px; flex: none; }

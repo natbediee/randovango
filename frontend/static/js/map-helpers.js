@@ -183,6 +183,16 @@ const POI_MARKER_STYLES = {
     urgence:      { color: '#B04A4A', icon: 'fa-first-aid' }
 };
 
+// Survol d'un marqueur : on ajoute (ou retire) la classe "is-hovered" sur l'icône
+// EXISTANTE, et le CSS change son apparence. Surtout pas setIcon() : il détruit
+// l'icône et en crée une nouvelle sous la souris ; Safari déclenche alors
+// mouseout puis mouseover en boucle (carte lente, info-bulles qui restent
+// ouvertes). Chrome, lui, ne réagit pas, d'où un bug visible seulement sur Safari.
+function setMarkerHovered(marker, hovered) {
+    const element = marker.getElement();
+    if (element) element.classList.toggle('is-hovered', hovered);
+}
+
 function buildHikeDivIcon(dayLabel) {
     const label = dayLabel
         ? `<span style="position:absolute;left:50%;transform:translateX(-50%);top:32px;
@@ -193,7 +203,7 @@ function buildHikeDivIcon(dayLabel) {
     return L.divIcon({
         className: 'custom-map-marker',
         html: `<div style="position:relative;width:30px;">
-                  <div style="background:var(--blue);width:30px;height:30px;border-radius:50% 50% 50% 0;
+                  <div class="map-pin map-pin--hike" style="background:var(--blue);width:30px;height:30px;border-radius:50% 50% 50% 0;
                               transform:rotate(-45deg);box-shadow:0 1px 4px #0006;display:flex;align-items:center;justify-content:center;">
                     <i class="fas fa-hiking" style="color:#fff;transform:rotate(45deg);font-size:14px;"></i>
                   </div>${label}
@@ -220,7 +230,7 @@ function buildSpotDivIcon(dayLabel) {
     return L.divIcon({
         className: 'custom-map-marker',
         html: `<div style="position:relative;width:28px;">
-                  <div style="background:${SPOT_COLOR};width:28px;height:28px;border-radius:50% 50% 50% 0;
+                  <div class="map-pin map-pin--spot" style="background:${SPOT_COLOR};width:28px;height:28px;border-radius:50% 50% 50% 0;
                               transform:rotate(-45deg);box-shadow:0 1px 4px #0006;display:flex;align-items:center;justify-content:center;">
                     <i class="fas fa-bed" style="color:#fff;transform:rotate(45deg);font-size:13px;"></i>
                   </div>${label}
@@ -228,21 +238,6 @@ function buildSpotDivIcon(dayLabel) {
         iconSize: [28, dayLabel ? 46 : 28],
         iconAnchor: [14, 28],
         popupAnchor: [0, -26]
-    });
-}
-
-// Icône de survol d'une randonnée : teal clair (accent de la palette), icône encre
-// pour le contraste. Se distingue du teal foncé par défaut et du sélectionné.
-function buildHikeHoveredDivIcon() {
-    return L.divIcon({
-        className: 'custom-map-marker',
-        html: `<div style="background:#7FC4CC;width:36px;height:36px;border-radius:50% 50% 50% 0;
-                    transform:rotate(-45deg);box-shadow:0 2px 8px #0008;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
-                  <i class="fas fa-hiking" style="color:#22424B;transform:rotate(45deg);font-size:16px;"></i>
-               </div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 36],
-        popupAnchor: [0, -34]
     });
 }
 
@@ -257,21 +252,6 @@ function buildHikeSelectedDivIcon() {
         iconSize: [42, 42],
         iconAnchor: [21, 42],
         popupAnchor: [0, -40]
-    });
-}
-
-// Icône de survol d'un spot : encre plus claire (même famille que le spot au
-// repos, pour ne pas virer au teal de la rando), agrandie et bordée de blanc.
-function buildSpotHoveredDivIcon() {
-    return L.divIcon({
-        className: 'custom-map-marker',
-        html: `<div style="background:#3D5C66;width:34px;height:34px;border-radius:50% 50% 50% 0;
-                    transform:rotate(-45deg);box-shadow:0 2px 8px #0008;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
-                  <i class="fas fa-bed" style="color:#fff;transform:rotate(45deg);font-size:15px;"></i>
-               </div>`,
-        iconSize: [34, 34],
-        iconAnchor: [17, 34],
-        popupAnchor: [0, -32]
     });
 }
 

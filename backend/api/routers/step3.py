@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, Body
 from services.plan_service import insert_or_update_plan
-from utils.display_utils import enrich_spot
+from utils.display_utils import HIDDEN_SPOT_TYPES, enrich_spot
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 
@@ -22,38 +22,48 @@ def get_spots(
     from utils.geo_utils import get_bounding_box
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor(dictionary=True)
+    # try/finally : la connexion est fermée même en cas d'erreur. Sinon elle reste
+    # ouverte avec une lecture en cours, et bloque toute modification de la table.
+    try:
+        return _spots_around_city(cursor, city_id, distance_km, get_bounding_box)
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(cnx)
 
+
+def _spots_around_city(cursor, city_id, distance_km, get_bounding_box) -> list:
+    """Spots autour d'une ville, prêts à afficher (voir get_spots)."""
     # Récupérer les coordonnées de la ville
     cursor.execute("SELECT latitude, longitude FROM cities WHERE id = %s", (city_id,))
     city = cursor.fetchone()
     if not city:
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
         return []
 
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(city['latitude'], city['longitude'], distance_km)
-    
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
 
-    # Récupérer les spots dans la bounding box (vérifiés et non vérifiés)
-    excluded_types = ('AIRE DE SERVICES SANS STAT.', "SERVICES D'APPOINT")
+    # Récupérer les spots dans la bounding box (vérifiés et non vérifiés),
+    # sauf les types jamais affichés (HIDDEN_SPOT_TYPES).
+    type_placeholders = ",".join(["%s"] * len(HIDDEN_SPOT_TYPES))
 
     # duplicate_of_spot_id : spots marqués comme doublon d'un voisin par
-    # etl.enrich.dedupe_spots. Ils restent en base (rien n'est supprimé), on ne
+    # agents.dedupe_spots. Ils restent en base (rien n'est supprimé), on ne
     # les affiche simplement pas deux fois sur la carte.
-    query = '''
+    # p4n_removed : fiches qui ont disparu de Park4Night, plus proposées.
+    # nuit_interdite : lieux où l'on ne peut pas dormir (harmonisation IA).
+    query = f'''
             SELECT s.id, s.name, s.description, s.type, s.latitude, s.longitude, s.rating, s.url, s.verifie, s.address,
-                   s.place_label, s.display_name, s.description_ia
+                   s.place_label, s.city_label, s.description_ia, s.prompt_version
             FROM spots s
             WHERE s.latitude BETWEEN %s AND %s
                 AND s.longitude BETWEEN %s AND %s
                 AND s.type IS NOT NULL
-                AND s.type NOT IN (%s, %s)
+                AND s.type NOT IN ({type_placeholders})
                 AND s.duplicate_of_spot_id IS NULL
+                AND s.p4n_removed = 0
+                AND (s.nuit_interdite IS NULL OR s.nuit_interdite = 0)
             ORDER BY s.name ASC
         '''
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, *excluded_types))
+    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, *HIDDEN_SPOT_TYPES))
     spots = cursor.fetchall()
 
     # Récupérer les services associés à chaque spot
@@ -70,7 +80,8 @@ def get_spots(
         cursor.execute(query_services, tuple(spot_ids))
         for row in cursor.fetchall():
             spot_id = row["spot_id"]
-            service = row["name"]
+            # On garde la catégorie : l'affichage fait un badge par catégorie.
+            service = {"name": row["name"], "category": row["category"]}
             if spot_id not in services_map:
                 services_map[spot_id] = []
             services_map[spot_id].append(service)
@@ -91,13 +102,12 @@ def get_spots(
             "verifie": spot["verifie"],
             "address": spot["address"],
             "place_label": spot["place_label"],
-            "display_name": spot["display_name"],
+            "city_label": spot["city_label"],
             "description_ia": spot["description_ia"],
+            "prompt_version": spot["prompt_version"],
             "services": services_map.get(spot["id"], [])
         }))
 
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
     return result
 
 @router.put("/update_plan/{plan_id}",summary="Update an existing trip plan with new data.")

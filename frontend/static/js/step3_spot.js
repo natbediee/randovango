@@ -117,7 +117,7 @@ function displaySpots(spots, map, hikeMarkerPosition, plannedSpotIds = new Map()
                 .on('popupclose', function () { if (!this.getTooltip()) this.bindTooltip(spotTipHtml, TIP_OPTS); })
                 .on('mouseover', function () {
                     const isSelected = localStorage.getItem('selectedSpot') == spot.id;
-                    if (!isSelected) this.setIcon(buildSpotHoveredDivIcon());
+                    if (!isSelected) setMarkerHovered(this, true);
                     const btn = document.getElementById(`select-spot-btn-${spot.id}`);
                     if (btn) {
                         const card = btn.closest('.spot-card');
@@ -128,7 +128,7 @@ function displaySpots(spots, map, hikeMarkerPosition, plannedSpotIds = new Map()
                 })
                 .on('mouseout', function () {
                     const isSelected = localStorage.getItem('selectedSpot') == spot.id;
-                    if (!isSelected) this.setIcon(buildSpotDivIcon());
+                    if (!isSelected) setMarkerHovered(this, false);
                     const btn = document.getElementById(`select-spot-btn-${spot.id}`);
                     if (btn) btn.closest('.spot-card')?.classList.remove('map-hover');
                 });
@@ -181,7 +181,7 @@ function createSpotCard(spot, plannedDay) {
     // Liste des services du spot (icône + nom, préparés côté Python)
     const servicesHTML = spot.services_display.length > 0
         ? spot.services_display.map(s => `<span class="feature">${s.icon} ${s.name}</span>`).join('')
-        : '<span class="feature">❌ Aucun service disponible</span>';
+        : '<span class="feature feature--none">Pas de service signalé</span>';
 
     card.innerHTML = `
         <div class="spot-content-grid">
@@ -195,7 +195,7 @@ function createSpotCard(spot, plannedDay) {
             <div class="spot-center">
                 <h4>${spot.name_label}</h4>
                 ${spot.address ? `<p class="spot-address"><i class="fas fa-map-marker-alt"></i> ${spot.address}</p>` : ''}
-                <p class="spot-description">${spot.description_label}</p>
+                ${spot.description_label ? `<p class="spot-description">${spot.description_label}</p>` : ''}
                 <div class="spot-features">
                     ${servicesHTML}
                 </div>
@@ -228,7 +228,7 @@ function createSpotCard(spot, plannedDay) {
         if (isSelected) return;
         const markerData = spotMarkers.find(m => m.spot.id === spot.id);
         if (!markerData) return;
-        markerData.marker.setIcon(buildSpotHoveredDivIcon());
+        setMarkerHovered(markerData.marker, true);
         markerData.marker.openTooltip(); // aperçu nom + infos de base
         if (spotMap && !spotMap.getBounds().contains(markerData.marker.getLatLng())) {
             spotMap.panTo(markerData.marker.getLatLng(), { animate: true });
@@ -239,7 +239,7 @@ function createSpotCard(spot, plannedDay) {
         if (markerData) markerData.marker.closeTooltip(); // toujours fermer, même si sélectionné
         const isSelected = localStorage.getItem('selectedSpot') == spot.id;
         if (isSelected) return;
-        if (markerData) markerData.marker.setIcon(buildSpotDivIcon());
+        if (markerData) setMarkerHovered(markerData.marker, false);
     });
 
     return card;

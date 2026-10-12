@@ -64,5 +64,11 @@ def init_mysql_randovango():
     else:
         logger.info(f"[INIT] Base MySQL randovango déjà initialisée (flag: {flag_path})")
 
-init_sqlite_users()
-init_mysql_randovango()
+# Auto-init/seed (comptes par défaut, création de schéma) : uniquement en dev.
+# En prod (AWS), les bases sont peuplées une fois pour toutes via restauration de dump,
+# pas par le code applicatif à chaque démarrage.
+if os.getenv("ENV", "dev") == "dev":
+    init_sqlite_users()
+    init_mysql_randovango()
+else:
+    logger.info("[INIT] ENV != dev : auto-init des bases désactivée.")

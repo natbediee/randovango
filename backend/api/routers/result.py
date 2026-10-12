@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import Response
 from utils.db_utils import MySQLUtils
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
-from utils.display_utils import result_day_display
+from utils.display_utils import result_day_display, spot_description_label, spot_name_label
 from services.pdf_service import render_trip_pdf_html
 
 router = APIRouter()
@@ -49,11 +49,15 @@ def _fetch_plan_data(plan_id: int):
             h.start_longitude    AS hike_longitude,
             h.address            AS hike_address,
             h.mongo_id           AS hike_mongo_id,
-            -- Le nom Park4Night est un gabarit "(29200) Brest - 172 Rue de Quimper"
-            -- et la description du texte contributeur brut : on préfère la couche
-            -- éditoriale quand elle existe, en retombant sur la source sinon.
-            COALESCE(p.display_name, p.place_label, p.name) AS spot_name,
-            COALESCE(p.description_ia, p.description)       AS spot_description,
+            -- Le nom affiché est calculé en Python (spot_name_label), avec la
+            -- même règle que l'étape 3. La description harmonisée prime sur le
+            -- texte contributeur brut quand elle existe.
+            p.place_label         AS spot_place_label,
+            p.city_label          AS spot_city_label,
+            p.name                AS spot_raw_name,
+            p.description_ia      AS spot_description_ia,
+            p.description         AS spot_raw_description,
+            p.prompt_version      AS spot_prompt_version,
             p.type                AS spot_type,
             p.rating              AS spot_rating,
             p.url                 AS spot_url,
@@ -71,6 +75,13 @@ def _fetch_plan_data(plan_id: int):
 
     # POI/services pour chaque jour
     for day in days:
+        day["spot_name"] = spot_name_label(
+            day.pop("spot_place_label"), day.pop("spot_city_label"),
+            day.pop("spot_raw_name"), day.get("spot_type"),
+        )
+        day["spot_description"] = spot_description_label(
+            day.pop("spot_description_ia"), day.pop("spot_raw_description"), day.pop("spot_prompt_version"),
+        ) if day.get("spot_id") else None
         cursor.execute("""
             SELECT p.id, p.name, p.latitude, p.longitude, p.address,
                    s.name AS service_type, s.category AS service_category
