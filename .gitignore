@@ -12,6 +12,8 @@ storage/
 logs/
 data/
 rapport/
-mongodump/
-bdd_randovango_dump.sql
+sauvegardes/
 .claudeignore
+# scripts ponctuels (rattrapage), hors du code versionné
+backend/oneshot/
+.DS_Store
