@@ -1,4 +1,4 @@
-from etl.enrich import dedupe_spots
+from agents import dedupe_spots
 
 
 CAMPING = {
@@ -104,6 +104,8 @@ def test_apply_merges_marks_the_loser_and_never_deletes() -> None:
     assert "INSERT IGNORE INTO spot_service" in statements[0]
     assert "UPDATE spots SET duplicate_of_spot_id" in statements[1]
     assert executed[1][1] == (PARKING_RICHE["id"], PARKING_PAUVRE["id"])
+    # La source ('p4n' ou 'ia') suit le service recopié.
+    assert "SELECT %s, service_id, source FROM spot_service" in statements[0]
 
 
 def test_candidate_pairs_drops_pairs_of_different_types(monkeypatch) -> None:
@@ -115,7 +117,7 @@ def test_candidate_pairs_drops_pairs_of_different_types(monkeypatch) -> None:
         (66.0, PARKING_RICHE["id"], PARKING_RICHE["name"], PARKING_RICHE["type"],
          PARKING_PAUVRE["id"], PARKING_PAUVRE["name"], PARKING_PAUVRE["type"]),
     ]
-    monkeypatch.setattr(dedupe_spots, "report_geographic_duplicates", lambda cursor: pairs)
+    monkeypatch.setattr(dedupe_spots, "find_close_pairs", lambda cursor: pairs)
     monkeypatch.setattr(
         dedupe_spots, "load_spot_details",
         lambda cursor, ids: {s["id"]: s for s in (CAMPING, PARKING_RICHE, PARKING_PAUVRE)},
@@ -125,3 +127,17 @@ def test_candidate_pairs_drops_pairs_of_different_types(monkeypatch) -> None:
 
     assert len(candidates) == 1
     assert {candidates[0][1]["id"], candidates[0][2]["id"]} == {PARKING_RICHE["id"], PARKING_PAUVRE["id"]}
+
+
+
+def test_each_decision_is_logged_on_a_self_sufficient_line(caplog) -> None:
+    # La ligne de log doit suffire pour décider : les deux fiches, la distance,
+    # la décision et sa raison.
+    service = FakeLLM([verdict()])
+    with caplog.at_level("INFO", logger="etl_dedupe_spots"):
+        dedupe_spots.arbitrate(service, [(66.0, PARKING_PAUVRE, PARKING_RICHE)])
+    line = next(r.getMessage() for r in caplog.records if "DOUBLON" in r.getMessage())
+    assert PARKING_PAUVRE["name"] in line and PARKING_RICHE["name"] in line
+    assert "66 m" in line
+    assert f"on garde #{PARKING_RICHE['id']}" in line
+    assert "Même rue décrite deux fois." in line

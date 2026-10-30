@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.llm_service import LLMService, LLMUnavailable
+from agents.llm_service import LLMService, LLMUnavailable
 
 
 def response(text=None, stop_reason="end_turn"):
@@ -28,7 +28,7 @@ SCHEMA = {"type": "object", "properties": {"ok": {"type": "boolean"}},
 
 def build(reply):
     service = LLMService(api_key="test")
-    service._client = SimpleNamespace(messages=FakeMessages(reply))
+    service.client = SimpleNamespace(messages=FakeMessages(reply))
     return service
 
 
@@ -41,7 +41,7 @@ def test_complete_json_constrains_the_output_format() -> None:
     service = build(response('{"ok": true}'))
     service.complete_json("sys", "user", SCHEMA)
 
-    sent = service._client.messages.kwargs
+    sent = service.client.messages.kwargs
     assert sent["output_config"]["format"] == {"type": "json_schema", "schema": SCHEMA}
     assert sent["model"] == "claude-opus-5"
     # Le prompt système est identique d'un spot à l'autre : il est mis en cache.
@@ -52,21 +52,21 @@ def test_complete_json_constrains_the_output_format() -> None:
 
 
 def test_complete_json_rejects_a_truncated_response() -> None:
-    # Mieux vaut ne rien écrire en base qu'un enrichissement partiel.
+    # Mieux vaut ne rien écrire en base qu'une harmonisation partielle.
     service = build(response('{"ok": tr', stop_reason="max_tokens"))
-    with pytest.raises(LLMUnavailable, match="tronquée"):
+    with pytest.raises(LLMUnavailable, match="coupée"):
         service.complete_json("sys", "user", SCHEMA)
 
 
 def test_complete_json_rejects_a_refusal() -> None:
     service = build(response(None, stop_reason="refusal"))
-    with pytest.raises(LLMUnavailable, match="refusée"):
+    with pytest.raises(LLMUnavailable, match="refusé"):
         service.complete_json("sys", "user", SCHEMA)
 
 
 def test_complete_json_rejects_a_response_without_text() -> None:
     service = build(response(None))
-    with pytest.raises(LLMUnavailable, match="sans bloc texte"):
+    with pytest.raises(LLMUnavailable, match="sans texte"):
         service.complete_json("sys", "user", SCHEMA)
 
 
@@ -84,7 +84,7 @@ def test_missing_api_key_is_reported_clearly(monkeypatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr("utils.service_utils.ServiceUtil.load_env", lambda: None)
     with pytest.raises(LLMUnavailable, match="ANTHROPIC_API_KEY"):
-        _ = LLMService().client
+        LLMService()._get_client()
 
 
 def test_fetch_batch_results_is_keyed_by_custom_id_and_skips_failures() -> None:
@@ -97,7 +97,7 @@ def test_fetch_batch_results_is_keyed_by_custom_id_and_skips_failures() -> None:
                         result=SimpleNamespace(type="succeeded", message=response("cassé"))),
     ]
     service = LLMService(api_key="test")
-    service._client = SimpleNamespace(
+    service.client = SimpleNamespace(
         messages=SimpleNamespace(batches=SimpleNamespace(results=lambda batch_id: results))
     )
 
@@ -106,7 +106,7 @@ def test_fetch_batch_results_is_keyed_by_custom_id_and_skips_failures() -> None:
 
 def test_batch_finished_reads_the_processing_status() -> None:
     service = LLMService(api_key="test")
-    service._client = SimpleNamespace(
+    service.client = SimpleNamespace(
         messages=SimpleNamespace(batches=SimpleNamespace(
             retrieve=lambda batch_id: SimpleNamespace(processing_status="ended")
         ))

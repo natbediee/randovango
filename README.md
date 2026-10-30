@@ -120,6 +120,27 @@ docker compose exec backend python3 -m etl.etl_meteo
 
 > ⚠️ Le lancement manuel des ETL est réservé aux cas où vous ne passez pas par le frontend Flask. Sinon, toutes les opérations d'intégration de données se font via l'interface utilisateur.
 
+### Sauvegarde de la base MySQL
+
+Le dump sert à peupler la base en production. Le refaire après chaque traitement important des données (scraping, harmonisation des spots…).
+
+```bash
+docker compose exec db_randovango mysqldump -u randovango_user -p \
+  --single-transaction --no-tablespaces --set-gtid-purged=OFF --skip-masking-policies \
+  bdd_randovango > sauvegardes/bdd_randovango_dump.sql
+```
+
+Le mot de passe demandé est `DB_PSWD` (voir `.env`). Le compte applicatif suffit : inutile d'utiliser root.
+
+| Option | Rôle |
+| --- | --- |
+| `--single-transaction` | photo cohérente de la base, même si un script y écrit pendant le dump |
+| `--no-tablespaces` | n'exporte pas les espaces de stockage (réservé aux administrateurs, inutile ici) |
+| `--set-gtid-purged=OFF` | n'inclut pas les identifiants de transactions du serveur, qui feraient échouer la restauration sur un autre serveur |
+| `--skip-masking-policies` | n'exporte pas les politiques de masquage de colonnes (MySQL 9, non utilisées) |
+
+Pour vérifier que le dump est complet, la dernière ligne du fichier doit être `-- Dump completed on …`.
+
 ### En local
 
 1. **Installe les dépendances**

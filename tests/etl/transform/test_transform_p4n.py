@@ -40,3 +40,9 @@ def test_parse_spot_name_without_template_falls_back_to_raw_name() -> None:
 def test_parse_spot_name_handles_empty_input() -> None:
     assert parse_spot_name(None) == (None, None, None)
     assert parse_spot_name("   ") == (None, None, None)
+
+
+def test_clean_place_type_removes_the_park4night_number() -> None:
+    from etl.transform.transform_p4n import clean_place_type
+    assert clean_place_type("#25487 - PARKING JOUR UNIQUEMENT") == "PARKING JOUR UNIQUEMENT"
+    assert clean_place_type("CAMPING") == "CAMPING"

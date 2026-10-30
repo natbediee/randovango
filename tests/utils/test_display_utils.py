@@ -7,6 +7,10 @@ from utils.display_utils import (
     enrich_meteo_forecasts,
     enrich_poi,
     enrich_spot,
+    spot_services_display,
+    spot_name_label,
+    spot_description_label,
+    SPOT_SERVICE_CATEGORIES,
     hike_trace_color,
     js_num,
     js_round,
@@ -119,12 +123,35 @@ def test_spot_category_casse_et_espaces() -> None:
 
 def test_enrich_spot() -> None:
     spot = enrich_spot({"type": None, "verifie": 0, "description": None,
-                        "rating": 4.2, "services": ["Eau potable", "Sauna"]})
+                        "rating": 4.2, "services": [
+                            {"name": "Eau potable", "category": "drinking_water"},
+                            {"name": "Sauna", "category": None},
+                        ]})
     assert spot["type_label"] == "Bivouac"
     assert spot["category"] == "autres"
     assert spot["rating_label"] == "⭐ 4.2/5"
     assert spot["services_display"][0] == {"icon": "💧", "name": "Eau potable"}
+    # Catégorie inconnue : le nom Park4Night est gardé, rien ne disparaît.
     assert spot["services_display"][1] == {"icon": "✓", "name": "Sauna"}
+
+
+def test_spot_services_display_merges_services_of_the_same_category() -> None:
+    badges = spot_services_display([
+        {"name": "Pêche à pied", "category": "fishing"},
+        {"name": "Coins de pêche", "category": "fishing"},
+        {"name": "Eaux usées", "category": "sanitary_dump_station"},
+        {"name": "Eaux noires", "category": "sanitary_dump_station"},
+        {"name": "Départ de randonnées", "category": "hiking"},
+    ])
+    # Un badge par catégorie, libellé français, équipements avant activités.
+    assert [b["name"] for b in badges] == ["Vidange", "Randonnée", "Pêche"]
+
+
+def test_every_mapped_service_category_has_a_french_label() -> None:
+    # Toute catégorie produite par le mapping P4N doit avoir son libellé,
+    # sinon ses services retomberaient sur le nom brut.
+    from utils.service_utils import SERVICE_CATEGORY_MAP
+    assert set(SERVICE_CATEGORY_MAP.values()) <= SPOT_SERVICE_CATEGORIES.keys()
 
 
 # --- POI / services ---
@@ -203,3 +230,41 @@ def test_result_day_display_jour_vide() -> None:
     assert display["activity_html"] == "Pas de randonnée - Détente"
     assert display["accommodation_html"] == "Aucun spot sélectionné"
     assert display["services_html"] == "Aucun service"
+
+
+# --- Nom affiché d'un spot ---
+
+def test_spot_name_label_builds_a_fallback_without_the_house_number() -> None:
+    assert spot_name_label("139 Mechou Kamm Doun", "Plouguerneau", "…",
+                           "PARKING JOUR ET NUIT") == "Parking · Mechou Kamm Doun"
+    assert spot_name_label("33-35 Rue du Manoir", None, "…",
+                           "AIRE CC STAT. GRATUIT") == "Aire camping-car · Rue du Manoir"
+    assert spot_name_label("54B Route de Plestin", None, "…",
+                           "PARKING JOUR ET NUIT") == "Parking · Route de Plestin"
+
+
+def test_spot_name_label_keeps_a_label_that_already_names_the_place() -> None:
+    assert spot_name_label("Camping Kermaléro", None, "…", "CAMPING") == "Camping Kermaléro"
+
+
+def test_spot_name_label_falls_back_on_the_city_then_the_raw_name() -> None:
+    assert spot_name_label(None, "Brest", "(29200) Brest -", "PARKING JOUR ET NUIT") == "Parking · Brest"
+    assert spot_name_label(None, None, "(29200) Brest -", None) == "(29200) Brest -"
+    assert spot_name_label(None, None, None, None) is None
+
+
+def test_spot_description_label() -> None:
+    assert spot_description_label("Parking calme.", "parking ok", 18) == "Parking calme."
+    # Harmonisé mais vide : rien à afficher, le titre et les badges suffisent.
+    assert spot_description_label(None, "Camping les Pins", 18) == ""
+    # Pas encore harmonisé : texte d'origine.
+    assert spot_description_label(None, "parking ok", None) == "parking ok"
+    assert spot_description_label(None, None, None) == "Aucune description disponible"
+
+
+def test_day_only_parkings_are_excluded_and_hidden() -> None:
+    # "Parking jour uniquement" : on ne peut pas y dormir, ce n'est pas un spot pour Randovango.
+    # Pas chargé s'il est nouveau, masqué s'il était déjà en base.
+    from utils.display_utils import EXCLUDED_SPOT_TYPES, HIDDEN_SPOT_TYPES
+    assert "PARKING JOUR UNIQUEMENT" in EXCLUDED_SPOT_TYPES
+    assert set(EXCLUDED_SPOT_TYPES) <= set(HIDDEN_SPOT_TYPES)
