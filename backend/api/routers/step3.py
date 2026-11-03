@@ -1,8 +1,14 @@
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Query, Body
+from services.pepite_service import start_preparation
 from services.plan_service import insert_or_update_plan
-from utils.display_utils import HIDDEN_SPOT_TYPES, enrich_spot
+from services.spot_selection_service import proposable_spots
+from services.supervision_service import reworked_a_savoir
+from utils.display_utils import SPOT_ON_HIKE_KM, enrich_spot
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
+from utils.geo_utils import distance_to_trace_km
 
 router = APIRouter()
 logger = LoggerUtil.get_logger(__name__)
@@ -10,11 +16,17 @@ logger = LoggerUtil.get_logger(__name__)
 @router.get("/spots", summary="Returns the spots for a given city.")
 def get_spots(
     city_id: int = Query(..., description="ID de la ville"),
-    distance_km: float = Query(5, description="Rayon de la zone en km")
+    distance_km: float = Query(5, description="Rayon de la zone en km"),
+    hike_id: int | None = Query(None, description="Rando du jour : spots triés selon leur distance à son tracé"),
+    plan_id: int | None = Query(None, description="Séjour : avec day_number, donne la date de la nuit"),
+    day_number: int = Query(1, description="Jour du séjour")
 ):
     """
     Retourne les spots (bivouac, camping, aire CC) pour une ville donnée,
     vérifiés ou non, quel que soit le statut de connexion de l'utilisateur.
+    Avec la rando du jour, chaque spot porte sa distance au tracé : ceux à moins de
+    500 m (SPOT_ON_HIKE_KM) sont « sur ta rando », même un peu au-delà du rayon de
+    la ville, et la liste va du plus proche au plus loin de la rando.
     """
     logger.info(f"Route /spots appelée avec city_id={city_id}, distance_km={distance_km}")
 
@@ -25,13 +37,35 @@ def get_spots(
     # try/finally : la connexion est fermée même en cas d'erreur. Sinon elle reste
     # ouverte avec une lecture en cours, et bloque toute modification de la table.
     try:
-        return _spots_around_city(cursor, city_id, distance_km, get_bounding_box)
+        night = _night_date(cursor, plan_id, day_number)
+        return _spots_around_city(cnx, cursor, city_id, distance_km, get_bounding_box, _hike_trace(cursor, hike_id),
+                                  night)
     finally:
         cursor.close()
         MySQLUtils.disconnect(cnx)
 
 
-def _spots_around_city(cursor, city_id, distance_km, get_bounding_box) -> list:
+def _night_date(cursor, plan_id, day_number) -> date:
+    """Date de la nuit à passer sur le spot : un lieu qui aura rouvert d'ici là peut être proposé."""
+    if plan_id:
+        cursor.execute("SELECT start_date FROM trip_plans WHERE id = %s", (plan_id,))
+        plan = cursor.fetchone()
+        if plan and plan["start_date"]:
+            return plan["start_date"] + timedelta(days=day_number - 1)
+    return date.today()
+
+
+def _hike_trace(cursor, hike_id) -> list:
+    """Points (latitude, longitude) du tracé de la rando du jour, [] sans rando ou sans tracé."""
+    if not hike_id:
+        return []
+    from services.pepite_service import hike_trace
+    cursor.execute("SELECT mongo_id FROM hikes WHERE id = %s", (hike_id,))
+    hike = cursor.fetchone()
+    return hike_trace(hike["mongo_id"]) if hike and hike.get("mongo_id") else []
+
+
+def _spots_around_city(connection, cursor, city_id, distance_km, get_bounding_box, trace=(), night=None) -> list:
     """Spots autour d'une ville, prêts à afficher (voir get_spots)."""
     # Récupérer les coordonnées de la ville
     cursor.execute("SELECT latitude, longitude FROM cities WHERE id = %s", (city_id,))
@@ -39,32 +73,22 @@ def _spots_around_city(cursor, city_id, distance_km, get_bounding_box) -> list:
     if not city:
         return []
 
-    min_lat, min_lon, max_lat, max_lon = get_bounding_box(city['latitude'], city['longitude'], distance_km)
+    city_box = get_bounding_box(city['latitude'], city['longitude'], distance_km)
+    min_lat, min_lon, max_lat, max_lon = city_box
+    if trace:
+        # La rando peut sortir du rayon de la ville : on cherche aussi le long du tracé.
+        south, west, _, _ = get_bounding_box(min(p[0] for p in trace), min(p[1] for p in trace), SPOT_ON_HIKE_KM)
+        _, _, north, east = get_bounding_box(max(p[0] for p in trace), max(p[1] for p in trace), SPOT_ON_HIKE_KM)
+        min_lat, min_lon, max_lat, max_lon = min(min_lat, south), min(min_lon, west), max(max_lat, north), max(max_lon, east)
 
-    # Récupérer les spots dans la bounding box (vérifiés et non vérifiés),
-    # sauf les types jamais affichés (HIDDEN_SPOT_TYPES).
-    type_placeholders = ",".join(["%s"] * len(HIDDEN_SPOT_TYPES))
-
-    # duplicate_of_spot_id : spots marqués comme doublon d'un voisin par
-    # agents.dedupe_spots. Ils restent en base (rien n'est supprimé), on ne
-    # les affiche simplement pas deux fois sur la carte.
-    # p4n_removed : fiches qui ont disparu de Park4Night, plus proposées.
-    # nuit_interdite : lieux où l'on ne peut pas dormir (harmonisation IA).
-    query = f'''
-            SELECT s.id, s.name, s.description, s.type, s.latitude, s.longitude, s.rating, s.url, s.verifie, s.address,
-                   s.place_label, s.city_label, s.description_ia, s.prompt_version
-            FROM spots s
-            WHERE s.latitude BETWEEN %s AND %s
-                AND s.longitude BETWEEN %s AND %s
-                AND s.type IS NOT NULL
-                AND s.type NOT IN ({type_placeholders})
-                AND s.duplicate_of_spot_id IS NULL
-                AND s.p4n_removed = 0
-                AND (s.nuit_interdite IS NULL OR s.nuit_interdite = 0)
-            ORDER BY s.name ASC
-        '''
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, *HIDDEN_SPOT_TYPES))
-    spots = cursor.fetchall()
+    spots = proposable_spots(connection, cursor, (min_lat, min_lon, max_lat, max_lon), night or date.today())
+    if trace:
+        for spot in spots:
+            spot["hike_distance_km"] = distance_to_trace_km(spot["latitude"], spot["longitude"], trace)
+        # Hors du rayon de la ville, on ne garde que les spots sur le trajet de la rando.
+        spots = [s for s in spots if s["hike_distance_km"] <= SPOT_ON_HIKE_KM
+                 or (city_box[0] <= s["latitude"] <= city_box[2] and city_box[1] <= s["longitude"] <= city_box[3])]
+        spots.sort(key=lambda s: s["hike_distance_km"])
 
     # Récupérer les services associés à chaque spot
     spot_ids = [spot["id"] for spot in spots]
@@ -86,6 +110,8 @@ def _spots_around_city(cursor, city_id, distance_km, get_bounding_box) -> list:
                 services_map[spot_id] = []
             services_map[spot_id].append(service)
 
+    a_savoir = reworked_a_savoir(cursor, spot_ids, night or date.today())
+
     # Construire la réponse, avec les champs prêts à afficher (catégorie prix,
     # badge, icônes des services...) calculés en Python par enrich_spot.
     result = []
@@ -105,6 +131,8 @@ def _spots_around_city(cursor, city_id, distance_km, get_bounding_box) -> list:
             "city_label": spot["city_label"],
             "description_ia": spot["description_ia"],
             "prompt_version": spot["prompt_version"],
+            "hike_distance_km": spot.get("hike_distance_km"),
+            "a_savoir": a_savoir.get(spot["id"]),
             "services": services_map.get(spot["id"], [])
         }))
 
@@ -113,4 +141,8 @@ def _spots_around_city(cursor, city_id, distance_km, get_bounding_box) -> list:
 @router.put("/update_plan/{plan_id}",summary="Update an existing trip plan with new data.")
 def update_plan(plan_id: int, data: dict = Body(...)):
     plan_id = insert_or_update_plan(plan_id, data)
+    # Le spot est choisi : on prépare tout de suite, en tâche de fond, les idées
+    # (pépites de Vany) du jour, pour qu'elles soient prêtes au récap.
+    if data.get("spot_id"):
+        start_preparation(plan_id, data.get("day_number", 1))
     return {"status": "updated", "plan_id": plan_id, "recap": data}

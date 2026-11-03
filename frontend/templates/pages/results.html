@@ -3,7 +3,7 @@
 {% block main_class %}has-mobile-nav has-results-nav{% endblock %}
 
 {% block header %}
-  {% with nav_mode='wizard', active_step=5 %}
+  {% with nav_mode='wizard', active_step=6 %}
     {% include 'partials/header.html' %}
   {% endwith %}
 {% endblock %}
@@ -32,7 +32,7 @@
     </div>
   </div>
 
-  {# Carte itinéraire + colonne latérale (Vany + action) à côté ; la carte prend la
+  {# Carte itinéraire + colonne latérale (action puis Vany) à côté ; la carte prend la
      hauteur de la colonne latérale (align-items: stretch). #}
   <div class="results-map-row">
     <div class="map-box results-map">
@@ -40,16 +40,6 @@
     </div>
 
     <div class="results-side">
-      {# Cerise sur le gâteau - recommandation Vany #}
-      {% with vany_pose='waiting-soft.png',
-              vany_eyebrow='La cerise sur le gâteau',
-              vany_title='Vany te suggère un détour',
-              vany_text="Envie d'un petit plus ? Débloque le voyage 100% IA et laisse Vany peaufiner ton itinéraire avec des idées sur-mesure.",
-              vany_cta_label='Découvrir Vany',
-              vany_cta_url=url_for('unlock_vany') %}
-        {% include 'partials/vany_banner.html' %}
-      {% endwith %}
-
       {# Fin du séjour : téléchargement du carnet #}
       <div id="tripEndSection" style="display:none;">
         <div class="trip-end card card--mint text-center">
@@ -66,6 +56,18 @@
           <p id="pdfMsg" class="muted" style="display:none; margin-top:10px;"></p>
         </div>
       </div>
+      {# Encart Vany - invitation au voyage 100% IA, à partir des pépites que Vany a
+         déjà trouvées pour ce séjour (titre complété par results.js, showVanyBanner). #}
+      <div id="vanyResults">
+      {% with vany_pose='waiting-soft.png',
+              vany_eyebrow='Voyage 100% IA',
+              vany_title='Vany peut aller plus loin',
+              vany_text="Imagine s'il préparait ton voyage de bout en bout : la rando, le spot, les services et les pépites, choisis selon tes envies.",
+              vany_cta_label='Découvrir Vany',
+              vany_cta_url=url_for('unlock_vany') %}
+        {% include 'partials/vany_banner.html' %}
+      {% endwith %}
+      </div>
     </div>
   </div>
 
@@ -76,7 +78,7 @@
    Elle porte le choix « jour suivant », qui doit rester atteignable sans dérouler le récap. #}
 <div class="container step-nav-wrap">
   <div class="step-nav mobile-nav">
-    <a href="{{ url_for('step4') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
+    <a href="{{ url_for('step5') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
     <div id="nextDaySection" class="results-nav__next" style="display:none;">
       <span id="nextDayTitle" class="results-nav__title"></span>
       <button class="btn btn--outline" id="stayButton" onclick="stayInSameCity()">

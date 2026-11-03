@@ -126,6 +126,10 @@ def init_database():
                 a_verifier TINYINT(1),
                 nuit_interdite TINYINT(1),
                 opening_period VARCHAR(255),
+                ouverture_statut VARCHAR(12),
+                ouverture_debut CHAR(5),
+                ouverture_fin CHAR(5),
+                ouverture_lue VARCHAR(255),
                 price_parking VARCHAR(255),
                 price_services VARCHAR(255),
                 details_scraped_at DATETIME,
@@ -223,6 +227,10 @@ def init_database():
                 original_id VARCHAR(255),
                 source_id INT,
                 verifie BOOL DEFAULT FALSE,
+                masque TINYINT(1) NOT NULL DEFAULT 0,
+                ferme_moment TINYINT(1) NOT NULL DEFAULT 0,
+                statut_saison VARCHAR(10),
+                mois_ouverture JSON,
                 unique (original_id, source_id),
                 INDEX idx_poi_latlon (latitude, longitude),
                 FOREIGN KEY (source_id) REFERENCES sources(id)
@@ -238,6 +246,66 @@ def init_database():
                 UNIQUE (poi_id, city_id),
                 FOREIGN KEY (poi_id) REFERENCES poi(id),
                 FOREIGN KEY (city_id) REFERENCES cities(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 bis. vérifications des POI (une ligne par source), dernière réponse brute.
+            # Même définition que etl/load/load_poi_checks.py, pour les bases déjà créées.
+            """
+            CREATE TABLE IF NOT EXISTS poi_checks (
+                poi_id INT NOT NULL,
+                source VARCHAR(20) NOT NULL,
+                checked_at DATETIME NOT NULL,
+                result JSON,
+                PRIMARY KEY (poi_id, source),
+                FOREIGN KEY (poi_id) REFERENCES poi(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 ter. ce que les vérifications signalent sur un POI, à relire avant toute correction
+            """
+            CREATE TABLE IF NOT EXISTS poi_signals (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                poi_id INT NOT NULL,
+                source VARCHAR(20) NOT NULL,
+                signal_type VARCHAR(30) NOT NULL,
+                detail JSON,
+                statut VARCHAR(10) NOT NULL DEFAULT 'a_relire',
+                detected_at DATETIME NOT NULL,
+                reviewed_at DATETIME,
+                UNIQUE (poi_id, source, signal_type),
+                FOREIGN KEY (poi_id) REFERENCES poi(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 quater. spécialisation de poi : un restaurant est un POI avec des attributs en plus
+            """
+            CREATE TABLE IF NOT EXISTS restaurants (
+                poi_id INT NOT NULL PRIMARY KEY,
+                genre VARCHAR(100) NOT NULL,
+                pourquoi TEXT,
+                budget VARCHAR(50),
+                jours_fermeture VARCHAR(150),
+                distinction VARCHAR(100),
+                ancien_nom VARCHAR(255),
+                prompt_version INT,
+                model VARCHAR(50),
+                trouve_le DATETIME NOT NULL,
+                FOREIGN KEY (poi_id) REFERENCES poi(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 quinquies. les pages qui prouvent qu'un POI existe
+            """
+            CREATE TABLE IF NOT EXISTS poi_preuves (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                poi_id INT NOT NULL,
+                url VARCHAR(512) NOT NULL,
+                type_page VARCHAR(20) NOT NULL,
+                porte_sur VARCHAR(20),
+                citation TEXT,
+                citation_trouvee TINYINT(1),
+                date_page DATE,
+                periode_affichee VARCHAR(255),
+                verdict VARCHAR(20) NOT NULL,
+                controle_le DATETIME NOT NULL,
+                FOREIGN KEY (poi_id) REFERENCES poi(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 10.table poi_service (association POI <-> services)

@@ -36,7 +36,7 @@ def get_hikes(
         return []
     
     # Calculer la bounding box autour de la ville
-    from utils.geo_utils import get_bounding_box
+    from utils.geo_utils import get_bounding_box, haversine_distance_km
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(
         city['latitude'], 
         city['longitude'], 
@@ -60,11 +60,14 @@ def get_hikes(
         FROM hikes
         WHERE start_latitude BETWEEN %s AND %s
         AND start_longitude BETWEEN %s AND %s
-        ORDER BY name ASC
     """
 
     cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
     hikes = cursor.fetchall()
+    # Les randos qui partent le plus près de la ville choisie d'abord (et non par
+    # ordre alphabétique : une rando d'une commune voisine passait en tête).
+    hikes.sort(key=lambda h: haversine_distance_km(city["latitude"], city["longitude"],
+                                                   h["start_latitude"], h["start_longitude"]))
 
     cursor.close()
     MySQLUtils.disconnect(cnx)

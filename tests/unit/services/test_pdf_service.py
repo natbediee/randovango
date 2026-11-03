@@ -5,16 +5,18 @@ Le rendu complet (render_trip_pdf_html) n'est pas testé ici : il dépend de Mon
 textes composés à partir des données du séjour et le balisage des descriptifs.
 """
 from services.pdf_service import (
+    _pepite_section,
     _cover_subtitle,
     _fr_int,
     _fr_measure,
     _fr_number,
     _highlight_brackets,
     _long_date,
+    _trail_tips_section,
     _trip_totals,
     vany_note,
 )
-from datetime import date
+from datetime import date, datetime
 
 
 # --- Formatage français ---
@@ -108,3 +110,36 @@ def test_vany_note_repli_quand_rien_ne_se_distingue() -> None:
     note = vany_note({"city_name": "Rennes"}, days, {"days": 1, "elevation_m": 80})
     assert "flâner" in note["text"]
     assert note["text"].endswith("On se retrouve sur RandoVanGo pour le prochain voyage.")
+
+
+def test_pepite_card_asks_to_confirm_only_what_is_scheduled() -> None:
+    market = {"nom": "Marché de Plougonvelin", "horaires": "Dimanche matin", "jours_semaine": [6],
+              "date_debut": None, "heure_debut": None, "sources": [], "verified_at": datetime(2026, 10, 30)}
+    assert "confirmer la veille" not in _pepite_section({"pepites": [market]})
+    concert = market | {"nom": "Concert", "date_debut": date(2026, 10, 31)}
+    assert "confirmer la veille" in _pepite_section({"pepites": [concert]})
+    boat = market | {"nom": "Sortie en mer", "heure_debut": 13.25}
+    assert "confirmer la veille" in _pepite_section({"pepites": [boat]})
+
+
+def test_every_idea_added_to_the_day_gets_its_card() -> None:
+    idea = {"nom": "Marché", "sources": [], "verified_at": datetime(2026, 10, 30)}
+    html = _pepite_section({"pepites": [idea, idea | {"nom": "Cinéma Le Dauphin"}]})
+    assert html.count('class="pepite-card"') == 2 and "Cinéma Le Dauphin" in html
+    assert _pepite_section({"pepites": []}) == ""
+
+
+def test_trail_tips_section_lists_places_on_the_way() -> None:
+    assert _trail_tips_section({"trail_tips": []}) == ""
+    html = _trail_tips_section({"trail_tips": [{"nom": "Menhir de Kerhouézel", "description": "10 m de haut."},
+                                               {"nom": "Port de Mazou", "description": None}]})
+    assert "En chemin, ne manque pas" in html
+    assert "<b>Menhir de Kerhouézel</b>&nbsp;– 10 m de haut." in html
+    assert "<b>Port de Mazou</b></div>" in html
+
+
+def test_pepite_card_carries_vany_sentence_escaped() -> None:
+    idea = {"nom": "Dunes", "description": "", "sources": [], "pourquoi": "<b>Coucher</b> à 18 h."}
+    html = _pepite_section({"pepites": [idea]})
+    assert 'class="pepite-why"' in html and "&lt;b&gt;Coucher&lt;/b&gt;" in html
+    assert 'class="pepite-why"' not in _pepite_section({"pepites": [idea | {"pourquoi": None}]})

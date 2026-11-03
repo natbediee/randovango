@@ -78,13 +78,29 @@ def scraping_background(city):
                     # modèle est indisponible ; les spots restent affichables sans.
                     try:
                         from agents.harmonize_spots import run_sample
-                        run_sample(len(df_transformed))
+                        run_sample(only_new=True)
                     except Exception as harmonize_error:
                         logger.warning(f"[ETL-SC] Harmonisation IA ignorée : {harmonize_error}")
+                    # Dates d'ouverture des fiches nouvelles ou modifiées : sans elles, le spot reste proposé.
+                    try:
+                        from agents.read_openings import run as read_openings
+                        read_openings()
+                    except Exception as opening_error:
+                        logger.warning(f"[ETL-SC] Lecture des ouvertures ignorée : {opening_error}")
                 else:
                     logger.warning(f"[ETL-SC] Scraping P4N a échoué pour la ville : {city}")
             except Exception as e:
                 logger.error(f"[ETL-SC] Erreur lors de l'extraction/chargement P4N: {e}")
+
+    # 4. Pépites de Vany : les lieux incontournables autour de la ville, cherchés une
+    # fois pour toutes par l'agent (quelques minutes). En dernier : la position des
+    # lieux trouvés est recalée sur les POI chargés plus haut, et les spots P4N,
+    # plus attendus, ne patientent pas derrière. Non bloquant, comme l'harmonisation.
+    try:
+        from services.pepite_service import search_city_places
+        search_city_places(city)
+    except Exception as pepites_error:
+        logger.warning(f"[ETL-SC] Pépites de Vany ignorées pour {city} : {pepites_error}")
 
     logger.info(f"[ETL-SC] Scraping terminé pour la ville: {city}")
 

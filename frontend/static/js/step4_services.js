@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // Label du bouton suivant
     const nextLabel = document.getElementById('nextStepLabel');
-    if (nextLabel) nextLabel.textContent = 'Voir mon carnet';
+    if (nextLabel) nextLabel.textContent = 'Voir les pépites de Vany';
 
     // --- 3. Carte ---
     serviceMap = await createStepMap(48.4, -4.5, 12);
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // Mettre à jour les marqueurs des POI déjà sélectionnés (restauration depuis DB)
         selectedPoiIds.forEach(id => updatePoiMarker(id));
-        if (selectedPoiIds.size > 0) document.getElementById('nextStepBtn').style.display = 'block';
+        showNextOrSkip(selectedPoiIds.size > 0);
 
         // Vue d'ensemble au départ : tous les marqueurs visibles (activeCategory = null)
         updateMapMarkersVisibility();
@@ -237,16 +237,13 @@ function renderCategory(categoryId, poiList) {
                     ${poi.address ? `<p class="service-address"><i class="fas fa-map-marker-alt"></i> ${poi.address}</p>` : ''}
                     ${poi.distance_label ? `<p class="service-distance"><i class="fas fa-route"></i> ${poi.distance_label}</p>` : ''}
                     <p>${poi.description || ''}</p>
+                    ${poi.url ? `<p class="service-address"><a href="${escapeHtml(poi.url)}" target="_blank" rel="noopener">Site : ${escapeHtml(poi.url_label)}</a></p>` : ''}
                 </div>
                 <div class="service-right">
                     <button class="btn btn-outline btn-sm"
                         onclick="showPoiOnMap(${poi.latitude}, ${poi.longitude}, '${safeName}')">
                         <i class="fas fa-map"></i> Voir
                     </button>
-                    ${poi.url ? `
-                    <a href="${poi.url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
-                        <i class="fas fa-external-link-alt"></i> Site
-                    </a>` : ''}
                     <button class="${selectedPoiIds.has(poi.id) ? 'btn btn-selected btn-sm' : 'btn btn-primary btn-sm'}" id="btn-poi-${poi.id}"
                         onclick="toggleService(${poi.id}, '${safeName}')">
                         ${selectedPoiIds.has(poi.id) ? 'Retirer' : 'Ajouter'}
@@ -417,9 +414,6 @@ function saveToDB() {
 // les appellent par leur nom dans des attributs onclick.
 
 function toggleService(poiId, poiName) {
-    const noServiceOption = document.querySelector('.no-service-option');
-    if (noServiceOption) noServiceOption.classList.remove('selected');
-
     const btn = document.getElementById(`btn-poi-${poiId}`);
     const card = document.getElementById(`poi-card-${poiId}`);
     if (selectedPoiIds.has(poiId)) {
@@ -433,46 +427,25 @@ function toggleService(poiId, poiName) {
     }
 
     updatePoiMarker(poiId);
-    document.getElementById('nextStepBtn').style.display = 'block';
+    showNextOrSkip(selectedPoiIds.size > 0);
     // Concept unifié : après l'action, le popup se ferme.
     if (serviceMap) serviceMap.closePopup();
     saveToDB();
 }
 
-function selectNoService() {
-    const previouslySelected = Array.from(selectedPoiIds);
+// Bouton « Continuer sans service » de la barre du bas : aucun service ce jour-là,
+// on passe directement aux pépites de Vany.
+function skipServices() {
     selectedPoiIds.clear();
-    previouslySelected.forEach(poiId => {
-        const btn = document.getElementById(`btn-poi-${poiId}`);
-        if (btn) { btn.textContent = 'Ajouter'; btn.className = 'btn btn-primary btn-sm'; }
-    });
-    previouslySelected.forEach(updatePoiMarker);
-
-    document.querySelector('.no-service-option').classList.add('selected');
-    document.getElementById('nextStepBtn').style.display = 'block';
-
-    saveToDB();
+    goToPepites();
 }
 
-// Bouton "Voir mon carnet" : sauvegarde les services puis affiche le carnet.
+// Bouton "Voir les pépites de Vany" : sauvegarde les services puis passe à l'étape 5.
 // On ATTEND la fin de la sauvegarde avant de quitter la page : naviguer tout de
 // suite interrompait la requête en cours ("Failed to fetch" dans la console).
-// C'est ensuite /results qui propose de continuer sur la même ville ou d'en
-// changer pour le jour suivant (voir stayInSameCity()/changeCityForNextDay()).
-async function goToNextDayOrResults() {
+async function goToPepites() {
     await saveToDB();
-    // Fin d'une édition de jour (lancée depuis le récap) : on restaure le jour de
-    // progression réel et on nettoie les repères d'édition, pour revenir au récap
-    // complet plutôt que de rester sur le jour édité (voir editDay dans results.js).
-    const editingDay = localStorage.getItem('editingDay');
-    if (editingDay) {
-        const ret = localStorage.getItem('editReturnDay');
-        if (ret) localStorage.setItem('currentDay', ret);
-        localStorage.removeItem('editingDay');
-        localStorage.removeItem('editReturnDay');
-        localStorage.removeItem('editOriginalCity');
-    }
-    window.location.href = window.APP_URLS.results;
+    window.location.href = window.APP_URLS.step5;
 }
 
 // Bouton "Voir" d'un service : centre la carte sur le service

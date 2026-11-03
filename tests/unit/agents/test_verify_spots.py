@@ -1,6 +1,6 @@
 from datetime import date
 
-from agents import verify_spots
+from agents import llm_config, verify_spots
 
 SPOT = {
     "id": 374, "name_label": "Parking · Rue des Cormorans", "city_label": "Brest", "postal_code": "29200",
@@ -54,7 +54,8 @@ def test_only_flagged_spots_not_verified_since_harmonization() -> None:
 def test_a_verification_is_a_new_row_and_never_touches_the_spot() -> None:
     cursor = FakeCursor()
     verify_spots.write_verification(
-        cursor, 374, {"statut": "plus_valable", "resume": " Rouvert en 2026. ", "sources": ["https://x"]}, "m",
+        cursor, 374, {"statut": "plus_valable", "resume": " Rouvert en 2026. ", "sources": ["https://x"], "a_savoir": [],
+                      "utilisable": "oui", "utilisable_a_partir": None, "raison": ""}, "m",
     )
     query, params = cursor.calls[0]
     assert query.startswith("INSERT INTO spot_verifications")
@@ -73,7 +74,7 @@ def test_prompt_prefers_uncertain_and_forbids_own_knowledge() -> None:
 def test_a_finished_period_is_no_longer_valid() -> None:
     prompt = verify_spots.SYSTEM_PROMPT
     assert "période déjà terminée" in prompt
-    assert verify_spots.VERIFY_EFFORT != "low"
+    assert llm_config.AGENTS["verify_spots"].effort != "low"
 
 
 def test_v3_rules_on_reopening_and_partial_end() -> None:
@@ -95,3 +96,88 @@ def test_commune_testimonies_are_a_tool_not_pushed_in_the_message() -> None:
     assert verify_spots.MCP_TOOLS == ["mcp__randovango__temoignages_commune"]
     prompt = " ".join(verify_spots.SYSTEM_PROMPT.split())
     assert "et seulement dans ce cas, appelle l'outil temoignages_commune" in prompt
+
+
+def test_only_the_comments_of_the_last_twelve_months_are_read() -> None:
+    today = date(2026, 11, 2)
+    reviews = [{"review_date": date(2026, 1, 8), "text": "Réparé"}, {"review_date": date(2025, 7, 30), "text": "Panne"},
+               {"review_date": None, "text": "Sans date"}, {"review_date": date(2026, 9, 26), "text": "Récent"}]
+    assert [r["text"] for r in verify_spots.recent_reviews(reviews, today)] == ["Récent", "Réparé"]
+
+
+def test_a_seasonal_rule_keeps_a_valid_period_and_a_bad_one_is_dropped() -> None:
+    items = [{"texte": " Chiens interdits sur la plage. ", "debut": None, "fin": "09-30"},
+             {"texte": "Séjour limité.", "debut": "été", "fin": "13-01"}, {"texte": " ", "debut": None, "fin": None}]
+    assert verify_spots.clean_a_savoir(items) == [
+        {"texte": "Chiens interdits sur la plage.", "debut": None, "fin": "09-30"},
+        {"texte": "Séjour limité.", "debut": None, "fin": None}]
+
+
+def test_an_unreadable_reopening_date_keeps_the_place_closed() -> None:
+    assert verify_spots.clean_reopening("2027-05-01") == "2027-05-01"
+    assert verify_spots.clean_reopening("mai 2027") is None
+    assert verify_spots.clean_reopening(None) is None
+
+
+def test_a_height_limit_does_not_make_a_place_unusable() -> None:
+    assert "limite de hauteur" in verify_spots.SYSTEM_PROMPT
+    assert "L'absence de nouvelles n'est pas une preuve" in verify_spots.SYSTEM_PROMPT
+
+
+def test_a_doubt_removes_the_verified_badge_and_nothing_else() -> None:
+    assert verify_spots.is_doubtful({"statut": "incertain", "utilisable": "oui"})
+    assert verify_spots.is_doubtful({"statut": "toujours_valable", "utilisable": "non"})
+    assert not verify_spots.is_doubtful({"statut": "toujours_valable", "utilisable": "oui"})
+    cursor = FakeCursor()
+    verify_spots.mark_doubt(cursor, 374)
+    query, params = cursor.calls[0]
+    assert query == "UPDATE spots SET verifie = 0 WHERE id = %s" and params == (374,)
+
+
+def test_three_failures_in_a_row_stop_the_pass(monkeypatch) -> None:
+    calls = []
+
+    class Unavailable:
+        model = "modele-test"
+
+        def complete_json(self, *args):
+            calls.append(args)
+            raise verify_spots.LLMUnavailable("quota")
+
+    class Driver:
+        def quit(self):
+            pass
+
+    class Cursor(FakeCursor):
+        def close(self):
+            pass
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+    spots = [dict(SPOT, id=number) for number in range(5)]
+    monkeypatch.setattr(verify_spots, "make_llm_service", lambda *args, **kwargs: Unavailable())
+    monkeypatch.setattr(verify_spots.ServiceUtil, "load_env", lambda: None)
+    monkeypatch.setattr(verify_spots.MySQLUtils, "connect", lambda: Connection())
+    monkeypatch.setattr(verify_spots.MySQLUtils, "disconnect", lambda connection: None)
+    monkeypatch.setattr(verify_spots, "create_verification_table", lambda cursor: None)
+    monkeypatch.setattr(verify_spots, "fetch_spots_to_verify", lambda *args, **kwargs: spots)
+    monkeypatch.setattr(verify_spots, "read_recent_reviews", lambda *args, **kwargs: None)
+    monkeypatch.setattr("etl.extract.scraper_p4n.create_driver", lambda: Driver())
+
+    verify_spots.run()
+
+    assert len(calls) == verify_spots.MAX_FAILURES_IN_A_ROW
+
+
+def test_only_new_leaves_the_spots_already_verified_alone() -> None:
+    cursor = FakeCursor()
+    verify_spots.fetch_spots_to_verify(cursor, only_new=True)
+    query, params = cursor.calls[0]
+    assert "v.prompt_version" not in query
+    assert "v.verified_at" not in query
+    assert verify_spots.VERIFY_PROMPT_VERSION not in params

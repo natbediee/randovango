@@ -32,7 +32,8 @@ import argparse
 import json
 
 from agents.harmonize_spots import update_spot_service_table
-from agents.llm_service import ClaudeCodeLLMService, LLMService, LLMUnavailable
+from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, make_llm_service
+from agents.llm_service import LLMUnavailable
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
@@ -364,7 +365,7 @@ def main():
     parser.add_argument("--apply", action="store_true", help="Enregistrer les doublons en base")
     parser.add_argument("--dry-run", action="store_true", help="Afficher les décisions sans rien écrire")
     parser.add_argument(
-        "--engine", choices=["api", "claude-code"], default="api",
+        "--engine", choices=[ENGINE_API, ENGINE_CLAUDE_CODE],
         help="api : clé ANTHROPIC_API_KEY ; claude-code : programme `claude` + abonnement",
     )
     args = parser.parse_args()
@@ -378,10 +379,7 @@ def main():
     cursor = connection.cursor()
 
     # Choix de la façon d'appeler Claude (même option que harmonize_spots).
-    if args.engine == "claude-code":
-        service = ClaudeCodeLLMService()
-    else:
-        service = LLMService()
+    service = make_llm_service("dedupe_spots", chosen_engine=args.engine)
 
     confirmed = arbitrate(service, candidate_pairs(cursor))
 

@@ -2,8 +2,8 @@
 Parcours de bout en bout du planificateur RandoVanGo (filet de sécurité).
 
 Lancé MANUELLEMENT (pas par pytest - pas de préfixe test_) :
-    .venv/bin/python tests/e2e/parcours_complet.py
-    .venv/bin/python tests/e2e/parcours_complet.py --changer-de-ville
+    .venv/bin/python tests/functional/parcours_complet.py
+    .venv/bin/python tests/functional/parcours_complet.py --changer-de-ville
 
 Déroule le parcours complet d'un utilisateur invité dans un Chrome headless
 piloté par Selenium (le même outil que le scraping P4N) :
@@ -126,7 +126,7 @@ def selectionner_jour(driver, etape, jour):
 
 
 def derouler_une_journee(driver, jour):
-    """Enchaîne step2 → step3 → step4 → results pour le jour donné."""
+    """Enchaîne step2 → step3 → step4 → step5 → results pour le jour donné."""
     # --- Étape 2 : choisir la première randonnée de la liste ---
     attendre(driver, EC.presence_of_element_located((By.CSS_SELECTOR, ".hiking-card")), 15)
     selectionner_jour(driver, "step2", jour)
@@ -150,6 +150,10 @@ def derouler_une_journee(driver, jour):
     cliquer(driver, "[id^=btn-poi-]")
     cliquer(driver, "#nextStepBtn")
     log(f"step4 jour {jour}: service choisi ('{sous_titre}')")
+
+    # --- Étape 5 : les pépites de Vany sont facultatives, on continue sans ---
+    cliquer(driver, "#skipBtn", timeout=15)
+    log(f"step5 jour {jour}: pépites passées")
 
     # --- Récapitulatif : vérifier la ligne du jour dans le tableau ---
     # Le tableau contient une ligne "Chargement..." tant que le JS n'a pas

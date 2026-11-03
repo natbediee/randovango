@@ -53,7 +53,8 @@ class FakeCursor:
 
 def test_schema_asks_for_the_description_and_the_cited_services() -> None:
     schema = harmonize_spots.SPOT_SCHEMA
-    assert set(schema["properties"]) == {"description", "services", "a_verifier", "nuit_interdite"}
+    assert set(schema["properties"]) == {"description", "services", "a_verifier", "nuit_interdite",
+                                         "doute_nuit", "doute_nuit_raison"}
     # Liste fermée : pas de service inventé, pas de service exclu.
     allowed = schema["properties"]["services"]["items"]["enum"]
     assert "Eau potable" in allowed
@@ -82,6 +83,9 @@ def test_prompt_keeps_its_essential_rules() -> None:
     assert "n'écris pas \"Camping.\" ou \"Parking.\"" in prompt
     assert "absent, interdit ou hors service" in prompt
     assert "À savoir :" in prompt
+    # v22 : les informations anciennes se jugent par rapport à la date du jour.
+    assert "## Informations anciennes" in prompt
+    assert "Un minimum de nuits imposé par le lieu" in prompt
     # v15 : les services sont affichés en badges, pas répétés dans le texte.
     assert "ne la répète pas dans le texte" in prompt
     assert "N'ajoute aucune phrase" in prompt
@@ -119,6 +123,12 @@ def test_message_without_reviews_or_opening() -> None:
     assert "(aucun)" in message
 
 
+def test_message_gives_the_date_of_the_day() -> None:
+    from datetime import date
+    message = harmonize_spots.build_user_message({"description": "Petit parking."})
+    assert message.startswith(f"DATE DU JOUR : {date.today():%d/%m/%Y}\n")
+
+
 # --- Mise en forme de la réponse ---
 
 def test_normalize_turns_empty_values_into_null() -> None:
@@ -129,6 +139,12 @@ def test_normalize_turns_empty_values_into_null() -> None:
 
 def test_a_verifier_is_stored_as_one_or_zero() -> None:
     assert harmonize_spots.normalize({"description": "Fermé.", "a_verifier": True})["a_verifier"] == 1
+
+
+def test_a_doubt_about_the_night_goes_to_verification() -> None:
+    fields = harmonize_spots.normalize({"description": "Parking.", "doute_nuit": True})
+    assert fields["a_verifier"] == 1
+    assert fields["nuit_interdite"] == 0
 
 
 # --- Base de données ---
@@ -147,6 +163,17 @@ def test_spots_to_harmonize_are_selected_by_prompt_version() -> None:
     assert params == (harmonize_spots.PROMPT_VERSION, *HIDDEN_SPOT_TYPES, 20)
 
 
+def test_only_new_leaves_the_spots_of_an_older_version_alone() -> None:
+    from utils.display_utils import HIDDEN_SPOT_TYPES
+
+    cursor = FakeCursor()
+    harmonize_spots.fetch_spots_to_harmonize(cursor, only_new=True)
+    query, params = cursor.calls[0]
+    assert "WHERE prompt_version IS NULL AND" in query
+    assert "prompt_version < %s" not in query
+    assert tuple(params) == tuple(HIDDEN_SPOT_TYPES)
+
+
 def test_write_records_the_prompt_version_and_never_the_description() -> None:
     # Garde-fou principal : la source Park4Night doit rester rejouable.
     cursor = FakeCursor()
@@ -154,10 +181,18 @@ def test_write_records_the_prompt_version_and_never_the_description() -> None:
     query, params = cursor.calls[0]
     assert "prompt_version = %s" in query
     assert "harmonized_at = NOW()" in query
-    assert "a_verifier = %s" in query
-    assert "nuit_interdite = %s" in query
     assert "description =" not in query.replace("description_ia =", "")
     assert params[-2:] == (harmonize_spots.PROMPT_VERSION, 1)
+
+
+def test_write_never_lowers_the_flags() -> None:
+    # Le SET s'applique dans l'ordre : a_verifier doit lire l'ancienne nuit_interdite.
+    cursor = FakeCursor()
+    harmonize_spots.write_harmonization(cursor, 1, PAYLOAD)
+    query, _ = cursor.calls[0]
+    assert "a_verifier = GREATEST(COALESCE(a_verifier, 0), %s, COALESCE(nuit_interdite, 0) > %s)" in query
+    assert "nuit_interdite = GREATEST(COALESCE(nuit_interdite, 0), %s)" in query
+    assert query.index("a_verifier = GREATEST") < query.index("nuit_interdite = GREATEST")
 
 
 def test_update_spots_columns_adds_version_and_drops_obsolete_columns() -> None:

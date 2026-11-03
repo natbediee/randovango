@@ -11,12 +11,13 @@ Conventions de nommage des champs ajoutés aux réponses API :
   - badge   : dictionnaire {"text": "Vérifié", "css": "verified"}
 
 Les fonctions sont pures (pas d'accès base de données) : elles sont testées
-dans tests/utils/test_display_utils.py.
+dans tests/unit/utils/test_display_utils.py.
 """
 
 import math
 import re
 from datetime import date, datetime
+from html import escape
 
 # ---------------------------------------------------------------------------
 # Petits utilitaires de formatage "à la JavaScript"
@@ -43,7 +44,7 @@ def verified_badge(verifie) -> dict:
     """Badge de vérification affiché sur les cartes randonnée/spot/service."""
     if verifie:
         return {"text": "Vérifié", "css": "verified"}
-    return {"text": "En attente", "css": "pending"}
+    return {"text": "Non vérifié", "css": "pending"}
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +157,27 @@ def hike_trace_color(index, total) -> str:
     return f"hsl(187, 55%, {js_num(lightness)}%)"
 
 
+# Heure de départ supposée de la rando du jour. Tout le calcul de la journée en
+# découle (temps libre, sorties possibles après la rando : pepite_service.DAY_START_H)
+# et Vany s'y réfère (« ta rando finit vers 11 h ») : elle est donc affichée au
+# voyageur (hike_schedule_label), à l'étape 2, dans le carnet et dans le PDF.
+HIKE_START_H = 9
+
+
+def hour_label(hour: float) -> str:
+    """Heure lisible au quart d'heure près : 11 -> "11 h", 11.5 -> "11 h 30"."""
+    minutes = round(hour * 4) * 15
+    h, m = divmod(minutes, 60)
+    return f"{h} h" if m == 0 else f"{h} h {m:02d}"
+
+
+def hike_schedule_label(duration_h) -> str:
+    """ "Départ conseillé vers 9 h, retour vers 11 h 30" pour une rando de 2 h 30. """
+    if duration_h is None:
+        return ""
+    return f"Départ conseillé vers {hour_label(HIKE_START_H)}, retour vers {hour_label(HIKE_START_H + float(duration_h))}"
+
+
 def enrich_hike(hike, index, total) -> dict:
     """Ajoute à une randonnée ses champs prêts à afficher."""
     difficulte = hike.get("difficulte")
@@ -166,6 +188,7 @@ def enrich_hike(hike, index, total) -> dict:
     hike["description_label"] = hike.get("description") or "Randonnée sans description"
     # Résumé affiché dans les popups de la carte ("13 km - 4h").
     hike["summary_label"] = f"{js_num(hike.get('distance_km'))} km - {js_num(hike.get('duration'))}h"
+    hike["schedule_label"] = hike_schedule_label(hike.get("duration"))
     hike["color"] = hike_trace_color(index, total)
     return hike
 
@@ -285,6 +308,41 @@ def spot_description_label(description_ia, description, prompt_version) -> str:
     return description or "Aucune description disponible"
 
 
+def a_savoir_on(items: list, on_date) -> list:
+    """
+    Phrases de l'« À savoir » retravaillé (verify_spots) valables à cette date. Les périodes
+    reviennent chaque année (MM-JJ) et peuvent passer le 31 décembre (du 16/09 au 14/06). Sans
+    début, la phrase vaut jusqu'à sa date de fin ; sans fin, à partir de son début.
+    """
+    day = on_date.strftime("%m-%d")
+
+    def applies(item):
+        start, end = item.get("debut"), item.get("fin")
+        if start and end and start > end:
+            return day >= start or day <= end
+        return (not start or day >= start) and (not end or day <= end)
+    return [item["texte"] for item in items if applies(item)]
+
+
+def with_a_savoir(description, sentences: list) -> str:
+    """La description avec son paragraphe « À savoir » remplacé ; retiré s'il ne reste aucune phrase."""
+    presentation = (description or "").split("À savoir :", 1)[0].strip()
+    if not sentences:
+        return presentation
+    a_savoir = "À savoir : " + " ".join(sentences)
+    return f"{presentation}\n\n{a_savoir}" if presentation else a_savoir
+
+
+def spot_description_html(description) -> str:
+    """
+    Description d'un spot prête à insérer en HTML (fiche de l'étape 3). Le texte est
+    échappé, puis le paragraphe des mises en garde de la description harmonisée
+    (« À savoir : l'aire est en pente... ») est signalé par son libellé en gras.
+    """
+    text = escape(description or "")
+    return re.sub(r"^À savoir :", '<strong class="spot-warning">À savoir :</strong>', text, flags=re.M)
+
+
 def spot_category(spot_type) -> str:
     """Catégorie prix d'un spot : "gratuit", "payant" ou "autres"."""
     if not spot_type:
@@ -387,9 +445,17 @@ def enrich_spot(spot) -> dict:
     spot["description_label"] = spot_description_label(
         spot.get("description_ia"), spot.get("description"), spot.get("prompt_version"),
     )
+    # L'« À savoir » retravaillé par verify_spots remplace celui de la fiche harmonisée.
+    if spot.get("a_savoir") is not None:
+        spot["description_label"] = with_a_savoir(spot["description_label"], spot["a_savoir"])
+    spot["description_html"] = spot_description_html(spot["description_label"])
     rating = spot.get("rating")
     spot["rating_label"] = f"⭐ {js_num(rating)}/5" if rating else None
     spot["services_display"] = spot_services_display(spot.get("services", []))
+    # Distance à la rando du jour (étape 3), quand une rando est choisie.
+    hike_km = spot.get("hike_distance_km")
+    spot["on_hike"] = hike_km is not None and hike_km <= SPOT_ON_HIKE_KM
+    spot["hike_distance_label"] = hike_distance_label(hike_km)
     return spot
 
 
@@ -452,10 +518,33 @@ def distance_label(distance_km) -> str:
     return f"{js_num(distance_km)} km"
 
 
+# Un spot à moins de 500 m du tracé de la rando du jour est « sur ta rando » : on
+# gare le van et on part à pied. Un peu plus large que les lieux « En chemin »
+# (400 m, pepite_service.TRAIL_KM) : marcher jusqu'au sentier reste raisonnable.
+SPOT_ON_HIKE_KM = 0.5
+
+
+def hike_distance_label(distance_km) -> str:
+    """Distance d'un spot à la rando du jour : "Sur ta rando · 150 m du tracé" ou "À 1.8 km de ta rando"."""
+    if distance_km is None:
+        return ""
+    # Arrondi à 10 m sous le kilomètre, à 100 m au-delà : la distance est mesurée au
+    # point du tracé le plus proche, une précision plus fine serait trompeuse.
+    rounded = round(distance_km, 2) if distance_km < 1 else round(distance_km, 1)
+    if distance_km <= SPOT_ON_HIKE_KM:
+        return f"Sur ta rando · {distance_label(rounded)} du tracé"
+    return f"À {distance_label(rounded)} de ta rando"
+
+
 def enrich_poi(poi) -> dict:
     """Ajoute à un POI (service) ses champs prêts à afficher."""
     poi["service_type_label"] = poi.get("service_type") or "Service"
     poi["distance_label"] = distance_label(poi.get("distance_km"))
+    # Nom du site affiché en clair sur la fiche, comme la source d'une pépite. OSM donne
+    # parfois l'adresse sans protocole (20 POI) : le lien renverrait vers notre propre site.
+    url = (poi.get("url") or "").strip()
+    poi["url"] = url if not url or url.startswith(("http://", "https://")) else f"https://{url}"
+    poi["url_label"] = source_label(poi["url"])
     poi["badge"] = verified_badge(poi.get("verifie"))
     return poi
 
@@ -470,6 +559,139 @@ def poi_subtitle(category, count) -> str:
     noun = labels["plural"] if count > 1 else labels["singular"]
     s = "s" if count > 1 else ""
     return f"{count} {noun} disponible{s} pour cette journée"
+
+
+# ---------------------------------------------------------------------------
+# Les pépites de Vany (étape 5, tableau récap, PDF)
+# ---------------------------------------------------------------------------
+
+PEPITE_CATEGORY_LABELS = {
+    "lieu": "Lieu à ne pas rater",
+    "point_de_vue": "Point de vue",
+    "activite": "Activité",
+    "evenement": "Événement",
+    "marche": "Marché",
+    "producteur": "Producteur local",
+}
+
+
+def duration_label(duration_h) -> str:
+    """Durée lisible : "45 min" en dessous d'une heure, sinon "1.5 h"."""
+    if not duration_h:
+        return ""
+    if duration_h < 1:
+        return f"{js_round(duration_h * 60)} min"
+    return f"{js_num(duration_h)} h"
+
+
+def source_label(url) -> str:
+    """Nom de site d'une source, sans "www." (ex. "ouest-france.fr")."""
+    host = re.sub(r"^https?://", "", url or "").split("/")[0]
+    return host.removeprefix("www.")
+
+
+# Moment de la journée où faire une pépite, donné par Vany (agents/choose_pepites.py),
+# dans l'ordre de la journée : il range les pépites d'un jour (marché le matin, plage
+# l'après-midi, point de vue au coucher du soleil).
+PEPITE_MOMENTS = {
+    "matin": "Le matin",
+    "midi": "À midi",
+    "apres_midi": "L'après-midi",
+    "coucher_soleil": "Au coucher du soleil",
+    "soiree": "En soirée",
+}
+
+
+# Deux familles d'idées, proposées dans deux sections de l'étape 5 : les lieux en accès
+# libre, déjà en base, et ce qui dépend des dates (événement, marché, cinéma, musée à
+# horaires...), que la recherche de l'agenda met plusieurs minutes à trouver.
+def pepite_section(pepite) -> str:
+    """ "saison" pour une idée intemporelle, "sejour" pour une idée liée aux dates du séjour. """
+    return "saison" if pepite.get("permanent") else "sejour"
+
+
+def pepite_news_text(count, day_date, with_favorite) -> str:
+    """Rappel de la barre du bas : "Vany a trouvé 2 idées pour ton lundi, dont un coup de cœur"."""
+    ideas = "1 idée" if count == 1 else f"{count} idées"
+    favorite = ", dont un coup de cœur" if with_favorite and count > 1 else ""
+    return f"Vany a trouvé {ideas} pour ton {FR_WEEKDAYS[day_date.weekday()].lower()}{favorite}"
+
+
+def pepite_display(pepite, top=False) -> dict:
+    """Champs prêts à afficher d'une idée (étape « Les pépites de Vany »)."""
+    meta = [
+        PEPITE_MOMENTS.get(pepite.get("moment"), ""),
+        pepite.get("horaires") or "",
+        pepite.get("tarif") or "",
+        f"à {distance_label(pepite.get('distance_km'))}" if pepite.get("distance_km") is not None else "",
+        f"{duration_label(pepite.get('duree_h'))} sur place" if pepite.get("duree_h") else "",
+        "" if pepite.get("exterieur") else "en intérieur",
+    ]
+    # Seuls les vrais liens web sont gardés (une source vient du web, via l'agent).
+    sources = [url for url in pepite.get("sources") or [] if url.startswith(("https://", "http://"))]
+    return {
+        "id": pepite["id"],
+        "nom": pepite["nom"],
+        "type_label": PEPITE_CATEGORY_LABELS.get(pepite.get("categorie"), "Idée"),
+        "description": pepite.get("description") or "",
+        "meta_label": " · ".join(part for part in meta if part),
+        "meteo_a_verifier": bool(pepite.get("meteo_a_verifier")),
+        "source_url": sources[0] if sources else None,
+        "source_label": source_label(sources[0]) if sources else "",
+        "top": top,
+        "section": pepite_section(pepite),
+        # Pourquoi Vany l'a choisie pour cette journée (agents/choose_pepites.py) ;
+        # vide si le code a classé seul.
+        "why": pepite.get("pourquoi") or "",
+        "added": pepite.get("statut") == "choisie",
+        "latitude": pepite["latitude"],
+        "longitude": pepite["longitude"],
+        # Position estimée par l'agent, que le code n'a retrouvée ni dans la base ETL
+        # ni par l'adresse (pepite_service.locate) : le marqueur est indicatif.
+        "position_approx": pepite.get("position_source") not in ("base", "adresse", "source"),
+    }
+
+
+def trail_tip_display(tip) -> dict:
+    """Champs d'un lieu à voir en chemin sur la rando (liste et carte de l'étape)."""
+    return {"nom": tip["nom"], "description": tip.get("description") or "",
+            "latitude": tip["latitude"], "longitude": tip["longitude"]}
+
+
+def pepite_day_texts(day_date, hike_duration_h, free_time_h) -> dict:
+    """Titre et phrase d'introduction de l'étape « Les pépites de Vany »."""
+    weekday = FR_WEEKDAYS[day_date.weekday()].lower()
+    if hike_duration_h:
+        intro = f"Après tes {js_num(hike_duration_h)} h de rando, il te reste environ {js_num(free_time_h)} h en journée."
+    else:
+        intro = "Journée sans rando : tu as tout ton temps."
+    return {"title": f"Les pépites de Vany pour ton {weekday}",
+            "intro": intro + " Ajoute ce qui te tente, ou continue sans."}
+
+
+def pepite_nothing_texts(day_date) -> dict:
+    """Encadré quand la recherche n'a rien donné d'exceptionnel pour ce jour."""
+    weekday = FR_WEEKDAYS[day_date.weekday()].lower()
+    return {"title": f"Pas de pépite pour ton {weekday}",
+            "intro": "Vany a cherché autour de ton spot et de ta rando sans trouver de bonne idée en plus."
+                     " Plutôt rien qu'une idée moyenne : profite simplement de ta journée !"}
+
+
+def pepite_line_html(pepite) -> str:
+    """Ligne de l'idée retenue dans la colonne Services du tableau récap.
+    Le nom vient du web (agent) : il est échappé avant d'être inséré en HTML."""
+    return f'<span class="pepite-line"><i class="pepite-icon" aria-hidden="true"></i> {escape(pepite["nom"])}</span>'
+
+
+def trail_tips_html(tips) -> str:
+    """
+    Ligne « En chemin » sous la rando du tableau récap, signée du chapeau de Vany
+    qui recommande ces lieux dès l'étape 2 (noms venus du web, échappés).
+    """
+    if not tips:
+        return ""
+    names = " · ".join(escape(tip["nom"]) for tip in tips)
+    return f'<br><span class="trail-tips"><i class="pepite-icon" aria-hidden="true"></i> En chemin : {names}</span>'
 
 
 # ---------------------------------------------------------------------------
@@ -490,6 +712,9 @@ def result_day_display(day) -> dict:
         # cf. le script ponctuel oneshot/backfill_addresses.py) : affichée quand elle est connue, comme le spot.
         if day.get("hike_address"):
             activity += f"<br><small>📍 {day['hike_address']}</small>"
+        if day.get("hike_duration_h") is not None:
+            activity += f"<br><small>🕘 {hike_schedule_label(day['hike_duration_h'])}</small>"
+        activity += trail_tips_html(day.get("trail_tips"))
     else:
         activity = "Pas de randonnée - Détente"
 
@@ -522,6 +747,8 @@ def result_day_display(day) -> dict:
         services = "<br>".join(_service_line(p) for p in pois)
     else:
         services = "Aucun service"
+    for pepite in day.get("pepites") or []:
+        services += "<br>" + pepite_line_html(pepite)
 
     return {
         "day_title": f"Jour {day.get('day_number')}",

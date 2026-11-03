@@ -23,6 +23,13 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // --- 3. Carte ---
     let hikingMarkers = [];  // { marker, hike, polyline }
+    // Recommandations « En chemin » de Vany : lieux à moins de 400 m du tracé de
+    // chaque rando, { idRando: [lieux dans l'ordre de la marche] }, et leurs
+    // pastilles numérotées sur la carte (une seule rando à la fois).
+    let tipsByHikeId = {};
+    let tipsLayer = null;
+    let viewedHikeId = null;  // rando montrée par « Voir » : ses lieux restent sur la carte après le survol
+    const TIPS_SHOWN = 2;  // au-delà, « + N autres » : une rando à 6 lieux allongerait trop la liste
 
     // Filtres actifs (doivent être initialisés avant le premier appel à applyFilters(),
     // déclenché dès le chargement initial des randonnées)
@@ -57,10 +64,11 @@ document.addEventListener('DOMContentLoaded', async function () {
     // --- 4. Chargement API ---
     // Charger les randonnées (et leurs tracés GPX) depuis l'API, ou depuis le cache
     // de session si elles ont déjà été chargées pour cette ville lors d'un jour
-    // précédent du même séjour. Le "v2" de la clé invalide les caches d'avant la
-    // refonte : ils n'ont pas les champs prêts à afficher ajoutés par l'API.
+    // précédent du même séjour. Le numéro de version de la clé invalide les anciens
+    // caches : "v2" pour les champs prêts à afficher ajoutés par l'API, "v3" pour
+    // le tri par distance à la ville, "v4" pour l'heure de départ (schedule_label).
     try {
-        const cacheKey = `hikesCache_v2_${cityId}`;
+        const cacheKey = `hikesCache_v4_${cityId}`;
         let hikes, tracesByHikeId;
         try {
             const cached = JSON.parse(sessionStorage.getItem(cacheKey));
@@ -96,19 +104,18 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // --- 5. Affichage : jours déjà planifiés, liste des cartes, marqueurs, tracés ---
         const { plannedHikeIds } = await loadPreviousDaysOnMap(hikeMap, currentDay, planId);
+        try {
+            if (hikes.length) tipsByHikeId = await apiGet(`/api/pepites/trail-tips?hike_ids=${hikes.map(h => h.id).join(',')}`);
+        } catch (err) {
+            console.error('Recommandations de Vany indisponibles :', err);  // la liste s'affiche sans
+        }
         displayHikes(hikes, plannedHikeIds);
         applyFilters();
 
-        // Revenir sur cette étape (ex. depuis l'étape spot) avec un choix déjà fait :
+        // Revenir sur cette étape (ex. depuis l'étape spot) avec une rando déjà choisie :
         // réafficher le bouton « Valider la rando et continuer », masqué au chargement.
-        // Il n'était sinon révélé que par selectHiking/selectNoHiking, jamais au retour.
         const restoredSelection = localStorage.getItem('selectedHiking');
-        if (restoredSelection) {
-            document.getElementById('nextStepBtn').style.display = 'flex';
-            if (restoredSelection === 'no-hiking') {
-                document.getElementById('noHikingCard').classList.add('selected');
-            }
-        }
+        showNextOrSkip(Boolean(restoredSelection) && restoredSelection !== 'no-hiking');
 
         if (hikeMap && hikes.length > 0) {
             hikes.forEach(hike => {
@@ -154,6 +161,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                         card.addEventListener('mouseenter', () => {
                             const isSelected = localStorage.getItem('selectedHiking') == hike.id;
                             highlightHikeTrace(hike.id, true);
+                            showTipsOnMap(hike.id);
                             if (isSelected) return;
                             setMarkerHovered(marker, true);
                             marker.openTooltip(); // aperçu nom + infos de base sur la carte
@@ -164,6 +172,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                         card.addEventListener('mouseleave', () => {
                             const isSelected = localStorage.getItem('selectedHiking') == hike.id;
                             highlightHikeTrace(hike.id, false);
+                            showTipsOnMap(viewedHikeId ?? localStorage.getItem('selectedHiking'));
                             marker.closeTooltip();
                             if (!isSelected) setMarkerHovered(marker, false);
                         });
@@ -200,6 +209,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             const previouslySelected = localStorage.getItem('selectedHiking');
             if (previouslySelected && previouslySelected !== 'no-hiking') {
                 updateSelectionUI(previouslySelected);
+                showTipsOnMap(previouslySelected);
                 // Centrer la carte sur la rando déjà sélectionnée
                 const selectedMarkerData = hikingMarkers.find(m => m.hike.id == previouslySelected);
                 if (selectedMarkerData) {
@@ -220,6 +230,41 @@ document.addEventListener('DOMContentLoaded', async function () {
         console.error('Erreur:', error);
         document.getElementById('hikingList').innerHTML = '<p style="text-align: center; color: red;">Erreur lors du chargement des randonnées</p>';
         document.getElementById('step2Subtitle').textContent = 'Erreur lors du chargement des randonnées';
+    }
+
+    // Recommandation de Vany sur une carte de rando : les TIPS_SHOWN premiers lieux en
+    // chemin, les suivants derrière « + N autres ».
+    function vanyTipsHtml(tips) {
+        if (!tips.length) return '';
+        // Première phrase de la description seulement : la seconde redit souvent que le
+        // lieu est sur le parcours, ce que l'encadré dit déjà, et la carte s'allongeait.
+        const firstSentence = text => (text || '').split(/(?<=[.!?])\s/)[0];
+        const line = (tip, i) => `
+            <p class="vany-tips__item"><span class="vany-tips__num">${i + 1}</span>
+               <span><strong>${escapeHtml(tip.nom)}</strong>${tip.description ? ' - ' + escapeHtml(firstSentence(tip.description)) : ''}</span></p>`;
+        const more = tips.length > TIPS_SHOWN
+            ? `<details class="vany-tips__more"><summary>+ ${tips.length - TIPS_SHOWN} autre${tips.length - TIPS_SHOWN > 1 ? 's' : ''}</summary>
+                 ${tips.slice(TIPS_SHOWN).map((t, i) => line(t, i + TIPS_SHOWN)).join('')}</details>`
+            : '';
+        return `
+            <div class="vany-tips">
+                <div class="vany-tips__head">
+                    <i class="pepite-icon" aria-hidden="true"></i>
+                    <div><span class="vany-tips__eyebrow">La recommandation de Vany</span>
+                         <span class="vany-tips__title">En chemin, ne manque pas</span></div>
+                </div>
+                ${tips.slice(0, TIPS_SHOWN).map(line).join('')}${more}
+            </div>`;
+    }
+
+    // Pastilles numérotées des lieux en chemin d'une rando (survolée ou choisie).
+    function showTipsOnMap(hikeId) {
+        if (!hikeMap) return;
+        if (tipsLayer) tipsLayer.remove();
+        tipsLayer = L.layerGroup((tipsByHikeId[hikeId] || []).map((tip, i) =>
+            L.marker([tip.latitude, tip.longitude], { icon: buildTrailTipIcon(i + 1) })
+                .bindPopup(`<b>${escapeHtml(tip.nom)}</b><br>En chemin, la recommandation de Vany`)
+        )).addTo(hikeMap);
     }
 
     // --- 5. Affichage : liste des cartes de randonnées ---
@@ -247,11 +292,11 @@ document.addEventListener('DOMContentLoaded', async function () {
             card.setAttribute('data-duration', hike.duration_category);
 
             card.innerHTML = `
-                <div class="hiking-status">
-                    <span class="status-badge ${hike.badge.css}">${hike.badge.text}</span>
-                </div>
                 <div class="hiking-info">
-                    <h3>${hike.name}</h3>
+                    <div class="hiking-title">
+                        <h3>${hike.name}</h3>
+                        <span class="status-badge ${hike.badge.css}">${hike.badge.text}</span>
+                    </div>
                     <p class="hiking-description">${hike.description_label}</p>
                     <div class="hiking-stats">
                         <span class="stat"><i class="fas fa-clock"></i>${hike.duration}h</span>
@@ -261,6 +306,8 @@ document.addEventListener('DOMContentLoaded', async function () {
                             <i class="fas fa-signal"></i>${hike.difficulty_label}
                         </span>
                     </div>
+                    ${hike.schedule_label ? `<p class="hiking-schedule"><i class="far fa-clock" aria-hidden="true"></i> ${hike.schedule_label}</p>` : ''}
+                    ${vanyTipsHtml(tipsByHikeId[hike.id] || [])}
                 </div>
                 <div class="hiking-actions">
                     ${plannedBadge}
@@ -403,7 +450,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     // sur le départ de la rando et ouvre son popup. Cohérent avec le "Voir" des services.
     window.showHikingMap = function (hikeId, lat, lon) {
         if (!hikeMap) return;
-        document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Ne faire défiler la page que si la carte n'est pas déjà visible (en mobile, elle
+        // est au-dessus de la liste). Sur ordinateur, elle reste à côté de la liste : faire
+        // défiler la page amenait le curseur sur une autre rando, dont le survol prenait
+        // alors la main sur la carte (son tracé, son aperçu, ses lieux en chemin).
+        const mapBox = document.getElementById('map').getBoundingClientRect();
+        if (mapBox.top < 0 || mapBox.bottom > window.innerHeight) {
+            document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        viewedHikeId = hikeId;
+        showTipsOnMap(hikeId);
+        // Le survol de la carte de rando, juste avant le clic, a pu lancer un déplacement
+        // animé de la carte (panTo) : sans stop(), il se terminait après setView et la
+        // carte finissait ailleurs, popup hors du cadre.
+        hikeMap.stop();
         hikeMap.setView([lat, lon], 14);
         const markerData = hikingMarkers.find(m => m.hike.id === hikeId);
         if (markerData) markerData.marker.openPopup();
@@ -413,15 +473,16 @@ document.addEventListener('DOMContentLoaded', async function () {
     window.selectHiking = function (hikingId) {
         localStorage.setItem('selectedHiking', hikingId);
         document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
-        document.getElementById('noHikingCard').classList.remove('selected');
         const selectedBtn = document.getElementById(`select-hike-btn-${hikingId}`);
         if (selectedBtn) {
             const card = selectedBtn.closest('.hiking-card');
             card.classList.add('selected');
             card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-        document.getElementById('nextStepBtn').style.display = 'flex';
+        showNextOrSkip(true);
         updateSelectionUI(hikingId);
+        viewedHikeId = null;
+        showTipsOnMap(hikingId);
 
         // Centrer la carte sur la rando choisie et FERMER le popup (concept unifié
         // avec la ville : après le choix, le popup se ferme ; le marqueur vert + la
@@ -439,15 +500,14 @@ document.addEventListener('DOMContentLoaded', async function () {
         saveDayChoice('step2', { hike_id: hikingId, day_number: currentDay }, 'randonnée');
     };
 
-    // Option "Pas de randonnée aujourd'hui" : journée détente
-    window.selectNoHiking = function () {
+    // Bouton « Pas de rando aujourd'hui » de la barre du bas : journée détente.
+    // On attend la sauvegarde avant de passer au spot (sinon la requête est coupée).
+    window.skipHike = async function () {
         localStorage.setItem('selectedHiking', 'no-hiking');
         document.querySelectorAll('.hiking-card').forEach(card => card.classList.remove('selected'));
-        document.getElementById('noHikingCard').classList.add('selected');
-        document.getElementById('nextStepBtn').style.display = 'flex';
         updateSelectionUI(null);
-
         // Réinitialise hike_id en base
-        saveDayChoice('step2', { hike_id: null, day_number: currentDay }, 'randonnée');
+        await saveDayChoice('step2', { hike_id: null, day_number: currentDay }, 'randonnée');
+        window.location.href = window.APP_URLS.step3;
     };
 });

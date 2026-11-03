@@ -6,6 +6,7 @@ from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from utils.display_utils import enrich_meteo_forecasts, city_stats_labels
+from services.pepite_service import start_zone_search
 from services.plan_service import set_day_city
 from typing import List
 from datetime import datetime, timedelta, date
@@ -98,7 +99,7 @@ def get_all_city_stats(cursor, cities, distance_km=5):
         JOIN poi p {bbox_on("p", "latitude", "longitude")}
         JOIN poi_service ps ON p.id = ps.poi_id
         JOIN services s ON ps.service_id = s.id
-        WHERE s.category IN ({placeholders})
+        WHERE s.category IN ({placeholders}) AND p.masque = 0
         GROUP BY c.id
     """, bbox_params + tuple(valid_categories))
     for row in cursor.fetchall():
@@ -247,6 +248,9 @@ def create_plan(
         cnx.commit()
         cursor.close()
         MySQLUtils.disconnect(cnx)
+        # La ville est choisie : Vany commence à chercher ses pépites
+        # pendant que l'utilisateur choisit sa rando et son spot.
+        start_zone_search(plan_id, 1)
         return {"plan_id": plan_id, "user_token": user_token_to_insert, "message": "Plan créé avec succès."}
     except HTTPException:
         # Erreur client déjà formée (ville introuvable, etc.) : la laisser passer
@@ -269,6 +273,7 @@ def update_day_city(plan_id: int, data: dict = Body(...)):
     if day_number is None or city_id is None:
         raise HTTPException(status_code=400, detail="day_number et city_id sont requis.")
     set_day_city(plan_id, day_number, city_id)
+    start_zone_search(plan_id, day_number)   # voir create_plan
     return {"status": "updated", "plan_id": plan_id, "day_number": day_number, "city_id": city_id}
 
 

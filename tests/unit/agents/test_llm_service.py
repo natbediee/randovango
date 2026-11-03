@@ -27,7 +27,7 @@ SCHEMA = {"type": "object", "properties": {"ok": {"type": "boolean"}},
 
 
 def build(reply):
-    service = LLMService(api_key="test")
+    service = LLMService("modele-test", api_key="test")
     service.client = SimpleNamespace(messages=FakeMessages(reply))
     return service
 
@@ -43,7 +43,7 @@ def test_complete_json_constrains_the_output_format() -> None:
 
     sent = service.client.messages.kwargs
     assert sent["output_config"]["format"] == {"type": "json_schema", "schema": SCHEMA}
-    assert sent["model"] == "claude-opus-5"
+    assert sent["model"] == "modele-test"
     # Le prompt système est identique d'un spot à l'autre : il est mis en cache.
     assert sent["system"][0]["cache_control"] == {"type": "ephemeral"}
     # Ces paramètres sont rejetés par l'API sur ce modèle.
@@ -84,7 +84,7 @@ def test_missing_api_key_is_reported_clearly(monkeypatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr("utils.service_utils.ServiceUtil.load_env", lambda: None)
     with pytest.raises(LLMUnavailable, match="ANTHROPIC_API_KEY"):
-        LLMService()._get_client()
+        LLMService("modele-test")._get_client()
 
 
 def test_fetch_batch_results_is_keyed_by_custom_id_and_skips_failures() -> None:
@@ -96,7 +96,7 @@ def test_fetch_batch_results_is_keyed_by_custom_id_and_skips_failures() -> None:
         SimpleNamespace(custom_id="spot-3",
                         result=SimpleNamespace(type="succeeded", message=response("cassé"))),
     ]
-    service = LLMService(api_key="test")
+    service = LLMService("modele-test", api_key="test")
     service.client = SimpleNamespace(
         messages=SimpleNamespace(batches=SimpleNamespace(results=lambda batch_id: results))
     )
@@ -105,7 +105,7 @@ def test_fetch_batch_results_is_keyed_by_custom_id_and_skips_failures() -> None:
 
 
 def test_batch_finished_reads_the_processing_status() -> None:
-    service = LLMService(api_key="test")
+    service = LLMService("modele-test", api_key="test")
     service.client = SimpleNamespace(
         messages=SimpleNamespace(batches=SimpleNamespace(
             retrieve=lambda batch_id: SimpleNamespace(processing_status="ended")

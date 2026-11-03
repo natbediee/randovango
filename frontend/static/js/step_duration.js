@@ -7,7 +7,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // /duration = tout début d'une nouvelle planification. On efface l'état d'un séjour
   // précédent (même abandonné en cours), sinon l'utilisateur reste coincé dessus.
   ['changingCityForNextDay', 'planId', 'currentDay', 'selectedCityId',
-   'selectedHiking', 'selectedSpot', 'selectedServices'].forEach(function (k) {
+   'selectedHiking', 'selectedSpot', 'selectedServices',
+   'editingDay', 'editReturnDay', 'editOriginalCity', 'vanyNewsReturn'].forEach(function (k) {
     localStorage.removeItem(k);
   });
   sessionStorage.removeItem('step1_cityId');

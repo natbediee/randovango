@@ -1,15 +1,28 @@
 """Tests du module de présentation (fonctions pures, sans base de données)."""
 
+from datetime import date
+
 from utils.display_utils import (
+    pepite_day_texts,
+    pepite_display,
+    pepite_line_html,
+    pepite_news_text,
+    pepite_nothing_texts,
+    pepite_section,
     distance_label,
+    hike_distance_label,
+    hike_schedule_label,
     duration_category,
     enrich_hike,
     enrich_meteo_forecasts,
     enrich_poi,
+    a_savoir_on,
     enrich_spot,
+    with_a_savoir,
     spot_services_display,
     spot_name_label,
     spot_description_label,
+    spot_description_html,
     SPOT_SERVICE_CATEGORIES,
     hike_trace_color,
     js_num,
@@ -18,6 +31,7 @@ from utils.display_utils import (
     poi_subtitle,
     result_day_display,
     spot_category,
+    trail_tips_html,
     verified_badge,
     weather_advice,
     weather_css,
@@ -42,7 +56,7 @@ def test_js_round_demi_vers_le_haut() -> None:
 
 def test_verified_badge() -> None:
     assert verified_badge(1) == {"text": "Vérifié", "css": "verified"}
-    assert verified_badge(0) == {"text": "En attente", "css": "pending"}
+    assert verified_badge(0) == {"text": "Non vérifié", "css": "pending"}
     assert verified_badge(None)["css"] == "pending"
 
 
@@ -262,9 +276,139 @@ def test_spot_description_label() -> None:
     assert spot_description_label(None, None, None) == "Aucune description disponible"
 
 
+def test_spot_description_html_marks_what_to_know_and_escapes() -> None:
+    html = spot_description_html("Aire <calme>.\n\nÀ savoir : l'aire est en pente.")
+    assert html == ("Aire &lt;calme&gt;.\n\n<strong class=\"spot-warning\">À savoir :</strong>"
+                    " l&#x27;aire est en pente.")
+    # Seul le libellé en début de paragraphe est mis en valeur.
+    assert "<strong" not in spot_description_html("Voir ce qui est à savoir : rien.")
+
+
 def test_day_only_parkings_are_excluded_and_hidden() -> None:
     # "Parking jour uniquement" : on ne peut pas y dormir, ce n'est pas un spot pour Randovango.
     # Pas chargé s'il est nouveau, masqué s'il était déjà en base.
     from utils.display_utils import EXCLUDED_SPOT_TYPES, HIDDEN_SPOT_TYPES
     assert "PARKING JOUR UNIQUEMENT" in EXCLUDED_SPOT_TYPES
     assert set(EXCLUDED_SPOT_TYPES) <= set(HIDDEN_SPOT_TYPES)
+
+
+# --- Les pépites de Vany ----------------------------------------------------
+
+def _pepite(**fields) -> dict:
+    return {"id": 7, "nom": "Fest-noz", "categorie": "evenement", "description": "Bal breton.",
+            "horaires": "Dès 21 h", "distance_km": 6, "duree_h": 3, "exterieur": 0,
+            "latitude": 48.24, "longitude": -4.49, "statut": "proposee",
+            "sources": ["https://www.ouest-france.fr/agenda/1"]} | fields
+
+
+def test_pepite_display_builds_the_meta_line_and_source() -> None:
+    shown = pepite_display(_pepite(), top=True)
+    assert shown["type_label"] == "Événement"
+    assert shown["meta_label"] == "Dès 21 h · à 6 km · 3 h sur place · en intérieur"
+    # Le tarif est visible avant d'ajouter une sortie payante.
+    assert pepite_display(_pepite(tarif="10 €"))["meta_label"].startswith("Dès 21 h · 10 € · à 6 km")
+    assert shown["source_label"] == "ouest-france.fr"
+    assert shown["top"] is True
+    # Une idée ajoutée à la journée est signalée (plusieurs peuvent l'être).
+    assert shown["added"] is False
+    assert pepite_display(_pepite(statut="choisie"))["added"] is True
+
+
+def test_vany_sentence_is_shown_only_when_vany_chose() -> None:
+    assert pepite_display(_pepite(pourquoi="Parfait après ta rando."))["why"] == "Parfait après ta rando."
+    assert pepite_display(_pepite())["why"] == ""
+
+
+def test_only_a_position_found_by_the_code_is_shown_as_exact() -> None:
+    assert pepite_display(_pepite(position_source="base"))["position_approx"] is False
+    assert pepite_display(_pepite(position_source="adresse"))["position_approx"] is False
+    assert pepite_display(_pepite(position_source="agent"))["position_approx"] is True
+    assert pepite_display(_pepite())["position_approx"] is True     # idée d'avant le recalage
+
+
+def test_pepite_display_keeps_only_web_links() -> None:
+    shown = pepite_display(_pepite(sources=["javascript:alert(1)"]))
+    assert shown["source_url"] is None and shown["source_label"] == ""
+
+
+def test_pepite_day_texts_name_the_day_and_the_free_time() -> None:
+    texts = pepite_day_texts(date(2026, 11, 15), 5, 4)
+    assert texts["title"] == "Les pépites de Vany pour ton dimanche"
+    assert texts["intro"].startswith("Après tes 5 h de rando, il te reste environ 4 h en journée.")
+    assert pepite_day_texts(date(2026, 11, 15), 0, 9)["intro"].startswith("Journée sans rando")
+
+
+def test_pepite_line_escapes_the_name_coming_from_the_web() -> None:
+    assert "&lt;b&gt;" in pepite_line_html({"nom": "<b>Fest-noz</b>"})
+
+
+def test_result_day_shows_every_added_idea_with_the_services() -> None:
+    display = result_day_display({"day_number": 1, "pois": [],
+                                  "pepites": [{"nom": "Fest-noz"}, {"nom": "Cinéma Le Dauphin"}]})
+    assert display["services_html"].startswith("Aucun service<br>")
+    assert display["services_html"].count("pepite-icon") == 2
+
+
+def test_pepite_nothing_texts_names_the_day() -> None:
+    assert pepite_nothing_texts(date(2026, 10, 31))["title"] == "Pas de pépite pour ton samedi"
+
+
+def test_trail_tips_appear_under_the_hike_escaped() -> None:
+    assert trail_tips_html([]) == ""
+    display = result_day_display({"day_number": 1, "hike_id": 1, "hike_name": "Aber Ildut", "distance_km": 12,
+                                  "difficulte": "Moyen", "pois": [],
+                                  "trail_tips": [{"nom": "Port goémonier"}, {"nom": "<i>Belvédère</i>"}]})
+    assert "En chemin : Port goémonier · &lt;i&gt;Belvédère&lt;/i&gt;" in display["activity_html"]
+
+
+def test_a_spot_near_the_hike_is_on_the_way() -> None:
+    assert hike_distance_label(0.15) == "Sur ta rando · 150 m du tracé"
+    assert hike_distance_label(1.21644) == "À 1.2 km de ta rando"
+    assert hike_distance_label(0.101) == "Sur ta rando · 100 m du tracé"
+    assert hike_distance_label(None) == ""
+    spot = enrich_spot({"type": "Parking", "hike_distance_km": 0.4})
+    assert spot["on_hike"] is True
+    assert enrich_spot({"type": "Parking", "hike_distance_km": 0.6})["on_hike"] is False
+    assert enrich_spot({"type": "Parking"})["on_hike"] is False      # pas de rando ce jour-là
+
+
+def test_the_hike_is_assumed_to_start_at_nine() -> None:
+    assert hike_schedule_label(2) == "Départ conseillé vers 9 h, retour vers 11 h"
+    assert hike_schedule_label(2.5) == "Départ conseillé vers 9 h, retour vers 11 h 30"
+    assert hike_schedule_label(None) == ""
+
+
+def test_a_pepite_is_timeless_or_tied_to_the_stay() -> None:
+    assert pepite_section({"permanent": 1}) == "saison"
+    assert pepite_section({"permanent": 0}) == "sejour"
+
+
+def test_the_bottom_bar_says_what_vany_found() -> None:
+    assert pepite_news_text(2, date(2026, 11, 2), 1) == "Vany a trouvé 2 idées pour ton lundi, dont un coup de cœur"
+    assert pepite_news_text(2, date(2026, 11, 2), 0) == "Vany a trouvé 2 idées pour ton lundi"
+    assert pepite_news_text(1, date(2026, 11, 2), 1) == "Vany a trouvé 1 idée pour ton lundi"
+
+
+def test_a_service_shows_the_name_of_its_site() -> None:
+    assert enrich_poi({"url": "https://www.intermarche.com/magasin/29"})["url_label"] == "intermarche.com"
+    assert enrich_poi({"url": None})["url_label"] == ""
+    # OSM donne parfois l'adresse sans protocole : le lien renverrait vers notre propre site.
+    poi = enrich_poi({"url": "www.labasebrest.com"})
+    assert (poi["url"], poi["url_label"]) == ("https://www.labasebrest.com", "labasebrest.com")
+
+
+def test_a_seasonal_sentence_only_shows_during_its_period() -> None:
+    items = [{"texte": "3 nuits.", "debut": "06-15", "fin": "09-15"}, {"texte": "7 nuits.", "debut": "09-16", "fin": "06-14"},
+             {"texte": "Chiens interdits.", "debut": None, "fin": "09-30"}, {"texte": "Barre de 2 m.", "debut": None, "fin": None}]
+    assert a_savoir_on(items, date(2026, 8, 1)) == ["3 nuits.", "Chiens interdits.", "Barre de 2 m."]
+    # La période de 7 nuits passe le 31 décembre ; les chiens sont de nouveau admis après le 30/09.
+    assert a_savoir_on(items, date(2026, 11, 2)) == ["7 nuits.", "Barre de 2 m."]
+    assert a_savoir_on(items, date(2027, 1, 15)) == ["7 nuits.", "Chiens interdits.", "Barre de 2 m."]
+
+
+def test_the_reworked_a_savoir_replaces_the_old_one() -> None:
+    old = "Aire de 28 places.\n\nÀ savoir : inaccessible le 30 décembre 2025."
+    assert with_a_savoir(old, ["Wifi en panne."]) == "Aire de 28 places.\n\nÀ savoir : Wifi en panne."
+    assert with_a_savoir(old, []) == "Aire de 28 places."
+    assert with_a_savoir("Aire simple.", ["Barre de 2 m."]) == "Aire simple.\n\nÀ savoir : Barre de 2 m."
+    assert with_a_savoir("", ["Barre de 2 m."]) == "À savoir : Barre de 2 m."

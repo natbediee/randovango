@@ -207,7 +207,18 @@ document.addEventListener('DOMContentLoaded', async function() {
         const countEl = nearbyPanel.querySelector('[data-nearby-count]');
         const hintEl = nearbyPanel.querySelector('[data-nearby-hint]');
 
+        // Marqueur dont le tooltip est ouvert par le survol d'un item de la liste.
+        let hoveredMarker = null;
+
         function renderNearbyCities() {
+            // La liste va être reconstruite (choix d'une ville, carte déplacée) : l'item
+            // survolé disparaît sans recevoir de mouseleave, son tooltip resterait donc
+            // affiché sur la carte. On le referme ici.
+            if (hoveredMarker) {
+                hoveredMarker.closeTooltip();
+                hoveredMarker.setZIndexOffset(0);
+                hoveredMarker = null;
+            }
             const bounds = cityMap.getBounds();
             const center = cityMap.getCenter();
             const inView = allCities.filter(c =>
@@ -243,10 +254,18 @@ document.addEventListener('DOMContentLoaded', async function() {
                 // Rien pour la ville sélectionnée : son popup est déjà là (pas de doublon).
                 const marker = cityMarkers[c.id];
                 item.addEventListener('mouseenter', () => {
-                    if (marker && !isSelected) { marker.openTooltip(); marker.setZIndexOffset(1000); }
+                    if (marker && !isSelected) {
+                        marker.openTooltip();
+                        marker.setZIndexOffset(1000);
+                        hoveredMarker = marker;
+                    }
                 });
                 item.addEventListener('mouseleave', () => {
-                    if (marker && !isSelected) { marker.closeTooltip(); marker.setZIndexOffset(0); }
+                    if (marker && !isSelected) {
+                        marker.closeTooltip();
+                        marker.setZIndexOffset(0);
+                        hoveredMarker = null;
+                    }
                 });
                 listEl.appendChild(item);
             });

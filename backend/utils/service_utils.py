@@ -28,6 +28,14 @@ SERVICE_CATEGORY_LABEL_MAP = {
     'shelter': 'Abri',
     'supermarket': 'Supermarché',
     'laundry': 'Laverie',
+    'cinema': 'Cinéma',
+    'theatre': 'Théâtre',
+    'arts_centre': 'Centre culturel',
+    'marketplace': 'Marché',
+    'museum': 'Musée',
+    'gallery': 'Galerie',
+    'farm': 'Vente à la ferme',
+    'brewery': 'Brasserie',
 }
 
 # Mapping label -> type OSM/Wikidata (pour import ou reverse)
@@ -51,6 +59,9 @@ POI_FRONTEND_CATEGORY_MAP = {
     "convenience":            "commerce",
     "bakery":                 "commerce",
     "shop":                   "commerce",
+    "marketplace":            "commerce",
+    "farm":                   "commerce",
+    "brewery":                "commerce",
     # Restauration
     "restaurant":             "restauration",
     "cafe":                   "restauration",
@@ -65,6 +76,10 @@ POI_FRONTEND_CATEGORY_MAP = {
     "tourism":                "culture",
     "attraction":             "culture",
     "museum":                 "culture",
+    "gallery":                "culture",
+    "cinema":                 "culture",
+    "theatre":                "culture",
+    "arts_centre":            "culture",
     "viewpoint":              "culture",
     "hiking":                 "culture",
     "bicycle":                "culture",

@@ -59,6 +59,11 @@ def step4():
     """Étape 4 - Services et POI"""
     return page('step4_services')
 
+@app.route('/step5')
+def step5():
+    """Étape 5 - Les pépites de Vany (idées en plus de la journée)"""
+    return page('step5_pepites')
+
 @app.route('/results')
 def results():
     """Résultat final du planning"""
@@ -96,6 +101,16 @@ def contributor_add_spot():
 def contributor_add_hike():
     """Ajout d'une randonnée par un contributeur"""
     return page('add_hike')
+
+@app.route('/supervision')
+def supervision():
+    """Supervision (admin) : file de relecture des propositions des agents"""
+    return page('supervision')
+
+@app.route('/supervision/services')
+def supervision_services():
+    """Supervision (admin) : relecture des liens, fermetures et saisons des services"""
+    return page('supervision_services')
 
 @app.route('/unlock-vany')
 def unlock_vany():

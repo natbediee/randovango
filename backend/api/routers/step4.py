@@ -7,6 +7,17 @@ from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 router = APIRouter()
 
 MAX_POI_PER_CATEGORY = 10
+RESTAURANT_SERVICE = "restaurant"
+
+
+def keep_checked_restaurants(poi_list: list) -> list:
+    """
+    Là où l'agent find_restaurants.py est passé, seuls les restaurants qui ont une fiche sont montrés.
+    Ailleurs, on garde ceux d'OSM tant que la commune n'est pas traitée. Les autres services ne changent pas.
+    """
+    if not any(poi["genre"] for poi in poi_list):
+        return poi_list
+    return [poi for poi in poi_list if poi["service_category"] != RESTAURANT_SERVICE or poi["genre"]]
 
 
 def _build_subtitles(categorized_poi: dict) -> dict:
@@ -86,18 +97,27 @@ def get_poi(
             p.address,
             --
             s.category as service_category,
-            s.name as service_name
+            s.name as service_name,
+            r.genre,
+            r.pourquoi,
+            r.budget,
+            r.jours_fermeture,
+            r.distinction,
+            p.statut_saison,
+            p.mois_ouverture
         FROM poi p
         JOIN poi_service ps ON p.id = ps.poi_id
         JOIN services s ON ps.service_id = s.id
+        LEFT JOIN restaurants r ON r.poi_id = p.id
         WHERE p.latitude BETWEEN %s AND %s
         AND p.longitude BETWEEN %s AND %s
+        AND p.masque = 0
         ORDER BY s.category, p.name ASC
     """
 
     cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
-    poi_list = cursor.fetchall()
-    
+    poi_list = keep_checked_restaurants(cursor.fetchall())
+
     cursor.close()
     MySQLUtils.disconnect(cnx)
     
@@ -138,7 +158,14 @@ def get_poi(
             "url": poi['url'],
             "address": poi['address'],
             "service_type": poi['service_name'],
-            "distance_km": round(distance_km, 2)
+            "distance_km": round(distance_km, 2),
+            "genre": poi['genre'],
+            "pourquoi": poi['pourquoi'],
+            "budget": poi['budget'],
+            "jours_fermeture": poi['jours_fermeture'],
+            "distinction": poi['distinction'],
+            "statut_saison": poi['statut_saison'],
+            "mois_ouverture": poi['mois_ouverture']
         }))
 
     # Ne garder que les POI les plus proches du point de référence, par catégorie

@@ -45,7 +45,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     // --- 4. Chargement API ---
     let spotsLoadFailed = false;
     try {
-        const spots = await apiGet(`/api/step3/spots?city_id=${cityId}`);
+        // Avec la rando du jour, les spots arrivent triés selon leur distance à son tracé.
+        const hikeParam = hikeId && hikeId !== 'no-hiking' ? `&hike_id=${hikeId}` : '';
+        // Le séjour et le jour donnent la date de la nuit : un lieu fermé qui aura rouvert est proposé.
+        const { planId: tripPlanId } = getTripContext();
+        const nightParam = tripPlanId ? `&plan_id=${tripPlanId}&day_number=${currentDay}` : '';
+        const spots = await apiGet(`/api/step3/spots?city_id=${cityId}${hikeParam}${nightParam}`);
 
         if (spots && spots.length > 0) {
             // --- 5. Affichage ---
@@ -94,8 +99,18 @@ function displaySpots(spots, map, hikeMarkerPosition, plannedSpotIds = new Map()
 
     // Créer les marqueurs et les cartes pour chaque spot
     const markerPositions = hikeMarkerPosition ? [hikeMarkerPosition] : [];
-    spots.forEach(spot => {
+    // Avec une rando ce jour-là : d'abord les spots sur son trajet (on part à pied du
+    // spot), puis les autres du plus proche au plus loin (ordre donné par l'API).
+    const hasHikeDistances = spots.some(spot => spot.hike_distance_label);
+    spots.forEach((spot, index) => {
         const plannedDay = plannedSpotIds.get(spot.id);
+        if (hasHikeDistances && index === 0 && spot.on_hike) {
+            spotsList.appendChild(spotSectionTitle('Sur le trajet de ta rando', 'tu pars à pied du spot', true));
+        }
+        if (hasHikeDistances && !spot.on_hike && (index === 0 || spots[index - 1].on_hike)) {
+            spotsList.appendChild(spotSectionTitle(
+                index === 0 ? 'Les spots, du plus proche au plus loin de ta rando' : 'Les autres spots, du plus proche au plus loin de ta rando'));
+        }
         spotsList.appendChild(createSpotCard(spot, plannedDay));
 
         // Ajouter un marqueur sur la carte si disponible
@@ -108,7 +123,7 @@ function displaySpots(spots, map, hikeMarkerPosition, plannedSpotIds = new Map()
                 `<span class="map-tip__name">${spot.name_label}</span>` +
                 `<span class="map-tip__stats">${spot.type_label}${spot.rating_label ? ' · ' + spot.rating_label : ''}</span>`;
             const TIP_OPTS = { direction: 'top', offset: [0, -30], className: 'map-tip', opacity: 1 };
-            const marker = L.marker([spot.latitude, spot.longitude], { icon: buildSpotDivIcon(), zIndexOffset: 600 })
+            const marker = L.marker([spot.latitude, spot.longitude], { icon: buildSpotDivIcon(null, spot.on_hike), zIndexOffset: spot.on_hike ? 650 : 600 })
                 .addTo(map)
                 .bindPopup(buildSpotPopupContent(spot, false))
                 .bindTooltip(spotTipHtml, TIP_OPTS)
@@ -156,20 +171,25 @@ function displaySpots(spots, map, hikeMarkerPosition, plannedSpotIds = new Map()
     // clic sur « Choisir » l'affichait, d'où l'impossibilité de repartir vers
     // l'étape 4 sans re-cliquer sur le spot déjà retenu.
     const previouslySelected = localStorage.getItem('selectedSpot');
-    if (previouslySelected === 'autre_hebergement') {
-        document.querySelector('.no-spot-option')?.classList.add('selected');
-        revealNextStep(false);
-    } else if (previouslySelected) {
+    if (previouslySelected && previouslySelected !== 'autre_hebergement') {
         const selectedCard = document.getElementById(`select-spot-btn-${previouslySelected}`)?.closest('.spot-card');
         if (selectedCard) selectedCard.classList.add('selected');
         updateSpotSelectionUI(previouslySelected);
-        revealNextStep(true);
+        revealNextStep();
     }
+}
+
+function spotSectionTitle(title, note, onHike = false) {
+    const heading = document.createElement('div');
+    heading.className = 'spots-section-title' + (onHike ? ' spots-section-title--hike' : '');
+    heading.innerHTML = (onHike ? '<i class="fas fa-hiking" aria-hidden="true"></i> ' : '') + title
+        + (note ? ` <span class="spots-section-title__note">${note}</span>` : '');
+    return heading;
 }
 
 function createSpotCard(spot, plannedDay) {
     const card = document.createElement('div');
-    card.className = 'spot-card';
+    card.className = 'spot-card' + (spot.on_hike ? ' spot-card--on-hike' : '');
     // Catégorie prix calculée côté Python (display_utils.spot_category), utilisée
     // par le filtre gratuit/payant/autres.
     card.setAttribute('data-type', spot.category);
@@ -185,26 +205,23 @@ function createSpotCard(spot, plannedDay) {
 
     card.innerHTML = `
         <div class="spot-content-grid">
-            <!-- Colonne gauche : Type + Vérifié -->
-            <div class="spot-left">
-                <span class="hiking-stats"><span class="stat">${spot.type_label}</span></span>
-                <span class="status-badge ${spot.badge.css}">${spot.badge.text}</span>
-            </div>
-
-            <!-- Colonne centre : Infos bivouac -->
+            <!-- Infos du spot : type, vérifié et note au-dessus du nom -->
             <div class="spot-center">
+                <div class="spot-tags">
+                    ${spot.hike_distance_label ? `<span class="hike-distance${spot.on_hike ? ' hike-distance--on' : ''}">${spot.hike_distance_label}</span>` : ''}
+                    <span class="spot-type">${spot.type_label}</span>
+                    <span class="status-badge ${spot.badge.css}">${spot.badge.text}</span>
+                    ${spot.rating_label ? `<span class="rating">${spot.rating_label}</span>` : ''}
+                </div>
                 <h4>${spot.name_label}</h4>
                 ${spot.address ? `<p class="spot-address"><i class="fas fa-map-marker-alt"></i> ${spot.address}</p>` : ''}
-                ${spot.description_label ? `<p class="spot-description">${spot.description_label}</p>` : ''}
+                ${spot.description_html ? `<p class="spot-description">${spot.description_html}</p>` : ''}
                 <div class="spot-features">
                     ${servicesHTML}
                 </div>
-                <div class="spot-details">
-                    ${spot.rating_label ? `<span class="rating">${spot.rating_label}</span>` : ''}
-                </div>
             </div>
 
-            <!-- Colonne droite : Planifié + Boutons -->
+            <!-- Boutons (et rappel si le spot est déjà planifié un autre jour) -->
             <div class="spot-right">
                 ${plannedBadge}
                 ${spot.url
@@ -274,14 +291,12 @@ function filterSpotsByType(filter) {
 
 // --- 7. Sélection et sauvegarde ---
 
-// Affiche le bouton « étape suivante » (toujours) et la météo de la nuit (seulement
-// si un vrai spot est retenu, pas pour « autre hébergement »). Appelé au clic de
-// sélection comme à la restauration d'un choix existant.
-function revealNextStep(showNightWeather) {
+// Un spot est retenu : bouton « étape suivante » et météo de la nuit. Appelé au clic
+// de sélection comme à la restauration d'un choix existant.
+function revealNextStep() {
     const nightWeather = document.getElementById('nightWeather');
-    if (nightWeather) nightWeather.style.display = showNightWeather ? 'block' : 'none';
-    const nextBtn = document.getElementById('nextStepBtn');
-    if (nextBtn) nextBtn.style.display = 'block';
+    if (nightWeather) nightWeather.style.display = 'block';
+    showNextOrSkip(true);
 }
 
 // Met à jour l'icône des marqueurs, le contenu des popups et les boutons des cartes
@@ -289,7 +304,7 @@ function updateSpotSelectionUI(spotId) {
     const TIP_OPTS = { direction: 'top', offset: [0, -30], className: 'map-tip', opacity: 1 };
     spotMarkers.forEach(({ marker, spot }) => {
         const isSelected = spot.id == spotId;
-        marker.setIcon(isSelected ? buildSpotSelectedDivIcon() : buildSpotDivIcon());
+        marker.setIcon(isSelected ? buildSpotSelectedDivIcon() : buildSpotDivIcon(null, spot.on_hike));
         marker.setPopupContent(buildSpotPopupContent(spot, isSelected));
         // Spot choisi : pas de tooltip de survol (le marqueur vert suffit) ; rétabli sinon.
         if (isSelected) { marker.closeTooltip(); marker.unbindTooltip(); }
@@ -318,12 +333,9 @@ function selectSpot(spotId) {
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    const noSpotOption = document.querySelector('.no-spot-option');
-    if (noSpotOption) noSpotOption.classList.remove('selected');
-
     localStorage.setItem('selectedSpot', spotId);
     updateSpotSelectionUI(spotId);
-    revealNextStep(true);
+    revealNextStep();
 
     // Concept unifié : après le choix, le popup se ferme (marqueur vert + fiche verte = sélection).
     if (spotMap) spotMap.closePopup();
@@ -331,18 +343,15 @@ function selectSpot(spotId) {
     saveDayChoice('step3', { spot_id: spotId, day_number: currentDay }, 'spot');
 }
 
-function selectNoSpot() {
+// Bouton « Autre hébergement » de la barre du bas : pas de spot RandoVanGo cette nuit.
+// On attend la sauvegarde avant de passer aux services (sinon la requête est coupée).
+async function skipSpot() {
     document.querySelectorAll('.spot-card').forEach(card => card.classList.remove('selected'));
-
-    const noSpotOption = document.querySelector('.no-spot-option');
-    if (noSpotOption) noSpotOption.classList.add('selected');
-
     localStorage.setItem('selectedSpot', 'autre_hebergement');
     updateSpotSelectionUI(null);
-    revealNextStep(false);
-
     // Réinitialise spot_id en base
-    saveDayChoice('step3', { spot_id: null, day_number: currentDay }, 'spot');
+    await saveDayChoice('step3', { spot_id: null, day_number: currentDay }, 'spot');
+    window.location.href = window.APP_URLS.step4;
 }
 
 // Bouton "Détail" du popup carte : amène à la carte du spot dans la liste et l'encadre

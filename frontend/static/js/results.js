@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Nettoyage défensif : si on atterrit sur le récap alors qu'une édition d'un jour
     // avait été lancée mais non terminée (jour rouvert puis abandon), on restaure la
     // progression réelle avant de lire le contexte, pour ne pas rester bloqué sur le
-    // jour édité (voir editDay / step4 goToNextDayOrResults).
+    // jour édité (voir editDay / step5 goToNextDayOrResults).
     if (localStorage.getItem('editingDay')) {
         const ret = localStorage.getItem('editReturnDay');
         if (ret) localStorage.setItem('currentDay', ret);
@@ -136,6 +136,16 @@ document.addEventListener('DOMContentLoaded', async function () {
                 markerPositions.push([day.spot_latitude, day.spot_longitude]);
             }
 
+            // Marqueurs des idées de Vany ajoutées à ce jour
+            (day.pepites || []).forEach(pepite => {
+                if (resultMap) {
+                    L.marker([pepite.latitude, pepite.longitude], { icon: buildPepiteIcon() })
+                        .addTo(resultMap)
+                        .bindPopup(`<b>${escapeHtml(pepite.nom)}</b><br>Jour ${day.day_number}`);
+                    markerPositions.push([pepite.latitude, pepite.longitude]);
+                }
+            });
+
             // Marqueurs POI/services
             (day.pois || []).forEach(poi => {
                 if (resultMap && poi.latitude && poi.longitude) {
@@ -155,6 +165,8 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
         }
 
+        showVanyBanner(plan.days);
+
         // --- 7. Navigation : jour suivant ou fin du séjour ---
         // Le jour qui vient d'être complété est le dernier jour affiché dans le récap.
         const lastDay = plan.days.find(d => d.day_number === currentDay) || plan.days[plan.days.length - 1];
@@ -169,6 +181,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             // depuis getTripContext() : rien à câbler ici.
             document.getElementById('tripEndSection').style.display = '';
         }
+
         // Pas de scroll automatique ici : cet écran est une relecture avant PDF, on doit
         // arriver en haut sur le carnet. La carte reste accessible plus bas.
     } catch (err) {
@@ -177,13 +190,23 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 });
 
+// Titre de l'encart Vany : les pépites qu'il a déjà trouvées pour ce séjour, avant de
+// proposer le voyage 100% IA. Sans pépite ajoutée, le titre du modèle reste
+// (« Vany peut aller plus loin »).
+function showVanyBanner(days) {
+    const count = days.reduce((total, day) => total + (day.pepites || []).length, 0);
+    const title = document.querySelector('#vanyResults .vany-banner__title');
+    if (!title || count === 0) return;
+    title.textContent = count === 1 ? "Vany t'a trouvé 1 pépite" : `Vany t'a trouvé ${count} pépites`;
+}
+
 // --- 8. Fonctions appelées par les boutons de la page (attributs onclick) ---
 
 // Rouvre un jour DÉJÀ planifié pour le modifier (ville comprise). On repart de
 // l'étape 1 avec le contexte de ce jour, et on mémorise :
 //   - editingDay      : le jour en cours d'édition (les étapes écrivent sur ce jour) ;
 //   - editReturnDay   : le jour de progression réel, restauré à la fin de l'édition
-//                       pour revenir au récap complet (voir step4 goToNextDayOrResults) ;
+//                       pour revenir au récap complet (voir step5 goToNextDayOrResults) ;
 //   - editOriginalCity: la ville d'origine du jour, pour réinitialiser rando/spot si
 //                       l'utilisateur change de ville (choix devenus incohérents).
 function editDay(dayNumber) {

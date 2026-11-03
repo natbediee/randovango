@@ -68,10 +68,16 @@ POI_CATEGORY_STYLES = {
     "urgence":      ("#B04A4A", "", "Urgence"),           # fa-first-aid
 }
 
+# Les idées de Vany : pastille blanche bordée de sable avec son chapeau, comme
+# .pepite-marker (frontend/static/css/app.css). Les lieux « En chemin », recommandés
+# aussi par Vany : la même pastille en plus petit, comme .trail-tip-marker.
+PEPITE_STYLE = ("#7A6224", "#ECDDB4", "Pépite de Vany")       # couleur de l'étiquette, bordure
+HAT_PNG = Path(__file__).resolve().parents[1] / "assets" / "carnet" / "logo" / "hat-icon.png"
+
 _icon_file_cache = {}
 
 
-def _fetch_hike_trace(mongo_id: str) -> list:
+def fetch_hike_trace(mongo_id: str) -> list:
     """Récupère les points [lon, lat] du tracé GPX depuis MongoDB (même source que
     la route /api/step2/hike/{id}/trace utilisée par la carte interactive)."""
     if not mongo_id:
@@ -121,27 +127,68 @@ def fetch_hike_waypoints(mongo_id: str) -> list:
         return []
 
 
-def _render_pin_png(color: str, glyph: str, size: int) -> bytes:
-    """Dessine un badge rond coloré avec l'icône Font Awesome centrée en blanc."""
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+def _render_badge_png(size: int, background: str, outline: str = "white", glyph: str = None,
+                      glyph_color: str = "white", picture: Path = None, label: str = None,
+                      label_color: str = None) -> bytes:
+    """
+    Dessine une pastille ronde : une icône Font Awesome (`glyph`) ou une image
+    (`picture`, le chapeau de Vany) au centre, et en option une étiquette (« J2 »)
+    sous la pastille, comme sur la carte du site (buildDivIcon dans results.js).
+    Le centre de la pastille reste à (largeur / 2, size / 2) : c'est le point
+    d'ancrage du marqueur (voir _add_badge).
+    """
+    label_font = ImageFont.truetype(DEJAVU_BOLD_TTF, max(9, round(size * 0.34))) if label else None
+    label_w = label_h = 0
+    if label:
+        bbox = label_font.getbbox(label)
+        label_w, label_h = bbox[2] - bbox[0] + round(size * 0.3), bbox[3] - bbox[1] + round(size * 0.2)
+    width = max(size, label_w)
+    img = Image.new("RGBA", (width, size + (label_h + 2 if label else 0)), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    draw.ellipse((1, 1, size - 1, size - 1), fill=color, outline="white", width=max(2, size // 15))
-    font = ImageFont.truetype(FA_SOLID_TTF, int(size * 0.45))
-    bbox = draw.textbbox((0, 0), glyph, font=font)
-    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    draw.text(((size - w) / 2 - bbox[0], (size - h) / 2 - bbox[1]), glyph, font=font, fill="white")
+    left = (width - size) // 2
+    draw.ellipse((left + 1, 1, left + size - 1, size - 1), fill=background, outline=outline, width=max(2, size // 15))
+    if glyph:
+        font = ImageFont.truetype(FA_SOLID_TTF, int(size * 0.45))
+        bbox = draw.textbbox((0, 0), glyph, font=font)
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        draw.text((left + (size - w) / 2 - bbox[0], (size - h) / 2 - bbox[1]), glyph, font=font, fill=glyph_color)
+    if picture:
+        side = round(size * 0.6)
+        hat = Image.open(picture).convert("RGBA")
+        hat.thumbnail((side, side))
+        img.alpha_composite(hat, (left + (size - hat.width) // 2, (size - hat.height) // 2))
+    if label:
+        top = size + 2
+        x0 = (width - label_w) // 2
+        draw.rounded_rectangle((x0, top, x0 + label_w - 1, top + label_h - 1), radius=3, fill=label_color or background)
+        bbox = draw.textbbox((0, 0), label, font=label_font)
+        draw.text((x0 + (label_w - (bbox[2] - bbox[0])) / 2 - bbox[0], top + (label_h - (bbox[3] - bbox[1])) / 2 - bbox[1]),
+                  label, font=label_font, fill="white")
     buffer = BytesIO()
     img.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
-def _icon_file_path(color: str, glyph: str, size: int) -> str:
+def _render_pin_png(color: str, glyph: str, size: int, label: str = None) -> bytes:
+    """Pastille colorée avec l'icône Font Awesome en blanc (rando, spot, services)."""
+    return _render_badge_png(size, color, glyph=glyph, label=label)
+
+
+def _render_pepite_png(size: int, label: str = None) -> bytes:
+    return _render_badge_png(size, "white", PEPITE_STYLE[1], picture=HAT_PNG, label=label,
+                             label_color=PEPITE_STYLE[0])
+
+
+def _render_trail_tip_png(size: int) -> bytes:
+    return _render_badge_png(size, "white", PEPITE_STYLE[1], picture=HAT_PNG)
+
+
+def _icon_file_path(key: tuple, render) -> str:
     """staticmap.IconMarker exige un chemin de fichier : on met en cache un fichier
-    temporaire par (couleur, glyphe, taille) pour ne le dessiner qu'une seule fois."""
-    key = (color, glyph, size)
+    temporaire par marqueur (`key`) pour ne le dessiner qu'une seule fois."""
     if key not in _icon_file_cache:
         tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-        tmp.write(_render_pin_png(color, glyph, size))
+        tmp.write(render())
         tmp.close()
         _icon_file_cache[key] = tmp.name
     return _icon_file_cache[key]
@@ -229,23 +276,36 @@ def _marker_scale(width: int, reference_width: int) -> float:
     return max(1.0, width / reference_width)
 
 
-def render_hike_map_png(mongo_id: str, width: int = 700, height: int = 420) -> bytes | None:
+def render_hike_map_png(mongo_id: str, width: int = 700, height: int = 420, trail_tips: list = ()) -> bytes | None:
     """Carte dédiée à la rando (dissociée de la carte générale du jour) : uniquement
     le tracé, zoomé dessus, avec les étapes du GPX (waypoints) numérotées - les
-    numéros renvoient à la liste d'indications sous la carte (cf. pdf_service.py)."""
+    numéros renvoient à la liste d'indications sous la carte (cf. pdf_service.py) -
+    et les lieux à voir en chemin (petit chapeau de Vany)."""
     try:
-        from staticmap import IconMarker, Line
+        from staticmap import CircleMarker, IconMarker, Line
     except ImportError:
         logger.warning("[map] Librairie staticmap non disponible, carte ignorée")
         return None
 
-    trace_points = _fetch_hike_trace(mongo_id)
+    trace_points = fetch_hike_trace(mongo_id)
     if len(trace_points) < 2:
         return None
 
     scale = _marker_scale(width, 700)
     m = _static_map(width, height)
     m.add_line(Line(trace_points, HIKE_STYLE[0], round(4 * scale)))
+
+    # Les lieux « En chemin » d'abord, sous les étapes numérotées : les numéros
+    # renvoient à l'itinéraire pas à pas et doivent rester lisibles. Le chapeau est
+    # posé à côté du lieu (en haut à droite, comme un fanion), un point sable marquant
+    # sa position exacte : centré dessus, il recouvrait l'étape voisine.
+    tip_size = round(28 * scale)
+    tip_path = _icon_file_path(("tip", tip_size), lambda: _render_trail_tip_png(tip_size))
+    for tip in trail_tips or []:
+        position = (tip["longitude"], tip["latitude"])
+        m.add_marker(IconMarker(position, tip_path, -round(4 * scale), tip_size + round(4 * scale)))
+        m.add_marker(CircleMarker(position, "white", round(9 * scale)))
+        m.add_marker(CircleMarker(position, PEPITE_STYLE[0], round(6 * scale)))
 
     waypoints = fetch_hike_waypoints(mongo_id)
     pin_size = round(26 * scale)
@@ -280,28 +340,45 @@ def render_overview_map_png(days: list, width: int = 900, height: int = 550) -> 
     m = _static_map(width, height)
     has_marker = False
 
-    def add_icon(lon, lat, color, glyph, size):
+    # Étiquette « J1 », « J2 »... sous les marqueurs, quand la carte montre plusieurs jours.
+    several_days = len(days) > 1
+
+    def add_badge(lon, lat, key, render, size):
+        path = _icon_file_path(key, render)
+        with Image.open(path) as image:
+            width = image.width
+        m.add_marker(IconMarker((lon, lat), path, width // 2, size // 2))
+
+    def add_icon(lon, lat, color, glyph, size, label=None):
         size = round(size * scale)
-        path = _icon_file_path(color, glyph, size)
-        m.add_marker(IconMarker((lon, lat), path, size // 2, size // 2))
+        add_badge(lon, lat, ("pin", color, glyph, size, label),
+                  lambda: _render_pin_png(color, glyph, size, label), size)
 
     for day in days:
+        label = f"J{day['day_number']}" if several_days and day.get("day_number") else None
         if day.get("hike_id"):
-            trace_points = _fetch_hike_trace(day.get("hike_mongo_id"))
+            trace_points = fetch_hike_trace(day.get("hike_mongo_id"))
             if len(trace_points) >= 2:
                 m.add_line(Line(trace_points, HIKE_STYLE[0], round(3 * scale)))
                 has_marker = True
         if day.get("hike_latitude") and day.get("hike_longitude"):
-            add_icon(day["hike_longitude"], day["hike_latitude"], *HIKE_STYLE[:2], 42)
+            add_icon(day["hike_longitude"], day["hike_latitude"], *HIKE_STYLE[:2], 42, label)
             has_marker = True
         if day.get("spot_latitude") and day.get("spot_longitude"):
-            add_icon(day["spot_longitude"], day["spot_latitude"], *SPOT_STYLE[:2], 42)
+            add_icon(day["spot_longitude"], day["spot_latitude"], *SPOT_STYLE[:2], 42, label)
             has_marker = True
         for poi in day.get("pois") or []:
             if poi.get("latitude") and poi.get("longitude"):
                 color, glyph, _ = POI_CATEGORY_STYLES.get(poi.get("category"), DEFAULT_POI_STYLE)
-                add_icon(poi["longitude"], poi["latitude"], color, glyph, 32)
+                add_icon(poi["longitude"], poi["latitude"], color, glyph, 32, label)
                 has_marker = True
+        # Les pépites ajoutées. Les lieux « En chemin » sont sur la carte de la rando
+        # (render_hike_map_png), à l'échelle du tracé : ici, ils chargeaient la carte.
+        pepite_size = round(38 * scale)
+        for pepite in day.get("pepites") or []:
+            add_badge(pepite["longitude"], pepite["latitude"], ("pepite", pepite_size, label),
+                      lambda: _render_pepite_png(pepite_size, label), pepite_size)
+            has_marker = True
 
     if not has_marker:
         return None
@@ -334,6 +411,9 @@ def legend_entries(days: list) -> list:
         {"shape": "pin", "color": SPOT_STYLE[0], "label": SPOT_STYLE[2],
          "icon_png": _render_pin_png(*SPOT_STYLE[:2], LEGEND_ICON_SIZE)},
     ]
+    if any(day.get("pepites") for day in days):
+        entries.append({"shape": "pin", "color": PEPITE_STYLE[0], "label": PEPITE_STYLE[2],
+                        "icon_png": _render_pepite_png(LEGEND_ICON_SIZE)})
     seen_categories = set()
     for day in days:
         for poi in day.get("pois") or []:

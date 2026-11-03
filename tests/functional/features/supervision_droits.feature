@@ -1,0 +1,55 @@
+# language: fr
+Fonctionnalité: La supervision est réservée aux admins
+  Les décisions de la supervision priment sur les agents et changent ce que voient les voyageurs :
+  seul un compte admin peut les lire, les prendre ou les annuler.
+
+  Plan du scénario: Sans jeton valide, aucune route ne répond
+    Étant donné un visiteur avec un jeton <jeton>
+    Quand il appelle <methode> <route>
+    Alors la réponse est 401
+    Et aucune décision n'est enregistrée
+
+    Exemples:
+      | jeton    | methode | route                          |
+      | absent   | GET     | /api/supervision/reviews       |
+      | invalide | GET     | /api/supervision/reviews       |
+      | expiré   | GET     | /api/supervision/reviews       |
+      | absent   | POST    | /api/supervision/decisions     |
+      | invalide | DELETE  | /api/supervision/decisions/1   |
+
+  Plan du scénario: Un compte qui n'est pas admin est refusé partout
+    Étant donné un utilisateur connecté avec le rôle "<role>"
+    Quand il appelle <methode> <route>
+    Alors la réponse est 403
+    Et aucune décision n'est enregistrée
+
+    Exemples:
+      | role        | methode | route                                   |
+      | contributor | GET     | /api/supervision/reviews                |
+      | user        | GET     | /api/supervision/reviews                |
+      | contributor | POST    | /api/supervision/decisions              |
+      | contributor | PUT     | /api/supervision/decisions/1            |
+      | contributor | DELETE  | /api/supervision/decisions/1            |
+      | contributor | GET     | /api/supervision/services               |
+      | contributor | POST    | /api/supervision/services/decisions     |
+      | contributor | POST    | /api/supervision/services/audit/1       |
+      | contributor | DELETE  | /api/supervision/services/decisions/1   |
+
+  Scénario: Un admin enregistre une décision à son nom
+    Étant donné un utilisateur connecté avec le rôle "admin"
+    Quand il décide de "garder" le spot 574
+    Alors la réponse est 200
+    Et la décision "garder" sur le spot 574 est enregistrée au nom de l'utilisateur
+
+  Scénario: Une décision inconnue est refusée
+    Étant donné un utilisateur connecté avec le rôle "admin"
+    Quand il décide de "supprimer" le spot 574
+    Alors la réponse est 422
+    Et aucune décision n'est enregistrée
+
+  Scénario: Un rôle admin retiré vaut tout de suite, même avec un jeton encore valide
+    Étant donné un utilisateur connecté avec le rôle "admin"
+    Et son rôle admin vient de lui être retiré
+    Quand il décide de "garder" le spot 574
+    Alors la réponse est 403
+    Et aucune décision n'est enregistrée

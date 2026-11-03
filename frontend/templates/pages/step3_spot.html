@@ -36,11 +36,6 @@
       <div class="spots-section" id="spotsSection" style="display:none;">
         <div class="spots-list"></div>
       </div>
-
-      {# Option "autre spot" #}
-      <div class="no-spot-option" id="noSpotCard">
-        <button class="btn btn--ghost no-spot-btn" onclick="selectNoSpot()">Autre spot (ami, hôtel, chez soi…)</button>
-      </div>
     </div>
 
     <div class="map-col">
@@ -55,6 +50,8 @@
 <div class="container step-nav-wrap">
   <div class="step-nav mobile-nav">
     <a href="{{ url_for('step2') }}" class="mobile-nav__back step-nav__back" aria-label="Étape précédente">←</a>
+    {# « Passer » tant qu'aucun spot n'est choisi, puis « Étape suivante » (showNextOrSkip) #}
+    <button id="skipBtn" class="btn btn--outline" onclick="skipSpot()">Autre hébergement (ami, hôtel, chez soi…)</button>
     <a href="{{ url_for('step4') }}" id="nextStepBtn" class="btn btn--primary btn--block" style="display:none;">Étape suivante : services <i class="fas fa-arrow-right"></i></a>
   </div>
 </div>

@@ -66,6 +66,16 @@ function showDayBadge(currentDay, selectedDays) {
     if (dayBadge) dayBadge.textContent = `Jour ${currentDay}/${selectedDays}`;
 }
 
+// Barre du bas des étapes : le bouton pour passer l'étape (« Pas de rando
+// aujourd'hui », « Continuer sans service »...) tant que rien n'est choisi, puis le
+// bouton pour continuer avec le choix fait. Même logique à chaque étape.
+function showNextOrSkip(hasChoice) {
+    const next = document.getElementById('nextStepBtn');
+    const skip = document.getElementById('skipBtn');
+    if (next) next.style.display = hasChoice ? '' : 'none';
+    if (skip) skip.style.display = hasChoice ? 'none' : '';
+}
+
 // Vérifie qu'une ville a été choisie à l'étape 1, sinon y renvoie l'utilisateur.
 // Renvoie l'identifiant de la ville (ou null : l'appelant doit alors s'arrêter).
 function requireCity() {
@@ -220,7 +230,11 @@ function buildHikeDivIcon(dayLabel) {
 // synchronisé avec SPOT_STYLE (results.js) et map_service.py (carnet PDF).
 const SPOT_COLOR = '#22424B';
 
-function buildSpotDivIcon(dayLabel) {
+// onHike (étape 3) : spot sur le trajet de la rando du jour, plus grand et cerclé de
+// teal, la couleur de la rando.
+function buildSpotDivIcon(dayLabel, onHike = false) {
+    const size = onHike ? 34 : 28;
+    const ring = onHike ? '0 0 0 3px #fff, 0 0 0 6px #2E7D86' : '0 1px 4px #0006';
     const label = dayLabel
         ? `<span style="position:absolute;left:50%;transform:translateX(-50%);top:30px;
                         background:${SPOT_COLOR};color:#fff;font-size:9px;font-weight:700;
@@ -229,15 +243,15 @@ function buildSpotDivIcon(dayLabel) {
            </span>` : '';
     return L.divIcon({
         className: 'custom-map-marker',
-        html: `<div style="position:relative;width:28px;">
-                  <div class="map-pin map-pin--spot" style="background:${SPOT_COLOR};width:28px;height:28px;border-radius:50% 50% 50% 0;
-                              transform:rotate(-45deg);box-shadow:0 1px 4px #0006;display:flex;align-items:center;justify-content:center;">
-                    <i class="fas fa-bed" style="color:#fff;transform:rotate(45deg);font-size:13px;"></i>
+        html: `<div style="position:relative;width:${size}px;">
+                  <div class="map-pin map-pin--spot" style="background:${SPOT_COLOR};width:${size}px;height:${size}px;border-radius:50% 50% 50% 0;
+                              transform:rotate(-45deg);box-shadow:${ring};display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-bed" style="color:#fff;transform:rotate(45deg);font-size:${onHike ? 15 : 13}px;"></i>
                   </div>${label}
                </div>`,
-        iconSize: [28, dayLabel ? 46 : 28],
-        iconAnchor: [14, 28],
-        popupAnchor: [0, -26]
+        iconSize: [size, dayLabel ? size + 18 : size],
+        iconAnchor: [size / 2, size],
+        popupAnchor: [0, -size + 2]
     });
 }
 
@@ -362,4 +376,39 @@ async function loadPreviousDaysOnMap(map, currentDay, planId, options = {}) {
     } catch {
         return { plannedHikeIds, plannedSpotIds, previousPositions };
     }
+}
+
+// ----- Les pépites de Vany (étape 5 et récap) -----
+
+// Les textes des idées viennent du web : on les échappe avant de les insérer en HTML.
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+}
+
+// Marqueur pépite : pastille blanche avec le chapeau de Vany (même image que dans le tableau).
+// À l'étape 5, le numéro de l'idée dans la liste s'affiche en plus sur le marqueur.
+function buildPepiteIcon(number) {
+    const badge = number ? `<span class="pepite-marker__num">${number}</span>` : '';
+    return L.divIcon({
+        className: 'custom-map-marker',
+        html: `<div class="pepite-marker"><i class="pepite-icon"></i>${badge}</div>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+        popupAnchor: [0, -16]
+    });
+}
+
+// Marqueur « En chemin », recommandé par Vany : petite pastille sable, avec le numéro
+// du lieu dans la liste (étape 2) ou le chapeau de Vany (carte du jour, carnet).
+function buildTrailTipIcon(number) {
+    const inner = number ? `<span>${number}</span>` : '<i class="pepite-icon"></i>';
+    return L.divIcon({
+        className: 'custom-map-marker',
+        html: `<div class="trail-tip-marker">${inner}</div>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+        popupAnchor: [0, -12]
+    });
 }

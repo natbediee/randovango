@@ -39,8 +39,12 @@
     </ol>
   </section>
 
+  {# Deux chemins côte à côte : composer soi-même (durée) ou laisser Vany composer #}
+  <div class="home-paths">
+
   {# Carte de sélection de la durée #}
   <div class="card" id="durationSection">
+    <span class="eyebrow">Je compose moi-même</span>
     <div class="card__title">Combien de jours pars-tu ?</div>
     <div class="duration-grid">
       <div class="duration-card pick" data-days="1">
@@ -84,13 +88,16 @@
     </div>
   </div>
 
-  {# Bandeau Vany #}
-  {% with vany_title='Ou laisse Vany composer ton voyage',
+  {# Carte Vany, à droite de la durée #}
+  {% with vany_eyebrow='Ou voyage 100% IA',
+          vany_title='Laisse Vany composer ton voyage',
           vany_text="Dis-lui où et combien de temps : il propose l'itinéraire complet, tu valides étape par étape.",
           vany_cta_label='Discuter avec Vany',
           vany_cta_url=url_for('unlock_vany') %}
     {% include 'partials/vany_banner.html' %}
   {% endwith %}
+
+  </div>
 
 </div>
 {% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Supervision - RandoVanGo{% endblock %}
+
+{% block page_content %}
+{# Réservé aux admins : supervision.js renvoie à la connexion, et l'API refuse les autres comptes. #}
+<div class="container stack" style="gap:18px;">
+
+  {% with active='spots' %}{% include 'partials/supervision_nav.html' %}{% endwith %}
+
+  <p class="supervision-msg" id="supervisionMsg" style="display:none;"></p>
+
+  <div id="reviewsList" class="stack" style="gap:14px;"></div>
+
+  <section id="recentSection" class="supervision-recent" style="display:none;">
+    <h2>Décidé récemment</h2>
+    <div id="recentList"></div>
+  </section>
+
+  <section id="openingsSection" class="supervision-recent" style="display:none;">
+    <h2>Ouvertures décidées</h2>
+    <div id="openingsList"></div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/supervision.js') }}"></script>
+{% endblock %}
