@@ -16,4 +16,6 @@ sauvegardes/
 .claudeignore
 # scripts ponctuels (rattrapage), hors du code versionné
 backend/oneshot/
+# fichiers retirés du code, gardés en local
+archive_local/
 .DS_Store

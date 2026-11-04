@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Query, Body
 from services.plan_service import insert_or_update_plan
 from utils.db_utils import MySQLUtils
@@ -10,14 +12,29 @@ MAX_POI_PER_CATEGORY = 10
 RESTAURANT_SERVICE = "restaurant"
 
 
+def postcode_of(address: str | None) -> str | None:
+    match = re.search(r"\b(\d{5})\b", address or "")
+    return match.group(1) if match else None
+
+
 def keep_checked_restaurants(poi_list: list) -> list:
     """
     Là où l'agent find_restaurants.py est passé, seuls les restaurants qui ont une fiche sont montrés.
-    Ailleurs, on garde ceux d'OSM tant que la commune n'est pas traitée. Les autres services ne changent pas.
+    Ailleurs, on garde ceux d'OSM tant que la commune n'est pas traitée : le code postal le dit, car une zone de 5 km
+    déborde sur la voisine (les fiches de Plougonvelin faisaient disparaître les restaurants de Locmaria-Plouzané).
+    Un restaurant sans adresse lisible n'est gardé que s'il n'y a aucune fiche autour. Les autres services ne changent pas.
     """
-    if not any(poi["genre"] for poi in poi_list):
+    treated = {postcode_of(poi.get("address")) for poi in poi_list if poi["genre"]}
+    if not treated:
         return poi_list
-    return [poi for poi in poi_list if poi["service_category"] != RESTAURANT_SERVICE or poi["genre"]]
+    return [poi for poi in poi_list if poi["service_category"] != RESTAURANT_SERVICE or poi["genre"]
+            or postcode_of(poi.get("address")) not in treated | {None}]
+
+
+def display_rank(poi: dict, city_name: str) -> tuple:
+    """Les fiches de la commune d'abord, puis le plus proche : un café voisin ne prend pas la place d'une table de la commune."""
+    own_sheet = bool(poi.get("genre")) and city_name.lower() in (poi.get("address") or "").lower()
+    return (not own_sheet, poi["distance_km"])
 
 
 def _build_subtitles(categorized_poi: dict) -> dict:
@@ -52,7 +69,7 @@ def get_poi(
     
     # Récupérer les coordonnées de la ville
     cursor.execute(
-        "SELECT latitude, longitude FROM cities WHERE id = %s", 
+        "SELECT name, latitude, longitude FROM cities WHERE id = %s", 
         (city_id,)
     )
     city = cursor.fetchone()
@@ -109,13 +126,16 @@ def get_poi(
         JOIN poi_service ps ON p.id = ps.poi_id
         JOIN services s ON ps.service_id = s.id
         LEFT JOIN restaurants r ON r.poi_id = p.id
-        WHERE p.latitude BETWEEN %s AND %s
-        AND p.longitude BETWEEN %s AND %s
-        AND p.masque = 0
+        WHERE p.masque = 0
+        AND (
+            (p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s)
+            -- Une commune déborde de la zone : la Pointe Saint-Mathieu est à 5,2 km du centre de Plougonvelin.
+            OR (r.poi_id IS NOT NULL AND p.address LIKE %s)
+        )
         ORDER BY s.category, p.name ASC
     """
 
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
+    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city['name']}"))
     poi_list = keep_checked_restaurants(cursor.fetchall())
 
     cursor.close()
@@ -170,7 +190,7 @@ def get_poi(
 
     # Ne garder que les POI les plus proches du point de référence, par catégorie
     for category, pois in categorized_poi.items():
-        pois.sort(key=lambda p: p['distance_km'])
+        pois.sort(key=lambda p: display_rank(p, city['name']))
         categorized_poi[category] = pois[:MAX_POI_PER_CATEGORY]
 
     # Phrases de sous-titre par catégorie, calculées APRÈS la troncature à

@@ -1,5 +1,5 @@
 """
-Harmonisation des descriptions des spots Park4Night par Claude.
+Harmonisation des descriptions des spots p4n par Claude.
 
 C'est une transformation POST-CHARGEMENT (voir agents/__init__.py) :
   extract -> transform -> load -> transformation post-chargement (ce fichier)
@@ -15,14 +15,14 @@ qui est utile à un voyageur en van. Le résultat est rangé dans la colonne
 `description_ia`, À CÔTÉ de la description d'origine.
 
 Le nom affiché sur le site, lui, ne passe pas par Claude : il est construit à
-partir des données Park4Night (voir spot_name_label dans utils/display_utils.py).
+partir des données p4n (voir spot_name_label dans utils/display_utils.py).
 
 Ce n'est PAS de l'enrichissement : aucune source externe n'est utilisée, tout
 ce qui sort vient du texte du contributeur.
 
 DEUX RÈGLES À NE JAMAIS CASSER
   1. La colonne `description` n'est JAMAIS modifiée : on garde toujours le
-     texte original de Park4Night, pour pouvoir tout refaire si besoin.
+     texte original de p4n, pour pouvoir tout refaire si besoin.
   2. Claude ne doit rien inventer.
 
 ON NE REFAIT PAS LE TRAVAIL DEUX FOIS
@@ -96,13 +96,13 @@ logger = LoggerUtil.get_logger("etl_harmonize_spots")
 #           interdiction, minimum de nuits, panne récente)
 PROMPT_VERSION = 22
 
-# Services que Claude peut citer : la liste fermée des services Park4Night
+# Services que Claude peut citer : la liste fermée des services p4n
 # (les services exclus, comme "Belle balade à moto", n'y sont pas).
 SERVICE_NAMES = sorted(SERVICE_CATEGORY_MAP.keys())
 
 # Le "schéma JSON" décrit exactement la réponse attendue. Claude est obligé de
 # le respecter : on reçoit toujours ces six champs, et rien d'autre. La liste
-# "enum" empêche Claude d'inventer un service qui n'existe pas dans Park4Night.
+# "enum" empêche Claude d'inventer un service qui n'existe pas dans p4n.
 SPOT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -320,67 +320,6 @@ def harmonize_one(service, spot: dict) -> dict:
 # =============================================================================
 
 # Colonnes d'une ancienne version de l'harmonisation, plus utilisées par personne.
-OBSOLETE_COLUMNS = [
-    "tags", "noise_level", "access_difficulty", "services_inferred",
-    "stale_info", "confidence", "source_hash", "display_name",
-]
-
-
-def update_spots_columns(cursor, database: str) -> None:
-    """
-    Met la table `spots` à jour pour ce script :
-      - renomme `enriched_at` en `harmonized_at` (ancien nom de la colonne) ;
-      - ajoute les colonnes `prompt_version`, `a_verifier` et `nuit_interdite` si elles manquent ;
-      - supprime les colonnes obsolètes si elles existent encore.
-    On peut l'appeler plusieurs fois sans risque : ce qui est déjà fait est ignoré.
-    """
-    cursor.execute(
-        "SELECT column_name FROM information_schema.columns"
-        " WHERE table_schema = %s AND table_name = 'spots'",
-        (database,),
-    )
-    existing_columns = [row[0] for row in cursor.fetchall()]
-
-    if "enriched_at" in existing_columns:
-        # RENAME COLUMN garde les valeurs déjà enregistrées.
-        cursor.execute("ALTER TABLE spots RENAME COLUMN enriched_at TO harmonized_at")
-        logger.info("[harmonize] Colonne spots.enriched_at renommée en harmonized_at")
-
-    if "prompt_version" not in existing_columns:
-        cursor.execute("ALTER TABLE spots ADD COLUMN prompt_version INT")
-        logger.info("[harmonize] Colonne spots.prompt_version ajoutée")
-
-    if "a_verifier" not in existing_columns:
-        cursor.execute("ALTER TABLE spots ADD COLUMN a_verifier TINYINT(1)")
-        logger.info("[harmonize] Colonne spots.a_verifier ajoutée")
-
-    if "nuit_interdite" not in existing_columns:
-        cursor.execute("ALTER TABLE spots ADD COLUMN nuit_interdite TINYINT(1)")
-        logger.info("[harmonize] Colonne spots.nuit_interdite ajoutée")
-
-    for column in OBSOLETE_COLUMNS:
-        if column in existing_columns:
-            cursor.execute(f"ALTER TABLE spots DROP COLUMN {column}")
-            logger.info(f"[harmonize] Colonne obsolète spots.{column} supprimée")
-
-
-def update_spot_service_table(cursor, database: str) -> None:
-    """
-    Ajoute à `spot_service` la colonne `source` si elle manque : 'p4n' pour les
-    services cochés sur Park4Night (valeur par défaut, donc toutes les lignes
-    existantes), 'ia' pour ceux ajoutés par l'harmonisation.
-    On peut l'appeler plusieurs fois sans risque.
-    """
-    cursor.execute(
-        "SELECT column_name FROM information_schema.columns"
-        " WHERE table_schema = %s AND table_name = 'spot_service' AND column_name = 'source'",
-        (database,),
-    )
-    if not cursor.fetchall():
-        cursor.execute("ALTER TABLE spot_service ADD COLUMN source VARCHAR(10) NOT NULL DEFAULT 'p4n'")
-        logger.info("[harmonize] Colonne spot_service.source ajoutée")
-
-
 def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None, only_new: bool = False) -> list:
     """
     Renvoie les spots à harmoniser : jamais traités, ou traités avec une ancienne
@@ -513,7 +452,7 @@ def write_services(cursor, spot_id: int, service_names: list) -> None:
       (source 'ia') : en cas de nouveau prompt, on repart de zéro.
     - On ajoute ensuite les services cités, avec source 'ia'. INSERT IGNORE ne
       fait rien si le service est déjà lié au spot : un service coché sur
-      Park4Night garde donc sa source 'p4n'.
+      p4n garde donc sa source 'p4n'.
     Les lignes 'p4n' ne sont jamais touchées.
     """
     cursor.execute("DELETE FROM spot_service WHERE spot_id = %s AND source = 'ia'", (spot_id,))
@@ -523,12 +462,6 @@ def write_services(cursor, spot_id: int, service_names: list) -> None:
             "INSERT IGNORE INTO spot_service (spot_id, service_id, source) VALUES (%s, %s, 'ia')",
             (spot_id, service_id),
         )
-
-
-def _database_name() -> str:
-    """Nom de la base MySQL, lu dans le .env."""
-    ServiceUtil.load_env()
-    return ServiceUtil.get_env("DB_NAME")
 
 
 # =============================================================================
@@ -553,9 +486,6 @@ def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new
 
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
-    update_spots_columns(cursor, _database_name())
-    update_spot_service_table(cursor, _database_name())
-    connection.commit()
 
     for spot in fetch_spots_to_harmonize(cursor, limit=sample, spot_ids=spot_ids, only_new=only_new):
         try:
@@ -589,9 +519,6 @@ def submit_backfill() -> str:
 
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
-    update_spots_columns(cursor, _database_name())
-    update_spot_service_table(cursor, _database_name())
-    connection.commit()
     spots = fetch_spots_to_harmonize(cursor)
     cursor.close()
     MySQLUtils.disconnect(connection)

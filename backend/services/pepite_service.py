@@ -35,7 +35,7 @@ comme pépite ; il devient un conseil pour le jour de cette rando (fetch_trail_t
 Une activité, un événement ou un marché sur le parcours (concert au bourg) reste une
 pépite : on ne le fait pas en passant.
 
-LES TABLES (créées au premier usage, voir ensure_tables)
+LES TABLES (créées par db_init/db_randovango.py)
     - pepites           : les idées trouvées par l'agent
     - pepite_recherches : les recherches déjà faites (type, zone, période, version
                           des consignes), pour ne pas rappeler l'agent quand il
@@ -121,83 +121,6 @@ MAX_TRAIL_TIPS = 4
 # de mètres près (un cinéma s'est retrouvé en mer). Le code cherche la vraie
 # position du lieu dans la base ETL jusqu'à 5 km de cette estimation (voir locate).
 LOCATE_KM = 5
-
-
-# =============================================================================
-# 1. LES TABLES
-# =============================================================================
-
-_tables_ready = False
-
-
-def ensure_tables(cursor) -> None:
-    """Crée les tables des pépites si elles n'existent pas (une fois par processus)."""
-    global _tables_ready
-    if _tables_ready:
-        return
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pepites (
-            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            nom VARCHAR(255) NOT NULL,
-            categorie VARCHAR(20) NOT NULL,
-            description TEXT,
-            commune VARCHAR(100),
-            themes JSON,
-            lieu VARCHAR(255),
-            adresse VARCHAR(255),
-            latitude DOUBLE NOT NULL,
-            longitude DOUBLE NOT NULL,
-            position_source VARCHAR(20),
-            position_url VARCHAR(500),
-            located_version INT,
-            located_at DATETIME,
-            date_debut DATE,
-            date_fin DATE,
-            jours_semaine JSON,
-            horaires VARCHAR(100),
-            heure_debut FLOAT,
-            tarif VARCHAR(50),
-            creneau VARCHAR(10) NOT NULL,
-            duree_h FLOAT,
-            exterieur TINYINT(1) NOT NULL DEFAULT 1,
-            permanent TINYINT(1) NOT NULL DEFAULT 0,
-            note INT,
-            sources JSON,
-            found_at DATETIME NOT NULL,
-            verified_at DATETIME NOT NULL,
-            prompt_version INT,
-            model VARCHAR(50)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pepite_recherches (
-            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            latitude DOUBLE NOT NULL,
-            longitude DOUBLE NOT NULL,
-            jour DATE NOT NULL,
-            jour_fin DATE NOT NULL,
-            searched_at DATETIME NOT NULL,
-            nb_trouvees INT NOT NULL,
-            type VARCHAR(10) NOT NULL DEFAULT 'agenda',
-            prompt_version INT NOT NULL,
-            trip_day_id INT
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS trip_day_pepites (
-            trip_day_id INT NOT NULL,
-            pepite_id INT NOT NULL,
-            statut VARCHAR(10) NOT NULL DEFAULT 'proposee',
-            pourquoi TEXT,
-            moment VARCHAR(15),
-            coup_de_coeur TINYINT(1) NOT NULL DEFAULT 0,
-            vue TINYINT(1) NOT NULL DEFAULT 0,
-            PRIMARY KEY (trip_day_id, pepite_id),
-            FOREIGN KEY (trip_day_id) REFERENCES trip_days(id) ON DELETE CASCADE,
-            FOREIGN KEY (pepite_id) REFERENCES pepites(id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """)
-    _tables_ready = True
 
 
 # =============================================================================
@@ -671,7 +594,6 @@ def relocate_missing(limit: int = None) -> None:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         places = places_to_locate(cursor, LOCATE_PROMPT_VERSION)
         batches = [places[i:i + BATCH_SIZE] for i in range(0, len(places), BATCH_SIZE)][:limit]
         logger.info(f"[pépites] positions : {len(places)} lieu(x) à recaler, {len(batches)} lot(s)")
@@ -810,7 +732,6 @@ def trail_tips_for_hikes(hike_ids: list) -> dict:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         cursor.execute(f"SELECT id, mongo_id FROM hikes WHERE id IN ({', '.join(['%s'] * len(hike_ids))})",
                        list(hike_ids))
         tips = {}
@@ -865,7 +786,6 @@ def search_zone(plan_id: int, day_number: int) -> None:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         day = load_day_context(cursor, plan_id, day_number)
         if day is None:
             return
@@ -914,7 +834,6 @@ def search_city_places(city_name: str) -> None:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         cursor.execute("SELECT id, name, latitude, longitude FROM cities WHERE name = %s LIMIT 1", (city_name,))
         city = cursor.fetchone()
         if city is None:
@@ -974,7 +893,6 @@ def search_missing_places(limit: int = None) -> None:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         cursor.execute("SELECT id, name, latitude, longitude FROM cities ORDER BY id")
         cities = cursor.fetchall()
         # Seules les villes encore sans lieux sont comptées : le compteur dit ce qui reste.
@@ -1053,7 +971,6 @@ def prepare_day(plan_id: int, day_number: int) -> None:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         day = load_day_context(cursor, plan_id, day_number)
         if day is None or not day["has_spot"]:
             return
@@ -1098,7 +1015,6 @@ def complete_day(plan_id: int, day_number: int) -> None:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         day = load_day_context(cursor, plan_id, day_number)
         if day is None or not day["has_spot"]:
             return
@@ -1215,7 +1131,6 @@ def get_day_state(plan_id: int, day_number: int) -> dict:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         day = load_day_context(cursor, plan_id, day_number)
         if day is None or not day["has_spot"]:
             return {"state": "recherche" if preparing or pending else "vide"}
@@ -1271,7 +1186,6 @@ def day_news(plan_id: int) -> list:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         cursor.execute("""
             SELECT td.day_number, td.city_id, td.hike_id, td.spot_id, tp.start_date,
                    COUNT(*) AS nb, MAX(tdp.coup_de_coeur) AS favorite
@@ -1297,7 +1211,6 @@ def mark_seen(plan_id: int, day_number: int) -> None:
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         cursor.execute("""
             UPDATE trip_day_pepites tdp JOIN trip_days td ON td.id = tdp.trip_day_id
             SET tdp.vue = 1 WHERE td.trip_plan_id = %s AND td.day_number = %s
@@ -1319,7 +1232,6 @@ def set_added(plan_id: int, day_number: int, pepite_id: int, added: bool) -> Non
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
-        ensure_tables(cursor)
         trip_day_id = _trip_day_id(cursor, plan_id, day_number)
         if trip_day_id is None:
             return

@@ -8,7 +8,7 @@ récente, équipement en panne). Cet agent cherche sur le web si elle est toujou
 d'actualité.
 
 CE N'EST PAS DE L'HARMONISATION, C'EST DE L'ENRICHISSEMENT
-Le web est une source externe à Park4Night. Le résultat est donc rangé à part,
+Le web est une source externe à p4n. Le résultat est donc rangé à part,
 dans la table `spot_verifications` (statut, résumé, sources, date), et la fiche
 du spot n'est jamais modifiée, sauf son badge : un doute de l'agent le passe en
 « non vérifié » (mark_doubt). On garde l'historique : une ligne par vérification.
@@ -16,7 +16,7 @@ du spot n'est jamais modifiée, sauf son badge : un doute de l'agent le passe en
 LES COMMENTAIRES REFONT L'HISTOIRE
 La base ne garde qu'un échantillon des commentaires, qui favorise les plus mauvais : une
 plainte y reste, pas toujours le commentaire qui dit que c'est réparé. L'agent relit donc
-sur Park4Night tous ceux des 12 derniers mois (read_recent_reviews). Il rend :
+sur p4n tous ceux des 12 derniers mois (read_recent_reviews). Il rend :
     - "a_savoir" : le paragraphe « À savoir » tel qu'il doit être affiché aujourd'hui,
       phrase par phrase, avec la période de l'année des règles saisonnières ;
     - "utilisable" : peut-on y passer la nuit aujourd'hui ? Dans le doute, non : on préfère
@@ -57,7 +57,7 @@ logger = LoggerUtil.get_logger("etl_verify_spots")
 # Version des consignes. À AUGMENTER À CHAQUE MODIFICATION DU PROMPT.
 #   1 : version initiale
 #   2 : date du jour fournie ; une période terminée n'est plus valable ; effort élevé
-#   3 : état actuel de la fiche Park4Night (ouverture, type) et commentaires récents
+#   3 : état actuel de la fiche p4n (ouverture, type) et commentaires récents
 #       fournis ; une période terminée ne prouve pas une réouverture ; "plus_valable"
 #       seulement si TOUTES les situations signalées ont pris fin
 #   4 : pas de tarif chiffré dans le résumé ; une règle communale se juge sur
@@ -69,7 +69,7 @@ VERIFY_PROMPT_VERSION = 5
 
 MAX_FAILURES_IN_A_ROW = 3
 
-# Commentaires transmis à l'agent : ceux des 12 derniers mois, relus sur Park4Night,
+# Commentaires transmis à l'agent : ceux des 12 derniers mois, relus sur p4n,
 # les plus récents d'abord. Une fiche très commentée en a des centaines.
 REVIEWS_DAYS = 365
 MAX_REVIEWS = 40
@@ -233,36 +233,14 @@ def build_user_message(spot: dict) -> str:
 # 2. LIRE ET ÉCRIRE DANS LA BASE MYSQL
 # =============================================================================
 
-def create_verification_table(cursor) -> None:
-    """Crée la table des vérifications si elle n'existe pas (sans risque si elle existe)."""
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS spot_verifications (
-            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            spot_id INT NOT NULL,
-            verified_at DATETIME NOT NULL,
-            statut VARCHAR(20) NOT NULL,
-            resume TEXT,
-            sources JSON,
-            prompt_version INT,
-            model VARCHAR(50),
-            FOREIGN KEY (spot_id) REFERENCES spots(id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """)
-    cursor.execute("SHOW COLUMNS FROM spot_verifications")
-    existing_columns = {row[0] for row in cursor.fetchall()}
-    for column, definition in (("a_savoir", "JSON"), ("utilisable", "VARCHAR(3)"),
-                               ("utilisable_a_partir", "DATE"), ("raison", "TEXT")):
-        if column not in existing_columns:
-            cursor.execute(f"ALTER TABLE spot_verifications ADD COLUMN {column} {definition}")
-            logger.info(f"[verify] Colonne spot_verifications.{column} ajoutée")
-
-
-def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None) -> list:
+def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None, only_new: bool = False) -> list:
     """
     Spots marqués `a_verifier` à (re)vérifier : jamais vérifiés depuis leur
     dernière harmonisation, ou vérifiés avec une ancienne version du prompt.
     Les types masqués (ex : "PARKING JOUR UNIQUEMENT") sont ignorés.
     `spot_ids` (option --id) : ces spots-là, sans condition.
+    `only_new` (ETL) : seulement les spots jamais vérifiés. Revérifier les anciens
+    sur une nouvelle version du prompt reste une décision, pas un effet du scraping.
     Chaque spot contient aussi ses commentaires les plus récents ("recent_reviews").
     """
     columns = """
@@ -275,6 +253,7 @@ def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None) -> l
                        tuple(spot_ids))
     else:
         type_placeholders = ",".join(["%s"] * len(HIDDEN_SPOT_TYPES))
+        recent = "" if only_new else "AND v.verified_at >= s.harmonized_at AND v.prompt_version >= %s"
         query = f"""
             SELECT {columns}
             FROM spots s
@@ -285,12 +264,11 @@ def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None) -> l
               AND NOT EXISTS (
                   SELECT 1 FROM spot_verifications v
                   WHERE v.spot_id = s.id
-                    AND v.verified_at >= s.harmonized_at
-                    AND v.prompt_version >= %s
+                    {recent}
               )
             ORDER BY s.id
         """
-        params = (*HIDDEN_SPOT_TYPES, VERIFY_PROMPT_VERSION)
+        params = HIDDEN_SPOT_TYPES if only_new else (*HIDDEN_SPOT_TYPES, VERIFY_PROMPT_VERSION)
         if limit:
             query += " LIMIT %s"
             params = (*params, limit)
@@ -327,7 +305,7 @@ def recent_reviews(reviews: list, today: date) -> list:
 
 def read_recent_reviews(driver, wait, spot: dict, first_page: bool = False) -> None:
     """
-    Remplace les commentaires du spot par ceux des 12 derniers mois, relus sur Park4Night.
+    Remplace les commentaires du spot par ceux des 12 derniers mois, relus sur p4n.
     La base n'en garde qu'un échantillon. Si la fiche ne peut pas être relue ou n'a rien de
     récent, l'agent garde les derniers commentaires en base (attach_recent_reviews).
     """
@@ -401,15 +379,19 @@ def mark_doubt(cursor, spot_id: int) -> None:
 # 3. LANCEMENT
 # =============================================================================
 
-def run(limit: int = None, spot_ids: list = None) -> None:
+def run(limit: int = None, spot_ids: list = None, only_new: bool = False) -> None:
     """Vérifie les spots un par un ; chaque résultat est enregistré dès qu'il arrive."""
     service = make_llm_service("verify_spots", mcp_servers=MCP_SERVERS, mcp_tools=MCP_TOOLS)
 
     ServiceUtil.load_env()
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
-    create_verification_table(cursor)
-    connection.commit()
+
+    spots = fetch_spots_to_verify(cursor, limit=limit, spot_ids=spot_ids, only_new=only_new)
+    if not spots:  # l'ETL passe ici à chaque ville : pas de navigateur pour rien
+        cursor.close()
+        MySQLUtils.disconnect(connection)
+        return
 
     from selenium.webdriver.support.ui import WebDriverWait
 
@@ -421,7 +403,7 @@ def run(limit: int = None, spot_ids: list = None) -> None:
     counts = {"toujours_valable": 0, "plus_valable": 0, "incertain": 0, "erreur": 0, "non_utilisable": 0}
     failures_in_a_row = 0
     try:
-        for number, spot in enumerate(fetch_spots_to_verify(cursor, limit=limit, spot_ids=spot_ids)):
+        for number, spot in enumerate(spots):
             read_recent_reviews(driver, wait, spot, first_page=number == 0)
             try:
                 payload = service.complete_json(SYSTEM_PROMPT, build_user_message(spot), VERIFY_SCHEMA)

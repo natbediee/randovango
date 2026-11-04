@@ -3,9 +3,9 @@ from fastapi import APIRouter, Query
 from fastapi.responses import Response
 from utils.db_utils import MySQLUtils
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
-from services.supervision_service import ensure_tables as ensure_supervision_tables, reworked_a_savoir
+from services.supervision_service import reworked_a_savoir
 from utils.display_utils import result_day_display, spot_description_label, spot_name_label, with_a_savoir
-from services.pepite_service import ensure_tables, fetch_chosen_pepites, fetch_trail_tips
+from services.pepite_service import fetch_chosen_pepites, fetch_trail_tips
 from services.pdf_service import render_trip_pdf_html
 
 router = APIRouter()
@@ -77,8 +77,6 @@ def _fetch_plan_data(plan_id: int):
     days = cursor.fetchall()
 
     # POI/services, idées de Vany ajoutées et conseils « En chemin » pour chaque jour
-    ensure_tables(cursor)
-    ensure_supervision_tables(cnx)
     for day in days:
         day["pepites"] = fetch_chosen_pepites(cursor, day["id"])
         day["trail_tips"] = fetch_trail_tips(cursor, day.get("hike_mongo_id"))

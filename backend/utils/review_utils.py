@@ -1,5 +1,5 @@
 """
-Sélection des commentaires Park4Night (avis datés et notés des utilisateurs).
+Sélection des commentaires p4n (avis datés et notés des utilisateurs).
 
 Certains spots ont plusieurs centaines de commentaires : on n'en garde qu'un
 échantillon représentatif, avec la même fonction à deux endroits :
@@ -19,7 +19,7 @@ PROMPT_SELECTION = (6, 2, 2)
 
 
 def parse_review_date(text: str):
-    """Date d'un commentaire Park4Night ("20/09/2026") en objet date, ou None."""
+    """Date d'un commentaire p4n ("20/09/2026") en objet date, ou None."""
     try:
         return datetime.strptime(text.strip(), "%d/%m/%Y").date()
     except (ValueError, AttributeError):

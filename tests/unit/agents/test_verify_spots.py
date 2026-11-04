@@ -164,7 +164,6 @@ def test_three_failures_in_a_row_stop_the_pass(monkeypatch) -> None:
     monkeypatch.setattr(verify_spots.ServiceUtil, "load_env", lambda: None)
     monkeypatch.setattr(verify_spots.MySQLUtils, "connect", lambda: Connection())
     monkeypatch.setattr(verify_spots.MySQLUtils, "disconnect", lambda connection: None)
-    monkeypatch.setattr(verify_spots, "create_verification_table", lambda cursor: None)
     monkeypatch.setattr(verify_spots, "fetch_spots_to_verify", lambda *args, **kwargs: spots)
     monkeypatch.setattr(verify_spots, "read_recent_reviews", lambda *args, **kwargs: None)
     monkeypatch.setattr("etl.extract.scraper_p4n.create_driver", lambda: Driver())

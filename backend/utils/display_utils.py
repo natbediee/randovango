@@ -241,12 +241,12 @@ EXCLUDED_SPOT_TYPES = ("PARKING JOUR UNIQUEMENT",)
 HIDDEN_SPOT_TYPES = (
     "AIRE DE SERVICES SANS STAT.",
     "SERVICES D'APPOINT",
-    # Un spot déjà en base peut devenir "jour uniquement" sur Park4Night : il
+    # Un spot déjà en base peut devenir "jour uniquement" sur p4n : il
     # reste en base (un carnet de voyage peut y faire référence) mais est masqué.
     *EXCLUDED_SPOT_TYPES,
 )
 
-# Nom commun de chaque type de spot Park4Night, utilisé pour construire un nom
+# Nom commun de chaque type de spot p4n, utilisé pour construire un nom
 # de secours quand la description ne nomme pas le lieu ("Parking · Saint-Cava").
 SPOT_TYPE_NOUNS = {
     "PARKING JOUR ET NUIT": "Parking",
@@ -269,12 +269,12 @@ HOUSE_NUMBER_RE = re.compile(r"^\d+[A-Za-z]?(?:-\d+[A-Za-z]?)?\s+")
 
 def spot_name_label(place_label, city_label, name, spot_type):
     """
-    Nom affiché d'un spot, construit SANS IA à partir des données Park4Night.
+    Nom affiché d'un spot, construit SANS IA à partir des données p4n.
 
     1. Le type du spot + le lieu, sans numéro de rue :
          "139 Mechou Kamm Doun" (PARKING JOUR ET NUIT) -> "Parking · Mechou Kamm Doun"
          "Camping Kermaléro"    (CAMPING)              -> "Camping Kermaléro" (inchangé)
-    2. À défaut de lieu, la commune ; en dernier recours, le nom Park4Night brut.
+    2. À défaut de lieu, la commune ; en dernier recours, le nom p4n brut.
     Renvoie None si le spot n'existe pas (tout est vide).
     """
     noun = SPOT_TYPE_NOUNS.get((spot_type or "").upper().strip(), "Spot")
@@ -355,7 +355,7 @@ def spot_category(spot_type) -> str:
     return "autres"
 
 
-# Un badge par CATÉGORIE de service (et non par service Park4Night) : les
+# Un badge par CATÉGORIE de service (et non par service p4n) : les
 # services équivalents sont ainsi fusionnés ("Coins de pêche" + "Pêche à pied"
 # -> "Pêche"). Clé = code de catégorie en base (services.category, cf.
 # SERVICE_CATEGORY_MAP), valeur = (icône, libellé français affiché).
@@ -397,7 +397,7 @@ def spot_services_display(services) -> list:
     français, dans l'ordre de SPOT_SERVICE_CATEGORIES.
 
     `services` est une liste de {"name": ..., "category": ...}. Un service dont
-    la catégorie est inconnue garde son nom Park4Night (repli de
+    la catégorie est inconnue garde son nom p4n (repli de
     spot_service_display), pour ne jamais faire disparaître une information.
     """
     categories = {s.get("category") for s in services}
@@ -431,7 +431,7 @@ def enrich_spot(spot) -> dict:
     """
     Ajoute à un spot ses champs prêts à afficher.
 
-    Le nom Park4Night est un gabarit "(29200) Brest - 172 Rue de Quimper" : on
+    Le nom p4n est un gabarit "(29200) Brest - 172 Rue de Quimper" : on
     affiche un nom lisible construit par spot_name_label. La description
     harmonisée par l'IA (`description_ia`) prime sur le texte contributeur brut
     quand elle existe. La source reste disponible dans `name` / `description`.

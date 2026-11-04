@@ -641,7 +641,7 @@ def _spot_section(day) -> str:
                if day.get("spot_address") else "")
     description = escape((day.get("spot_description") or "").strip())
     description_html = f'<p class="spot-description">{description}</p>' if description else ""
-    link = (f'<a class="spot-link" href="{escape(day["spot_url"])}">Voir sur park4night&nbsp;↗</a>'
+    link = (f'<a class="spot-link" href="{escape(day["spot_url"])}">Voir plus de détails&nbsp;↗</a>'
             if day.get("spot_url") else "")
     # Le type ("Parking jour et nuit") complète le nom, souvent une simple adresse.
     spot_type = f' - {escape(day["spot_type"].capitalize())}' if day.get("spot_type") else ""

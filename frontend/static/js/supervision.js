@@ -29,7 +29,7 @@ function reviewCard(review) {
     const comments = review.commentaires.map(c =>
         `<li><strong>${escapeHtml(c.date)}</strong> : ${escapeHtml(c.texte)}</li>`).join('');
     const links = [
-        review.url ? `<a href="${escapeHtml(review.url)}" target="_blank" rel="noopener">Voir la fiche Park4Night</a>` : '',
+        review.url ? `<a href="${escapeHtml(review.url)}" target="_blank" rel="noopener">Voir plus de détails</a>` : '',
         ...review.sources.map((url, i) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Source ${i + 1}</a>`),
     ].filter(Boolean).join('');
     return `

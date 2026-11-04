@@ -1,24 +1,24 @@
 import requests
 
 from utils.logger_util import LoggerUtil
-from utils.geo_utils import get_coordinates_for_city
+from utils.geo_utils import get_city_center
 
 logger = LoggerUtil.get_logger("etl_meteo")
 
 def extract_weather_data(city, latitude=None, longitude=None) -> bool | None:
     """
     Récupère les données météo pour une ville donnée via l'API Open-Meteo.
-    Si latitude/longitude sont fournis, Nominatim n'est pas appelé.
+    Sans latitude/longitude, la position vient de la table cities (voir get_city_center).
     """
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
     if latitude is None or longitude is None:
         logger.info(f"[Extract] : Recherche des coordonnées pour {city}")
-        latitude, longitude = get_coordinates_for_city(city)
+        latitude, longitude = get_city_center(city)
         if latitude is None or longitude is None:
             logger.warning(f"[Extract] : Impossible de trouver les coordonnées pour {city}")
             return None
-        logger.info(f"[Extract] : Coordonnées trouvées via Nominatim: {latitude}, {longitude}")
+        logger.info(f"[Extract] : Coordonnées trouvées : {latitude}, {longitude}")
     else:
         logger.info(f"[Extract] : Coordonnées fournies pour {city}: {latitude}, {longitude}")
 

@@ -12,6 +12,7 @@ Les agents, qui sont des transformations POST-CHARGEMENT (le "T" d'un ELT) :
     - harmonize_spots.py : Claude réécrit les descriptions pour un voyageur en van
     - verify_spots.py    : vérifie sur le web les situations temporaires (fermeture, travaux...)
     - dedupe_spots.py    : repère les spots saisis deux fois et les marque comme doublons
+    - read_openings.py   : traduit la période d'ouverture des fiches en dates
     - discover_places.py : cherche sur le web les lieux qui valent le détour autour
                            d'une ville (site, point de vue, patrimoine), une fois pour
                            toutes, après le chargement de ses POI

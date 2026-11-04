@@ -158,7 +158,7 @@ def test_spots_to_harmonize_are_selected_by_prompt_version() -> None:
     assert "prompt_version IS NULL OR prompt_version < %s" in query
     assert "duplicate_of_spot_id IS NULL" in query  # pas de doublons
     assert "details_scraped_at IS NOT NULL" in query  # ouverture et commentaires récupérés
-    assert "p4n_removed = 0" in query  # pas de fiches disparues de Park4Night
+    assert "p4n_removed = 0" in query  # pas de fiches disparues de p4n
     # Version actuelle, puis types masqués (jamais harmonisés), puis la limite.
     assert params == (harmonize_spots.PROMPT_VERSION, *HIDDEN_SPOT_TYPES, 20)
 
@@ -175,7 +175,7 @@ def test_only_new_leaves_the_spots_of_an_older_version_alone() -> None:
 
 
 def test_write_records_the_prompt_version_and_never_the_description() -> None:
-    # Garde-fou principal : la source Park4Night doit rester rejouable.
+    # Garde-fou principal : la source p4n doit rester rejouable.
     cursor = FakeCursor()
     harmonize_spots.write_harmonization(cursor, 1, PAYLOAD)
     query, params = cursor.calls[0]
@@ -193,20 +193,6 @@ def test_write_never_lowers_the_flags() -> None:
     assert "a_verifier = GREATEST(COALESCE(a_verifier, 0), %s, COALESCE(nuit_interdite, 0) > %s)" in query
     assert "nuit_interdite = GREATEST(COALESCE(nuit_interdite, 0), %s)" in query
     assert query.index("a_verifier = GREATEST") < query.index("nuit_interdite = GREATEST")
-
-
-def test_update_spots_columns_adds_version_and_drops_obsolete_columns() -> None:
-    cursor = FakeCursor(columns=["id", "enriched_at", "tags", "source_hash"])
-    harmonize_spots.update_spots_columns(cursor, "bdd")
-    statements = [query for query, _ in cursor.calls]
-    assert "ALTER TABLE spots RENAME COLUMN enriched_at TO harmonized_at" in statements
-    assert "ALTER TABLE spots ADD COLUMN prompt_version INT" in statements
-    assert "ALTER TABLE spots ADD COLUMN a_verifier TINYINT(1)" in statements
-    assert "ALTER TABLE spots ADD COLUMN nuit_interdite TINYINT(1)" in statements
-    assert "ALTER TABLE spots DROP COLUMN tags" in statements
-    assert "ALTER TABLE spots DROP COLUMN source_hash" in statements
-    # Une colonne déjà absente n'est pas supprimée une seconde fois.
-    assert "ALTER TABLE spots DROP COLUMN confidence" not in statements
 
 
 def test_spot_ids_select_those_spots_even_if_already_harmonized() -> None:
@@ -227,7 +213,7 @@ def test_cited_services_complete_the_badges_with_source_ia() -> None:
     cursor = FakeCursor()
     harmonize_spots.write_harmonization(cursor, 1, PAYLOAD)
     statements = [query for query, _ in cursor.calls]
-    # Les ajouts IA précédents sont effacés, les lignes Park4Night jamais touchées.
+    # Les ajouts IA précédents sont effacés, les lignes p4n jamais touchées.
     assert "DELETE FROM spot_service WHERE spot_id = %s AND source = 'ia'" in statements
     insert = [call for call in cursor.calls if call[0].startswith("INSERT IGNORE INTO spot_service")]
     assert insert == [(
@@ -239,9 +225,3 @@ def test_no_cited_service_only_clears_previous_ia_services() -> None:
     cursor = FakeCursor()
     harmonize_spots.write_harmonization(cursor, 1, {"description": "Parking.", "services": []})
     assert not any(query.startswith("INSERT") for query, _ in cursor.calls)
-
-
-def test_spot_service_gets_a_source_column() -> None:
-    cursor = FakeCursor(columns=[])  # la colonne n'existe pas encore
-    harmonize_spots.update_spot_service_table(cursor, "bdd")
-    assert any("ADD COLUMN source" in query for query, _ in cursor.calls)

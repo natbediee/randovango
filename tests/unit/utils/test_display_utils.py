@@ -145,7 +145,7 @@ def test_enrich_spot() -> None:
     assert spot["category"] == "autres"
     assert spot["rating_label"] == "⭐ 4.2/5"
     assert spot["services_display"][0] == {"icon": "💧", "name": "Eau potable"}
-    # Catégorie inconnue : le nom Park4Night est gardé, rien ne disparaît.
+    # Catégorie inconnue : le nom p4n est gardé, rien ne disparaît.
     assert spot["services_display"][1] == {"icon": "✓", "name": "Sauna"}
 
 

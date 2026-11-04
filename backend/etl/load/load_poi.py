@@ -1,4 +1,5 @@
 import pandas as pd
+from etl.load.load_poi_checks import save_check
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 from utils.service_utils import ServiceUtil, SERVICE_CATEGORY_LABEL_MAP
@@ -89,6 +90,9 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
             # Insérer le type dans la table service si besoin, puis lier dans poi_service
             if row.get('type'):
                 insert_service_and_link(cursor, poi_id, row.get('type'))
+            # Téléphone et horaires : pas encore de colonne dans poi, gardés pour la vérification.
+            if row.get('osm_details'):
+                save_check(cursor, poi_id, 'osm', {**row.get('osm_details'), 'present': True})
     cnx.commit()
     logger.info(f"[load_osm_poi] : {len(df_osm)} POI OSM insérés pour {city_name}.")
     cursor.close()

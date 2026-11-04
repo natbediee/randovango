@@ -1,6 +1,7 @@
 import requests
 import time 
 
+from utils.geo_utils import get_city_center
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("etl_wikidata")
@@ -12,7 +13,12 @@ def extract_wikidata(city) -> dict:
     (types) et labels (itemLabel) corrects en une seule ligne par POI.
     """
     logger.info(f"[Extract] : Lancement de l'extraction Wikidata pour : {city}")
-    
+
+    latitude, longitude = get_city_center(city)
+    if latitude is None or longitude is None:
+        logger.error(f"[Extract] : Impossible de trouver les coordonnées pour '{city}'")
+        return None
+
     # --- Requête SPARQL ---
     sparql_query = f"""
         SELECT ?item
@@ -23,21 +29,15 @@ def extract_wikidata(city) -> dict:
             (SAMPLE(?commonsCat) AS ?commonsCat)
             (GROUP_CONCAT(DISTINCT ?baseTypeLabel; separator=", ") AS ?types)
         WHERE {{
-          # 1. Centre = La commune de recherche
-          BIND("{city}"@fr AS ?name)
-          ?place rdfs:label ?name ;
-                 wdt:P31/wdt:P279* wd:Q484170 ; # Commune de France
-                 wdt:P625 ?center .
-
-          # 2. POI dans un rayon de 5 km (recherche géographique)
+          # 1. POI dans un rayon de 5 km autour de la ville (format WKT : longitude d'abord)
           ?item wdt:P625 ?coord .
           SERVICE wikibase:around {{
             ?item wdt:P625 ?loc .
-            bd:serviceParam wikibase:center ?center .
+            bd:serviceParam wikibase:center "Point({longitude} {latitude})"^^geo:wktLiteral .
             bd:serviceParam wikibase:radius "5" .
           }}
 
-          # 3. Types visés (incluant les sous-classes)
+          # 2. Types visés (incluant les sous-classes)
           VALUES ?baseType {{
             wd:Q570116  # Phare
             wd:Q23397   # Plage
@@ -50,17 +50,17 @@ def extract_wikidata(city) -> dict:
           }}
           ?item wdt:P31/wdt:P279* ?baseType .
 
-          # 4. Propriétés Optionnelles
+          # 3. Propriétés Optionnelles
           OPTIONAL {{ ?item wdt:P18 ?image. }}
           OPTIONAL {{ ?item wdt:P373 ?commonsCat. }}
           OPTIONAL {{ ?item schema:description ?desc FILTER(LANG(?desc)="fr") }}
 
-          # 5. Labels robustes avec fallback (pour éviter les valeurs vides)
+          # 4. Labels robustes avec fallback (pour éviter les valeurs vides)
           OPTIONAL {{ ?item rdfs:label ?lfr FILTER(LANG(?lfr)="fr") }}
           OPTIONAL {{ ?item rdfs:label ?len FILTER(LANG(?len)="en") }}
           BIND( COALESCE(?lfr, ?len, STRAFTER(STR(?item),"entity/")) AS ?label )
 
-          # 6. Service de labels pour les types
+          # 5. Service de labels pour les types
           SERVICE wikibase:label {{ bd:serviceParam wikibase:language "fr,en".
                                    ?baseType rdfs:label ?baseTypeLabel. }}
         }}

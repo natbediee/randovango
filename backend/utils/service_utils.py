@@ -129,7 +129,7 @@ SERVICE_CATEGORY_MAP = {
     "Caravaneige": "caravan_site",
 }
 
-# Services Park4Night qu'on ne veut pas dans Randovango (hors sujet pour des
+# Services p4n qu'on ne veut pas dans Randovango (hors sujet pour des
 # randonneurs en van). Ils sont ignorés au chargement (etl/load/load_p4n.py) et
 # supprimés de la base existante par le script ponctuel oneshot/clean_spots.py.
 EXCLUDED_SERVICES = {
@@ -138,7 +138,7 @@ EXCLUDED_SERVICES = {
 
 
 def is_excluded_service(service_name: str) -> bool:
-    """True si ce service Park4Night ne doit pas entrer en base."""
+    """True si ce service p4n ne doit pas entrer en base."""
     return service_name in EXCLUDED_SERVICES
 
 

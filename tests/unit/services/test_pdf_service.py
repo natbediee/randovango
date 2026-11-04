@@ -23,7 +23,7 @@ from datetime import date, datetime
 
 def test_fr_number_virgule_et_milliers_insecables() -> None:
     assert _fr_number(3.0, 1) == "3,0"
-    # Note park4night arrondie à une décimale pour l'affichage
+    # Note p4n arrondie à une décimale pour l'affichage
     assert _fr_number(4.38, 1) == "4,4"
     # Milliers séparés par une espace insécable (U+00A0), pour ne pas couper "1 072 m"
     assert _fr_number(1072) == "1 072"

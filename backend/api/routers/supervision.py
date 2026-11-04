@@ -47,6 +47,12 @@ def delete_decision(decision_id: int, _admin=Depends(require_admin)):
     return supervision_service.get_reviews()
 
 
+@router.delete("/openings/{decision_id}", summary="Cancels an opening decision and restores the previous values.")
+def delete_opening_decision(decision_id: int, _admin=Depends(require_admin)):
+    supervision_service.cancel_opening_decision(decision_id)
+    return supervision_service.get_reviews()
+
+
 @router.get("/services", summary="Service checks awaiting a human decision, one queue at a time.")
 def get_service_reviews(tab: str = "liens", service: str | None = None, ville: str | None = None,
                         _admin=Depends(require_admin)):

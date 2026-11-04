@@ -190,14 +190,14 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 });
 
-// Titre de l'encart Vany : les pépites qu'il a déjà trouvées pour ce séjour, avant de
-// proposer le voyage 100% IA. Sans pépite ajoutée, le titre du modèle reste
+// Titre de l'encart Vany : les pépites choisies pour ce séjour, avant de
+// proposer le voyage 100% IA. Sans pépite choisie, le titre du modèle reste
 // (« Vany peut aller plus loin »).
 function showVanyBanner(days) {
     const count = days.reduce((total, day) => total + (day.pepites || []).length, 0);
     const title = document.querySelector('#vanyResults .vany-banner__title');
     if (!title || count === 0) return;
-    title.textContent = count === 1 ? "Vany t'a trouvé 1 pépite" : `Vany t'a trouvé ${count} pépites`;
+    title.textContent = count === 1 ? "Tu as choisi 1 pépite de Vany" : `Tu as choisi ${count} pépites de Vany`;
 }
 
 // --- 8. Fonctions appelées par les boutons de la page (attributs onclick) ---

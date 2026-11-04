@@ -1,5 +1,5 @@
 """
-Repérage des spots en double (le même lieu saisi deux fois sur Park4Night).
+Repérage des spots en double (le même lieu saisi deux fois sur p4n).
 
 C'est une transformation POST-CHARGEMENT (voir agents/__init__.py) :
 elle a besoin de voir TOUS les spots déjà en base pour trouver les paires.
@@ -31,7 +31,6 @@ UTILISATION (dans le conteneur backend, depuis /usr/src/app)
 import argparse
 import json
 
-from agents.harmonize_spots import update_spot_service_table
 from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, make_llm_service
 from agents.llm_service import LLMUnavailable
 from utils.db_utils import MySQLUtils
@@ -50,7 +49,6 @@ logger = LoggerUtil.get_logger("etl_dedupe_spots")
 DUPLICATE_RADIUS_M = 80
 
 # Colonne ajoutée à `spots` : l'id du spot gardé, ou NULL si le spot n'est pas un doublon.
-DUPLICATE_COLUMN = ("duplicate_of_spot_id", "INT NULL")
 
 # Forme de la réponse attendue de Claude (son "verdict") pour une paire.
 VERDICT_SCHEMA = {
@@ -303,30 +301,6 @@ def arbitrate(service, candidates: list) -> list:
 # 5. ÉCRIRE DANS LA BASE MYSQL
 # =============================================================================
 
-def add_missing_column(cursor, database: str) -> None:
-    """
-    Ajoute la colonne `duplicate_of_spot_id` à `spots` si elle n'existe pas encore.
-    On peut l'appeler plusieurs fois sans risque.
-    """
-    column, sql_type = DUPLICATE_COLUMN
-
-    cursor.execute(
-        "SELECT column_name FROM information_schema.columns"
-        " WHERE table_schema = %s AND table_name = 'spots' AND column_name = %s",
-        (database, column),
-    )
-    if cursor.fetchone():
-        return  # la colonne existe déjà
-
-    cursor.execute(f"ALTER TABLE spots ADD COLUMN {column} {sql_type}")
-    # Clé étrangère : MySQL vérifiera que l'id indiqué correspond bien à un spot existant.
-    cursor.execute(
-        f"ALTER TABLE spots ADD CONSTRAINT fk_spots_duplicate"
-        f" FOREIGN KEY ({column}) REFERENCES spots(id)"
-    )
-    logger.info(f"[dedupe] Colonne spots.{column} ajoutée ({sql_type})")
-
-
 def apply_merges(cursor, confirmed: list) -> int:
     """
     Enregistre les doublons confirmés en base. Renvoie leur nombre.
@@ -384,9 +358,6 @@ def main():
     confirmed = arbitrate(service, candidate_pairs(cursor))
 
     if args.apply:
-        add_missing_column(cursor, ServiceUtil.get_env("DB_NAME"))
-        # La recopie des services a besoin de la colonne spot_service.source.
-        update_spot_service_table(cursor, ServiceUtil.get_env("DB_NAME"))
         apply_merges(cursor, confirmed)
         connection.commit()
     else:
