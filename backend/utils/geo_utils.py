@@ -3,6 +3,10 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import logging
 from math import radians, cos, sin, asin, sqrt
 
+import requests
+
+from utils.db_utils import MySQLUtils
+
 logger = logging.getLogger(__name__)
 
 def haversine_distance_km(lat1, lon1, lat2, lon2):
@@ -15,6 +19,16 @@ def haversine_distance_km(lat1, lon1, lat2, lon2):
     a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
     earth_radius_km = 6371
     return 2 * earth_radius_km * asin(sqrt(a))
+
+def distance_to_trace_km(latitude, longitude, trace):
+    """
+    Distance en km d'un point au tracé d'une rando (liste de points (latitude,
+    longitude)) : celle du point du tracé le plus proche. None sans tracé.
+    """
+    if not trace:
+        return None
+    return min(haversine_distance_km(latitude, longitude, lat, lon) for lat, lon in trace)
+
 
 def get_admin_info_from_coordinates(latitude, longitude, language='fr', timeout=10, max_retries=3):
     """
@@ -81,6 +95,23 @@ def get_coordinates_for_city(city_name, department=None, country="France", timeo
             logger.error(f"Erreur de géocodage pour {query} (tentative {attempt+1}/{max_retries}): {e}")
             sleep(2)
     return None, None
+
+
+def get_city_center(city_name):
+    """
+    Centre de recherche d'une ville : ses coordonnées de la table `cities`, connues
+    grâce au GPX. Le nom seul ne suffit pas : Saint-Philibert (Morbihan), géocodée
+    par son nom, donne l'homonyme de Côte-d'Or. Géocodage seulement si elle n'y est pas.
+    """
+    conn = MySQLUtils.connect()
+    cursor = MySQLUtils.get_cursor(conn)
+    cursor.execute("SELECT latitude, longitude FROM cities WHERE name = %s ORDER BY id LIMIT 1", (city_name,))
+    row = cursor.fetchone()
+    cursor.close()
+    MySQLUtils.disconnect(conn)
+    if row:
+        return row[0], row[1]
+    return get_coordinates_for_city(city_name)
 
 
 def get_address_from_coordinates(latitude, longitude, language='fr', timeout=10, max_retries=3):
@@ -155,6 +186,37 @@ def get_city_from_coordinates(latitude, longitude, language='fr', timeout=10, ma
             logger.error(f"Erreur de géocodage inversé pour ({latitude}, {longitude}) (tentative {attempt+1}/{max_retries}): {e}")
             sleep(2)
     return None
+
+BAN_URL = "https://api-adresse.data.gouv.fr/search/"
+BAN_MIN_SCORE = 0.5
+
+
+def geocode_address_ban(address, latitude=None, longitude=None, timeout=5):
+    """
+    Géocodage d'une adresse postale française par la Base Adresse Nationale
+    (api-adresse.data.gouv.fr, publique et gratuite), précise au numéro de rue.
+    Le point (latitude, longitude), s'il est donné, départage les rues homonymes.
+    Renvoie (latitude, longitude), ou None si l'adresse n'est pas reconnue au
+    moins à la rue ou si l'API ne répond pas (on ne bloque jamais l'appelant).
+    """
+    params = {"q": address, "limit": 1}
+    if latitude is not None and longitude is not None:
+        params |= {"lat": latitude, "lon": longitude}
+    try:
+        response = requests.get(BAN_URL, params=params, timeout=timeout)
+        response.raise_for_status()
+        features = response.json().get("features") or []
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"BAN injoignable pour « {address} » : {e}")
+        return None
+    if not features:
+        return None
+    properties = features[0]["properties"]
+    if properties.get("type") not in ("housenumber", "street") or properties.get("score", 0) < BAN_MIN_SCORE:
+        return None
+    found_longitude, found_latitude = features[0]["geometry"]["coordinates"]
+    return found_latitude, found_longitude
+
 
 if __name__ == "__main__":
     # Exemple : Brest, 10 km

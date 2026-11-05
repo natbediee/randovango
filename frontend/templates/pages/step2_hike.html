@@ -45,11 +45,6 @@
       <div class="hiking-list" id="hikingList">
         <div class="list-loading"><i class="fas fa-spinner fa-spin"></i><p>Chargement des randonnées…</p></div>
       </div>
-
-      {# Option "pas de rando" #}
-      <div class="no-hiking-option" id="noHikingCard">
-        <button class="btn btn--ghost no-hiking-btn" onclick="selectNoHiking()">Pas de rando aujourd'hui</button>
-      </div>
     </div>
 
     {# Carte des tracés (Leaflet réel), carrée et sticky #}
@@ -65,6 +60,8 @@
 <div class="container step-nav-wrap">
   <div class="step-nav mobile-nav">
     <a href="{{ url_for('step1') }}" class="mobile-nav__back step-nav__back" aria-label="Retour à la ville">←</a>
+    {# « Passer » tant qu'aucune rando n'est choisie, puis « Valider » (showNextOrSkip) #}
+    <button id="skipBtn" class="btn btn--outline" onclick="skipHike()">Pas de rando aujourd'hui</button>
     <a href="{{ url_for('step3') }}" id="nextStepBtn" class="btn btn--primary btn--block" style="display:none;">Valider la rando et continuer <i class="fas fa-arrow-right"></i></a>
   </div>
 </div>

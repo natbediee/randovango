@@ -55,11 +55,13 @@
             step2: "{{ url_for('step2') }}",
             step3: "{{ url_for('step3') }}",
             step4: "{{ url_for('step4') }}",
+            step5: "{{ url_for('step5') }}",
             results: "{{ url_for('results') }}",
             howItWorks: "{{ url_for('how_it_works') }}",
             chat: "{{ url_for('chat') }}",
             contributorLogin: "{{ url_for('contributor_login') }}",
             contributor: "{{ url_for('contributor_dashboard') }}",
+            supervision: "{{ url_for('supervision') }}",
             contributorAddSpot: "{{ url_for('contributor_add_spot') }}",
             contributorAddHike: "{{ url_for('contributor_add_hike') }}",
             unlockVany: "{{ url_for('unlock_vany') }}"
@@ -71,6 +73,7 @@
     <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 
     {% block scripts %}{% endblock %}
+    <script src="{{ url_for('static', filename='js/vany_news.js') }}"></script>
 </body>
 
 </html>

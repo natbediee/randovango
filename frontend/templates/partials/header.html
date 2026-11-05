@@ -1,6 +1,6 @@
 {# Header sombre commun. Paramètres (via {% with %} avant l'include) :
      - nav_mode : 'home' (défaut) | 'wizard' (timeline du séjour) | 'minimal' (+ bouton retour)
-     - active_step : 1..5, étape courante du wizard (nav_mode='wizard')
+     - active_step : 1..6, étape courante du wizard (nav_mode='wizard')
      - back_url : URL du bouton retour (nav_mode='minimal')
    Les liens publics (Comment ça marche / Contributeur ? Connexion) sont les mêmes
    partout : partials/nav_links.html. Ils sont affichés dans la barre, sauf en mode
@@ -9,7 +9,7 @@
    Connecté, l'avatar et son menu déroulant (espace contributeur / créer mon voyage /
    déconnexion) remplacent le lien de connexion, et le burger disparaît : son menu
    ferait doublon avec celui du compte, qui reprend alors les liens publics (common.js).
-   Le stepper mobile (barre 5 segments) est rendu par partials/stepper.html. #}
+   Le stepper mobile (barre 6 segments) est rendu par partials/stepper.html. #}
 {% set nav_mode = nav_mode | default('home') %}
 
 <header class="rvg-header {% if nav_mode == 'wizard' %}rvg-header--compact{% endif %}">

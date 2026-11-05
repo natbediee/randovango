@@ -1,5 +1,8 @@
+import re
+
 from fastapi import APIRouter, Query, Body
 from services.plan_service import insert_or_update_plan
+from services.restaurant_selection_service import TABLE_CATEGORY_LABELS, is_new, maps_url
 from utils.db_utils import MySQLUtils
 from utils.display_utils import enrich_poi, poi_subtitle
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -7,6 +10,49 @@ from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 router = APIRouter()
 
 MAX_POI_PER_CATEGORY = 10
+RESTAURANT_SERVICE = "restaurant"
+RESTAURATION_CATEGORY = "restauration"
+
+
+def postcode_of(address: str | None) -> str | None:
+    match = re.search(r"\b(\d{5})\b", address or "")
+    return match.group(1) if match else None
+
+
+def keep_checked_restaurants(poi_list: list) -> list:
+    """
+    Là où l'agent find_restaurants.py est passé, seuls les restaurants qui ont une fiche sont montrés.
+    Ailleurs, on garde ceux d'OSM tant que la commune n'est pas traitée : le code postal le dit, car une zone de 5 km
+    déborde sur la voisine (les fiches de Plougonvelin faisaient disparaître les restaurants de Locmaria-Plouzané).
+    Un restaurant sans adresse lisible n'est gardé que s'il n'y a aucune fiche autour. Les autres services ne changent pas.
+    """
+    treated = {postcode_of(poi.get("address")) for poi in poi_list if poi["genre"]}
+    if not treated:
+        return poi_list
+    return [poi for poi in poi_list if poi["service_category"] != RESTAURANT_SERVICE or poi["genre"]
+            or postcode_of(poi.get("address")) not in treated | {None}]
+
+
+def is_own_table(poi: dict, city_name: str) -> bool:
+    return bool(poi.get("genre")) and city_name.lower() in (poi.get("address") or "").lower()
+
+
+def display_rank(poi: dict, city_name: str) -> tuple:
+    """Les fiches de la commune d'abord, puis le plus proche : un café voisin ne prend pas la place d'une table de la commune."""
+    return (not is_own_table(poi, city_name), poi["distance_km"])
+
+
+def order_category(pois: list, category: str, city_name: str) -> list:
+    """
+    Les MAX_POI_PER_CATEGORY plus proches. Pour la restauration, toutes les tables de la commune, de la plus proche à la plus
+    loin, sans limite : la limite cachait Les Boucaniers et La Balise. Les autres lieux ne font que compléter jusqu'à cette limite.
+    """
+    pois = sorted(pois, key=lambda poi: display_rank(poi, city_name))
+    if category != RESTAURATION_CATEGORY:
+        return pois[:MAX_POI_PER_CATEGORY]
+    tables = [poi for poi in pois if is_own_table(poi, city_name)]
+    others = [poi for poi in pois if not is_own_table(poi, city_name)]
+    return tables + others[:max(0, MAX_POI_PER_CATEGORY - len(tables))]
 
 
 def _build_subtitles(categorized_poi: dict) -> dict:
@@ -41,7 +87,7 @@ def get_poi(
     
     # Récupérer les coordonnées de la ville
     cursor.execute(
-        "SELECT latitude, longitude FROM cities WHERE id = %s", 
+        "SELECT name, latitude, longitude FROM cities WHERE id = %s", 
         (city_id,)
     )
     city = cursor.fetchone()
@@ -86,18 +132,32 @@ def get_poi(
             p.address,
             --
             s.category as service_category,
-            s.name as service_name
+            s.name as service_name,
+            r.genre,
+            r.pourquoi,
+            r.budget,
+            r.jours_fermeture,
+            r.distinction,
+            r.categorie,
+            r.registre_depuis,
+            p.statut_saison,
+            p.mois_ouverture
         FROM poi p
         JOIN poi_service ps ON p.id = ps.poi_id
         JOIN services s ON ps.service_id = s.id
-        WHERE p.latitude BETWEEN %s AND %s
-        AND p.longitude BETWEEN %s AND %s
+        LEFT JOIN restaurants r ON r.poi_id = p.id
+        WHERE p.masque = 0
+        AND (
+            (p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s)
+            -- Une commune déborde de la zone : la Pointe Saint-Mathieu est à 5,2 km du centre de Plougonvelin.
+            OR (r.poi_id IS NOT NULL AND p.address LIKE %s)
+        )
         ORDER BY s.category, p.name ASC
     """
 
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
-    poi_list = cursor.fetchall()
-    
+    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city['name']}"))
+    poi_list = keep_checked_restaurants(cursor.fetchall())
+
     cursor.close()
     MySQLUtils.disconnect(cnx)
     
@@ -130,24 +190,35 @@ def get_poi(
         categorized_poi[frontend_category].append(enrich_poi({
             "id": poi_id,
             "name": poi['name'],
-            "description": poi['description'],
+            # La phrase de l'agent restaurants : OSM n'a aucune description pour ces lieux.
+            "description": poi['description'] or poi['pourquoi'],
             "latitude": poi['latitude'],
             "longitude": poi['longitude'],
             "verifie": poi['verifie'],
             "image_url": poi['image_url'],
             "url": poi['url'],
             "address": poi['address'],
-            "service_type": poi['service_name'],
-            "distance_km": round(distance_km, 2)
+            "service_type": TABLE_CATEGORY_LABELS.get(poi['categorie'], poi['service_name']),
+            "distance_km": round(distance_km, 2),
+            "from_spot": spot_lat is not None,
+            "genre": poi['genre'],
+            "pourquoi": poi['pourquoi'],
+            "budget": poi['budget'],
+            "jours_fermeture": poi['jours_fermeture'],
+            "distinction": poi['distinction'],
+            "categorie": poi['categorie'],
+            "nouveau": is_new(poi['registre_depuis']),
+            "maps_url": maps_url(poi['name'], poi['address']) if service_cat == RESTAURANT_SERVICE else None,
+            "statut_saison": poi['statut_saison'],
+            "mois_ouverture": poi['mois_ouverture']
         }))
 
-    # Ne garder que les POI les plus proches du point de référence, par catégorie
+    # Ne garder que les premiers POI de chaque catégorie
     for category, pois in categorized_poi.items():
-        pois.sort(key=lambda p: p['distance_km'])
-        categorized_poi[category] = pois[:MAX_POI_PER_CATEGORY]
+        categorized_poi[category] = order_category(pois, category, city['name'])
 
-    # Phrases de sous-titre par catégorie, calculées APRÈS la troncature à
-    # MAX_POI_PER_CATEGORY pour correspondre au nombre réellement affiché.
+    # Phrases de sous-titre par catégorie, calculées APRÈS la troncature,
+    # pour correspondre au nombre réellement affiché.
     categorized_poi["subtitles"] = _build_subtitles(categorized_poi)
 
     return categorized_poi

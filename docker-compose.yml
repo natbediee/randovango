@@ -53,6 +53,7 @@ services:
 
   backend:
     container_name: fastapi_backend
+    init: true
     build:
       context: .
       dockerfile: Dockerfile.backend

@@ -4,11 +4,10 @@ from utils.db_utils import MySQLUtils
 from etl.extract.scraper_p4n import run_p4n_scraper
 from etl.transform.transform_p4n import transform_p4n
 from etl.load.load_p4n import load_p4n_to_mysql
-from etl.extract.api_osm import extract_osm
+from etl.etl_osm import run_osm_etl
 from etl.extract.api_wikidata import extract_wikidata
-from etl.transform.transform_osm import transform_osm
 from etl.transform.transform_wikidata import transform_wikidata
-from etl.load.load_poi import load_osm_poi,load_wikidata_poi
+from etl.load.load_poi import load_wikidata_poi
 from utils.logger_util import LoggerUtil
 from etl.load.load_gpx import load_gpx_data
 from etl.extract.api_meteo import extract_weather_data
@@ -28,12 +27,11 @@ def scraping_background(city):
     # 1. Extraction OSM (rapide - API)
     try:
         logger.info(f"[ETL-BG] Extraction OSM pour la ville : {city}")
-        osm_json = extract_osm(city)
-        logger.info("[ETL-BG] Transformation OSM...")
-        df_osm = transform_osm(osm_json, city=city)
-        logger.info("[ETL-BG] Chargement OSM...")
-        load_osm_poi(df_osm=df_osm, city_name=city)
-        logger.info(f"[ETL-BG] OSM chargé pour la ville : {city}")
+        nb_places = run_osm_etl(city)
+        if nb_places is None:
+            logger.error(f"[ETL-BG] OSM en échec pour {city} : ville sans commerces ni services, à rattraper")
+        else:
+            logger.info(f"[ETL-BG] OSM chargé pour la ville : {city} ({nb_places} lieux)")
     except Exception as e:
         logger.error(f"[ETL-BG] Erreur OSM: {e}")
 
@@ -78,13 +76,35 @@ def scraping_background(city):
                     # modèle est indisponible ; les spots restent affichables sans.
                     try:
                         from agents.harmonize_spots import run_sample
-                        run_sample(len(df_transformed))
+                        run_sample(only_new=True)
                     except Exception as harmonize_error:
                         logger.warning(f"[ETL-SC] Harmonisation IA ignorée : {harmonize_error}")
+                    # Dates d'ouverture des fiches nouvelles ou modifiées : sans elles, le spot reste proposé.
+                    try:
+                        from agents.read_openings import run as read_openings
+                        read_openings()
+                    except Exception as opening_error:
+                        logger.warning(f"[ETL-SC] Lecture des ouvertures ignorée : {opening_error}")
+                    # Vérification des fiches que l'harmonisation a marquées à vérifier : un doute part en relecture.
+                    try:
+                        from agents.verify_spots import run as verify_spots
+                        verify_spots(only_new=True)
+                    except Exception as verify_error:
+                        logger.warning(f"[ETL-SC] Vérification des spots ignorée : {verify_error}")
                 else:
                     logger.warning(f"[ETL-SC] Scraping P4N a échoué pour la ville : {city}")
             except Exception as e:
                 logger.error(f"[ETL-SC] Erreur lors de l'extraction/chargement P4N: {e}")
+
+    # 4. Pépites de Vany : les lieux incontournables autour de la ville, cherchés une
+    # fois pour toutes par l'agent (quelques minutes). En dernier : la position des
+    # lieux trouvés est recalée sur les POI chargés plus haut, et les spots P4N,
+    # plus attendus, ne patientent pas derrière. Non bloquant, comme l'harmonisation.
+    try:
+        from services.pepite_service import search_city_places
+        search_city_places(city)
+    except Exception as pepites_error:
+        logger.warning(f"[ETL-SC] Pépites de Vany ignorées pour {city} : {pepites_error}")
 
     logger.info(f"[ETL-SC] Scraping terminé pour la ville: {city}")
 

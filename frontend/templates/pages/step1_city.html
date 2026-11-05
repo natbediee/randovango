@@ -38,7 +38,8 @@
   {# Données villes (cachées, alimentées par step1_city.js) #}
   <select id="citySelect" class="hidden"></select>
 
-  {# Deux colonnes desktop : carte carrée collée à gauche, liste des villes à droite.
+  {# Deux colonnes desktop : carte carrée collée à gauche ; à droite, la liste des villes
+     puis la météo, pour que ses conseils soient visibles sans faire défiler.
      En mobile, une colonne avec la carte au-dessus (voir CSS .map-col order). #}
   <div class="map-list-layout map-list-layout--map-left">
     {# Carte interactive réelle (Leaflet), carrée et sticky #}
@@ -57,13 +58,13 @@
         </div>
         <div class="nearby__list" data-nearby-list></div>
       </div>
-    </div>
-  </div>
 
-  {# Météo #}
-  <div class="card weather-section" id="weatherSection" style="display:none;">
-    <h3 id="weatherTitle" style="font-size:17px; font-weight:700;">Météo - prochains jours</h3>
-    <div class="weather-grid" id="weatherGrid"></div>
+      {# Météo de la ville choisie, en version compacte à côté de la carte #}
+      <div class="card weather-section weather-section--compact" id="weatherSection" style="display:none;">
+        <h3 id="weatherTitle">Météo - prochains jours</h3>
+        <div class="weather-grid" id="weatherGrid"></div>
+      </div>
+    </div>
   </div>
 
 </div>

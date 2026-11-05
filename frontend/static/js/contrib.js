@@ -15,15 +15,27 @@
     localStorage.setItem('userToken', token);
     localStorage.setItem('userId', user.id);
     localStorage.setItem('username', user.username);
+    localStorage.setItem('userRoles', (user.roles || []).join(','));
   }
 
   window.RVG = window.RVG || {};
+  // Le jeton de connexion expire au bout de 60 minutes, et userToken peut aussi être un jeton
+  // invité (UUID) : seul un JWT encore valable compte comme connexion.
+  function isLiveToken(token) {
+    try {
+      var payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return payload.exp * 1000 > Date.now();
+    } catch (err) {
+      return false;
+    }
+  }
+
   window.RVG.getContribToken = function () {
-    return sessionStorage.getItem('jwtToken') || localStorage.getItem('userToken');
+    return [sessionStorage.getItem('jwtToken'), localStorage.getItem('userToken')].filter(isLiveToken)[0] || null;
   };
   window.RVG.logoutContrib = function () {
     ['jwtToken', 'username'].forEach(function (k) { sessionStorage.removeItem(k); });
-    ['userToken', 'userId', 'username'].forEach(function (k) { localStorage.removeItem(k); });
+    ['userToken', 'userId', 'username', 'userRoles'].forEach(function (k) { localStorage.removeItem(k); });
   };
 
   // ===== Page connexion =====
@@ -236,6 +248,7 @@
         if (!selectedFile) { showMsg('Ajoute d\'abord ton fichier .gpx.', false); return; }
 
         var token = window.RVG.getContribToken();
+        if (!token) { window.location.href = window.APP_URLS.contributorLogin; return; }
         var formData = new FormData();
         formData.append('file', selectedFile);
 
@@ -248,6 +261,7 @@
             headers: { 'Authorization': 'Bearer ' + token },
             body: formData
           });
+          if (res.status === 401) { window.location.href = window.APP_URLS.contributorLogin; return; }
           var ct = res.headers.get('content-type') || '';
           var data = ct.includes('application/json') ? await res.json() : { message: await res.text() };
           if (res.ok && (data.success === undefined || data.success)) {

@@ -46,7 +46,7 @@
     // Self-contained (contrib.js n'est pas chargé sur ces pages) : on vide les deux
     // emplacements utilisés par le login (voir contrib.js storeSession/logoutContrib).
     ['jwtToken', 'username'].forEach(function (k) { sessionStorage.removeItem(k); });
-    ['userToken', 'userId', 'username'].forEach(function (k) { localStorage.removeItem(k); });
+    ['userToken', 'userId', 'username', 'userRoles'].forEach(function (k) { localStorage.removeItem(k); });
   }
 
   function initAccountMenu() {
@@ -64,6 +64,10 @@
     var panel = document.querySelector('[data-nav-panel]');
     if (burger) burger.style.display = 'none';
     if (panel) panel.remove();
+
+    if ((localStorage.getItem('userRoles') || '').split(',').indexOf('admin') !== -1) {
+      document.querySelectorAll('[data-admin-only]').forEach(function (el) { el.style.display = ''; });
+    }
 
     var name = getUsername() || 'mon compte';
     account.querySelectorAll('[data-account-initials]').forEach(function (el) {

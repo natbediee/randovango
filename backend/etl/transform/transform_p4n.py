@@ -3,7 +3,7 @@ import re
 import pandas as pd
 from utils.logger_util import LoggerUtil
 
-# Park4Night ne fournit pas un nom de lieu mais un gabarit constant :
+# p4n ne fournit pas un nom de lieu mais un gabarit constant :
 #   "(29200) Brest - 172 Rue de Quimper"  -> code postal + commune + adresse
 #   "(29790) Camping Lizoé"               -> code postal + vrai nom du lieu
 # Affiché tel quel sur les cartes et le PDF, l'utilisateur lit une adresse là où
@@ -13,7 +13,7 @@ SPOT_NAME_RE = re.compile(r"^\((?P<cp>\d{5})?\)\s*(?P<rest>.*)$")
 
 def parse_spot_name(name) -> tuple:
     """
-    (code_postal, commune, libellé de lieu) extraits du nom Park4Night.
+    (code_postal, commune, libellé de lieu) extraits du nom p4n.
 
     La commune n'est renseignée que pour la forme "Ville - Adresse" : sans
     tiret, ce qui suit le code postal est le nom du lieu (camping, aire), pas
@@ -40,7 +40,7 @@ def parse_spot_name(name) -> tuple:
 
 def clean_place_type(raw_type) -> str:
     """
-    Type du lieu, sans le numéro de fiche que Park4Night affiche devant :
+    Type du lieu, sans le numéro de fiche que p4n affiche devant :
     "#25487 - PARKING JOUR UNIQUEMENT" -> "PARKING JOUR UNIQUEMENT".
     """
     return str(raw_type).split('-', 1)[-1].strip()
@@ -48,7 +48,7 @@ def clean_place_type(raw_type) -> str:
 
 def transform_p4n(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Transforme le DataFrame issu du scraping Park4Night selon les règles métier :
+    Transforme le DataFrame issu du scraping p4n selon les règles métier :
     - Extrait p4n_id depuis URL_fiche
     - Sépare Coordonnees en latitude/longitude
     - Nettoie Type_Place (après le tiret)

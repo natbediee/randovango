@@ -28,6 +28,14 @@ SERVICE_CATEGORY_LABEL_MAP = {
     'shelter': 'Abri',
     'supermarket': 'Supermarché',
     'laundry': 'Laverie',
+    'cinema': 'Cinéma',
+    'theatre': 'Théâtre',
+    'arts_centre': 'Centre culturel',
+    'marketplace': 'Marché',
+    'museum': 'Musée',
+    'gallery': 'Galerie',
+    'farm': 'Vente à la ferme',
+    'brewery': 'Brasserie',
 }
 
 # Mapping label -> type OSM/Wikidata (pour import ou reverse)
@@ -51,6 +59,9 @@ POI_FRONTEND_CATEGORY_MAP = {
     "convenience":            "commerce",
     "bakery":                 "commerce",
     "shop":                   "commerce",
+    "marketplace":            "commerce",
+    "farm":                   "commerce",
+    "brewery":                "commerce",
     # Restauration
     "restaurant":             "restauration",
     "cafe":                   "restauration",
@@ -65,6 +76,10 @@ POI_FRONTEND_CATEGORY_MAP = {
     "tourism":                "culture",
     "attraction":             "culture",
     "museum":                 "culture",
+    "gallery":                "culture",
+    "cinema":                 "culture",
+    "theatre":                "culture",
+    "arts_centre":            "culture",
     "viewpoint":              "culture",
     "hiking":                 "culture",
     "bicycle":                "culture",
@@ -114,7 +129,7 @@ SERVICE_CATEGORY_MAP = {
     "Caravaneige": "caravan_site",
 }
 
-# Services Park4Night qu'on ne veut pas dans Randovango (hors sujet pour des
+# Services p4n qu'on ne veut pas dans Randovango (hors sujet pour des
 # randonneurs en van). Ils sont ignorés au chargement (etl/load/load_p4n.py) et
 # supprimés de la base existante par le script ponctuel oneshot/clean_spots.py.
 EXCLUDED_SERVICES = {
@@ -123,7 +138,7 @@ EXCLUDED_SERVICES = {
 
 
 def is_excluded_service(service_name: str) -> bool:
-    """True si ce service Park4Night ne doit pas entrer en base."""
+    """True si ce service p4n ne doit pas entrer en base."""
     return service_name in EXCLUDED_SERVICES
 
 

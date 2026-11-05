@@ -29,8 +29,11 @@ jobs:
       - name: Ruff lint
         run: ruff check backend frontend tests
 
-      - name: Pytest
-        run: pytest --cov=backend --cov-report=term-missing
+      - name: Tests unitaires
+        run: pytest tests/unit --cov=backend --cov-report=term-missing
+
+      - name: Tests fonctionnels
+        run: pytest tests/functional --cov=backend --cov-append --cov-report=term-missing
 
   nightly-integration-placeholder:
     name: Nightly Integration Placeholder

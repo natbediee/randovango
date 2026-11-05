@@ -5,51 +5,11 @@ from utils.service_utils import ServiceUtil, is_excluded_service
 from utils.db_utils import MySQLUtils
 from utils.display_utils import EXCLUDED_SPOT_TYPES
 
-# Colonnes de `spots` ajoutées pour les informations complémentaires des fiches.
-P4N_DETAIL_COLUMNS = {
-    "opening_period": "VARCHAR(255)",   # texte brut "Ouverture/Fermeture" de la fiche
-    "price_parking": "VARCHAR(255)",    # texte brut "Prix du stationnement"
-    "price_services": "VARCHAR(255)",   # texte brut "Prix des services"
-    "details_scraped_at": "DATETIME",   # date de récupération de ces informations
-    "p4n_removed": "TINYINT(1) NOT NULL DEFAULT 0",  # 1 si la fiche a disparu de Park4Night
-}
-
-
-def update_p4n_detail_schema(cursor, database: str) -> None:
-    """
-    Met la base à jour pour les informations complémentaires des fiches :
-      - ajoute à `spots` les colonnes de P4N_DETAIL_COLUMNS qui manquent ;
-      - crée la table `spot_reviews` (les commentaires) si elle n'existe pas.
-    On peut l'appeler plusieurs fois sans risque.
-    """
-    cursor.execute(
-        "SELECT column_name FROM information_schema.columns"
-        " WHERE table_schema = %s AND table_name = 'spots'",
-        (database,),
-    )
-    existing_columns = [row[0] for row in cursor.fetchall()]
-    for column, sql_type in P4N_DETAIL_COLUMNS.items():
-        if column not in existing_columns:
-            cursor.execute(f"ALTER TABLE spots ADD COLUMN {column} {sql_type}")
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS spot_reviews (
-            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            spot_id INT NOT NULL,
-            p4n_review_id VARCHAR(20) NOT NULL,
-            review_date DATE,
-            rating TINYINT,
-            text TEXT,
-            UNIQUE (p4n_review_id),
-            FOREIGN KEY (spot_id) REFERENCES spots(id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """)
-
 
 def save_reviews(cursor, spot_id: int, reviews: list) -> None:
     """
     Enregistre les commentaires d'un spot. INSERT IGNORE : un commentaire déjà
-    en base (même identifiant Park4Night) n'est pas ajouté une seconde fois.
+    en base (même identifiant p4n) n'est pas ajouté une seconde fois.
     """
     for review in reviews or []:
         cursor.execute(
@@ -61,7 +21,7 @@ def save_reviews(cursor, spot_id: int, reviews: list) -> None:
 
 def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     """
-    Charge un DataFrame transformé Park4Night dans la base MySQL.
+    Charge un DataFrame transformé p4n dans la base MySQL.
     La ville utilisée est celle passée explicitement par le pipeline (issue du GPX).
     """
     logger = LoggerUtil.get_logger("etl_p4n")
@@ -73,7 +33,7 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     df = df.where(pd.notnull(df), None)
     conn = MySQLUtils.connect()
     cursor = MySQLUtils.get_cursor(conn)
-    # Gestion de la source (Park4Night)
+    # Gestion de la source (p4n)
     source_name = 'Park4Night'
     cursor.execute("SELECT id FROM sources WHERE name = %s", (source_name,))
     result = cursor.fetchone()
@@ -86,7 +46,6 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
 
     conn = MySQLUtils.connect()
     cursor = conn.cursor(buffered=True)
-    update_p4n_detail_schema(cursor, ServiceUtil.get_env("DB_NAME"))
 
     # Récupère tous les p4n_id déjà présents dans spots
     cursor.execute("SELECT p4n_id FROM spots")

@@ -31,9 +31,6 @@ logger = LoggerUtil.get_logger("llm_service")
 
 # --- Réglages ----------------------------------------------------------------
 
-# Modèle utilisé avec l'API.
-MODEL = "claude-opus-5"
-
 # Niveau de réflexion du modèle. "low" suffit : extraire quelques infos d'un
 # texte court est simple, et on le fait pour environ 1700 spots, donc on économise.
 EFFORT = "low"
@@ -53,7 +50,7 @@ class LLMUnavailable(RuntimeError):
 class LLMService:
     """Appelle Claude via l'API Anthropic (clé ANTHROPIC_API_KEY dans le .env)."""
 
-    def __init__(self, api_key: str = None, model: str = MODEL):
+    def __init__(self, model: str, api_key: str = None):
         self.model = model
         self.api_key = api_key
         self.client = None  # créé seulement au premier appel (voir _get_client)
@@ -196,14 +193,7 @@ class ClaudeCodeLLMService:
     À réserver aux mises à jour lancées à la main.
     """
 
-    # Version exacte du modèle, et non un alias comme "opus" : l'alias suit les
-    # nouvelles versions, et une base harmonisée en plusieurs paquets pourrait alors
-    # l'être avec deux modèles différents.
-    # Opus plutôt que Sonnet : comparaison sur 10 spots (rapport/comparaison_modeles.md),
-    # Opus suit l'intention même quand la consigne est floue, pour un quota environ x2.
-    DEFAULT_MODEL = "claude-opus-5-5"
-
-    def __init__(self, model: str = DEFAULT_MODEL, effort: str = EFFORT, timeout: int = 180,
+    def __init__(self, model: str, effort: str = EFFORT, timeout: int = 180,
                  tools: list = None, mcp_servers: dict = None, mcp_tools: list = None):
         self.model = model
         self.effort = effort

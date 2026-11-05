@@ -1,5 +1,5 @@
 """
-Harmonisation des descriptions des spots Park4Night par Claude.
+Harmonisation des descriptions des spots p4n par Claude.
 
 C'est une transformation POST-CHARGEMENT (voir agents/__init__.py) :
   extract -> transform -> load -> transformation post-chargement (ce fichier)
@@ -15,14 +15,14 @@ qui est utile à un voyageur en van. Le résultat est rangé dans la colonne
 `description_ia`, À CÔTÉ de la description d'origine.
 
 Le nom affiché sur le site, lui, ne passe pas par Claude : il est construit à
-partir des données Park4Night (voir spot_name_label dans utils/display_utils.py).
+partir des données p4n (voir spot_name_label dans utils/display_utils.py).
 
 Ce n'est PAS de l'enrichissement : aucune source externe n'est utilisée, tout
 ce qui sort vient du texte du contributeur.
 
 DEUX RÈGLES À NE JAMAIS CASSER
   1. La colonne `description` n'est JAMAIS modifiée : on garde toujours le
-     texte original de Park4Night, pour pouvoir tout refaire si besoin.
+     texte original de p4n, pour pouvoir tout refaire si besoin.
   2. Claude ne doit rien inventer.
 
 ON NE REFAIT PAS LE TRAVAIL DEUX FOIS
@@ -43,8 +43,10 @@ UTILISATION (dans le conteneur backend, depuis /usr/src/app)
 """
 import argparse
 import json
+from datetime import date
 
-from agents.llm_service import ClaudeCodeLLMService, LLMService, LLMUnavailable
+from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, engine, make_llm_service
+from agents.llm_service import LLMUnavailable
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
@@ -89,15 +91,18 @@ logger = LoggerUtil.get_logger("etl_harmonize_spots")
 #           une information mais pas commenter ses sources
 #   20    : une interdiction de nuit saisonnière n'est pas nuit_interdite (le spot
 #           reste visible hors saison, l'interdiction et sa période dans « À savoir »)
-PROMPT_VERSION = 20
+#   21    : doute_nuit, un fait rapporté sans certitude : le spot part en vérification
+#   22    : date du jour reçue et règles sur les informations anciennes (nuisance, incident,
+#           interdiction, minimum de nuits, panne récente)
+PROMPT_VERSION = 22
 
-# Services que Claude peut citer : la liste fermée des services Park4Night
+# Services que Claude peut citer : la liste fermée des services p4n
 # (les services exclus, comme "Belle balade à moto", n'y sont pas).
 SERVICE_NAMES = sorted(SERVICE_CATEGORY_MAP.keys())
 
 # Le "schéma JSON" décrit exactement la réponse attendue. Claude est obligé de
-# le respecter : on reçoit toujours ces quatre champs, et rien d'autre. La liste
-# "enum" empêche Claude d'inventer un service qui n'existe pas dans Park4Night.
+# le respecter : on reçoit toujours ces six champs, et rien d'autre. La liste
+# "enum" empêche Claude d'inventer un service qui n'existe pas dans p4n.
 SPOT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -118,8 +123,16 @@ SPOT_SCHEMA = {
             "type": "boolean",
             "description": "Vrai si on ne peut pas passer la nuit sur place (interdiction, fermeture définitive).",
         },
+        "doute_nuit": {
+            "type": "boolean",
+            "description": "Vrai si un fait rapporté laisse penser qu'on ne peut peut-être pas dormir sur place.",
+        },
+        "doute_nuit_raison": {
+            "type": "string",
+            "description": "Le fait à l'origine du doute, ou chaîne vide.",
+        },
     },
-    "required": ["description", "services", "a_verifier", "nuit_interdite"],
+    "required": ["description", "services", "a_verifier", "nuit_interdite", "doute_nuit", "doute_nuit_raison"],
     "additionalProperties": False,
 }
 
@@ -212,6 +225,40 @@ période d'ouverture) ou interdiction de nuit en saison seulement ("interdit jus
 verbalisations signalées uniquement en été). Dans ce cas, le spot reste proposé hors saison :
 indique l'interdiction et sa période dans « À savoir ».
 
+## doute_nuit
+nuit_interdite reste réservé aux certitudes. doute_nuit couvre le doute : vrai si un fait rapporté laisse
+penser qu'on ne peut peut-être pas dormir sur place, même hors saison, sans que ce soit certain :
+panneau interdisant la nuit, voyageurs réveillés ou renvoyés par la police ou un gardien, verbalisations,
+même anciens, sans démenti plus récent.
+Faux si :
+- nuit_interdite est vrai ;
+- l'interdiction est limitée à une période (elle va dans « À savoir ») ;
+- ce n'est qu'une crainte sans fait précis ("on a eu peur de se faire déloger") ;
+- un commentaire plus récent dément (nuit passée sans problème depuis, contrôle sans suite).
+doute_nuit_raison : le fait, en une phrase avec sa date si elle est connue ; vide si faux.
+
+## Informations anciennes
+Compare chaque information à la DATE DU JOUR.
+- Une nuisance mineure signalée une seule fois il y a plus de 2 ans n'a pas sa place dans
+  « À savoir » : supprime-la.
+- Un incident ponctuel (panne, accès, fermeture) : décris la situation actuelle, pas son histoire.
+  Si un commentaire plus récent dit que c'est réparé ou rouvert, ce dernier l'emporte.
+  Si des voyageurs sont passés depuis sans en parler et que l'incident date de plus de 6 mois,
+  supprime-le.
+- Si AUCUN commentaire n'est venu depuis et que l'incident bloque l'accès ou la nuit, ne conclus
+  pas qu'il est résolu : garde-le daté, avec a_verifier à vrai.
+- Une règle durable (interdiction, limite de séjour, gabarit, chiens) reste, même ancienne.
+- Une interdiction ou une demande de partir (police, gardien, agents municipaux) sans aucun commentaire
+  venu depuis : garde-la datée avec a_verifier à vrai, quel que soit son âge.
+- Toute information ancienne que tu gardes conserve sa date ("signalé en 2019"). Ne la réécris jamais
+  au présent : elle passerait pour un fait actuel.
+- Un minimum de nuits imposé par le lieu ("minimum 2 nuits", "pas pour une seule nuit") est une règle durable
+  qui change la décision de venir : garde-le toujours dans « À savoir », daté, même rapporté par un seul
+  commentaire ancien, sauf si un commentaire plus récent le dément.
+- Un équipement signalé hors service il y a moins de 6 mois ("ne fonctionne pas", "en panne"), sans commentaire
+  venu depuis, même non bloquant et même peu clair : garde-le dans « À savoir », daté, avec a_verifier à faux.
+  Ne conclus pas qu'il est réparé.
+
 ## Exemple
 Entrée :
 DESCRIPTION : "Superbe camping familial depuis 50 ans !! Accueil adorable par Marie. Emplacements
@@ -235,13 +282,14 @@ Réponds en français."""
 
 def build_user_message(spot: dict) -> str:
     """
-    Écrit le message envoyé à Claude pour un spot : sa description, sa période
-    d'ouverture et ses commentaires sélectionnés (voir fetch_spots_to_harmonize).
+    Écrit le message envoyé à Claude pour un spot : la date du jour, sa description, sa
+    période d'ouverture et ses commentaires sélectionnés (voir fetch_spots_to_harmonize).
 
     Pas de contexte géographique (commune, type de lieu...) : Claude pourrait en
     tirer des informations qui ne sont écrites nulle part.
     """
     lines = [
+        f"DATE DU JOUR : {date.today():%d/%m/%Y}",
         f'DESCRIPTION : "{(spot.get("description") or "").strip()}"',
         f'OUVERTURE : "{spot.get("opening_period") or "non renseignée"}"',
         "COMMENTAIRES :",
@@ -250,10 +298,10 @@ def build_user_message(spot: dict) -> str:
     if not reviews:
         lines.append("(aucun)")
     for review in reviews:
-        date = review["review_date"].strftime("%d/%m/%Y") if review.get("review_date") else "date inconnue"
+        review_date = review["review_date"].strftime("%d/%m/%Y") if review.get("review_date") else "date inconnue"
         rating = f"{review['rating']}/5" if review.get("rating") is not None else "sans note"
         text = (review.get("text") or "").replace("\n", " ").strip()
-        lines.append(f'- {date}, {rating} : "{text}"')
+        lines.append(f'- {review_date}, {rating} : "{text}"')
     return "\n".join(lines)
 
 
@@ -272,68 +320,7 @@ def harmonize_one(service, spot: dict) -> dict:
 # =============================================================================
 
 # Colonnes d'une ancienne version de l'harmonisation, plus utilisées par personne.
-OBSOLETE_COLUMNS = [
-    "tags", "noise_level", "access_difficulty", "services_inferred",
-    "stale_info", "confidence", "source_hash", "display_name",
-]
-
-
-def update_spots_columns(cursor, database: str) -> None:
-    """
-    Met la table `spots` à jour pour ce script :
-      - renomme `enriched_at` en `harmonized_at` (ancien nom de la colonne) ;
-      - ajoute les colonnes `prompt_version`, `a_verifier` et `nuit_interdite` si elles manquent ;
-      - supprime les colonnes obsolètes si elles existent encore.
-    On peut l'appeler plusieurs fois sans risque : ce qui est déjà fait est ignoré.
-    """
-    cursor.execute(
-        "SELECT column_name FROM information_schema.columns"
-        " WHERE table_schema = %s AND table_name = 'spots'",
-        (database,),
-    )
-    existing_columns = [row[0] for row in cursor.fetchall()]
-
-    if "enriched_at" in existing_columns:
-        # RENAME COLUMN garde les valeurs déjà enregistrées.
-        cursor.execute("ALTER TABLE spots RENAME COLUMN enriched_at TO harmonized_at")
-        logger.info("[harmonize] Colonne spots.enriched_at renommée en harmonized_at")
-
-    if "prompt_version" not in existing_columns:
-        cursor.execute("ALTER TABLE spots ADD COLUMN prompt_version INT")
-        logger.info("[harmonize] Colonne spots.prompt_version ajoutée")
-
-    if "a_verifier" not in existing_columns:
-        cursor.execute("ALTER TABLE spots ADD COLUMN a_verifier TINYINT(1)")
-        logger.info("[harmonize] Colonne spots.a_verifier ajoutée")
-
-    if "nuit_interdite" not in existing_columns:
-        cursor.execute("ALTER TABLE spots ADD COLUMN nuit_interdite TINYINT(1)")
-        logger.info("[harmonize] Colonne spots.nuit_interdite ajoutée")
-
-    for column in OBSOLETE_COLUMNS:
-        if column in existing_columns:
-            cursor.execute(f"ALTER TABLE spots DROP COLUMN {column}")
-            logger.info(f"[harmonize] Colonne obsolète spots.{column} supprimée")
-
-
-def update_spot_service_table(cursor, database: str) -> None:
-    """
-    Ajoute à `spot_service` la colonne `source` si elle manque : 'p4n' pour les
-    services cochés sur Park4Night (valeur par défaut, donc toutes les lignes
-    existantes), 'ia' pour ceux ajoutés par l'harmonisation.
-    On peut l'appeler plusieurs fois sans risque.
-    """
-    cursor.execute(
-        "SELECT column_name FROM information_schema.columns"
-        " WHERE table_schema = %s AND table_name = 'spot_service' AND column_name = 'source'",
-        (database,),
-    )
-    if not cursor.fetchall():
-        cursor.execute("ALTER TABLE spot_service ADD COLUMN source VARCHAR(10) NOT NULL DEFAULT 'p4n'")
-        logger.info("[harmonize] Colonne spot_service.source ajoutée")
-
-
-def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None) -> list:
+def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None, only_new: bool = False) -> list:
     """
     Renvoie les spots à harmoniser : jamais traités, ou traités avec une ancienne
     version du prompt. `limit` permet de n'en prendre que les N premiers.
@@ -347,6 +334,9 @@ def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None) -
 
     `spot_ids` (option --id) : renvoie ces spots-là, qu'ils soient déjà
     harmonisés ou non. Sert à tester le prompt sur un cas précis.
+
+    `only_new` (ETL) : seulement les spots jamais traités. Repasser les anciens
+    sur une nouvelle version du prompt reste une décision, pas un effet du scraping.
 
     Chaque spot renvoyé contient aussi ses commentaires sélectionnés ("reviews").
     """
@@ -364,7 +354,7 @@ def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None) -
         query = f"""
             SELECT {columns}
             FROM spots
-            WHERE (prompt_version IS NULL OR prompt_version < %s)
+            WHERE {"prompt_version IS NULL" if only_new else "(prompt_version IS NULL OR prompt_version < %s)"}
               AND details_scraped_at IS NOT NULL
               AND ((description IS NOT NULL AND description <> '')
                    OR EXISTS (SELECT 1 FROM spot_reviews WHERE spot_reviews.spot_id = spots.id))
@@ -374,7 +364,7 @@ def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None) -
               AND type NOT IN ({type_placeholders})
             ORDER BY id
         """
-        params = (PROMPT_VERSION, *HIDDEN_SPOT_TYPES)
+        params = HIDDEN_SPOT_TYPES if only_new else (PROMPT_VERSION, *HIDDEN_SPOT_TYPES)
         if limit:
             query += " LIMIT %s"
             params = (*params, limit)
@@ -416,11 +406,12 @@ def normalize(payload: dict) -> dict:
     - Une description vide devient None (NULL en base) : le site affichera alors
       la description d'origine.
     - a_verifier et nuit_interdite deviennent 1 ou 0 (MySQL n'a pas de vrai type booléen).
+    - Un doute sur la nuit passe par a_verifier : verify_spots tranche, puis /supervision.
     """
     description = (payload.get("description") or "").strip()
     return {
         "description_ia": description or None,
-        "a_verifier": 1 if payload.get("a_verifier") else 0,
+        "a_verifier": 1 if payload.get("a_verifier") or payload.get("doute_nuit") else 0,
         "nuit_interdite": 1 if payload.get("nuit_interdite") else 0,
     }
 
@@ -430,19 +421,25 @@ def write_harmonization(cursor, spot_id: int, payload: dict) -> None:
     Enregistre en base le résultat de Claude pour un spot, avec la version du
     prompt utilisée. La colonne `description` n'apparaît pas dans la requête :
     elle n'est jamais touchée.
+
+    Garde-fou : a_verifier et nuit_interdite ne repassent jamais de 1 à 0 ici. Si
+    l'agent ne confirme plus une interdiction de nuit, elle reste et le spot part en
+    vérification. MySQL applique le SET dans l'ordre : a_verifier doit donc venir
+    avant nuit_interdite, pour lire son ancienne valeur.
     """
     fields = normalize(payload)
     cursor.execute(
         """
         UPDATE spots
         SET description_ia = %s,
-            a_verifier = %s,
-            nuit_interdite = %s,
+            a_verifier = GREATEST(COALESCE(a_verifier, 0), %s, COALESCE(nuit_interdite, 0) > %s),
+            nuit_interdite = GREATEST(COALESCE(nuit_interdite, 0), %s),
             harmonized_at = NOW(),
             prompt_version = %s
         WHERE id = %s
         """,
-        (fields["description_ia"], fields["a_verifier"], fields["nuit_interdite"], PROMPT_VERSION, spot_id),
+        (fields["description_ia"], fields["a_verifier"], fields["nuit_interdite"], fields["nuit_interdite"],
+         PROMPT_VERSION, spot_id),
     )
     write_services(cursor, spot_id, payload.get("services") or [])
 
@@ -455,7 +452,7 @@ def write_services(cursor, spot_id: int, service_names: list) -> None:
       (source 'ia') : en cas de nouveau prompt, on repart de zéro.
     - On ajoute ensuite les services cités, avec source 'ia'. INSERT IGNORE ne
       fait rien si le service est déjà lié au spot : un service coché sur
-      Park4Night garde donc sa source 'p4n'.
+      p4n garde donc sa source 'p4n'.
     Les lignes 'p4n' ne sont jamais touchées.
     """
     cursor.execute("DELETE FROM spot_service WHERE spot_id = %s AND source = 'ia'", (spot_id,))
@@ -467,38 +464,30 @@ def write_services(cursor, spot_id: int, service_names: list) -> None:
         )
 
 
-def _database_name() -> str:
-    """Nom de la base MySQL, lu dans le .env."""
-    ServiceUtil.load_env()
-    return ServiceUtil.get_env("DB_NAME")
-
-
 # =============================================================================
 # 3. LES TROIS FAÇONS DE LANCER L'HARMONISATION
 # =============================================================================
 
-def run_sample(sample: int = None, service=None, spot_ids: list = None) -> None:
+def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new: bool = False) -> None:
     """
     Harmonise les spots UN PAR UN (une requête à Claude par spot).
 
     - sample = 20         -> seulement les 20 premiers spots à harmoniser (pour tester)
     - sample = None       -> tous les spots à harmoniser
     - spot_ids = [31, 44] -> exactement ces spots (option --id)
+    - only_new = True     -> seulement les spots jamais traités (ETL)
 
     On enregistre en base (commit) après chaque spot : si le script s'arrête en
     route (Ctrl+C, quota atteint...), rien n'est perdu, et au prochain lancement
     les spots déjà faits sont passés grâce à leur `prompt_version`.
     """
     if service is None:
-        service = LLMService()
+        service = make_llm_service("harmonize_spots")
 
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
-    update_spots_columns(cursor, _database_name())
-    update_spot_service_table(cursor, _database_name())
-    connection.commit()
 
-    for spot in fetch_spots_to_harmonize(cursor, limit=sample, spot_ids=spot_ids):
+    for spot in fetch_spots_to_harmonize(cursor, limit=sample, spot_ids=spot_ids, only_new=only_new):
         try:
             payload = harmonize_one(service, spot)
         except (LLMUnavailable, json.JSONDecodeError) as error:
@@ -513,6 +502,7 @@ def run_sample(sample: int = None, service=None, spot_ids: list = None) -> None:
             f" | services cités : {', '.join(payload.get('services') or []) or 'aucun'}"
             f"{' | ⚠ À VÉRIFIER' if payload.get('a_verifier') else ''}"
             f"{' | ⛔ NUIT INTERDITE' if payload.get('nuit_interdite') else ''}"
+            f"{' | ❓ DOUTE NUIT : ' + payload.get('doute_nuit_raison', '') if payload.get('doute_nuit') else ''}"
         )
 
     cursor.close()
@@ -525,13 +515,10 @@ def submit_backfill() -> str:
     Anthropic traite le lot en arrière-plan. Renvoie l'identifiant du lot, à
     réutiliser ensuite avec --collect.
     """
-    service = LLMService()
+    service = make_llm_service("harmonize_spots", chosen_engine=ENGINE_API)
 
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
-    update_spots_columns(cursor, _database_name())
-    update_spot_service_table(cursor, _database_name())
-    connection.commit()
     spots = fetch_spots_to_harmonize(cursor)
     cursor.close()
     MySQLUtils.disconnect(connection)
@@ -564,7 +551,7 @@ def collect_backfill(batch_id: str) -> int:
     Attention : ne pas modifier le prompt entre --submit et --collect, sinon les
     réponses (faites avec l'ancien prompt) seraient enregistrées avec la nouvelle version.
     """
-    service = LLMService()
+    service = make_llm_service("harmonize_spots", chosen_engine=ENGINE_API)
     if not service.batch_finished(batch_id):
         logger.info(f"[harmonize] Lot {batch_id} encore en cours, réessayer plus tard")
         return 0
@@ -598,20 +585,18 @@ def main():
     parser.add_argument("--submit", action="store_true", help="Envoyer tous les spots en un lot (API)")
     parser.add_argument("--collect", metavar="BATCH_ID", help="Récupérer les résultats d'un lot (API)")
     parser.add_argument(
-        "--engine", choices=["api", "claude-code"], default="api",
-        help="api : clé ANTHROPIC_API_KEY ; claude-code : programme `claude` + abonnement",
+        "--engine", choices=[ENGINE_API, ENGINE_CLAUDE_CODE],
+        help="api : clé ANTHROPIC_API_KEY ; claude-code : programme `claude` + abonnement (défaut : LLM_ENGINE)",
     )
     parser.add_argument("--model", help="Modèle à utiliser (par défaut : celui du service choisi)")
     args = parser.parse_args()
 
     # Choix de la façon d'appeler Claude, et éventuellement du modèle.
-    if args.engine == "claude-code":
-        service = ClaudeCodeLLMService(model=args.model) if args.model else ClaudeCodeLLMService()
-    else:
-        service = LLMService(model=args.model) if args.model else LLMService()
+    chosen_engine = args.engine or engine()
+    service = make_llm_service("harmonize_spots", chosen_engine=chosen_engine, model=args.model)
 
     # Les lots n'existent qu'avec l'API.
-    if args.engine == "claude-code" and (args.submit or args.collect):
+    if chosen_engine == ENGINE_CLAUDE_CODE and (args.submit or args.collect):
         parser.error("--submit et --collect ne marchent qu'avec l'API (--engine api)")
 
     if args.id:

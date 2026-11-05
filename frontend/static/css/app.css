@@ -601,14 +601,16 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ===== ACCUEIL (écran 01) ===== */
 /* Hero immersif : la photo occupe tout le cadre, le texte est posé dessus à
-   gauche (voile dégradé pour le contraste) et le parcours flotte en bas. */
+   gauche (voile dégradé pour le contraste) et le parcours flotte en bas.
+   Hauteur limitée pour que le choix de la durée ET la carte Vany soient visibles
+   sans faire défiler. */
 .home-hero {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   border-radius: 20px;
-  min-height: 480px;
-  padding: 56px 56px 26px;
+  min-height: 330px;
+  padding: 40px 48px 24px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -637,19 +639,19 @@ button { font-family: inherit; cursor: pointer; }
 .home-hero__content {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   max-width: 620px;
 }
 .eyebrow--on-dark { color: var(--accent-light); }
 .home-hero__title {
-  font-size: 46px;
+  font-size: 38px;
   line-height: 1.1;
   color: var(--white);
 }
 .home-hero__lead {
   margin: 4px 0 0;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 15.5px;
+  line-height: 1.5;
   color: var(--on-dark);
   max-width: 560px;
 }
@@ -695,6 +697,26 @@ button { font-family: inherit; cursor: pointer; }
   height: 0;
   border-top: 2px dashed var(--mint-border-2);
 }
+
+/* Deux chemins : la durée (je compose moi-même) et Vany (voyage 100% IA). */
+.home-paths {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: stretch;
+}
+/* Le bandeau Vany, horizontal ailleurs, devient ici une carte verticale. */
+.home-paths .vany-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 22px 24px;
+}
+.home-paths .vany-banner__img { width: 84px; align-self: flex-start; }
+.home-paths .vany-banner__body { padding: 0; }
+.home-paths .vany-banner__title { font-size: 18px; line-height: 1.25; }
+.home-paths .vany-banner .btn { margin-top: auto; }
 
 .duration-grid {
   display: grid;
@@ -744,8 +766,8 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 
 /* Tablette : le hero garde la photo, mais le parcours passe sur 3 lignes. */
 @media (max-width: 1080px) {
-  .home-hero { padding: 44px 34px 22px; min-height: 440px; }
-  .home-hero__title { font-size: 38px; }
+  .home-hero { padding: 40px 34px 22px; }
+  .home-paths { grid-template-columns: 1fr; }
   .home-journey { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px 20px; }
   .home-journey__link { display: none; }
 }
@@ -791,16 +813,18 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   color: var(--muted);
 }
 .step-nav .btn { flex: none; }
+/* Bouton pour passer l'étape (« Pas de rando aujourd'hui »...) : poussé à droite,
+   à côté du bouton principal qui le remplace dès qu'un choix est fait. */
+.step-nav__back + #skipBtn { margin-left: auto; }
 @media (min-width: 769px) {
   /* Comme en mobile, la barre d'action reste atteignable pendant le défilement : sans
      ça, une sélection faite en haut d'une longue liste oblige à tout dérouler pour
      rejoindre le CTA. Le wrapper est le dernier enfant de .page-main, donc `sticky` le
      colle en bas du viewport pendant le scroll puis le repose en fin de contenu (il ne
      recouvre jamais le footer, qui est hors de .page-main). */
-  .step-nav-wrap { position: sticky; bottom: 20px; z-index: 40; }
-  /* Récap : un peu d'air entre la rangée carte/bannières et la barre basse, qui
-     sinon se colle au bas de la carte quand on arrive en fin de page. */
-  .page-main.has-results-nav .step-nav-wrap { margin-top: 22px; }
+  /* margin-top : un peu d'air entre le contenu (carte, listes) et la barre basse,
+     qui sinon se colle au bas de la carte quand on arrive en fin de page. */
+  .step-nav-wrap { position: sticky; bottom: 20px; z-index: 40; margin-top: 22px; }
   /* display:flex explicite pour annuler le `.mobile-nav { display:none }` desktop.
      position:static : c'est le wrapper qui porte le sticky, pas la barre elle-même. */
   .step-nav.mobile-nav {
@@ -872,6 +896,12 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   gap: 8px;
   max-height: 232px;
   overflow-y: auto;
+  /* La liste défile : la rangée coupée par le bas s'estompe, pour montrer qu'il y a
+     d'autres villes plus bas (coupée net, elle ressemblait à un bug). Le dégradé
+     couvre la marge basse : en fin de défilement, la dernière ville reste nette. */
+  padding-bottom: 40px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
 }
 .nearby.is-empty .nearby__list { display: none; }
 .nearby-item {
@@ -986,6 +1016,20 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   color: var(--warn-tx);
 }
 
+/* Météo compacte (étape 1) : logée sous la liste des villes, à côté de la carte. */
+.weather-section--compact { gap: 12px; padding: 16px 18px; }
+.weather-section--compact h3 { font-size: 15px; font-weight: 700; }
+.weather-section--compact .weather-grid { gap: 10px; }
+.weather-section--compact .weather-day { padding: 10px 10px 10px; gap: 4px; }
+.weather-section--compact .weather-day .day-name { font-size: 12.5px; }
+.weather-section--compact .weather-day .weather-icon { width: 38px; }
+.weather-section--compact .weather-day .temperatures { font-size: 14px; }
+.weather-section--compact .weather-day .weather-info { font-size: 11.5px; }
+/* Le conseil peut passer sur deux lignes dans une carte étroite : coins moins arrondis. */
+.weather-section--compact .weather-day .weather-advice {
+  font-size: 11px; line-height: 1.3; border-radius: 10px; padding: 4px 6px;
+}
+
 @media (max-width: 768px) {
   .step-head { flex-direction: column; align-items: flex-start; gap: 10px; }
   .weather-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1000,7 +1044,18 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 /* Variante carte à gauche (étape 1) : la carte carrée prend la colonne fixe de
    gauche, la liste des villes occupe la colonne fluide de droite. */
-.map-list-layout--map-left { grid-template-columns: minmax(0, 460px) minmax(0, 1fr); }
+.map-list-layout--map-left { grid-template-columns: minmax(0, 460px) minmax(0, 1fr); align-items: stretch; }
+/* Étape 1 : la carte prend la hauteur de l'écran (sous le titre, au-dessus de la barre
+   du bas) au lieu d'être carrée, pour exploiter toute la page. */
+.map-list-layout--map-left .map-box--square { aspect-ratio: auto; height: clamp(460px, calc(100vh - 400px), 720px); }
+/* La colonne de droite prend exactement la hauteur de la carte : height 0 l'empêche
+   d'agrandir la rangée, min-height 100 % l'étire à la hauteur de la carte. La liste
+   des villes occupe la place libre et défile ; la météo, quand elle est affichée,
+   garde sa hauteur et réduit d'autant la liste. */
+.map-list-layout--map-left .map-list-layout__main { height: 0; min-height: 100%; }
+.map-list-layout--map-left .nearby { flex: 0 1 auto; min-height: 0; }
+.map-list-layout--map-left .nearby__list { max-height: none; min-height: 0; }
+.map-list-layout--map-left .weather-section { flex: none; }
 .map-list-layout__main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .map-col { position: sticky; top: 20px; }
 .map-box--square { aspect-ratio: 1 / 1; }
@@ -1010,6 +1065,9 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .map-list-layout { grid-template-columns: 1fr; }
   .map-col { position: static; order: -1; }        /* carte au-dessus de la liste en mobile */
   .map-box--square { aspect-ratio: 4 / 3; }         /* moins haute sur petit écran */
+  .map-list-layout--map-left .map-box--square { aspect-ratio: 4 / 3; height: auto; }
+  .map-list-layout--map-left .map-list-layout__main { height: auto; min-height: 0; }
+  .map-list-layout--map-left .nearby__list { max-height: 232px; }
 }
 
 /* ===== STEP2 - RANDONNÉE (markup injecté par step2_hike.js) ===== */
@@ -1054,10 +1112,12 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   0% { box-shadow: 0 0 0 4px rgba(46,125,134,0.5); }
   100% { box-shadow: none; }
 }
-.hiking-status { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .hiking-info { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .hiking-info h3 { font-size: 17px; font-weight: 700; }
-.hiking-description { font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+.hiking-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.hiking-description { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+/* Heure de départ supposée (display_utils.HIKE_START_H) : les conseils de Vany en découlent. */
+.hiking-schedule { margin: 0; font-size: 12.5px; color: var(--muted); }
 .hiking-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
 .hiking-stats .stat {
   display: inline-flex;
@@ -1106,8 +1166,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   background: var(--mint); color: var(--teal); border-color: var(--teal);
 }
 
-.no-hiking-option { text-align: center; }
-.no-hiking-btn { text-decoration: underline; }
 
 @media (max-width: 768px) {
   .hiking-card { flex-direction: column; align-items: stretch; gap: 12px; }
@@ -1141,16 +1199,16 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   gap: 20px;
   align-items: center;
 }
-.spot-left, .service-left { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-/* Colonne du type de spot à largeur fixe : un type long ("PARKING JOUR ET NUIT")
-   n'élargit plus la colonne, les cartes restent alignées entre elles. */
-.spot-content-grid { grid-template-columns: 120px 1fr auto; }
-/* Un type long passe sur deux lignes, centré, avec des coins moins arrondis
-   (une forme de pilule sur deux lignes paraîtrait disproportionnée). */
-.spot-left .hiking-stats .stat {
-  white-space: normal; text-align: center; line-height: 1.25; border-radius: 12px;
-  /* Plus discrète que les autres pastilles : c'est une étiquette, pas une info clé. */
-  font-size: 10.5px; padding: 3px 8px;
+.service-left { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+/* Fiche spot : plus de colonne de gauche, le texte et les services prennent toute
+   la largeur. Le type et le badge forment une ligne au-dessus du nom, la note suit le nom. */
+.spot-content-grid { grid-template-columns: minmax(0, 1fr) auto; }
+.spot-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Le type est une étiquette, pas une info clé : petite pastille discrète. */
+.spot-type {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--ink); background: var(--cream); border: 1px solid var(--card-border);
+  border-radius: var(--r-pill); padding: 3px 9px;
 }
 .spot-center, .service-center { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .spot-center h4, .service-center h4 { font-size: 16px; font-weight: 700; }
@@ -1172,7 +1230,10 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   font-weight: 400; font-style: italic; color: var(--muted);
   background: none; border: none; padding: 3px 0;
 }
-.spot-details .rating { font-size: 13px; font-weight: 700; color: var(--warn-tx); }
+.spot-center h4 .rating { font-size: 13px; font-weight: 700; color: var(--warn-tx); white-space: nowrap; margin-left: 4px; }
+/* « À savoir : » repéré d'un coup d'œil, sans encadré (une liste de fiches toutes
+   encadrées de jaune deviendrait vite chargée). */
+.spot-warning { color: var(--warn-tx); font-weight: 700; }
 .spot-right, .service-right { display: flex; flex-direction: column; gap: 8px; flex: none; }
 .spot-right .btn, .service-right .btn { white-space: nowrap; }
 
@@ -1193,12 +1254,19 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .service-center h4 { font-size: 15px; }
 .service-address, .service-distance { font-size: 12.5px; line-height: 1.4; }
 .service-center { gap: 3px; }
+/* Même mise en page que la fiche spot : plus de colonne de gauche, la ligne d'étiquettes passe au-dessus du nom. */
+.service-content-grid { grid-template-columns: minmax(0, 1fr) auto; }
+.service-center .spot-tags { margin-bottom: 3px; }
+.service-tag-distance { margin-left: auto; }
+/* Un bouton qui ouvre un autre site (Google Maps d'un restaurant, page d'un spot) : écrit à la taille d'un lien,
+   pour ne pas élargir la carte, et la flèche ↗ dit qu'on quitte RandoVanGo. */
+.service-right .btn-external, .spot-right .btn-external { font-size: 12.5px; padding: 6px 12px; text-align: center; }
+.service-description { font-size: 13px; color: var(--ink); margin: 0; line-height: 1.5; }
 
 /* Onglets de catégories (step4) - chip + icône */
 .category-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
 .category-tab.active { color: var(--teal); background: var(--mint); border-color: var(--teal); }
 
-.no-spot-option, .no-service-option { text-align: center; }
 .no-spot-btn { text-decoration: underline; }
 
 /* Étape 4 - parcours en 2 temps : tuiles de catégories (vue 1) puis sous-liste (vue 2) */
@@ -1284,7 +1352,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .results-side { display: flex; flex-direction: column; gap: 20px; }
 /* Bannière Vany dans la colonne latérale étroite du récap : la disposition par
    défaut (image | texte | bouton sur une seule rangée) y comprime la colonne texte,
-   et le titre « Vany te suggère un détour » passait sur deux lignes. On réagence en
+   et le titre de l'encart passait sur deux lignes. On réagence en
    plaçant le bouton sous le texte (l'image occupe les deux rangées), ce qui élargit
    la colonne texte : le titre tient alors sur une seule ligne, sans rien rogner. */
 .results-side .vany-banner {
@@ -1297,6 +1365,122 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .results-side .vany-banner__body { grid-area: body; padding: 20px 0 6px; }
 .results-side .vany-banner .btn { grid-area: cta; justify-self: start; margin-bottom: 20px; }
 .trip-end__hat { height: 1.1em; vertical-align: -0.15em; }
+
+/* ===== STEP5 - LES PÉPITES DE VANY (markup injecté par step5_pepites.js) ===== */
+.pepites-head { display: flex; align-items: center; gap: 16px; }
+.pepites-head__img { width: 72px; height: 72px; object-fit: contain; flex-shrink: 0; }
+.pepites-list { display: flex; flex-direction: column; gap: 12px; }
+/* Numéro de l'idée, repris sur son marqueur de la carte. */
+.pepite-num, .pepite-marker__num {
+  flex: none;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--warn-bg);
+  color: #7A6224;
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pepite-marker { position: relative; }
+.pepite-marker__num {
+  position: absolute; top: -8px; right: -8px;
+  width: 18px; height: 18px; font-size: 11px;
+  border: 1.5px solid var(--white);
+}
+.pepites-count { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--teal-dark); }
+
+.pepite-meteo { margin: 0; font-size: 12.5px; color: var(--warn-tx); font-weight: 600; }
+/* Pourquoi Vany a choisi l'idée pour cette journée (agents/choose_pepites.py). */
+.pepite-why {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 2px 0 4px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--teal-dark);
+}
+.pepite-why .pepite-icon { flex: none; width: 18px; height: 18px; margin-top: 1px; }
+/* Badge « coup de cœur » d'une idée de Vany, aux couleurs sable de son chapeau. */
+.status-badge.top { color: #7A6224; background: var(--warn-bg); border: 1px solid var(--warn-bd); }
+.pepite-removed {
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--white);
+  border: 1px dashed var(--card-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+/* Carte fantôme pendant la recherche : trois barres grises qui « respirent »,
+   pour montrer que quelque chose arrive (une carte blanche vide faisait bug). */
+.pepite-skeleton {
+  border-radius: 12px;
+  background: var(--white);
+  border: 1px solid var(--card-border);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pepite-skeleton span {
+  display: block;
+  height: 10px;
+  border-radius: 6px;
+  background: var(--line);
+  animation: pepite-pulse 1.4s ease-in-out infinite;
+}
+.pepite-skeleton span:nth-child(1) { width: 28%; }
+.pepite-skeleton span:nth-child(2) { width: 72%; height: 14px; }
+.pepite-skeleton span:nth-child(3) { width: 52%; }
+@keyframes pepite-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+  .pepite-skeleton span { animation: none; }
+}
+/* Chapeau de Vany, icône des pépites : tableau récap (colonne Services) et marqueurs de carte. */
+.pepite-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+  background: url('../images/logo/hat-icon.png') center / contain no-repeat;
+}
+/* Les ajouts de Vany dans le tableau du carnet : en sable, sans gras et un peu plus
+   petits, pour rester secondaires face à la rando, au spot et aux services choisis. */
+.pepite-line { color: #7A6224; font-weight: 400; font-size: 13px; }
+.pepite-marker {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 1.5px solid var(--warn-bd);
+  box-shadow: 0 1px 4px #0004;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pepite-marker .pepite-icon { width: 20px; height: 20px; }
+/* « En chemin » : lieux recommandés par Vany sur le parcours de la rando. */
+.trail-tips { color: #7A6224; font-size: 13px; font-weight: 400; }
+.trail-tip-marker {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 1.5px solid var(--warn-bd);
+  box-shadow: 0 1px 4px #0004;
+  color: #7A6224;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@media (max-width: 768px) {
+  .pepites-head__img { width: 56px; height: 56px; }
+}
 /* Choix du jour suivant, logé dans la barre basse : results.js le révèle en retirant
    le `display:none` inline, d'où le display porté par la classe et non par le JS. */
 .results-nav__next { display: flex; align-items: center; gap: 12px; }
@@ -1854,6 +2038,10 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
     justify-items: center;
   }
   .vany-banner__img { width: 88px; }
+  /* Carte Vany de l'accueil : centrée comme le texte, image et bouton compris. */
+  .home-paths .vany-banner { align-items: center; }
+  .home-paths .vany-banner__img { align-self: center; }
+  .home-paths .vany-banner .btn { margin-top: 4px; }
 
   /* Barre de navigation basse fixe (retour + CTA) */
   .mobile-nav {
@@ -1945,3 +2133,128 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
      dans le menu compte (le burger, redondant, est retiré par common.js). */
   .rvg-header--compact .account__menu-public { display: flex; }
 }
+
+/* Étape 2 : la recommandation de Vany sur chaque rando (lieux en chemin), aux
+   couleurs sable de son chapeau, pour aider à choisir la rando. */
+.vany-tips {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-bd);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.vany-tips__head { display: flex; align-items: center; gap: 10px; }
+.vany-tips__head .pepite-icon { width: 30px; height: 30px; }
+.vany-tips__head > div { display: flex; flex-direction: column; }
+.vany-tips__eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #7A6224; }
+.vany-tips__title { font-family: var(--font-head); font-weight: 800; font-size: 16px; color: var(--ink); }
+.vany-tips__item { display: flex; gap: 10px; align-items: flex-start; margin: 0; font-size: 13.5px; }
+.vany-tips__num {
+  flex: none;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 1.5px solid var(--warn-bd);
+  color: #7A6224;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.vany-tips__more summary { cursor: pointer; font-size: 13px; font-weight: 600; color: #7A6224; }
+.vany-tips__more[open] { display: flex; flex-direction: column; gap: 8px; }
+
+/* Étape 3 : distance des spots à la rando du jour. Les spots sur son trajet (on
+   part à pied du spot) passent en tête, cadre et étiquette aux couleurs de la rando. */
+.spots-section-title { font-family: var(--font-head); font-weight: 800; font-size: 15px; color: var(--muted); margin-top: 6px; }
+.spots-section-title--hike { color: var(--teal-dark); margin-top: 0; }
+.spots-section-title__note { font-family: var(--font-body); font-weight: 600; font-size: 12.5px; color: var(--muted); margin-left: 4px; }
+.spot-card--on-hike:not(.selected), .service-card--near-spot:not(.selected) { border: 2px solid var(--teal); }
+.hike-distance { font-size: 12px; font-weight: 700; color: var(--teal-dark); background: var(--mint); padding: 3px 10px; border-radius: 999px; }
+.hike-distance--on { color: var(--white); background: var(--teal); }
+
+/* Étape 5 : les deux sections des pépites de Vany, et l'attente de l'agenda. */
+.pepites-section { font-family: var(--font-head); font-weight: 800; font-size: 16px; margin: 6px 0 0; }
+.pepites-section--saison { color: var(--teal-dark); }
+.pepites-section--sejour { color: #7A6224; }
+.pepites-pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--warn-bg);
+  border: 1px dashed var(--warn-bd);
+  border-radius: var(--r-card-sm);
+  padding: 14px 18px;
+  font-size: 13.5px;
+}
+.pepites-pending .pepite-icon { flex: none; width: 34px; height: 34px; }
+.pepites-pending p { margin: 3px 0 0; color: #7A6224; font-size: 13px; }
+/* Rappel de Vany dans la barre du bas (vany_news.js) : des idées sont arrivées. */
+.vany-news { display: flex; align-items: center; gap: 8px; margin-left: auto; color: #7A6224; font-size: 13px; font-weight: 600; }
+.vany-news .pepite-icon { flex: none; width: 22px; height: 22px; }
+@media (max-width: 768px) {
+  .vany-news__text { display: none; }
+}
+
+/* Supervision : la file de relecture des propositions des agents. */
+.supervision-msg { margin: 0; padding: 10px 14px; border-radius: var(--r-card-sm); background: var(--warn-bg); border: 1px solid var(--warn-bd); color: #7A6224; font-weight: 600; font-size: 14px; }
+.supervision-nav { display: flex; gap: 22px; border-bottom: 1px solid var(--card-border); font-size: 14.5px; }
+.supervision-nav a { color: var(--muted); font-weight: 600; text-decoration: none; padding-bottom: 8px; }
+.supervision-nav a.is-on { color: var(--ink); font-weight: 700; border-bottom: 3px solid var(--teal); }
+.services-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.review-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 20px;
+  background: var(--white);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-card-sm);
+  padding: 16px 20px;
+}
+.review-card h2 { font-size: 18px; margin: 8px 0; }
+.review-card p { margin: 0 0 8px; font-size: 14px; }
+.review-card__remove { color: #A3361F; background: #FBEAE5; border: 1px solid #F0CFC5; }
+.review-card__proofs { background: var(--mint-2); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 8px; }
+.review-card__proofs span { font-weight: 700; color: var(--muted); font-size: 12px; }
+.review-card__proofs ul { margin: 6px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
+.review-card__links { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
+.review-card__actions { display: flex; flex-direction: column; gap: 8px; }
+.review-card__btn-remove { background: #A3361F; color: var(--white); border: 0; }
+.review-card__note { width: 100%; box-sizing: border-box; margin-top: 4px; }
+.review-card__text { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; text-transform: none; letter-spacing: 0; }
+.review-card__a-savoir, .supervision-recent__edit textarea { width: 100%; box-sizing: border-box; font: inherit; font-weight: 400; font-size: 13px; padding: 8px; border: 1px solid var(--card-border); border-radius: 8px; }
+.supervision-recent__edit { margin: 0 0 10px; font-size: 13px; }
+.supervision-recent__edit textarea { margin: 6px 0; }
+.supervision-recent h2 { font-size: 15px; margin: 0 0 6px; color: var(--muted); }
+.supervision-recent p { margin: 0 0 5px; font-size: 13px; }
+@media (max-width: 768px) {
+  .review-card { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Supervision des services */
+.services-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.services-filters .label { display: flex; flex-direction: column; gap: 2px; }
+.services-filters select { min-height: 44px; padding: 0 10px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--white); color: var(--ink); font: inherit; font-size: 14px; }
+.services-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--card-border); }
+.services-tab { min-height: 44px; padding: 8px 14px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
+.services-tab.is-on { border-bottom-color: var(--teal); color: var(--ink); font-weight: 700; }
+.services-title { font-size: 18px; margin: 0; }
+.services-empty { margin: 0; padding: 28px; text-align: center; color: var(--muted); background: var(--white); border: 1px dashed var(--card-border); border-radius: var(--r-card-sm); }
+.services-tag--red { color: #A3361F; background: #FBEAE5; border: 1px solid #F0CFC5; }
+.services-tag--warn { color: #7A6224; background: var(--warn-bg); border: 1px solid var(--warn-bd); }
+.services-tag--teal { color: var(--teal-dark); background: var(--mint); border: 1px solid var(--mint-border); }
+.services-auto { background: var(--white); border: 1px solid var(--card-border); border-radius: var(--r-card-sm); padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.services-auto__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.services-auto__head p { margin: 2px 0 0; font-size: 14px; }
+.services-auto__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 0; border-top: 1px solid var(--divider); }
+.services-auto__row.is-removed { opacity: .5; }
+.services-auto__name { display: flex; flex-direction: column; min-width: 0; flex: 1 1 280px; font-size: 14px; }
+.services-auto__name a { font-size: 13px; overflow-wrap: anywhere; }
+.services-auto__proof { font-size: 12.5px; color: var(--muted); flex: 0 1 220px; }
+.services-months { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.services-months > span { font-size: 12px; font-weight: 700; color: var(--muted); }
+.services-months > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.services-chip { min-width: 44px; min-height: 44px; padding: 0 8px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--white); color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.services-chip.is-on { border-color: var(--teal-dark); background: var(--mint); color: var(--ink); font-weight: 700; }

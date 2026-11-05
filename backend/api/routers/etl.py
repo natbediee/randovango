@@ -12,14 +12,16 @@ from services.authentification import get_roles_for_user, insert_auth_log
 router = APIRouter()
 
 ALLOWED_EXT = {"gpx"}
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)  # sans jeton : 401 ci-dessous, et non le 403 par défaut
 
 
 # Auth dépendance
 SECRET_KEY = ServiceUtil.get_env("JWT_SECRET", "dev-secret")
 ALGORITHM = "HS256"
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)):
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Token manquant")
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

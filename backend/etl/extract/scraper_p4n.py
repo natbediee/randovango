@@ -1,4 +1,3 @@
-import sys
 import time
 import os
 import pandas as pd
@@ -12,7 +11,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
 
-from utils.geo_utils import get_coordinates_for_city
+from utils.geo_utils import get_city_center
 from utils.db_utils import p4n_id_exists
 from utils.review_utils import STORED_SELECTION, parse_review_date, select_reviews
 
@@ -99,7 +98,7 @@ def extract_details(driver) -> dict:
 def extract_reviews(driver) -> list:
     """
     Tous les commentaires de la fiche (ils sont tous dans la page, certains masqués).
-    Chaque commentaire : identifiant Park4Night, date, note, texte. L'auteur n'est
+    Chaque commentaire : identifiant p4n, date, note, texte. L'auteur n'est
     volontairement PAS récupéré (donnée personnelle, inutile pour Randovango).
     """
     reviews = []
@@ -194,11 +193,11 @@ def scrape_place_details(driver, url, wait) -> dict:
 
 def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.DataFrame | None:
     """
-    Obtient les coordonnées de la ville, construit l'URL de recherche Park4Night,
+    Obtient les coordonnées de la ville, construit l'URL de recherche p4n,
     scrappe les résultats et sauvegarde en CSV en option.
     """
-    latitude, longitude = get_coordinates_for_city(city_name)
-    
+    latitude, longitude = get_city_center(city_name)
+
     if not latitude or not longitude:
         logger.error("[Extract] : Échec de la recherche : Impossible de continuer sans coordonnées.")
         return
@@ -283,10 +282,10 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
 
     except TimeoutException:
         logger.error("[Extract] : ÉCHEC : Timeout. La liste des résultats n'a pas chargé à temps.")
-        sys.exit(1)
+        return None
     except Exception as e:
         logger.critical(f"[Extract] : ERREUR FATALE : {e}")
-        sys.exit(1)
+        return None
     finally:
         if driver:
             driver.quit()

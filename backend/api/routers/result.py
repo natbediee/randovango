@@ -1,8 +1,11 @@
+from datetime import timedelta
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
 from utils.db_utils import MySQLUtils
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
-from utils.display_utils import result_day_display, spot_description_label, spot_name_label
+from services.supervision_service import reworked_a_savoir
+from utils.display_utils import result_day_display, spot_description_label, spot_name_label, with_a_savoir
+from services.pepite_service import fetch_chosen_pepites, fetch_trail_tips
 from services.pdf_service import render_trip_pdf_html
 
 router = APIRouter()
@@ -73,8 +76,10 @@ def _fetch_plan_data(plan_id: int):
     """, (plan_id,))
     days = cursor.fetchall()
 
-    # POI/services pour chaque jour
+    # POI/services, idées de Vany ajoutées et conseils « En chemin » pour chaque jour
     for day in days:
+        day["pepites"] = fetch_chosen_pepites(cursor, day["id"])
+        day["trail_tips"] = fetch_trail_tips(cursor, day.get("hike_mongo_id"))
         day["spot_name"] = spot_name_label(
             day.pop("spot_place_label"), day.pop("spot_city_label"),
             day.pop("spot_raw_name"), day.get("spot_type"),
@@ -82,6 +87,12 @@ def _fetch_plan_data(plan_id: int):
         day["spot_description"] = spot_description_label(
             day.pop("spot_description_ia"), day.pop("spot_raw_description"), day.pop("spot_prompt_version"),
         ) if day.get("spot_id") else None
+        # L'« À savoir » retravaillé par verify_spots, valable à la date de cette nuit.
+        if day.get("spot_id") and plan.get("start_date"):
+            night = plan["start_date"] + timedelta(days=day["day_number"] - 1)
+            sentences = reworked_a_savoir(cursor, [day["spot_id"]], night).get(day["spot_id"])
+            if sentences is not None:
+                day["spot_description"] = with_a_savoir(day["spot_description"], sentences)
         cursor.execute("""
             SELECT p.id, p.name, p.latitude, p.longitude, p.address,
                    s.name AS service_type, s.category AS service_category

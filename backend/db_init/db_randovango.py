@@ -1,3 +1,10 @@
+"""
+Toute la structure de la base MySQL : à relancer sans risque, en « create or alter ».
+Une table absente est créée ; une colonne absente d'une table existante est ajoutée, avec sa clé
+étrangère si elle en a une. Le script n'écrit aucune donnée et ne supprime ni ne renomme rien.
+Une colonne existante n'est pas modifiée : changer son type reste un geste à faire à la main.
+"""
+import re
 import sys
 import time
 from pathlib import Path
@@ -20,6 +27,39 @@ DB_ROOT_PSWD = ServiceUtil.get_env("DB_ROOT_PSWD")
 DB_NAME = ServiceUtil.get_env("DB_NAME")
 DB_USER = ServiceUtil.get_env("DB_USER")
 DB_PSWD = ServiceUtil.get_env("DB_PSWD")
+
+NOT_A_COLUMN = ("PRIMARY", "UNIQUE", "FOREIGN", "INDEX", "KEY", "CONSTRAINT")
+
+
+def parse_create_table(statement: str) -> tuple:
+    """(table, {colonne: définition}, {colonne: clé étrangère}) d'après un CREATE TABLE IF NOT EXISTS."""
+    table = re.search(r"CREATE TABLE IF NOT EXISTS (\w+)", statement).group(1)
+    columns, foreign_keys = {}, {}
+    for line in statement.splitlines()[2:]:
+        line = line.strip().rstrip(",")
+        if not line or line.startswith(")"):
+            continue
+        name, definition = line.split(None, 1)
+        if name.upper() not in NOT_A_COLUMN:
+            columns[name] = definition
+        elif name.upper() == "FOREIGN":
+            foreign_keys[re.search(r"KEY \((\w+)\)", line).group(1)] = line
+    return table, columns, foreign_keys
+
+
+def add_missing_columns(cursor, database: str, statement: str) -> list:
+    """Ajoute à une table existante les colonnes de sa définition qui lui manquent. Renvoie leurs noms."""
+    table, columns, foreign_keys = parse_create_table(statement)
+    cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_schema = %s AND table_name = %s",
+                   (database, table))
+    existing = {row[0] for row in cursor.fetchall()}
+    missing = [column for column in columns if column not in existing]
+    for column in missing:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {columns[column]}")
+        if column in foreign_keys:
+            cursor.execute(f"ALTER TABLE {table} ADD {foreign_keys[column]}")
+        logger.info(f"[MySQL] :→ Colonne ajoutée : {table}.{column}")
+    return missing
 
 
 def init_database():
@@ -126,6 +166,10 @@ def init_database():
                 a_verifier TINYINT(1),
                 nuit_interdite TINYINT(1),
                 opening_period VARCHAR(255),
+                ouverture_statut VARCHAR(12),
+                ouverture_debut CHAR(5),
+                ouverture_fin CHAR(5),
+                ouverture_lue VARCHAR(255),
                 price_parking VARCHAR(255),
                 price_services VARCHAR(255),
                 details_scraped_at DATETIME,
@@ -160,7 +204,7 @@ def init_database():
                 FOREIGN KEY (service_id) REFERENCES services(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
-            # 6 bis. commentaires Park4Night des spots (échantillon, sans auteur)
+            # 6 bis. commentaires p4n des spots (échantillon, sans auteur)
             """
             CREATE TABLE IF NOT EXISTS spot_reviews (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -184,6 +228,10 @@ def init_database():
                 sources JSON,
                 prompt_version INT,
                 model VARCHAR(50),
+                a_savoir JSON,
+                utilisable VARCHAR(3),
+                utilisable_a_partir DATE,
+                raison TEXT,
                 FOREIGN KEY (spot_id) REFERENCES spots(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
@@ -205,6 +253,7 @@ def init_database():
                 city_id INT,
                 verifie BOOL DEFAULT FALSE,
                 imported_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                address VARCHAR(512),
                 INDEX idx_hikes_latlon (start_latitude, start_longitude),
                 FOREIGN KEY (source_id) REFERENCES sources(id),
                 FOREIGN KEY (city_id) REFERENCES cities(id)
@@ -223,6 +272,11 @@ def init_database():
                 original_id VARCHAR(255),
                 source_id INT,
                 verifie BOOL DEFAULT FALSE,
+                masque TINYINT(1) NOT NULL DEFAULT 0,
+                ferme_moment TINYINT(1) NOT NULL DEFAULT 0,
+                statut_saison VARCHAR(10),
+                mois_ouverture JSON,
+                address VARCHAR(512),
                 unique (original_id, source_id),
                 INDEX idx_poi_latlon (latitude, longitude),
                 FOREIGN KEY (source_id) REFERENCES sources(id)
@@ -238,6 +292,67 @@ def init_database():
                 UNIQUE (poi_id, city_id),
                 FOREIGN KEY (poi_id) REFERENCES poi(id),
                 FOREIGN KEY (city_id) REFERENCES cities(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 bis. vérifications des POI (une ligne par source), dernière réponse brute.
+            """
+            CREATE TABLE IF NOT EXISTS poi_checks (
+                poi_id INT NOT NULL,
+                source VARCHAR(20) NOT NULL,
+                checked_at DATETIME NOT NULL,
+                result JSON,
+                PRIMARY KEY (poi_id, source),
+                FOREIGN KEY (poi_id) REFERENCES poi(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 ter. ce que les vérifications signalent sur un POI, à relire avant toute correction
+            """
+            CREATE TABLE IF NOT EXISTS poi_signals (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                poi_id INT NOT NULL,
+                source VARCHAR(20) NOT NULL,
+                signal_type VARCHAR(30) NOT NULL,
+                detail JSON,
+                statut VARCHAR(10) NOT NULL DEFAULT 'a_relire',
+                detected_at DATETIME NOT NULL,
+                reviewed_at DATETIME,
+                UNIQUE (poi_id, source, signal_type),
+                FOREIGN KEY (poi_id) REFERENCES poi(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 quater. spécialisation de poi : un restaurant est un POI avec des attributs en plus
+            """
+            CREATE TABLE IF NOT EXISTS restaurants (
+                poi_id INT NOT NULL PRIMARY KEY,
+                genre VARCHAR(100) NOT NULL,
+                pourquoi TEXT,
+                budget VARCHAR(50),
+                jours_fermeture VARCHAR(150),
+                distinction VARCHAR(100),
+                ancien_nom VARCHAR(255),
+                categorie VARCHAR(30),
+                registre_depuis DATE,
+                prompt_version INT,
+                model VARCHAR(50),
+                trouve_le DATETIME NOT NULL,
+                FOREIGN KEY (poi_id) REFERENCES poi(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 quinquies. les pages qui prouvent qu'un POI existe
+            """
+            CREATE TABLE IF NOT EXISTS poi_preuves (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                poi_id INT NOT NULL,
+                url VARCHAR(512) NOT NULL,
+                type_page VARCHAR(20) NOT NULL,
+                porte_sur VARCHAR(20),
+                citation TEXT,
+                citation_trouvee TINYINT(1),
+                date_page DATE,
+                periode_affichee VARCHAR(255),
+                verdict VARCHAR(20) NOT NULL,
+                controle_le DATETIME NOT NULL,
+                FOREIGN KEY (poi_id) REFERENCES poi(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 10.table poi_service (association POI <-> services)
@@ -289,7 +404,7 @@ def init_database():
                 city_id INT,
                 FOREIGN KEY (trip_plan_id) REFERENCES trip_plans(id) ON DELETE CASCADE,
                 FOREIGN KEY (hike_id) REFERENCES hikes(id),
-                FOREIGN KEY (spot_id) REFERENCES poi(id),
+                FOREIGN KEY (spot_id) REFERENCES spots(id),
                 FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
@@ -303,6 +418,88 @@ def init_database():
                 FOREIGN KEY (poi_id) REFERENCES poi(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
+            # 15. pepites : les idées trouvées par l'agent
+            """
+            CREATE TABLE IF NOT EXISTS pepites (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                nom VARCHAR(255) NOT NULL,
+                categorie VARCHAR(20) NOT NULL,
+                description TEXT,
+                commune VARCHAR(100),
+                themes JSON,
+                lieu VARCHAR(255),
+                adresse VARCHAR(255),
+                latitude DOUBLE NOT NULL,
+                longitude DOUBLE NOT NULL,
+                position_source VARCHAR(20),
+                position_url VARCHAR(500),
+                located_version INT,
+                located_at DATETIME,
+                date_debut DATE,
+                date_fin DATE,
+                jours_semaine JSON,
+                horaires VARCHAR(100),
+                heure_debut FLOAT,
+                tarif VARCHAR(50),
+                creneau VARCHAR(10) NOT NULL,
+                duree_h FLOAT,
+                exterieur TINYINT(1) NOT NULL DEFAULT 1,
+                permanent TINYINT(1) NOT NULL DEFAULT 0,
+                note INT,
+                sources JSON,
+                found_at DATETIME NOT NULL,
+                verified_at DATETIME NOT NULL,
+                prompt_version INT,
+                model VARCHAR(50)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 16. pepite_recherches : les recherches déjà faites, pour ne pas rappeler l'agent
+            """
+            CREATE TABLE IF NOT EXISTS pepite_recherches (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                latitude DOUBLE NOT NULL,
+                longitude DOUBLE NOT NULL,
+                jour DATE NOT NULL,
+                jour_fin DATE NOT NULL,
+                searched_at DATETIME NOT NULL,
+                nb_trouvees INT NOT NULL,
+                type VARCHAR(10) NOT NULL DEFAULT 'agenda',
+                prompt_version INT NOT NULL,
+                trip_day_id INT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 17. trip_day_pepites : les idées proposées pour un jour (dépend de trip_days, pepites)
+            """
+            CREATE TABLE IF NOT EXISTS trip_day_pepites (
+                trip_day_id INT NOT NULL,
+                pepite_id INT NOT NULL,
+                statut VARCHAR(10) NOT NULL DEFAULT 'proposee',
+                pourquoi TEXT,
+                moment VARCHAR(15),
+                coup_de_coeur TINYINT(1) NOT NULL DEFAULT 0,
+                vue TINYINT(1) NOT NULL DEFAULT 0,
+                PRIMARY KEY (trip_day_id, pepite_id),
+                FOREIGN KEY (trip_day_id) REFERENCES trip_days(id) ON DELETE CASCADE,
+                FOREIGN KEY (pepite_id) REFERENCES pepites(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 18. decisions : ce qu'un humain a tranché (qui, quand, quoi, pourquoi)
+            """
+            CREATE TABLE IF NOT EXISTS decisions (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                objet_type VARCHAR(20) NOT NULL,
+                objet_id INT NOT NULL,
+                decision VARCHAR(20) NOT NULL,
+                note VARCHAR(255),
+                decided_by VARCHAR(100) NOT NULL,
+                decided_at DATETIME NOT NULL,
+                verification_id INT,
+                annulee_at DATETIME,
+                a_savoir_corrige TEXT,
+                detail JSON,
+                INDEX idx_decisions_objet (objet_type, objet_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
         ]
         ("- Création des tables :")
         user_cnx = MySQLUtils.connect()
@@ -314,6 +511,7 @@ def init_database():
                     user_cursor.fetchall()
                 except Exception:
                     pass
+                add_missing_columns(user_cursor, DB_NAME, stmt)
                 logger.info(f"[MySQL] :→ OK : {stmt.strip().split()[5]}")
             except Exception as table_err:
                 logger.error(f"[MySQL] :✗ [ERREUR SQL] lors de la création: {table_err}\nStatement:\n{stmt}")

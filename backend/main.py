@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
 
-from api.routers import step1, step2, step3, step4, result, auth, etl
+from api.routers import step1, step2, step3, step4, result, auth, etl, pepites, supervision
 from utils.logger_util import LoggerUtil
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -32,7 +32,9 @@ app.include_router(step2.router, prefix="/api/step2", tags=["Step 2 Hikes"])
 app.include_router(step3.router, prefix="/api/step3", tags=["Step 3 Spots"])
 app.include_router(step4.router, prefix="/api/step4", tags=["Step 4 Services"])
 app.include_router(result.router, prefix="/api/result", tags=["Result Plan"])
+app.include_router(pepites.router, prefix="/api/pepites", tags=["Pépites de Vany"])
 app.include_router(etl.router, prefix="/api/etl", tags=["GPX Files"])
+app.include_router(supervision.router, prefix="/api/supervision", tags=["Supervision"])
 
 
 # Logger principal pour le backend

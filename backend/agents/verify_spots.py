@@ -8,9 +8,19 @@ récente, équipement en panne). Cet agent cherche sur le web si elle est toujou
 d'actualité.
 
 CE N'EST PAS DE L'HARMONISATION, C'EST DE L'ENRICHISSEMENT
-Le web est une source externe à Park4Night. Le résultat est donc rangé à part,
+Le web est une source externe à p4n. Le résultat est donc rangé à part,
 dans la table `spot_verifications` (statut, résumé, sources, date), et la fiche
-du spot n'est jamais modifiée. On garde l'historique : une ligne par vérification.
+du spot n'est jamais modifiée, sauf son badge : un doute de l'agent le passe en
+« non vérifié » (mark_doubt). On garde l'historique : une ligne par vérification.
+
+LES COMMENTAIRES REFONT L'HISTOIRE
+La base ne garde qu'un échantillon des commentaires, qui favorise les plus mauvais : une
+plainte y reste, pas toujours le commentaire qui dit que c'est réparé. L'agent relit donc
+sur p4n tous ceux des 12 derniers mois (read_recent_reviews). Il rend :
+    - "a_savoir" : le paragraphe « À savoir » tel qu'il doit être affiché aujourd'hui,
+      phrase par phrase, avec la période de l'année des règles saisonnières ;
+    - "utilisable" : peut-on y passer la nuit aujourd'hui ? Dans le doute, non : on préfère
+      ne pas proposer un lieu risqué. "utilisable_a_partir" : la réouverture annoncée.
 
 ON NE REFAIT PAS LE TRAVAIL DEUX FOIS
 Un spot est à vérifier s'il est marqué `a_verifier` et n'a pas été vérifié depuis
@@ -26,10 +36,12 @@ moteur "api" pour cet agent.
 """
 import argparse
 import json
-from datetime import date
+import re
+from datetime import date, timedelta
 from pathlib import Path
 
-from agents.llm_service import ClaudeCodeLLMService, LLMUnavailable
+from agents.llm_config import make_llm_service
+from agents.llm_service import LLMUnavailable
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, spot_name_label
 from utils.logger_util import LoggerUtil
@@ -45,14 +57,23 @@ logger = LoggerUtil.get_logger("etl_verify_spots")
 # Version des consignes. À AUGMENTER À CHAQUE MODIFICATION DU PROMPT.
 #   1 : version initiale
 #   2 : date du jour fournie ; une période terminée n'est plus valable ; effort élevé
-#   3 : état actuel de la fiche Park4Night (ouverture, type) et commentaires récents
+#   3 : état actuel de la fiche p4n (ouverture, type) et commentaires récents
 #       fournis ; une période terminée ne prouve pas une réouverture ; "plus_valable"
 #       seulement si TOUTES les situations signalées ont pris fin
 #   4 : pas de tarif chiffré dans le résumé ; une règle communale se juge sur
 #       l'ensemble des spots de la commune, via l'outil MCP temoignages_commune
-VERIFY_PROMPT_VERSION = 4
+#   5 : "À savoir" corrigé phrase par phrase, avec la période des règles saisonnières ;
+#       lieu utilisable ou non ; commentaires des 12 derniers mois. Une information n'est
+#       retirée que sur preuve : l'absence de nouvelles n'en est pas une
+VERIFY_PROMPT_VERSION = 5
 
-# Nombre de commentaires récents transmis à l'agent (les plus récents d'abord).
+MAX_FAILURES_IN_A_ROW = 3
+
+# Commentaires transmis à l'agent : ceux des 12 derniers mois, relus sur p4n,
+# les plus récents d'abord. Une fiche très commentée en a des centaines.
+REVIEWS_DAYS = 365
+MAX_REVIEWS = 40
+# Si la fiche n'a rien de récent ou ne peut pas être relue : les derniers commentaires en base.
 RECENT_REVIEWS = 5
 
 # Nos propres outils, branchés par MCP (agents/mcp_randovango.py). L'agent les
@@ -66,17 +87,6 @@ MCP_SERVERS = {
 }
 # Nom complet d'un outil MCP pour la CLI : mcp__<serveur>__<outil>.
 MCP_TOOLS = ["mcp__randovango__temoignages_commune"]
-
-# Effort de réflexion. L'harmonisation se contente de "low" ; une recherche web
-# a besoin de plus (en "low", l'agent répondait sans vraiment chercher). L'agent
-# ne traite que les spots marqués a_verifier : on peut se le permettre.
-VERIFY_EFFORT = "high"
-
-# Outils autorisés : chercher sur le web et lire des pages. Rien d'autre.
-WEB_TOOLS = ["WebSearch", "WebFetch"]
-
-# Une recherche web prend du temps (souvent 30 s à 1 min) : délai plus long.
-VERIFY_TIMEOUT_SECONDS = 400
 
 VERIFY_SCHEMA = {
     "type": "object",
@@ -94,8 +104,25 @@ VERIFY_SCHEMA = {
             "items": {"type": "string"},
             "description": "URL des pages réellement consultées qui appuient le statut.",
         },
+        "a_savoir": {
+            "type": "array",
+            "description": "Le paragraphe « À savoir » à afficher aujourd'hui, une phrase par information.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "texte": {"type": "string"},
+                    "debut": {"type": ["string", "null"], "description": "Début de la période annuelle, MM-JJ."},
+                    "fin": {"type": ["string", "null"], "description": "Fin de la période annuelle, MM-JJ."},
+                },
+                "required": ["texte", "debut", "fin"],
+                "additionalProperties": False,
+            },
+        },
+        "utilisable": {"type": "string", "enum": ["oui", "non"]},
+        "utilisable_a_partir": {"type": ["string", "null"], "description": "Date de réouverture, AAAA-MM-JJ."},
+        "raison": {"type": "string", "description": "Pourquoi le lieu n'est pas utilisable, en une phrase datée."},
     },
-    "required": ["statut", "resume", "sources"],
+    "required": ["statut", "resume", "sources", "a_savoir", "utilisable", "utilisable_a_partir", "raison"],
     "additionalProperties": False,
 }
 
@@ -136,6 +163,32 @@ Une à trois phrases pour le voyageur, neutres, au présent, à la troisième pe
 daté ("en septembre 2026, ..."). Pas de "je", pas de conseil, pas de numéro de téléphone, pas de
 tarif chiffré, pas de commentaire sur ta recherche. Si le statut est "incertain", dis seulement que l'information n'a pas
 pu être confirmée.
+
+## a_savoir
+Réécris le paragraphe « À savoir » de la fiche tel qu'il doit être affiché aujourd'hui, sous forme d'une liste
+de phrases courtes, une par information. Élément par élément :
+- Retire une information seulement sur preuve : un commentaire plus récent la dément, ou elle porte sur une
+  période terminée qui ne revient pas. L'absence de nouvelles n'est pas une preuve : garde l'information, datée.
+- Un commentaire plus récent qui dit que c'est réparé ou qui dément le problème l'emporte.
+- Garde ce qui est durable (règles, durée de séjour, accès, contrôles, sécurité, nuisances répétées).
+- Date ce qui est temporaire ("signalé en juillet 2026") ; décris la situation actuelle, pas son historique.
+- Tu peux ajouter une situation temporaire récente qui change la décision de venir (panne, fermeture, interdiction),
+  trouvée dans les commentaires. N'ajoute rien d'autre : pas de description du lieu (places, vue, plage), pas de
+  rumeur ou de projet, ne parle pas de tes sources.
+Pour une règle ou une situation qui revient chaque année à la même période (chiens interdits sur la plage en été),
+donne ses dates dans "debut" et "fin" au format MM-JJ et ne les répète pas dans le texte si elles sont claires ;
+"debut" et "fin" valent null pour tout le reste, ou si la fiche ne donne qu'une des deux bornes : la borne manquante
+vaut null. Liste vide s'il ne reste rien.
+
+## utilisable
+"non" si, à la date du jour, on ne peut pas venir passer la nuit avec un van : accès bloqué, lieu fermé, interdiction de
+nuit aux camping-cars, sans démenti plus récent, même si le signalement est ancien : dans le doute, on préfère ne
+pas proposer un lieu risqué. Une fermeture de saison qui reviendra chaque année se traite dans "debut"/"fin", pas ici.
+"oui" sinon : une panne d'un équipement, une partie fermée (station de lavage, douches), un manque de services ou une
+limite de hauteur ou de longueur (elle dépend du véhicule : garde-la dans a_savoir) ne rend pas le lieu inutilisable.
+"utilisable_a_partir" : la date de réouverture annoncée (AAAA-MM-JJ) si le lieu est "non" ; si seul le mois est annoncé
+("mai 2027"), le premier jour de ce mois (2027-05-01). Sinon null.
+"raison" : pourquoi "non", en une phrase datée ; chaîne vide si "oui".
 
 ## sources
 Les URL des pages consultées qui appuient le statut. Liste vide si "incertain", ou si le statut ne
@@ -180,29 +233,14 @@ def build_user_message(spot: dict) -> str:
 # 2. LIRE ET ÉCRIRE DANS LA BASE MYSQL
 # =============================================================================
 
-def create_verification_table(cursor) -> None:
-    """Crée la table des vérifications si elle n'existe pas (sans risque si elle existe)."""
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS spot_verifications (
-            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            spot_id INT NOT NULL,
-            verified_at DATETIME NOT NULL,
-            statut VARCHAR(20) NOT NULL,
-            resume TEXT,
-            sources JSON,
-            prompt_version INT,
-            model VARCHAR(50),
-            FOREIGN KEY (spot_id) REFERENCES spots(id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """)
-
-
-def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None) -> list:
+def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None, only_new: bool = False) -> list:
     """
     Spots marqués `a_verifier` à (re)vérifier : jamais vérifiés depuis leur
     dernière harmonisation, ou vérifiés avec une ancienne version du prompt.
     Les types masqués (ex : "PARKING JOUR UNIQUEMENT") sont ignorés.
     `spot_ids` (option --id) : ces spots-là, sans condition.
+    `only_new` (ETL) : seulement les spots jamais vérifiés. Revérifier les anciens
+    sur une nouvelle version du prompt reste une décision, pas un effet du scraping.
     Chaque spot contient aussi ses commentaires les plus récents ("recent_reviews").
     """
     columns = """
@@ -215,6 +253,7 @@ def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None) -> l
                        tuple(spot_ids))
     else:
         type_placeholders = ",".join(["%s"] * len(HIDDEN_SPOT_TYPES))
+        recent = "" if only_new else "AND v.verified_at >= s.harmonized_at AND v.prompt_version >= %s"
         query = f"""
             SELECT {columns}
             FROM spots s
@@ -225,12 +264,11 @@ def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None) -> l
               AND NOT EXISTS (
                   SELECT 1 FROM spot_verifications v
                   WHERE v.spot_id = s.id
-                    AND v.verified_at >= s.harmonized_at
-                    AND v.prompt_version >= %s
+                    {recent}
               )
             ORDER BY s.id
         """
-        params = (*HIDDEN_SPOT_TYPES, VERIFY_PROMPT_VERSION)
+        params = HIDDEN_SPOT_TYPES if only_new else (*HIDDEN_SPOT_TYPES, VERIFY_PROMPT_VERSION)
         if limit:
             query += " LIMIT %s"
             params = (*params, limit)
@@ -258,58 +296,143 @@ def attach_recent_reviews(cursor, spots: list) -> None:
         spot["recent_reviews"] = [{"review_date": day, "text": text} for day, text in cursor.fetchall()]
 
 
+def recent_reviews(reviews: list, today: date) -> list:
+    """Les commentaires des 12 derniers mois, les plus récents d'abord, MAX_REVIEWS au plus."""
+    cutoff = today - timedelta(days=REVIEWS_DAYS)
+    dated = [review for review in reviews if review.get("review_date") and review["review_date"] >= cutoff]
+    return sorted(dated, key=lambda review: review["review_date"], reverse=True)[:MAX_REVIEWS]
+
+
+def read_recent_reviews(driver, wait, spot: dict, first_page: bool = False) -> None:
+    """
+    Remplace les commentaires du spot par ceux des 12 derniers mois, relus sur p4n.
+    La base n'en garde qu'un échantillon. Si la fiche ne peut pas être relue ou n'a rien de
+    récent, l'agent garde les derniers commentaires en base (attach_recent_reviews).
+    """
+    from selenium.common.exceptions import WebDriverException
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+
+    from etl.extract.scraper_p4n import dismiss_cookies, extract_reviews
+
+    try:
+        driver.get(spot["url"])
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "h1.place-header-name")))
+        if first_page:
+            dismiss_cookies(driver, wait)   # le bandeau n'apparaît qu'à la première page
+        spot["recent_reviews"] = recent_reviews(extract_reviews(driver), date.today()) or spot["recent_reviews"]
+    except WebDriverException as error:
+        logger.warning(f"[verify] #{spot['id']} fiche non relue, commentaires en base : {error}")
+
+
+def clean_a_savoir(items: list) -> list:
+    """Phrases non vides ; une période mal formée est retirée, la phrase reste."""
+    def month_day(value):
+        return value if value and re.fullmatch(r"(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])", value) else None
+    return [{"texte": item["texte"].strip(), "debut": month_day(item.get("debut")), "fin": month_day(item.get("fin"))}
+            for item in items if (item.get("texte") or "").strip()]
+
+
+def clean_reopening(value: str | None) -> str | None:
+    """La date de réouverture, si elle est lisible ; sinon None : le lieu reste non utilisable."""
+    try:
+        return date.fromisoformat(value).isoformat() if value else None
+    except ValueError:
+        return None
+
+
 def write_verification(cursor, spot_id: int, payload: dict, model: str) -> None:
     """Enregistre une vérification (une nouvelle ligne : on garde l'historique)."""
+    usable = payload["utilisable"] == "oui"
     cursor.execute(
         """
-        INSERT INTO spot_verifications (spot_id, verified_at, statut, resume, sources, prompt_version, model)
-        VALUES (%s, NOW(), %s, %s, %s, %s, %s)
+        INSERT INTO spot_verifications (spot_id, verified_at, statut, resume, sources, prompt_version, model,
+                                        a_savoir, utilisable, utilisable_a_partir, raison)
+        VALUES (%s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             spot_id, payload["statut"], payload["resume"].strip(),
             json.dumps(payload.get("sources") or [], ensure_ascii=False),
             VERIFY_PROMPT_VERSION, model,
+            json.dumps(clean_a_savoir(payload["a_savoir"]), ensure_ascii=False),
+            payload["utilisable"],
+            None if usable else clean_reopening(payload.get("utilisable_a_partir")),
+            None if usable else (payload.get("raison") or "").strip(),
         ),
     )
+
+
+def is_doubtful(payload: dict) -> bool:
+    """L'agent a un doute sur le lieu : rien de récent et fiable, ou lieu non utilisable."""
+    return payload["statut"] == "incertain" or payload["utilisable"] == "non"
+
+
+def mark_doubt(cursor, spot_id: int) -> None:
+    """
+    Un doute de l'agent retire le badge « Vérifié » du spot. Seule modification de la fiche,
+    et seulement dans ce sens : l'absence de doute ne suffit pas à déclarer un lieu vérifié.
+    """
+    cursor.execute("UPDATE spots SET verifie = 0 WHERE id = %s", (spot_id,))
 
 
 # =============================================================================
 # 3. LANCEMENT
 # =============================================================================
 
-def run(limit: int = None, spot_ids: list = None) -> None:
+def run(limit: int = None, spot_ids: list = None, only_new: bool = False) -> None:
     """Vérifie les spots un par un ; chaque résultat est enregistré dès qu'il arrive."""
-    service = ClaudeCodeLLMService(
-        tools=WEB_TOOLS, mcp_servers=MCP_SERVERS, mcp_tools=MCP_TOOLS,
-        timeout=VERIFY_TIMEOUT_SECONDS, effort=VERIFY_EFFORT,
-    )
+    service = make_llm_service("verify_spots", mcp_servers=MCP_SERVERS, mcp_tools=MCP_TOOLS)
 
     ServiceUtil.load_env()
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
-    create_verification_table(cursor)
-    connection.commit()
 
-    counts = {"toujours_valable": 0, "plus_valable": 0, "incertain": 0, "erreur": 0}
+    spots = fetch_spots_to_verify(cursor, limit=limit, spot_ids=spot_ids, only_new=only_new)
+    if not spots:  # l'ETL passe ici à chaque ville : pas de navigateur pour rien
+        cursor.close()
+        MySQLUtils.disconnect(connection)
+        return
+
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    from etl.extract.scraper_p4n import create_driver
+
+    driver = create_driver()
+    wait = WebDriverWait(driver, 15)
+
+    counts = {"toujours_valable": 0, "plus_valable": 0, "incertain": 0, "erreur": 0, "non_utilisable": 0}
+    failures_in_a_row = 0
     try:
-        for spot in fetch_spots_to_verify(cursor, limit=limit, spot_ids=spot_ids):
+        for number, spot in enumerate(spots):
+            read_recent_reviews(driver, wait, spot, first_page=number == 0)
             try:
                 payload = service.complete_json(SYSTEM_PROMPT, build_user_message(spot), VERIFY_SCHEMA)
             except (LLMUnavailable, json.JSONDecodeError) as error:
                 counts["erreur"] += 1
                 logger.warning(f"[verify] #{spot['id']} non vérifié, retenté au prochain lancement : {error}")
+                failures_in_a_row += 1
+                # Quota atteint ou agent en panne : inutile de relire les fiches suivantes.
+                if failures_in_a_row >= MAX_FAILURES_IN_A_ROW:
+                    logger.error(f"[verify] {failures_in_a_row} échecs de suite : arrêt, relancer plus tard")
+                    break
                 continue
+            failures_in_a_row = 0
             write_verification(cursor, spot["id"], payload, service.model)
+            if is_doubtful(payload):
+                mark_doubt(cursor, spot["id"])
             connection.commit()
             counts[payload["statut"]] += 1
+            counts["non_utilisable"] += payload["utilisable"] == "non"
             logger.info(
-                f"[verify] #{spot['id']} {spot['name_label']} -> {payload['statut'].upper()}"
+                f"[verify] #{spot['id']} {spot['name_label']} -> {payload['statut'].upper()},"
+                f" utilisable : {payload['utilisable']}"
                 f" ({(service.last_run.get('duration_ms') or 0) / 1000:.0f} s,"
                 f" {service.last_run.get('turns')} tours,"
                 f" outils : {', '.join(service.last_run.get('tools') or []) or 'aucun'}) : {payload['resume']}"
                 f" | sources : {', '.join(payload.get('sources') or []) or 'aucune'}"
             )
     finally:
+        driver.quit()
         cursor.close()
         MySQLUtils.disconnect(connection)
 

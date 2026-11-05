@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Supervision, services - RandoVanGo{% endblock %}
+
+{% block page_content %}
+{# Réservé aux admins : supervision_services.js renvoie à la connexion, et l'API refuse les autres comptes. #}
+<div class="container stack" style="gap:18px;">
+
+  {% with active='services' %}{% include 'partials/supervision_nav.html' %}{% endwith %}
+
+  <div class="services-toolbar">
+    <div class="services-tabs" role="tablist" aria-label="Files de relecture" id="servicesTabs"></div>
+    <div class="services-filters">
+      <label class="label">Type de lieu
+        <select id="filterService">
+          <option value="">Tous</option>
+          <option>Restaurant</option>
+          <option>Café</option>
+          <option>Boulangerie</option>
+          <option>Pharmacie</option>
+          <option>Supérette</option>
+          <option>Supermarché</option>
+          <option>Station-service</option>
+          <option>Laverie</option>
+        </select>
+      </label>
+      <label class="label">Ville
+        <select id="filterCity"><option value="">Toutes</option></select>
+      </label>
+    </div>
+  </div>
+
+  <p class="supervision-msg" id="supervisionMsg" style="display:none;"></p>
+
+  <section id="autoSection" class="services-auto" style="display:none;"></section>
+
+  <h2 id="cardsTitle" class="services-title" style="display:none;">À valider un par un</h2>
+  <div id="cardsList" class="stack" style="gap:14px;"></div>
+  <p class="services-empty" id="emptyNote" style="display:none;">Rien à relire ici pour l'instant.</p>
+  <p class="muted" id="moreNote" style="display:none; font-size:13px;"></p>
+
+  <section id="auditSection" class="services-auto" style="display:none;">
+    <div class="services-auto__head">
+      <div>
+        <h2 class="services-title">Contrôle des décisions automatiques</h2>
+        <p class="muted">Tirées au sort. Si tu en trouves de fausses, on resserre la règle au lieu de tout relire.</p>
+      </div>
+    </div>
+    <div id="auditList"></div>
+  </section>
+
+  <section id="recentSection" class="supervision-recent" style="display:none;">
+    <h2>Décidé récemment</h2>
+    <div id="recentList"></div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/supervision_services.js') }}"></script>
+{% endblock %}

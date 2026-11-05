@@ -1,0 +1,14 @@
+{# En-tête commun des pages de Supervision (admin). Paramètre : active ('spots' | 'services').
+   Le nombre de décisions en attente est rempli par le script de la page. #}
+<div class="dash-head">
+  <div class="stack-sm" style="gap:5px;">
+    <h1 style="font-size:27px;">Supervision</h1>
+    <p class="muted" style="font-size:14.5px;">Les agents proposent, tu tranches. Ta décision prime sur eux.</p>
+  </div>
+  <span class="pill pill--teal" id="reviewsCount"></span>
+</div>
+
+<nav class="supervision-nav" aria-label="Sections de la supervision">
+  <a href="{{ url_for('supervision') }}" {% if active == 'spots' %}class="is-on" aria-current="page"{% endif %}>Spots</a>
+  <a href="{{ url_for('supervision_services') }}" {% if active == 'services' %}class="is-on" aria-current="page"{% endif %}>Services</a>
+</nav>

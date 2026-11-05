@@ -14,6 +14,7 @@ from functools import lru_cache
 from html import escape
 from pathlib import Path
 
+from utils.display_utils import PEPITE_MOMENTS, hike_schedule_label
 from services.map_service import (
     POI_CATEGORY_STYLES,
     DEFAULT_POI_STYLE,
@@ -346,6 +347,9 @@ a {{ color: {TEAL}; text-decoration: none; }}
     margin-bottom: 12px;
 }}
 .step {{ display: flex; gap: 14px; align-items: flex-start; margin-bottom: 11px; break-inside: avoid; }}
+.trail-tips {{ margin: 0 0 16px; break-inside: avoid; }}
+.trail-tip {{ font-size: 13px; line-height: 1.55; color: {BODY}; margin-bottom: 6px; }}
+.trail-tip b {{ font-family: 'Archivo', system-ui, sans-serif; color: {TEAL}; }}
 .step:last-child {{ margin-bottom: 0; }}
 /* inline-block : comme les pilules/badges plus haut, un <span> à bordure arrondie
    laissé en inline voit WeasyPrint dessiner la bordure deux fois (un anneau
@@ -395,6 +399,27 @@ a {{ color: {TEAL}; text-decoration: none; }}
 .spot-address {{ font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: {MUTED}; margin-bottom: 11px; }}
 .spot-description {{ font-size: 13.5px; line-height: 1.58; color: {BODY}; margin-bottom: 12px; white-space: pre-line; }}
 .spot-link {{ font-size: 12.5px; font-weight: 600; color: {TEAL}; }}
+
+/* --- Pépites de Vany (couleurs sable du chapeau) --- */
+.pepite-card {{
+    margin-top: 18px;
+    background: #FBF3DE;
+    border: 1.5px solid #ECDDB4;
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    gap: 14px;
+    break-inside: avoid;
+}}
+.pepite-card img {{ width: 34px; height: 34px; flex-shrink: 0; }}
+.trail-tips__hat {{ width: 16px; height: 16px; vertical-align: -3px; }}
+.pepite-card .eyebrow {{ color: #7A6224; }}
+.pepite-name {{ font-family: 'Archivo', system-ui, sans-serif; font-weight: 700; font-size: 16px; margin: 3px 0 2px; }}
+.pepite-meta {{ font-size: 12.5px; color: {MUTED}; }}
+.pepite-why {{ font-size: 13px; font-style: italic; color: {TEAL}; margin-top: 5px; }}
+.pepite-description {{ font-size: 13px; line-height: 1.55; color: {BODY}; margin-top: 5px; }}
+.pepite-source {{ font-size: 11.5px; color: {MUTED}; margin-top: 5px; }}
+.pepite-check {{ font-size: 11.5px; font-weight: 600; color: #866A22; margin-top: 3px; }}
 
 /* --- Services --- */
 .services {{ margin-top: 18px; break-inside: avoid; }}
@@ -525,7 +550,7 @@ def _step_item(index, waypoint) -> str:
 def _hike_map_html(day) -> str:
     """Carte dédiée à la rando : tracé zoomé + étapes du GPX numérotées, dont les
     numéros renvoient à la liste « Itinéraire pas à pas » juste en dessous."""
-    png_bytes = render_hike_map_png(day.get("hike_mongo_id"), *HIKE_MAP_PX)
+    png_bytes = render_hike_map_png(day.get("hike_mongo_id"), *HIKE_MAP_PX, trail_tips=day.get("trail_tips"))
     if not png_bytes:
         return ""
     return (f'<div class="hike-map"><img class="hike-map__img" '
@@ -552,8 +577,14 @@ def _hike_section(day) -> str:
 
     # Adresse du point de départ (géocodée à l'import, cf. le script ponctuel oneshot/backfill_addresses.py) :
     # affichée quand elle est connue - un départ isolé (parking de sentier) n'en a pas.
-    address_html = (f'<div class="hike-address">Départ&nbsp;: {escape(day["hike_address"])}</div>'
-                    if day.get("hike_address") else "")
+    # Puis l'heure supposée du départ : les conseils de Vany (« ta rando finit vers 11 h »)
+    # en découlent, le voyageur doit la connaître.
+    start_lines = []
+    if day.get("hike_address"):
+        start_lines.append(f'Départ&nbsp;: {escape(day["hike_address"])}')
+    if day.get("hike_duration_h") is not None:
+        start_lines.append(hike_schedule_label(day["hike_duration_h"]))
+    address_html = f'<div class="hike-address">{"<br>".join(start_lines)}</div>' if start_lines else ""
 
     description = escape((day.get("hike_description") or "").strip())
     description_html = f'<p class="hike-description">{description}</p>' if description else ""
@@ -575,8 +606,25 @@ def _hike_section(day) -> str:
     {address_html}
     {description_html}
     {_hike_map_html(day)}
+    {_trail_tips_section(day)}
     {steps_html}
     """
+
+
+def _trail_tips_section(day) -> str:
+    """« En chemin, ne manque pas » : les lieux repérés par Vany sur le parcours de la rando."""
+    tips = day.get("trail_tips") or []
+    if not tips:
+        return ""
+    # « &nbsp;– » et non « - » : après le nom en gras, WeasyPrint coupait la ligne
+    # DANS le nom (« Passerelle du Croaë et ria du / Conquet - La passerelle… ») dès que
+    # la description débordait. Le tiret demi-cadratin est aussi le bon en français.
+    items = "".join(f'<div class="trail-tip"><b>{escape(tip["nom"])}</b>'
+                    f'{"&nbsp;– " + escape(tip["description"]) if tip.get("description") else ""}</div>'
+                    for tip in tips)
+    # Le chapeau de Vany, comme sur la carte de la rando juste au-dessus.
+    hat = f'<img class="trail-tips__hat" src="{_asset_data_uri("logo", "hat-icon.png")}" alt="">'
+    return f'<div class="trail-tips"><span class="subhead">{hat} En chemin, ne manque pas</span>{items}</div>'
 
 
 def _spot_section(day) -> str:
@@ -593,7 +641,7 @@ def _spot_section(day) -> str:
                if day.get("spot_address") else "")
     description = escape((day.get("spot_description") or "").strip())
     description_html = f'<p class="spot-description">{description}</p>' if description else ""
-    link = (f'<a class="spot-link" href="{escape(day["spot_url"])}">Voir sur park4night&nbsp;↗</a>'
+    link = (f'<a class="spot-link" href="{escape(day["spot_url"])}">Voir plus de détails&nbsp;↗</a>'
             if day.get("spot_url") else "")
     # Le type ("Parking jour et nuit") complète le nom, souvent une simple adresse.
     spot_type = f' - {escape(day["spot_type"].capitalize())}' if day.get("spot_type") else ""
@@ -611,6 +659,40 @@ def _spot_section(day) -> str:
         {link}
     </div>
     """
+
+
+def _pepite_card(pepite) -> str:
+    """Encart d'une idée de Vany ajoutée à la journée."""
+    meta = " · ".join(part for part in (PEPITE_MOMENTS.get(pepite.get("moment")), pepite.get("horaires"),
+                                        pepite.get("tarif"), pepite.get("commune")) if part)
+    sources = pepite.get("sources") or []
+    source = f'<div class="pepite-source">Source : {escape(sources[0])}</div>' if sources else ""
+    # Seul ce qui est programmé peut être annulé ou déplacé : un événement daté ou un
+    # rendez-vous à heure fixe (bateau, visite guidée). Un marché hebdomadaire ou un
+    # musée aux horaires réguliers n'a pas besoin de ce rappel.
+    check = ""
+    if pepite.get("date_debut") or pepite.get("heure_debut") is not None:
+        check = (f'<div class="pepite-check">Info vérifiée le {pepite["verified_at"].strftime("%d/%m/%Y")}'
+                 f' : pense à confirmer la veille.</div>')
+    return f"""
+    <div class="pepite-card">
+        <img src="{_asset_data_uri('logo', 'hat-icon.png')}" alt="">
+        <div>
+            <span class="eyebrow">La pépite de Vany</span>
+            <div class="pepite-name">{escape(pepite["nom"])}</div>
+            <div class="pepite-meta">{escape(meta)}</div>
+            {f'<div class="pepite-why">{escape(pepite["pourquoi"])}</div>' if pepite.get("pourquoi") else ""}
+            <div class="pepite-description">{escape(pepite.get("description") or "")}</div>
+            {source}
+            {check}
+        </div>
+    </div>
+    """
+
+
+def _pepite_section(day) -> str:
+    """Les idées de Vany ajoutées à ce jour, une carte par idée (rien si aucune)."""
+    return "".join(_pepite_card(pepite) for pepite in day.get("pepites") or [])
 
 
 def _services_section(day) -> str:
@@ -754,7 +836,7 @@ def _is_seaside(days) -> bool:
 def vany_note(plan, days, totals) -> dict:
     """Mot de clôture de Vany : titre + conseil, choisis d'après le séjour
     (bord de mer, dénivelé, randonnée difficile). Fonction pure, testée dans
-    tests/services/test_pdf_service.py."""
+    tests/unit/services/test_pdf_service.py."""
     city = plan.get("city_name") or "la région"
     tips = []
     if _is_seaside(days):
@@ -809,6 +891,7 @@ def _day_section(day, start_date) -> str:
         </div>
         {_hike_section(day)}
         {_spot_section(day)}
+        {_pepite_section(day)}
         {_services_section(day)}
     </div>
     """
