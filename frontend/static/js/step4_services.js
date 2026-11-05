@@ -145,8 +145,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // --- 4. Chargement API : POI au plus près du spot choisi si disponible ---
     try {
-        let poiUrl = `/api/step4/poi?city_id=${cityId}&distance_km=5`;
-        if (chosenSpotCoords) {
+        let poiUrl = `/api/step4/poi?city_id=${cityId}&distance_km=5`;        if (chosenSpotCoords) {
             poiUrl += `&spot_lat=${chosenSpotCoords.lat}&spot_lon=${chosenSpotCoords.lon}`;
         }
         const data = await apiGet(poiUrl);
@@ -223,27 +222,31 @@ function renderCategory(categoryId, poiList) {
         const safeName = poi.name.replace(/'/g, "\\'");
         const card = document.createElement('div');
         // .selected : la carte du service ajouté reste en teal (comme spot/rando)
-        card.className = 'service-card' + (selectedPoiIds.has(poi.id) ? ' selected' : '');
+        // .service-card--near-spot : à pied du spot, la carte est entourée comme un spot sur la rando
+        card.className = 'service-card' + (poi.near_spot ? ' service-card--near-spot' : '') + (selectedPoiIds.has(poi.id) ? ' selected' : '');
         card.id = `poi-card-${poi.id}`;
         card.innerHTML = `
             <div class="service-content-grid">
-                <div class="service-left">
-                    <span class="hiking-stats"><span class="stat">${poi.service_type_label}</span></span>
-                    <span class="status-badge ${poi.badge.css}">${poi.badge.text}</span>
-                    ${previousPoiDay.has(poi.id) ? `<span class="status-badge planned"><i class="fas fa-check"></i> J${previousPoiDay.get(poi.id)} déjà planifié</span>` : ''}
-                </div>
+                <!-- Comme la fiche spot : catégorie et vérifié sur une ligne, puis le nom, le texte et le lien -->
                 <div class="service-center">
+                    <div class="spot-tags">
+                        ${poi.reference_distance_label ? `<span class="hike-distance${poi.near_spot ? ' hike-distance--on' : ''}">${poi.reference_distance_label}</span>` : ''}
+                        <span class="spot-type">${poi.service_type_label}</span>
+                        <span class="status-badge ${poi.badge.css}">${poi.badge.text}</span>
+                        ${poi.nouveau ? '<span class="status-badge top">Nouveau</span>' : ''}
+                        ${previousPoiDay.has(poi.id) ? `<span class="status-badge planned"><i class="fas fa-check"></i> J${previousPoiDay.get(poi.id)} déjà planifié</span>` : ''}                    </div>
                     <h4>${poi.name}</h4>
-                    ${poi.address ? `<p class="service-address"><i class="fas fa-map-marker-alt"></i> ${poi.address}</p>` : ''}
-                    ${poi.distance_label ? `<p class="service-distance"><i class="fas fa-route"></i> ${poi.distance_label}</p>` : ''}
-                    <p>${poi.description || ''}</p>
-                    ${poi.url ? `<p class="service-address"><a href="${escapeHtml(poi.url)}" target="_blank" rel="noopener">Site : ${escapeHtml(poi.url_label)}</a></p>` : ''}
-                </div>
+                    ${poi.address && !poi.maps_url ? `<p class="service-address"><i class="fas fa-map-marker-alt"></i> ${poi.address}</p>` : ''}
+                    ${poi.description ? `<p class="service-description">${escapeHtml(poi.description)}</p>` : ''}
+                    ${poi.distinction ? `<p class="service-address"><i class="fas fa-star"></i> ${escapeHtml(poi.distinction)}</p>` : ''}
+                    ${poi.url && !poi.maps_url ? `<p class="service-address"><a href="${escapeHtml(poi.url)}" target="_blank" rel="noopener">Site : ${escapeHtml(poi.url_label)}</a></p>` : ''}                </div>
                 <div class="service-right">
-                    <button class="btn btn-outline btn-sm"
+                    <!-- Essai de mise en page : pour un restaurant, le bouton Voir ouvre Google Maps -->
+                    ${poi.maps_url ? `<a href="${escapeHtml(poi.maps_url)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm btn-external">Voir sur Google Maps ↗
+                    </a>` : `<button class="btn btn-outline btn-sm"
                         onclick="showPoiOnMap(${poi.latitude}, ${poi.longitude}, '${safeName}')">
                         <i class="fas fa-map"></i> Voir
-                    </button>
+                    </button>`}
                     <button class="${selectedPoiIds.has(poi.id) ? 'btn btn-selected btn-sm' : 'btn btn-primary btn-sm'}" id="btn-poi-${poi.id}"
                         onclick="toggleService(${poi.id}, '${safeName}')">
                         ${selectedPoiIds.has(poi.id) ? 'Retirer' : 'Ajouter'}

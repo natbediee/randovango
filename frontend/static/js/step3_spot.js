@@ -211,9 +211,9 @@ function createSpotCard(spot, plannedDay) {
                     ${spot.hike_distance_label ? `<span class="hike-distance${spot.on_hike ? ' hike-distance--on' : ''}">${spot.hike_distance_label}</span>` : ''}
                     <span class="spot-type">${spot.type_label}</span>
                     <span class="status-badge ${spot.badge.css}">${spot.badge.text}</span>
-                    ${spot.rating_label ? `<span class="rating">${spot.rating_label}</span>` : ''}
                 </div>
-                <h4>${spot.name_label}</h4>
+                <!-- La note suit le nom : en bout d'étiquettes, elle passait seule à la ligne, collée à droite -->
+                <h4>${spot.name_label}${spot.rating_label ? ` <span class="rating">${spot.rating_label}</span>` : ''}</h4>
                 ${spot.address ? `<p class="spot-address"><i class="fas fa-map-marker-alt"></i> ${spot.address}</p>` : ''}
                 ${spot.description_html ? `<p class="spot-description">${spot.description_html}</p>` : ''}
                 <div class="spot-features">
@@ -225,9 +225,7 @@ function createSpotCard(spot, plannedDay) {
             <div class="spot-right">
                 ${plannedBadge}
                 ${spot.url
-                    ? `<a href="${spot.url}" target="_blank" class="btn btn-outline btn-sm">
-                        <i class="fas fa-external-link-alt"></i> Voir
-                       </a>`
+                    ? `<a href="${spot.url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm btn-external">Voir plus de détails ↗</a>`
                     : `<button class="btn btn-outline btn-sm" onclick="showSpotOnMap(${spot.latitude}, ${spot.longitude}, '${spot.name_label}')">
                         <i class="fas fa-map"></i> Carte
                        </button>`

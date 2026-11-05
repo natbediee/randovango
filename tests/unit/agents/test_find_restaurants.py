@@ -4,12 +4,12 @@ import sys
 import pytest
 
 from agents import find_restaurants, find_service_links
-from agents.find_restaurants import add_proofs, build_message, clean_name, has_accepted_page, merge_answers
+from agents.find_restaurants import add_proofs, build_message, clean_name, has_accepted_page, merge_answers, registered_since
 from api.routers.step4 import display_rank, keep_checked_restaurants
 
 
 def _answer(restaurants=(), closed=(), set_aside=()):
-    return {"restaurants": [{"nom": name} for name in restaurants],
+    return {"restaurants": [_found(name, f"https://exemple.fr/{name}") for name in restaurants],
             "ecartes": [{"nom": name, "ferme": True} for name in closed] + [{"nom": name, "ferme": False} for name in set_aside]}
 
 
@@ -36,6 +36,67 @@ def test_a_place_said_closed_by_another_search_goes_to_the_analyst():
     assert _names(merged) == ["Crêperie de la plage", "Spiaggia"]
     assert merged["restaurants"][0]["dit_ferme"]["nom"] == "La Crêperie de la Plage"
     assert "dit_ferme" not in merged["restaurants"][1]
+
+
+def test_the_pages_of_every_search_are_kept():
+    """L'Hostellerie : la première recherche ne citait que des sites exclus, la deuxième avait la page de l'office de tourisme."""
+    first = {**_found("Hostellerie", "https://guide.michelin.com/hostellerie")}
+    second = {**_found("Hostellerie", "https://iroise-bretagne.bzh/hostellerie"), "type_lien": "office_tourisme", "type_preuve": "office_tourisme"}
+    merged = merge_answers({"restaurants": [first], "ecartes": []}, {"restaurants": [second], "ecartes": []})
+    assert {page["url"] for page in merged["restaurants"][0]["pages_vues"]} == {first["lien"], second["lien"]}
+
+
+def test_every_kept_page_is_controlled_once_with_its_citation(monkeypatch):
+    monkeypatch.setattr(find_restaurants, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
+    monkeypatch.setattr(find_restaurants, "citation_found", lambda citation, url: True)
+    row = {"nom": "Riboul", "adresse": None, "pages_vues": [
+        {"url": "https://a.fr", "type_page": "site"},
+        {"url": "https://a.fr ", "type_page": "site", "citation": "Crêperie", "date_page": "2026-09"},
+        {"url": "https://b.fr", "type_page": "office_tourisme"}]}
+    pages = find_restaurants.control_row(row, "Plougonvelin")
+    assert [page["url"] for page in pages] == ["https://a.fr", "https://b.fr"]
+    assert pages[0]["citation"] == "Crêperie" and pages[0]["date_page"] == "2026-09" and "citation" not in pages[1]
+
+
+def test_a_proof_controls_only_its_own_pages(monkeypatch):
+    monkeypatch.setattr(find_restaurants, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
+    row = {**_row(), "pages_vues": [{"url": "https://deja-vue.fr", "type_page": "site"}]}
+    add_proofs(row, {"preuve_url": "https://nous.fr", "type_preuve": "site"}, "Plougonvelin")
+    assert [page["url"] for page in row["pages"]] == ["https://annuaire.fr/nous", "https://nous.fr"]
+
+
+def test_the_register_date_goes_by_name_and_keeps_the_oldest():
+    register = {"actifs": [{"nom": "CAFE KONK", "actif_depuis": "2026-06-15"},
+                           {"nom": "LES PANIERS DE MARIE.K", "actif_depuis": "2025-07-01"},
+                           {"nom": "LES PANIERS DE MARIE.K", "actif_depuis": "2023-11-01"},
+                           {"nom": None, "actif_depuis": "2026-01-01"}]}
+    assert registered_since("Café Konk", register) == "2026-06-15"
+    assert registered_since("Les Paniers de Marie.K", register) == "2023-11-01"
+    assert registered_since("Autre nom", register) is None
+    assert registered_since("Café Konk", None) is None
+
+
+REGISTER = {"actifs": [{"nom": "CAFE KONK", "adresse": "18 RUE SAINT CHRISTOPHE 29217 LE CONQUET", "activite": "56.10A"},
+                       {"nom": None, "adresse": "9 RUE LIEUTENANT JOURDEN 29217 LE CONQUET", "activite": "56.10A"},
+                       {"nom": "SPIAGGIA", "adresse": "LIEUDIT LE TREZ HIR BOULEVARD DE LA MER 29217 PLOUGONVELIN", "activite": "56.10A"},
+                       {"nom": "HOTEL DU LARGE", "adresse": "30 RUE SAINT MATHIEU 29217 PLOUGONVELIN", "activite": "55.10Z"}]}
+
+
+def test_the_register_shows_a_restaurant_by_name_or_address():
+    assert find_restaurants.in_register({"nom": "Café Konk", "adresse": None}, REGISTER)
+    assert find_restaurants.in_register({"nom": "L'Armen", "adresse": "9 rue du Lieutenant Jourden, 29217 Le Conquet"}, REGISTER)
+
+
+def test_a_bar_in_the_register_is_no_proof_of_a_restaurant():
+    register = {"actifs": [{"nom": "L'UNIVERS", "adresse": "PLACE DE L'EGLISE 29217 PLOUGONVELIN", "activite": "56.30Z"}]}
+    assert not find_restaurants.in_register({"nom": "L'Univers", "adresse": "Place de l'Église, 29217 Plougonvelin"}, register)
+
+
+def test_a_street_without_number_or_a_hotel_shows_no_restaurant():
+    assert not find_restaurants.in_register({"nom": "La Balise", "adresse": "Boulevard de la Mer, 29217 Plougonvelin"}, REGISTER)
+    assert not find_restaurants.in_register({"nom": "L'Archipel", "adresse": "30 rue Saint-Mathieu, 29217 Plougonvelin"}, REGISTER)
+    assert not find_restaurants.in_register({"nom": "Autre", "adresse": "18 rue du Port, 29217 Le Conquet"}, REGISTER)
+    assert not find_restaurants.in_register({"nom": "Autre", "adresse": None}, None)
 
 
 def test_a_place_only_said_closed_is_not_retained():
@@ -138,11 +199,11 @@ class _Agent:
 CITY = {"name": "Plougonvelin", "department": "Finistère", "latitude": 48.3, "longitude": -4.7}
 
 
-def _chain(monkeypatch, tmp_path, agent):
+def _chain(monkeypatch, tmp_path, agent, registered="AUTRE LIEU"):
     monkeypatch.setattr(find_restaurants, "TRACE_DIR", tmp_path)
     monkeypatch.setattr(find_restaurants, "make_llm_service", lambda name: agent)
     monkeypatch.setattr(find_restaurants.analyze_restaurants, "make_llm_service", lambda name: agent)
-    monkeypatch.setattr(find_restaurants.api_registre, "load_register", lambda city: {"actifs": [{"nom": "NOUS"}]})
+    monkeypatch.setattr(find_restaurants.api_registre, "load_register", lambda city: {"actifs": [{"nom": registered, "activite": "56.10A"}]})
     monkeypatch.setattr(find_service_links, "read_page", lambda url: {
         "statut": 200, "final": url, "texte": "nous riboul la vinotiere plougonvelin " + "x " * 200, "brut": ""})
 
@@ -158,6 +219,15 @@ def test_the_chain_keeps_found_pages_and_looks_for_the_missing_proof(monkeypatch
     assert has_accepted_page(by_name["NOUS"], "Plougonvelin") and by_name["NOUS"]["adresse"] == "10 rue Saint-Yves"
     trace = json.loads(next(tmp_path.iterdir()).read_text())
     assert trace["registre"] and [row["nom"] for row in trace["preuves"]] == ["NOUS"]
+
+
+def test_a_place_in_the_register_needs_no_proof_search(monkeypatch, tmp_path):
+    _chain(monkeypatch, tmp_path, _Agent(), registered="NOUS")
+    answer = find_restaurants.search_commune(CITY)
+    by_name = {row["nom"]: row for row in answer["restaurants"]}
+    assert by_name["NOUS"]["au_registre"] and not by_name["Riboul"]["au_registre"]
+    trace = json.loads(next(tmp_path.iterdir()).read_text())
+    assert "preuves" not in trace
 
 
 def test_what_was_paid_stays_readable_when_a_step_fails(monkeypatch, tmp_path):

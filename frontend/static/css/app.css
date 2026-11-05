@@ -1201,7 +1201,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 .service-left { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 /* Fiche spot : plus de colonne de gauche, le texte et les services prennent toute
-   la largeur. Le type, le badge et la note forment une ligne au-dessus du nom. */
+   la largeur. Le type et le badge forment une ligne au-dessus du nom, la note suit le nom. */
 .spot-content-grid { grid-template-columns: minmax(0, 1fr) auto; }
 .spot-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 /* Le type est une étiquette, pas une info clé : petite pastille discrète. */
@@ -1210,7 +1210,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   color: var(--ink); background: var(--cream); border: 1px solid var(--card-border);
   border-radius: var(--r-pill); padding: 3px 9px;
 }
-.spot-tags .rating { margin-left: auto; }
 .spot-center, .service-center { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .spot-center h4, .service-center h4 { font-size: 16px; font-weight: 700; }
 .spot-address, .service-address, .spot-description, .service-distance {
@@ -1231,7 +1230,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   font-weight: 400; font-style: italic; color: var(--muted);
   background: none; border: none; padding: 3px 0;
 }
-.spot-tags .rating { font-size: 13px; font-weight: 700; color: var(--warn-tx); }
+.spot-center h4 .rating { font-size: 13px; font-weight: 700; color: var(--warn-tx); white-space: nowrap; margin-left: 4px; }
 /* « À savoir : » repéré d'un coup d'œil, sans encadré (une liste de fiches toutes
    encadrées de jaune deviendrait vite chargée). */
 .spot-warning { color: var(--warn-tx); font-weight: 700; }
@@ -1255,6 +1254,14 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .service-center h4 { font-size: 15px; }
 .service-address, .service-distance { font-size: 12.5px; line-height: 1.4; }
 .service-center { gap: 3px; }
+/* Même mise en page que la fiche spot : plus de colonne de gauche, la ligne d'étiquettes passe au-dessus du nom. */
+.service-content-grid { grid-template-columns: minmax(0, 1fr) auto; }
+.service-center .spot-tags { margin-bottom: 3px; }
+.service-tag-distance { margin-left: auto; }
+/* Un bouton qui ouvre un autre site (Google Maps d'un restaurant, page d'un spot) : écrit à la taille d'un lien,
+   pour ne pas élargir la carte, et la flèche ↗ dit qu'on quitte RandoVanGo. */
+.service-right .btn-external, .spot-right .btn-external { font-size: 12.5px; padding: 6px 12px; text-align: center; }
+.service-description { font-size: 13px; color: var(--ink); margin: 0; line-height: 1.5; }
 
 /* Onglets de catégories (step4) - chip + icône */
 .category-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2164,7 +2171,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .spots-section-title { font-family: var(--font-head); font-weight: 800; font-size: 15px; color: var(--muted); margin-top: 6px; }
 .spots-section-title--hike { color: var(--teal-dark); margin-top: 0; }
 .spots-section-title__note { font-family: var(--font-body); font-weight: 600; font-size: 12.5px; color: var(--muted); margin-left: 4px; }
-.spot-card--on-hike:not(.selected) { border: 2px solid var(--teal); }
+.spot-card--on-hike:not(.selected), .service-card--near-spot:not(.selected) { border: 2px solid var(--teal); }
 .hike-distance { font-size: 12px; font-weight: 700; color: var(--teal-dark); background: var(--mint); padding: 3px 10px; border-radius: 999px; }
 .hike-distance--on { color: var(--white); background: var(--teal); }
 

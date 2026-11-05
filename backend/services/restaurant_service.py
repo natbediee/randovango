@@ -1,10 +1,9 @@
 """
 Enregistre ce que l'agent find_restaurants.py a trouvé.
 
-    fiche    : une page au moins acceptée par le code, et une position. Le lieu s'affiche à l'étape 4 ;
-    à relire : un lieu avec une page acceptée, mais sans position ou avec une alerte du registre, en signal
-               a_confirmer, masqué s'il est nouveau ;
-    écarté   : un lieu sans page acceptée. Rien n'est écrit en base, il ne reste que dans le fichier de l'agent.
+    fiche    : le registre ou une page acceptée montre un restaurant à l'adresse, et on a une position. Le lieu s'affiche à l'étape 4 ;
+    à relire : un tel lieu, mais sans position ou avec une enseigne fermée au registre, en signal a_confirmer, masqué s'il est nouveau ;
+    écarté   : ni registre ni page acceptée, ou une liquidation judiciaire. Rien n'est écrit en base, il ne reste que dans le fichier de l'agent.
 
 Un restaurant est un POI : on réutilise la ligne d'un lieu déjà connu (même nom, ou ancien nom),
 sinon on en crée une. Un lieu déjà masqué (Le Pêcheur, signalé fermé) est ignoré : il ne revient pas
@@ -15,7 +14,7 @@ import json
 import re
 from datetime import date, datetime
 
-from agents.find_service_links import AUTO_VERDICTS, SOCIAL_TYPES, commune_of, domain
+from agents.find_service_links import AUTO_VERDICTS, SOCIAL_TYPES, TYPE_RANK, commune_of, domain
 from etl.load.load_poi import get_or_create_source, insert_histo_poi, insert_service_and_link
 from etl.load.load_poi_checks import save_signal
 from services.pepite_service import is_generic, match_poi, name_key
@@ -147,8 +146,10 @@ def _create_poi(cursor, row: dict, position: tuple | None, city: dict, source_id
 
 
 def _update_poi(cursor, poi: dict, row: dict, position: tuple | None) -> None:
-    """L'adresse et la position de l'agent sont meilleures qu'OSM ; un lien déjà connu est gardé."""
-    fields = {"url": poi["url"] or row.get("lien"), "address": row.get("adresse")}
+    """L'adresse et la position de l'agent sont meilleures qu'OSM, et son lien est une page acceptée : l'ancien pouvait être Facebook."""
+    fields = {"address": row.get("adresse")}
+    if row.get("lien"):
+        fields["url"] = row["lien"]
     if position:
         fields |= {"latitude": position[0], "longitude": position[1]}
     if row.get("ancien_nom") and name_key(poi["name"]) == name_key(row["ancien_nom"]):
@@ -175,12 +176,11 @@ def _save_season(cursor, poi_id: int, row: dict) -> None:
 
 def _save_sheet(cursor, poi_id: int, row: dict, version: int, model: str) -> None:
     cursor.execute("""
-        REPLACE INTO restaurants (poi_id, genre, pourquoi, budget, jours_fermeture, distinction, ancien_nom,
+        REPLACE INTO restaurants (poi_id, genre, pourquoi, distinction, ancien_nom, categorie, registre_depuis,
                                   prompt_version, model, trouve_le)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (poi_id, row["genre"][:100], row.get("pourquoi"), (row.get("budget") or "")[:50] or None,
-          (row.get("jours_fermeture") or "")[:150] or None, (row.get("distinction") or "")[:100] or None,
-          row.get("ancien_nom"), version, model, datetime.now()))
+    """, (poi_id, row["genre"][:100], row.get("pourquoi"), (row.get("distinction") or "")[:100] or None,
+          row.get("ancien_nom"), row.get("categorie"), row.get("registre_depuis"), version, model, datetime.now()))
 
 
 def _save_proofs(cursor, poi_id: int, pages: list) -> None:
@@ -207,6 +207,11 @@ def _flag(cursor, row: dict, position: tuple | None, city: dict, known: list, so
         save_signal(cursor, poi_id, SOURCE, "a_confirmer", {"raison": reason, "adresse": row.get("adresse"), **detail})
 
 
+def is_liquidated(row: dict) -> bool:
+    """Une liquidation judiciaire au registre retire le lieu sans relecture (décision du 5 novembre 2026)."""
+    return "liquidation" in name_key(row.get("alerte_registre") or "")
+
+
 def review_reason(row: dict, located) -> str | None:
     """Pourquoi ce lieu, qui a une page acceptée, doit attendre une relecture au lieu d'être montré, ou None."""
     if row.get("alerte_registre"):
@@ -216,7 +221,7 @@ def review_reason(row: dict, located) -> str | None:
 
 def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
     """Enregistre une commune en une transaction. Renvoie le nombre de fiches, de lieux à relire et de lieux écartés."""
-    summary = {"fiches": 0, "a_confirmer": 0, "sans_page": 0}
+    summary = {"fiches": 0, "a_confirmer": 0, "sans_page": 0, "liquidation": 0}
     sheets = set()
     connection = MySQLUtils.connect()
     try:
@@ -228,9 +233,13 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
             poi = _find_known(row, position, city, known)
             if poi and poi["masque"]:
                 continue
+            if is_liquidated(row):
+                logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, {row['alerte_registre']}")
+                summary["liquidation"] += 1
+                continue
             accepted = [page for page in row["pages"] if page_accepted(page, commune=city["name"])]
-            if not accepted:
-                logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, aucune page acceptée")
+            if not accepted and not row.get("au_registre"):
+                logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, ni registre ni page acceptée")
                 summary["sans_page"] += 1
                 continue
             reason = review_reason(row, position or poi)
@@ -240,8 +249,9 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
                        "verdicts": [page.get("verdict") for page in row["pages"]]})
                 summary["a_confirmer"] += 1
                 continue
-            # Le lien montré au voyageur est toujours une page acceptée.
-            row = {**row, "lien": accepted[0]["url"]}
+            # Le lien gardé est toujours une page acceptée, son site si on l'a, et rien sinon.
+            best = min(accepted, key=lambda page: TYPE_RANK.get(page["type_page"], len(TYPE_RANK)), default=None)
+            row = {**row, "lien": best["url"] if best else None}
             if poi:
                 _update_poi(cursor, poi, row, position)
                 poi_id = poi["id"]

@@ -144,10 +144,7 @@ def test_the_citation_must_hold_the_value():
     assert value_in_citation("saison", "avril à septembre", "Ouvert d'avril à septembre")
     assert not value_in_citation("saison", "mars à novembre", "Ouvert de mars à octobre")
     assert value_in_citation("saison", None, "Ouvert seulement l'été")
-    assert value_in_citation("jours_fermeture", "fermé lundi et mardi", "Fermé le lundi et le mardi")
-    assert not value_in_citation("jours_fermeture", "fermé lundi", "Fermé en hiver")
-    assert value_in_citation("budget", "20 à 30 €", "Menus de 20 € à 30 €")
-    assert not value_in_citation("budget", "20 à 30 €", "Un budget raisonnable")
+    assert value_in_citation("distinction", "1 étoile Michelin", "UNE ETOILE AU GUIDE MICHELIN")
     assert value_in_citation("distinction", "1 étoile Michelin", "Une étoile au guide Michelin")
     assert not value_in_citation("distinction", "1 étoile Michelin", "Cité par le guide Michelin")
     assert value_in_citation("distinction", "Bib Gourmand", "Le restaurant a reçu un Bib Gourmand")
@@ -167,22 +164,29 @@ def _detail(field, value, citation, page="https://keringar.fr"):
 def test_a_detail_whose_citation_is_absent_from_the_page_is_dropped(monkeypatch):
     monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: False)
     checked = control_details(_row(_detail("saison", "mars à novembre", "Ouvert de mars à novembre")), "Le Conquet")
+    assert "budget" not in checked and "jours_fermeture" not in checked
     assert not checked["saisonnier"] and checked["mois_ouverture"] is None and len(checked["pages"]) == 1
 
 
 def test_an_unreadable_page_proves_nothing(monkeypatch):
     monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: None)
-    assert control_details(_row(_detail("budget", "20 à 30 €", "De 20 à 30 €")), "Le Conquet")["budget"] is None
+    assert control_details(_row(_detail("distinction", "Bib Gourmand", "Un Bib Gourmand")), "Le Conquet")["distinction"] is None
 
 
 def test_a_found_detail_is_kept_with_its_proof(monkeypatch):
     monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: True)
-    checked = control_details(_row(_detail("budget", "20 à 30 €", "De 20 à 30 €"), _detail("budget", "40 €", "40 €")), "Le Conquet")
-    assert checked["budget"] == "20 à 30 €"
-    assert [(page.get("porte_sur"), page.get("citation")) for page in checked["pages"]] == [(None, None), ("budget", "De 20 à 30 €")]
+    star = _detail("distinction", "Étoile Michelin", "Une étoile au guide Michelin")
+    checked = control_details(_row(star, _detail("distinction", "Bib Gourmand", "Un Bib Gourmand")), "Le Conquet")
+    assert checked["distinction"] == "Étoile Michelin"
+    assert [(page.get("porte_sur"), page.get("citation")) for page in checked["pages"]] == [(None, None), ("distinction", "Une étoile au guide Michelin")]
 
 
 def test_a_detail_on_a_refused_page_is_dropped(monkeypatch):
     monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: True)
     monkeypatch.setattr(analyze_restaurants, "check_links_of", lambda row, place: [{"url": "https://autre.fr", "type_page": "site", "verdict": "nom_absent"}])
-    assert control_details(_row(_detail("budget", "20 à 30 €", "De 20 à 30 €", "https://autre.fr")), "Le Conquet")["budget"] is None
+    assert control_details(_row(_detail("distinction", "Bib Gourmand", "Un Bib Gourmand", "https://autre.fr")), "Le Conquet")["distinction"] is None
+
+
+def test_the_analyst_reads_every_page_found_except_the_excluded_sites():
+    row = {"pages": [{"url": "https://guide.michelin.com/x"}, {"url": "https://iroise-bretagne.bzh/x"}, {"url": "https://iroise-bretagne.bzh/x"}]}
+    assert analyze_restaurants.pages_to_read(row) == ["https://iroise-bretagne.bzh/x"]

@@ -6,10 +6,11 @@ Demander tout à la même recherche semblait lui coûter des adresses. Celui-ci 
 aucun nouveau lieu, il lit ce qui existe sur chacun.
 
 UN DÉTAIL SANS CITATION RETROUVÉE N'EST PAS ENREGISTRÉ
-Personne ne relira 130 villes. Saison, jours de fermeture, budget et distinction ne sont donc gardés que si le
-code retrouve la phrase sur une page acceptée, et que cette phrase contient bien l'information. Le code vérifie
-ainsi que la page le dit, pas qu'elle a raison : pour Keringar, la phrase « De mars à novembre » est bien sur la
-page de l'office de tourisme. Le lien « Source » reste le recours du voyageur pour les horaires.
+Personne ne relira 130 villes. Saison et distinction ne sont donc gardées que si le code retrouve la phrase sur une
+page acceptée, et que cette phrase contient bien l'information. Le code vérifie ainsi que la page le dit, pas qu'elle
+a raison : pour Keringar, la phrase « De mars à novembre » est bien sur la page de l'office de tourisme.
+Le budget et les jours de fermeture ne sont plus cherchés : sur 5 passages, un seul budget et un seul jour de fermeture
+ont passé ce contrôle. Le lien du restaurant reste le recours du voyageur.
 
 UNE FERMETURE LUE ICI RETIRE LE LIEU
 Sauf si le code lit la page et n'y trouve pas la phrase citée. Quand les recherches se contredisent, c'est ici
@@ -19,7 +20,8 @@ nom, donne une "alerte_registre" : le lieu attend une relecture au lieu d'être 
 
 PAS DE TABLE, PAS DE LIEU
 La Vinotière est classée restaurant par l'office de tourisme, mais c'est un hébergement avec un salon de thé.
-Le registre et les pages ne le disent pas : c'est à l'analyste de le lire.
+Le registre et les pages ne le disent pas : c'est à l'analyste de le lire. Un hôtel dont il ne trouve pas le nom du restaurant
+sort aussi (Hôtel Vent d'Iroise, 5 novembre 2026).
 
 LA PREUVE VIENT À PART, PAR PETITS LOTS
 Au pilote du 3 novembre 2026, un seul appel pour 17 lieux n'a laissé qu'environ 9 s par lieu, et 8 sont restés sans page.
@@ -36,16 +38,15 @@ from datetime import date
 
 from agents.find_service_links import check_links_of, citation_found
 from agents.llm_config import make_llm_service
-from agents.pepite_common import EXCLUDED_SITES_PROMPT
+from agents.pepite_common import EXCLUDED_SITES_PROMPT, is_excluded_site
 from services import restaurant_service
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_restaurants")
 
 PAGE_TYPES = ["site", "office_tourisme", "guide", "presse", "facebook", "instagram", "mairie"]
-DETAIL_FIELDS = ["saison", "jours_fermeture", "budget", "distinction"]
+DETAIL_FIELDS = ["saison", "distinction"]
 PROOF_BATCH = 5
-DAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
 MONTHS = tuple(restaurant_service.name_key(month) for month in restaurant_service.FRENCH_MONTHS)
 
 SYSTEM_PROMPT = f"""Tu vérifies pour les voyageurs de Randovango, une application de randonnée en van, des restaurants déjà
@@ -69,7 +70,8 @@ actuel, et le restaurant plutôt que l'hôtel. Deux tables distinctes à la mêm
 
 ## La table
 "pas_un_restaurant" est true si le lieu n'a aucune table où un voyageur peut s'asseoir pour manger (traiteur, camping seul,
-hébergement avec un simple salon de thé), même s'il est classé restaurant quelque part.
+hébergement avec un simple salon de thé), même s'il est classé restaurant quelque part. Il est true aussi pour un hôtel dont tu
+ne trouves pas le nom du restaurant sur une page. Le restaurant peut porter le nom de l'hôtel si une page le présente ainsi.
 
 ## Le registre
 Le message peut contenir une liste tirée des registres officiels. C'est un indice : "actif" ne prouve pas qu'un lieu soit
@@ -88,9 +90,8 @@ cherche le nouveau nom et dis-le dans "ferme_citation" seulement si une page le 
 Dans "details", une ligne par information, seulement si une page la donne. Sans phrase à recopier, pas de ligne.
 - "champ" : "saison" si une page dit que le lieu n'ouvre qu'une partie de l'année, "valeur" donne les mois sous la seule
   forme « avril à septembre », ou null si la page ne les donne pas. Des congés de quelques semaines ne sont pas une saison.
-- "champ" : "jours_fermeture", "valeur" comme « fermé lundi et mardi ».
-- "champ" : "budget", "valeur" comme « 20 à 30 € ».
-- "champ" : "distinction", la plus haute seulement : étoile Michelin, Bib Gourmand, assiette Michelin, Gault & Millau.
+- "champ" : "distinction", la plus haute seulement : étoile Michelin, Bib Gourmand, assiette Michelin, Gault & Millau. Lis-la
+  sur le site du lieu ou celui d'un office de tourisme, jamais sur le site d'un guide ni d'une mairie.
 - "citation" : la phrase de la page, recopiée mot pour mot, qui contient l'information. "page" : son adresse.
   "type_page" : son type. Une information que tu déduis, sans phrase qui la dit, n'a pas sa place ici.
 
@@ -184,11 +185,17 @@ def fill_addresses(restaurants: list, answer: dict) -> None:
             restaurants[place["numero"] - 1]["adresse"] = place["adresse"]
 
 
+def pages_to_read(row: dict) -> list:
+    """Les pages trouvées par les recherches, sans les sites que l'analyste ne doit pas ouvrir."""
+    urls = [page["url"] for page in row["pages"]] if "pages" in row else [row["lien"], row["preuve_url"]]
+    return [url for url in dict.fromkeys(urls) if not is_excluded_site(url)]
+
+
 def analyze_commune(city: dict, restaurants: list, register: dict | None = None, trace: dict | None = None) -> list:
     """Les lieux encore valables, avec les détails proposés. Lève LLMUnavailable si l'agent n'a pas pu répondre."""
     if not restaurants:
         return []
-    places = [{"numero": number, "nom": row["nom"], "adresse": row.get("adresse"), "pages": [row["lien"], row["preuve_url"]],
+    places = [{"numero": number, "nom": row["nom"], "adresse": row.get("adresse"), "pages": pages_to_read(row),
                **({"dit_ferme": {"raison": row["dit_ferme"].get("raison"), "page": row["dit_ferme"].get("page")}} if row.get("dit_ferme") else {})}
               for number, row in enumerate(restaurants, 1)]
     message = f"COMMUNE : {city['name']}\nLIEUX : {json.dumps(places, ensure_ascii=False)}"
@@ -235,7 +242,7 @@ def find_proofs(city: dict, restaurants: list, trace: dict | None = None) -> lis
 
 
 def value_in_citation(field: str, value: str | None, citation: str) -> bool:
-    """La phrase retrouvée dit-elle bien ce que l'agent en tire ? Mois, jours et chiffres, ou le nom de la distinction."""
+    """La phrase retrouvée dit-elle bien ce que l'agent en tire ? Les mois de la saison, ou le nom de la distinction."""
     quoted = restaurant_service.name_key(citation).split()
     words = restaurant_service.name_key(value).split()
     if field == "saison" and not value:
@@ -243,7 +250,7 @@ def value_in_citation(field: str, value: str | None, citation: str) -> bool:
     if field == "distinction":
         needed = [word for word in words if word.isalpha() and len(word) > 2]
     else:
-        needed = [word for word in words if word.isdigit() or word in DAYS or word in MONTHS]
+        needed = [word for word in words if word in MONTHS]
     return bool(needed) and all(word in quoted for word in needed)
 
 
@@ -269,5 +276,5 @@ def control_details(row: dict, commune: str) -> dict:
     dropped = [detail["champ"] for detail in row.get("details", []) if detail["champ"] not in checked]
     if dropped:
         logger.info(f"[restaurants] {row['nom']} : détails sans citation contrôlée {sorted(set(dropped))}")
-    return {"saisonnier": "saison" in checked, "mois_ouverture": checked.get("saison"), "jours_fermeture": checked.get("jours_fermeture"),
-            "budget": checked.get("budget"), "distinction": checked.get("distinction"), "pages": row["pages"] + proofs}
+    return {"saisonnier": "saison" in checked, "mois_ouverture": checked.get("saison"), "distinction": checked.get("distinction"),
+            "pages": row["pages"] + proofs}

@@ -47,7 +47,7 @@ def test_a_place_without_an_accepted_page_is_not_kept(monkeypatch):
     row = {"nom": "Le Nom Seul", "adresse": None, "alerte_registre": None,
            "pages": [{"url": "https://tripadvisor.fr/x", "type_page": "agregateur", "verdict": "site_exclu"}]}
     summary = restaurant_service.save_commune({"name": "Plougonvelin"}, {"restaurants": [row]}, 8, "modele")
-    assert summary == {"fiches": 0, "a_confirmer": 0, "sans_page": 1}
+    assert summary == {"fiches": 0, "a_confirmer": 0, "sans_page": 1, "liquidation": 0}
     connection.commit.assert_called_once()
 
 
@@ -170,18 +170,54 @@ PAGE = {"url": "https://riboul.fr", "type_page": "site", "verdict": "ok"}
 
 def test_an_accepted_page_makes_a_sheet(monkeypatch):
     summary, calls = _save(monkeypatch, {"nom": "Riboul", "pages": [PAGE]})
-    assert summary == {"fiches": 1, "a_confirmer": 0, "sans_page": 0} and calls["sheet"] == [99] and calls["connection"].committed
+    assert summary == {"fiches": 1, "a_confirmer": 0, "sans_page": 0, "liquidation": 0} and calls["sheet"] == [99] and calls["connection"].committed
+
+
+def test_the_link_shown_is_the_own_site_when_there_is_one(monkeypatch):
+    row = {"nom": "Riboul", "pages": [{"url": "https://iroise-bretagne.bzh/riboul", "type_page": "office_tourisme", "verdict": "ok"}, PAGE]}
+    _save(monkeypatch, row)
+    created = []
+    monkeypatch.setattr(restaurant_service, "_create_poi", lambda cursor, row, position, city, source, masked: created.append(row["lien"]) or 99)
+    restaurant_service.save_commune(CITY, {"restaurants": [row]}, 9, "modele")
+    assert created == ["https://riboul.fr"]
+
+
+def test_the_register_is_enough_to_keep_a_place_without_a_page(monkeypatch):
+    created = []
+    row = {"nom": "Café Konk", "au_registre": True, "pages": [{"url": "https://www.facebook.com/x", "type_page": "facebook", "verdict": "a_valider_social"}]}
+    _save(monkeypatch, row)
+    monkeypatch.setattr(restaurant_service, "_create_poi", lambda cursor, row, position, city, source, masked: created.append(row["lien"]) or 99)
+    summary = restaurant_service.save_commune(CITY, {"restaurants": [row]}, 9, "modele")
+    assert summary["fiches"] == 1 and created == [None]
+
+
+def test_a_liquidation_removes_the_place_without_review(monkeypatch):
+    summary, calls = _save(monkeypatch, {"nom": "Le Plez'hir", "au_registre": True, "pages": [PAGE], "alerte_registre": "Ouverture d'une liquidation judiciaire"})
+    assert summary["liquidation"] == 1 and summary["a_confirmer"] == 0 and calls["sheet"] == [] and calls["flag"] == []
+
+
+def test_an_old_link_stays_when_no_page_was_accepted():
+    cursor = MagicMock()
+    restaurant_service._update_poi(cursor, {"id": 5, "name": "A", "url": "https://a.fr"}, {"lien": None, "adresse": "1 place"}, None)
+    assert "url" not in cursor.execute.call_args[0][0]
+
+
+def test_an_old_facebook_link_gives_way_to_the_accepted_page():
+    cursor = MagicMock()
+    poi = {"id": 5, "name": "La Ria", "url": "https://www.facebook.com/laria29/"}
+    restaurant_service._update_poi(cursor, poi, {"lien": "https://www.iroise-bretagne.bzh/restaurant/la-ria/", "adresse": "1 place"}, None)
+    assert "https://www.iroise-bretagne.bzh/restaurant/la-ria/" in cursor.execute.call_args[0][1]
 
 
 def test_a_registry_alert_makes_no_sheet_even_with_a_page(monkeypatch):
-    summary, calls = _save(monkeypatch, {"nom": "Kan Ar Mor", "pages": [PAGE], "alerte_registre": "liquidation judiciaire"})
-    assert summary == {"fiches": 0, "a_confirmer": 1, "sans_page": 0} and calls["sheet"] == []
-    assert calls["flag"] == ["registre : liquidation judiciaire"]
+    summary, calls = _save(monkeypatch, {"nom": "Kan Ar Mor", "pages": [PAGE], "alerte_registre": "enseigne fermée"})
+    assert summary["a_confirmer"] == 1 and summary["fiches"] == 0 and calls["sheet"] == []
+    assert calls["flag"] == ["registre : enseigne fermée"]
 
 
 def test_a_place_masked_by_a_human_is_left_alone(monkeypatch):
     summary, calls = _save(monkeypatch, {"nom": "La Marina", "pages": [PAGE]}, known=[{"id": 5, "masque": 1}])
-    assert summary == {"fiches": 0, "a_confirmer": 0, "sans_page": 0} and calls["sheet"] == [] and calls["flag"] == []
+    assert summary == {"fiches": 0, "a_confirmer": 0, "sans_page": 0, "liquidation": 0} and calls["sheet"] == [] and calls["flag"] == []
 
 
 def test_a_failure_writes_nothing(monkeypatch):

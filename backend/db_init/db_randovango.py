@@ -330,6 +330,8 @@ def init_database():
                 jours_fermeture VARCHAR(150),
                 distinction VARCHAR(100),
                 ancien_nom VARCHAR(255),
+                categorie VARCHAR(30),
+                registre_depuis DATE,
                 prompt_version INT,
                 model VARCHAR(50),
                 trouve_le DATETIME NOT NULL,

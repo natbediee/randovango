@@ -540,6 +540,16 @@ def enrich_poi(poi) -> dict:
     """Ajoute à un POI (service) ses champs prêts à afficher."""
     poi["service_type_label"] = poi.get("service_type") or "Service"
     poi["distance_label"] = distance_label(poi.get("distance_km"))
+    # La distance dit d'où elle se mesure, comme sur la fiche spot ("À 3.8 km de ton spot").
+    # Sous SPOT_ON_HIKE_KM, le lieu est à pied du spot : même mise en avant qu'un spot sur la rando.
+    poi["near_spot"] = bool(poi.get("from_spot")) and poi.get("distance_km") is not None and poi["distance_km"] <= SPOT_ON_HIKE_KM
+    # Arrondi comme hike_distance_label : 10 m sous le kilomètre, 100 m au-delà.
+    km = poi.get("distance_km")
+    rounded = None if km is None else round(km, 2) if km < 1 else round(km, 1)
+    # À pied du spot, un texte court suffit : le cadre de la carte le dit déjà.
+    poi["reference_distance_label"] = ("Proche de ton spot" if poi["near_spot"]
+                                       else f"À {distance_label(rounded)} {'de ton spot' if poi.get('from_spot') else 'du centre'}"
+                                       if rounded is not None else "")
     # Nom du site affiché en clair sur la fiche, comme la source d'une pépite. OSM donne
     # parfois l'adresse sans protocole (20 POI) : le lien renverrait vers notre propre site.
     url = (poi.get("url") or "").strip()
