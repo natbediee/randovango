@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Supervision, modifier - RandoVanGo{% endblock %}
+
+{% block page_content %}
+{# Réservé aux admins : supervision_modifier.js renvoie à la connexion, et l'API refuse les autres comptes.
+   Corriger n'importe quel service ou spot vu dans l'appli, même sans signal à relire. #}
+<div class="container stack" style="gap:18px;">
+
+  {% with active='modifier' %}{% include 'partials/supervision_nav.html' %}{% endwith %}
+
+  <div class="services-toolbar">
+    <div class="services-filters" role="group" aria-label="Que corriger ?">
+      <button type="button" class="btn btn--primary" id="modeServices" aria-pressed="true">Services</button>
+      <button type="button" class="btn btn--outline" id="modeSpots" aria-pressed="false">Spots</button>
+    </div>
+    <div class="services-filters">
+      <label class="label">Ville
+        <select id="filterCity"><option value="">Choisir une ville</option></select>
+      </label>
+      {# Les onglets de l'étape 4, puis le type précis : seulement pour les services. #}
+      <label class="label" id="filterServiceLabel">Type de lieu
+        <select id="filterService"><option value="">Tous</option></select>
+      </label>
+      <label class="label" id="filterTypeLabel" style="display:none;">Sous-catégorie
+        <select id="filterType"><option value="">Tous</option></select>
+      </label>
+      <label class="label">Nom
+        <input type="search" id="filterName" maxlength="80" placeholder="Keruzas"
+               style="min-height:44px; padding:0 10px; border:1px solid var(--card-border); border-radius:10px; background:var(--white); color:var(--ink); font:inherit; font-size:14px;">
+      </label>
+    </div>
+  </div>
+
+  <p class="supervision-msg" id="supervisionMsg" style="display:none;"></p>
+
+  <div id="cardsList" class="stack" style="gap:14px;"></div>
+  <p class="services-empty" id="emptyNote" style="display:none;"></p>
+  <p class="muted" id="moreNote" style="display:none; font-size:13px;"></p>
+
+  <section id="recentSection" class="supervision-recent" style="display:none;">
+    <h2>Corrigé récemment</h2>
+    <div id="recentList"></div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/supervision_modifier.js') }}"></script>
+{% endblock %}

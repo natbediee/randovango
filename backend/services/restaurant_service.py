@@ -22,7 +22,7 @@ from etl.load.load_poi_checks import save_signal
 from services.pepite_service import is_generic, match_poi, name_key
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
-from utils.geo_utils import geocode_address_ban, get_bounding_box, haversine_distance_km
+from utils.geo_utils import geocode_address_ban, geocode_locality_ban, get_bounding_box, haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_restaurants")
@@ -30,10 +30,17 @@ logger = LoggerUtil.get_logger("agent_restaurants")
 SOURCE = "agent_restaurants"
 SERVICE_CATEGORY = "restaurant"
 MAX_KM = 15                 # au-delà, l'adresse géocodée n'est pas celle de la commune cherchée
+SAME_PLACE_KM = 0.05        # même nom, sans numéro de rue : à moins de 50 m, c'est le même lieu
+RULE_AUTHOR = "règle automatique"   # les décisions de la règle (poi_triage_service.py) ne bloquent pas l'agent
+HUMAN_NAME_DECISIONS = ("renommer", "autre_nom", "valider_lien_nom")
+HUMAN_LINK_DECISIONS = ("valider_lien", "valider_lien_nom", "refuser_lien", "autre_lien", "retirer_lien", "garder_lien")
+SHEET_FIELDS = ("genre", "pourquoi", "distinction", "ancien_nom", "categorie", "registre_depuis")
 OLD_NAME_KM = 1             # un ancien nom ne retrouve un lieu connu qu'à cette distance de l'adresse (Cléder : 0,51 km pour le même lieu)
 MAX_ARTICLE_MONTHS = 18     # un article ancien ne prouve pas que le lieu existe encore
 FRENCH_MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
                  "septembre", "octobre", "novembre", "décembre")
+COMMON_STREET_WORDS = {"rue", "route", "boulevard", "bd", "avenue", "av", "place", "quai", "chemin", "impasse", "allee", "lieudit", "lieu", "dit",
+                       "ld", "de", "du", "des", "la", "le", "les", "l", "d"}
 _MONTH_RANGE = re.compile(rf"({'|'.join(FRENCH_MONTHS)})\s+à\s+({'|'.join(FRENCH_MONTHS)})", re.I)
 
 
@@ -63,6 +70,31 @@ def page_date(text: str | None) -> date | None:
 def compact_name(name: str) -> str:
     """Le nom sans espaces : « Ti Madeo » et « Ti Mad Eo » sont le même lieu."""
     return name_key(name).replace(" ", "")
+
+
+def place_key(name: str) -> str:
+    """« La Crêperie Riboul » et « Riboul », « Spiaggia Restaurant » et « Spiaggia » sont le même lieu d'un passage à l'autre."""
+    words = [word for word in name_key(name).split() if word not in ("creperie", "restaurant")]
+    # « La Crêperie du Château d'Eau » au registre est « Le Château d'Eau » des recherches (Ploudalmézeau, 7 novembre 2026).
+    while words and words[0] in ("l", "la", "le", "les", "d", "de", "du", "des"):
+        words.pop(0)
+    return "".join(words) or compact_name(name)
+
+
+def street_words(address: str | None) -> list:
+    """Les mots de l'adresse, sans le code postal ni ce qui le suit, et sans les mots communs à toutes les rues."""
+    street = re.split(r"\b\d{5}\b", address or "")[0]
+    return [word for word in name_key(street).split() if word not in COMMON_STREET_WORDS]
+
+
+def same_address(first: str | None, second: str | None) -> bool:
+    """Même numéro et même rue. Sans numéro, on ne conclut pas : le boulevard de la Mer compte plusieurs tables."""
+    words, others = street_words(first), street_words(second)
+    number = next((word for word in words if word.isdigit()), None)
+    if not number or number != next((word for word in others if word.isdigit()), None):
+        return False
+    street, other_street = {word for word in words if not word.isdigit()}, {word for word in others if not word.isdigit()}
+    return bool(street and other_street) and len(street & other_street) / min(len(street), len(other_street)) >= 0.5
 
 
 def is_town_hall(url: str, commune: str) -> bool:
@@ -127,7 +159,7 @@ def _known_restaurants(cursor, city: dict) -> list:
     """Les restaurants déjà en base autour de la commune, pour réutiliser leur ligne."""
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], MAX_KM)
     cursor.execute("""
-        SELECT p.id, p.name, p.latitude, p.longitude, p.url, p.masque
+        SELECT p.id, p.name, p.address, p.latitude, p.longitude, p.url, p.masque
         FROM poi p JOIN poi_service ps ON ps.poi_id = p.id JOIN services s ON s.id = ps.service_id
         WHERE s.category = %s AND p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s
     """, (SERVICE_CATEGORY, min_lat, max_lat, min_lon, max_lon))
@@ -135,9 +167,16 @@ def _known_restaurants(cursor, city: dict) -> list:
 
 
 def _position(city: dict, address: str | None) -> tuple | None:
-    found = geocode_address_ban(address, city["latitude"], city["longitude"]) if address else None
-    if found and haversine_distance_km(city["latitude"], city["longitude"], *found) <= MAX_KM:
-        return found
+    """
+    La position de l'adresse, à la rue près, sinon celle de son lieu-dit (une ferme, une crêperie de campagne : la
+    moitié des « position introuvable » à relire le 7 novembre 2026). Rien si elle est loin de la commune cherchée.
+    """
+    if not address:
+        return None
+    for geocode in (geocode_address_ban, geocode_locality_ban):
+        found = geocode(address, city["latitude"], city["longitude"])
+        if found and haversine_distance_km(city["latitude"], city["longitude"], *found) <= MAX_KM:
+            return found
     return None
 
 
@@ -151,17 +190,41 @@ def _find_known(row: dict, position: tuple | None, city: dict, known: list) -> d
     for name in (row["nom"], row.get("ancien_nom")):
         if not name:
             continue
+        candidates = known
         if name != row["nom"]:
             if not position:
                 continue
-            known = [poi for poi in known if poi["latitude"] is not None
-                     and haversine_distance_km(latitude, longitude, poi["latitude"], poi["longitude"]) <= OLD_NAME_KM]
-        same = [poi for poi in known if compact_name(poi["name"]) == compact_name(name) and not is_generic(name_key(name))]
+            candidates = [poi for poi in known if poi["latitude"] is not None
+                          and haversine_distance_km(latitude, longitude, poi["latitude"], poi["longitude"]) <= OLD_NAME_KM]
+        same = [poi for poi in candidates if compact_name(poi["name"]) == compact_name(name) and not is_generic(name_key(name))]
         if same:
             return min(same, key=lambda poi: haversine_distance_km(latitude, longitude, poi["latitude"], poi["longitude"]))
-        found = match_poi(name, latitude, longitude, known)
+        found = match_poi(name, latitude, longitude, candidates)
         if found:
             return found
+    return _same_place(row, position, known)
+
+
+def _same_place(row: dict, position: tuple | None, known: list) -> dict | None:
+    """
+    Le même lieu sous un autre nom de la même table : « Racines » et « Restaurant Racines » au même numéro de Crozon,
+    « Crêperie La Chaumine » et « La Chaumine Biligou ». Sur 992 pépites, 10 doublons de ce genre (7 novembre 2026).
+    Il faut le nom ET le lieu : l'Hostellerie et le Bistrot 1954 partagent une adresse et sont deux tables.
+        - même adresse (numéro et rue), et l'un des deux noms contient l'autre ;
+        - sans numéro (« Saint-Roch »), le même nom et la même position à SAME_PLACE_KM près.
+    """
+    key = place_key(row["nom"])
+    if len(key) < 4:
+        return None
+    for poi in known:
+        other = place_key(poi["name"])
+        if len(other) < 4:
+            continue
+        if (key in other or other in key) and same_address(row.get("adresse"), poi.get("address")):
+            return poi
+        if key == other and position and poi["latitude"] is not None \
+                and haversine_distance_km(*position, poi["latitude"], poi["longitude"]) <= SAME_PLACE_KM:
+            return poi
     return None
 
 
@@ -177,14 +240,28 @@ def _create_poi(cursor, row: dict, position: tuple | None, city: dict, source_id
     return poi_id
 
 
+def _decided_by_human(cursor, poi_id: int, decisions: tuple) -> bool:
+    """Un humain a tranché ce point du lieu dans la supervision (poi_review_service.py) : sa décision prime sur l'agent."""
+    marks = ", ".join(["%s"] * len(decisions))
+    cursor.execute(f"""
+        SELECT 1 FROM decisions WHERE objet_type = 'poi' AND objet_id = %s AND annulee_at IS NULL
+        AND decided_by <> %s AND decision IN ({marks}) LIMIT 1
+    """, (poi_id, RULE_AUTHOR, *decisions))
+    return cursor.fetchone() is not None
+
+
 def _update_poi(cursor, poi: dict, row: dict, position: tuple | None) -> None:
-    """L'adresse et la position de l'agent sont meilleures qu'OSM, et son lien est une page acceptée : l'ancien pouvait être Facebook."""
+    """
+    L'adresse et la position de l'agent sont meilleures qu'OSM, et son lien est une page acceptée : l'ancien pouvait être
+    Facebook. Un lien ou un nom tranché par un humain dans la supervision n'est plus touché (7 novembre 2026).
+    """
     fields = {"address": row.get("adresse")}
-    if row.get("lien"):
+    if row.get("lien") and not _decided_by_human(cursor, poi["id"], HUMAN_LINK_DECISIONS):
         fields["url"] = row["lien"]
     if position:
         fields |= {"latitude": position[0], "longitude": position[1]}
-    if row.get("ancien_nom") and name_key(poi["name"]) == name_key(row["ancien_nom"]):
+    if row.get("ancien_nom") and name_key(poi["name"]) == name_key(row["ancien_nom"]) \
+            and not _decided_by_human(cursor, poi["id"], HUMAN_NAME_DECISIONS):
         fields["name"] = row["nom"]
     assignments = ", ".join(f"{column} = %s" for column in fields)
     cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*fields.values(), poi["id"]))
@@ -204,6 +281,28 @@ def _save_season(cursor, poi_id: int, row: dict) -> None:
     months = parse_months(row.get("mois_ouverture"))
     cursor.execute("UPDATE poi SET statut_saison = %s, mois_ouverture = %s WHERE id = %s",
                    ("confirmee" if months else "probable", json.dumps(months) if months else None, poi_id))
+
+
+def set_verified(cursor, poi_id: int, verified: bool) -> None:
+    """
+    Le badge « Vérifié » suit la preuve (7 novembre 2026) : une page acceptée par le code nomme le lieu, ou un humain l'a
+    validé. Avant, il disait seulement d'où venait la ligne : 1 pour tout POI d'OSM (load_poi.py), 0 pour ceux de l'agent.
+    Un lieu gardé par le registre seul reste « Non vérifié » : le registre montre une activité, pas le nom (Leonetti).
+    """
+    cursor.execute("UPDATE poi SET verifie = %s WHERE id = %s", (int(verified), poi_id))
+
+
+def sheet_of(row: dict, version: int, model: str) -> dict:
+    """Ce qu'il faut pour écrire la fiche plus tard, si un humain valide le lieu à confirmer (poi_review_service.py)."""
+    return {**{field: row.get(field) for field in SHEET_FIELDS}, "prompt_version": version, "model": model}
+
+
+def save_validated_sheet(cursor, poi_id: int, sheet: dict) -> None:
+    """La fiche d'un lieu à confirmer qu'un humain a validé : celle que l'agent avait préparée."""
+    if not sheet or not sheet.get("genre"):
+        raise ValueError("Ce lieu n'a pas de fiche préparée par l'agent : il faut le relancer")
+    _save_sheet(cursor, poi_id, sheet, sheet.get("prompt_version"), sheet.get("model"))
+    set_verified(cursor, poi_id, True)
 
 
 def _save_sheet(cursor, poi_id: int, row: dict, version: int, model: str) -> None:
@@ -280,7 +379,7 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
             if reason:
                 _flag(cursor, row, position, city, known, source_id, reason,
                       {"indice": row.get("pourquoi"), "page": row.get("lien"),
-                       "verdicts": [page.get("verdict") for page in row["pages"]]})
+                       "verdicts": [page.get("verdict") for page in row["pages"]], "fiche": sheet_of(row, version, model)})
                 summary["a_confirmer"] += 1
                 continue
             # Le lien gardé est toujours une page acceptée, son site si on l'a, et rien sinon.
@@ -294,6 +393,7 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
             _save_season(cursor, poi_id, row)
             _save_sheet(cursor, poi_id, row, version, model)
             _save_proofs(cursor, poi_id, row["pages"])
+            set_verified(cursor, poi_id, bool(accepted))
             # Le lieu a maintenant sa fiche : il n'attend plus de relecture.
             cursor.execute("DELETE FROM poi_signals WHERE poi_id = %s AND source = %s AND signal_type = 'a_confirmer'",
                            (poi_id, SOURCE))

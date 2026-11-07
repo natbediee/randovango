@@ -11,6 +11,23 @@ const VANY_NEWS_RETURN_KEY = 'vanyNewsReturn';
 const DAY_CONTEXT_KEYS = ['currentDay', 'selectedCityId', 'selectedHiking', 'selectedSpot',
                           'editingDay', 'editReturnDay', 'editOriginalCity'];
 
+// Le dernier jour dont le voyageur a ouvert l'étape 5 ("planId:jour"). Pour le jour qu'il
+// prépare, le rappel attend ce passage : à l'étape 3 ou 4, il n'a pas encore vu les pépites.
+const PEPITES_VISIT_KEY = 'pepitesVisit';
+
+function markPepitesVisited(planId, day) {
+    localStorage.setItem(PEPITES_VISIT_KEY, `${planId}:${day}`);
+}
+
+// Les jours d'avant sont terminés, donc passés par l'étape 5 ; le jour en préparation
+// seulement si son étape 5 a été ouverte.
+function pepitesReached(planId, day) {
+    const saved = vanyNewsReturn();
+    const inProgress = parseInt(saved ? saved.context.currentDay : localStorage.getItem('currentDay') || '1');
+    if (day < inProgress) return true;
+    return day === inProgress && localStorage.getItem(PEPITES_VISIT_KEY) === `${planId}:${day}`;
+}
+
 function vanyNewsReturn() {
     try {
         return JSON.parse(localStorage.getItem(VANY_NEWS_RETURN_KEY));
@@ -71,6 +88,7 @@ async function refreshVanyNews() {
     } catch {
         return;   // un simple rappel : son échec ne doit rien perturber
     }
+    news = news.filter(item => pepitesReached(planId, item.day_number));
     // À l'étape 5, les idées du jour affiché sont déjà sous les yeux du voyageur.
     if (window.location.pathname.endsWith('/step5')) {
         const shown = parseInt(localStorage.getItem('currentDay') || '1');

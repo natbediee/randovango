@@ -187,8 +187,10 @@ const POI_MARKER_STYLES = {
     supermarche:  { color: '#6E9A3C', icon: 'fa-cart-arrow-down' },
     commerce:     { color: '#9A6E3C', icon: 'fa-shopping-basket' },
     restauration: { color: '#C58A2E', icon: 'fa-utensils' },
+    cafe:         { color: '#8C5A6E', icon: 'fa-mug-hot' },
     toilettes:    { color: '#6E8CA0', icon: 'fa-toilet' },
     hygiene:      { color: '#4FA3A0', icon: 'fa-shower' },
+    laverie:      { color: '#5E8F7A', icon: 'fa-shirt' },
     culture:      { color: '#8A6BA1', icon: 'fa-camera' },
     urgence:      { color: '#B04A4A', icon: 'fa-first-aid' }
 };

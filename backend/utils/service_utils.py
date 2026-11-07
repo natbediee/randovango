@@ -64,7 +64,11 @@ POI_FRONTEND_CATEGORY_MAP = {
     "brewery":                "commerce",
     # Restauration
     "restaurant":             "restauration",
-    "cafe":                   "restauration",
+    # Café, bar : un onglet à part (7 novembre 2026). La restauration ne garde que les endroits où l'on mange ;
+    # les cafés sont cherchés par l'agent commerces (agents/find_commerces.py), jamais par celui des restaurants.
+    "cafe":                   "cafe",
+    # Laverie : un onglet à part, venu d'OSM seulement (pas d'agent, comme les supermarchés).
+    "laundry":                "laverie",
     "fast_food":              "restauration",
     # Toilettes (séparée des douches : pas toujours au même endroit)
     "toilets":                "toilettes",

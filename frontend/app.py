@@ -112,6 +112,16 @@ def supervision_services():
     """Supervision (admin) : relecture des liens, fermetures et saisons des services"""
     return page('supervision_services')
 
+@app.route('/supervision/bilan')
+def supervision_bilan():
+    """Supervision (admin) : combien il reste à trancher, file par file"""
+    return page('supervision_bilan')
+
+@app.route('/supervision/modifier')
+def supervision_modifier():
+    """Supervision (admin) : corriger n'importe quel service ou spot, même sans signal à relire"""
+    return page('supervision_modifier')
+
 @app.route('/unlock-vany')
 def unlock_vany():
     """Accès à Vany - paiement unique ou code contributeur"""

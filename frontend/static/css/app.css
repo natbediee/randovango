@@ -358,6 +358,12 @@ button { font-family: inherit; cursor: pointer; }
   margin-right: 5px;
 }
 .timeline__step i { font-size: 9px; }
+/* Ville du jour à la place de « Ville » : un nom long est coupé, le nom complet au survol. */
+.timeline__step [data-timeline-city] {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .timeline__step.is-done { color: var(--done-light); }
 .timeline__step.is-active {
   color: var(--accent-light-2);
@@ -2229,9 +2235,37 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .supervision-recent__edit textarea { margin: 6px 0; }
 .supervision-recent h2 { font-size: 15px; margin: 0 0 6px; color: var(--muted); }
 .supervision-recent p { margin: 0 0 5px; font-size: 13px; }
+/* Fiche des services : une colonne, les décisions en ligne dessous, puis les cases côte à côte. */
+.review-card--wide { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.review-card--wide .review-card__actions { gap: 10px; border-top: 1px solid var(--card-border); padding-top: 12px; }
+.review-card__decisions { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-card__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: end; }
+.review-card__field { display: flex; gap: 6px; margin-top: 4px; }
+.review-card__field input { flex: 1; min-width: 0; }
+.review-card__field .btn { white-space: nowrap; }
+.review-card__fields input { height: 34px; box-sizing: border-box; padding: 4px 10px; font: inherit; font-weight: 400; font-size: 13px;
+  text-transform: none; letter-spacing: 0; border: 1px solid var(--card-border); border-radius: 8px; }
+.review-card__fields .review-card__note { margin-top: 4px; }
 @media (max-width: 768px) {
   .review-card { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Supervision : le bilan */
+.bilan-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.bilan-total { display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; background: var(--white); border: 1px solid var(--card-border); border-radius: var(--r-card-sm); color: var(--ink); text-decoration: none; }
+a.bilan-total:hover { border-color: var(--teal); }
+.bilan-total strong { font-size: 28px; line-height: 1.1; }
+.bilan-total span { font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.bilan-block { background: var(--white); border: 1px solid var(--card-border); border-radius: var(--r-card-sm); padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bilan-block > p { margin: 0 0 4px; font-size: 13px; }
+.bilan-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+.bilan-row { display: grid; grid-template-columns: minmax(0, 1fr) 30% 44px; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--divider); font-size: 14px; }
+.bilan-row.is-empty { color: var(--muted); }
+.bilan-row__label { overflow-wrap: anywhere; }
+.bilan-row__bar { height: 8px; border-radius: 4px; background: var(--mint-2); overflow: hidden; }
+.bilan-row__bar span { display: block; height: 100%; background: var(--teal); border-radius: 4px; }
+.bilan-row__n { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bilan-more summary { min-height: 44px; display: flex; align-items: center; color: var(--teal-dark); font-weight: 600; font-size: 14px; cursor: pointer; border-top: 1px solid var(--divider); }
 
 /* Supervision des services */
 .services-filters { display: flex; flex-wrap: wrap; gap: 8px; }

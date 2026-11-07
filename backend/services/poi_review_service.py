@@ -7,7 +7,16 @@ QUATRE FILES, parce que les décisions ne se prennent pas pareil :
     fermetures : renommer, retirer, garder. Toujours au cas par cas : c'est là qu'une erreur coûte le
                  plus. Les sources sont montrées ensemble, car elles se contredisent souvent ;
     saison     : valider les mois d'ouverture, ou « saisonnier probable » sans mois ;
-    morts      : retirer un lien qui ne répond plus.
+    morts      : retirer un lien qui ne répond plus ;
+    confirmer  : un restaurant ou un commerce que son agent n'a pas pu trancher (restaurant_service.py,
+                 commerce_service.py, signal a_confirmer). Valider
+                 écrit la fiche qu'il avait préparée et l'affiche ; retirer le laisse masqué ;
+    doublons   : deux restaurants proches que la règle n'a pas su trancher (restaurant_duplicates_service.py), ou deux
+                 lieux de même nom, quel que soit le service (poi_duplicates_service.py, signal doublon_service).
+                 Fusionner masque celui-ci, l'autre reste ; rien n'est effacé.
+
+PARTOUT, « Retirer le lieu » : un lieu qui n'a rien à faire là se voit dans n'importe quelle file. Il est masqué
+et sort de toutes les files.
 
 UNE DÉCISION SE DÉFAIT : elle garde les valeurs d'avant (decisions.detail) et les remet si on l'annule.
 Elle reste tracée dans la table `decisions`, avec celles des spots (objet_type = 'poi').
@@ -17,7 +26,13 @@ masqué par poi_triage_service.py dès qu'une fermeture est signalée. Garder ou
 et la fermeture du moment sont enregistrées ici, leur affichage sur les fiches reste à faire.
 """
 import json
+from collections import Counter
+import re
 
+from services import commerce_service, restaurant_service
+from services.commerce_selection_service import SHOP_CATEGORY_LABELS
+from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
+from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from utils.db_utils import MySQLUtils
 
 POI = "poi"
@@ -32,6 +47,8 @@ TAB_SIGNALS = {
     "fermetures": ("fermeture_agent", "renommage_osm", "fermeture_osm", "absent_osm"),
     "saison": ("saison_agent", "saison_osm"),
     "morts": ("lien_mort",),
+    "doublons": ("doublon_restaurant", "doublon_commerce", "doublon_service"),
+    "confirmer": ("a_confirmer",),
 }
 SIGNAL_TAB = {signal: tab for tab, signals in TAB_SIGNALS.items() for signal in signals}
 SOURCE_LABELS = {"osm": "OSM", "agent": "Agent", "liens": "Contrôle"}
@@ -39,6 +56,10 @@ SIGNAL_LABELS = {
     "lien_agent": "Lien trouvé par l'agent", "lien_osm": "Lien indiqué dans OSM",
     "fermeture_agent": "Fermeture signalée", "renommage_osm": "Renommé dans OSM", "fermeture_osm": "Marqué fermé dans OSM",
     "absent_osm": "Absent d'OSM", "saison_agent": "Saison", "saison_osm": "Saison dans OSM", "lien_mort": "Lien mort",
+    "doublon_restaurant": "Doublon possible",
+    "doublon_commerce": "Doublon possible",
+    "doublon_service": "Doublon possible",
+    "a_confirmer": "À confirmer",
 }
 # Les décisions possibles et le sort des signaux relus. Le code n'accepte rien d'autre.
 ACTIONS = {
@@ -46,12 +67,24 @@ ACTIONS = {
     "renommer": "valide", "retirer": "valide", "fermer_moment": "valide", "garder": "rejete",
     "valider_saison": "valide", "pas_saisonnier": "rejete",
     "retirer_lien": "valide", "garder_lien": "rejete",
+    "fusionner": "valide", "deux_lieux": "rejete",
+    "valider_pepite": "valide",
+    "sans_suite": "rejete",
+    "autre_lien": "rejete",
+    "autre_nom": "valide",
+    "autre_maps": "valide",
 }
 ACTION_LABELS = {
     "valider_lien": "lien ajouté", "valider_lien_nom": "lien ajouté et nom corrigé", "refuser_lien": "lien refusé",
     "renommer": "renommé", "retirer": "retiré", "fermer_moment": "fermé pour le moment", "garder": "gardé",
     "valider_saison": "saison validée", "pas_saisonnier": "pas saisonnier",
     "retirer_lien": "lien retiré", "garder_lien": "lien gardé",
+    "fusionner": "fusionné", "deux_lieux": "deux lieux",
+    "valider_pepite": "pépite validée",
+    "sans_suite": "classé sans suite",
+    "autre_lien": "lien saisi à la main",
+    "autre_nom": "renommé à la main",
+    "autre_maps": "lien Google Maps saisi à la main",
 }
 ACTION_BUTTONS = {
     "valider_lien": ("Valider le lien", "main"), "valider_lien_nom": ("Valider le lien et le nom", "main"),
@@ -59,9 +92,44 @@ ACTION_BUTTONS = {
     "fermer_moment": ("Fermé pour le moment", "main"), "garder": ("Garder tel quel", "line"),
     "valider_saison": ("Valider la saison", "main"), "pas_saisonnier": ("Pas saisonnier", "line"),
     "retirer_lien": ("Retirer le lien", "main"), "garder_lien": ("Garder le lien", "line"),
+    "fusionner": ("Même lieu : fusionner", "remove"), "deux_lieux": ("Deux lieux", "line"),
+    "valider_pepite": ("Valider la pépite", "main"),
+    "autre_lien": ("Mettre ce lien", "line"),
+    "autre_nom": ("Renommer ainsi", "line"),
+    "autre_maps": ("Mettre ce lien Google Maps", "line"),
 }
+# Les cases de toutes les fiches : un nom ou un lien trouvé à la main. Elles ne tranchent que le problème de leur file
+# (le nom, le lien) ; ailleurs, elles corrigent le lieu et le problème reste à trancher.
+SIDE_ACTIONS = {"autre_nom": "fermetures", "autre_lien": "liens",
+                # Le lien Google Maps corrige la carte du voyageur (step4.py) sans trancher aucune file.
+                "autre_maps": None}
+ALL_TABS = "tous"
+# Les files que la page et le bilan ne proposent pas : la règle tranche tous les liens morts (poi_triage_service.py).
+# Une décision annulée en ramène un : il apparaît alors dans « Tous » (7 novembre 2026).
+HIDDEN_TABS = ("morts",)
+# Les décisions que seule la règle prend (poi_triage_service.py) : aucun bouton, mais annulables comme les autres.
+RULE_ACTIONS = ("sans_suite",)
+# Le filtre « Type de lieu » reprend les onglets de l'étape 4 (utils/service_utils.POI_FRONTEND_CATEGORY_MAP), puis le
+# type précis : la catégorie de la fiche de l'agent quand il y en a une (« Crêperie », « Marché »), sinon le service
+# (« Café »). Un service sans onglet (le voyageur ne le voit jamais) est rangé à part.
+NO_TAB = "hors_etape4"
+SHEET_LABELS = {**TABLE_CATEGORY_LABELS, **SHOP_CATEGORY_LABELS}
+
+
+def step4_tab(raw_category: str | None) -> str:
+    return POI_FRONTEND_CATEGORY_MAP.get((raw_category or "").lower(), NO_TAB)
+
+
+def tab_categories(service: str) -> tuple:
+    """Les services OSM d'un onglet de l'étape 4."""
+    return tuple(category for category, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab == service)
+
+
+# Valider un lieu à confirmer écrit la fiche que son agent avait préparée, dans sa table (source du signal).
+SHEET_WRITERS = {restaurant_service.SOURCE: restaurant_service.save_validated_sheet,
+                 commerce_service.SOURCE: commerce_service.save_validated_sheet}
 # Les seules colonnes qu'une décision peut changer, et donc remettre.
-APPLIED_COLUMNS = ("url", "name", "masque", "ferme_moment", "statut_saison", "mois_ouverture")
+APPLIED_COLUMNS = ("url", "name", "masque", "ferme_moment", "statut_saison", "mois_ouverture", "maps_url", "latitude", "longitude")
 OSM_MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
 def signal_detail(signal: dict) -> dict:
@@ -103,6 +171,11 @@ def proof_text(signal: dict) -> str:
         return f"horaires « {detail.get('opening_hours') or detail.get('seasonal')} »."
     if kind == "lien_mort":
         return f"{detail.get('url')} : {detail.get('raison')} (vérifié deux fois)."
+    if kind == "a_confirmer":
+        return f"{detail.get('raison')}" + (f" : « {detail['indice']} »." if detail.get("indice") else ".")
+    if kind in ("doublon_restaurant", "doublon_commerce", "doublon_service"):
+        distance = f"à {detail['distance_m']} m de" if detail.get("distance_m") is not None else "même lieu que"
+        return f"{detail.get('raison')}, {distance} « {detail.get('autre_nom')} » ({detail.get('autre_adresse') or 'sans adresse'})."
     return ""
 
 
@@ -159,16 +232,41 @@ def _dead_link_card(signals: list) -> dict:
     return {"link": detail.get("url"), "proposal": "retirer le lien de la fiche.", "actions": ["retirer_lien", "garder_lien"]}
 
 
-CARD_BUILDERS = {"liens": _links_card, "fermetures": _closure_card, "saison": _season_card, "morts": _dead_link_card}
+def _duplicate_card(signals: list) -> dict:
+    detail = _detail(signals[0])
+    return {"link": None, "autre_id": detail.get("autre_id"),
+            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Fusionner masque celui-ci, l'autre reste.",
+            "actions": ["fusionner", "deux_lieux"]}
+
+
+def _to_confirm_card(signals: list) -> dict:
+    detail = _detail(signals[0])
+    sheet = detail.get("fiche") or {}
+    genre = f" ({sheet['genre']})" if sheet.get("genre") else ""
+    return {"link": detail.get("page"), "proposal": f"une pépite{genre} ? Valider l'affiche avec la fiche de l'agent.",
+            "actions": ["valider_pepite", "retirer"] if sheet.get("genre") else ["retirer"]}
+
+
+CARD_BUILDERS = {"liens": _links_card, "fermetures": _closure_card, "saison": _season_card, "morts": _dead_link_card,
+                 "doublons": _duplicate_card, "confirmer": _to_confirm_card}
 
 
 def build_card(tab: str, poi: dict, signals: list) -> dict:
-    """La fiche de relecture d'un lieu : tous ses signaux d'une file, ensemble."""
+    """
+    La fiche de relecture d'un lieu : tous ses signaux d'une file, ensemble. Toutes les fiches ont la même forme et
+    les mêmes cases « autre nom » et « autre lien » (7 novembre 2026) : seules les décisions propres au problème changent.
+    """
     card = CARD_BUILDERS[tab](signals)
+    # « Retirer le lieu » sur toutes les fiches : un lieu qui n'a rien à faire là (une bijouterie classée supérette)
+    # se voit dans n'importe quelle file (7 novembre 2026).
+    card["actions"] = card["actions"] + [action for action in ("retirer", *SIDE_ACTIONS) if action not in card["actions"]]
     ordered = sorted(signals, key=lambda signal: TAB_SIGNALS[tab].index(signal["signal_type"]))
     return {
         **card, "tab": tab, "poi_id": poi["id"], "nom": poi["name"], "adresse": poi.get("address") or "",
-        "service": poi.get("service") or "", "url_actuelle": poi.get("url"),
+        "service": poi.get("service") or "", "url_actuelle": poi.get("url"), "maps_actuel": poi.get("maps_url"),
+        # Sans adresse (Gortozenn, un objet OSM), la commune et la position disent quand même où est le lieu.
+        "commune": poi.get("commune") or "",
+        "position": [float(poi["latitude"]), float(poi["longitude"])] if poi.get("latitude") is not None else None,
         "signal_ids": [signal["id"] for signal in ordered],
         "signal": SIGNAL_LABELS[ordered[0]["signal_type"]],
         "gravite": "red" if ordered[0]["signal_type"] in ("lien_mort", "fermeture_agent")
@@ -180,8 +278,60 @@ def build_card(tab: str, poi: dict, signals: list) -> dict:
     }
 
 
-def applied_fields(action: str, card: dict, months: list | None) -> dict:
-    """Ce qu'une décision change sur le lieu. Le lien et le nom viennent du signal, jamais du navigateur."""
+def typed_link(url: str | None) -> str:
+    """Le lien qu'un admin a trouvé lui-même : une adresse web complète, et rien d'autre."""
+    url = (url or "").strip()
+    if not re.fullmatch(r"https?://[^\s\"'<>]{4,490}", url):
+        raise ValueError("Lien invalide : colle une adresse complète, qui commence par https://")
+    return url
+
+
+def typed_name(name: str | None) -> str:
+    """Le nom qu'un admin a trouvé lui-même : du texte court, sans balise."""
+    name = " ".join((name or "").split())
+    if not 2 <= len(name) <= 150 or re.search(r"[<>]", name):
+        raise ValueError("Nom invalide : entre 2 et 150 caractères, sans < ni >")
+    return name
+
+
+GOOGLE_MAPS_HOSTS = re.compile(r"^(www\.)?google\.[a-z.]{2,6}/maps|^maps\.google\.[a-z.]{2,6}/|^maps\.app\.goo\.gl/|^goo\.gl/maps/")
+# La position d'un lien Google Maps : l'épingle du lieu (!3d…!4d…), sinon le centre de la carte (@lat,lon) ou la recherche.
+MAPS_POSITIONS = (re.compile(r"!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)"), re.compile(r"@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)"),
+                  re.compile(r"[?&](?:query|q)=(-?\d{1,2}\.\d+)(?:,|%2C)(-?\d{1,3}\.\d+)"))
+
+
+def typed_maps_link(url: str | None) -> dict:
+    """
+    Le lien Google Maps qu'un admin a trouvé lui-même (7 novembre 2026), quand la recherche fabriquée par le code tombe
+    sur un autre lieu. Seulement une adresse de Google Maps. Sa position, si le lien en porte une, corrige aussi celle
+    du lieu : 18 lieux des agents n'en avaient pas. Le code n'ouvre jamais ce lien (Google est un site exclu).
+    """
+    url = typed_link(url)
+    if not GOOGLE_MAPS_HOSTS.search(re.sub(r"^https?://", "", url)):
+        raise ValueError("Lien Google Maps invalide : colle l'adresse d'une page de Google Maps")
+    fields = {"maps_url": url}
+    for pattern in MAPS_POSITIONS:
+        match = pattern.search(url)
+        if match:
+            latitude, longitude = float(match.group(1)), float(match.group(2))
+            if -90 <= latitude <= 90 and -180 <= longitude <= 180:
+                fields |= {"latitude": latitude, "longitude": longitude}
+            break
+    return fields
+
+
+def applied_fields(action: str, card: dict, months: list | None, url: str | None = None, name: str | None = None) -> dict:
+    """
+    Ce qu'une décision change sur le lieu. Le lien et le nom viennent du signal, jamais du navigateur, sauf un lien
+    ou d'un nom que l'admin a trouvé lui-même (« Mettre ce lien », « Renommer ainsi ») : contrôlés par typed_link et typed_name.
+    """
+    if action == "autre_lien":
+        return {"url": typed_link(url)}
+    if action == "autre_maps":
+        return typed_maps_link(url)
+    # Renommer à la main dit aussi que le lieu existe, comme « Renommer », mais seulement là où l'existence était en doute.
+    if action == "autre_nom":
+        return {"name": typed_name(name), "masque": 0} if card.get("tab") == "fermetures" else {"name": typed_name(name)}
     if action == "valider_lien":
         return {"url": card["url"]}
     if action == "valider_lien_nom":
@@ -202,24 +352,33 @@ def applied_fields(action: str, card: dict, months: list | None) -> dict:
         return {"statut_saison": None, "mois_ouverture": None}
     if action == "retirer_lien":
         return {"url": None}
+    if action == "fusionner":
+        return {"masque": 1}
+    if action == "valider_pepite":
+        return {"masque": 0}
     return {}
 
 
-def _pending(cursor, service: str | None, city: str | None, statut: str = "a_relire") -> tuple:
-    """{(file, poi_id): signaux dans cet état} et les lieux concernés, à travers les filtres."""
+def _pending(cursor, service: str | None, city: str | None, statut: str = "a_relire", kind: str | None = None) -> tuple:
+    """
+    {(file, poi_id): signaux dans cet état} et les lieux concernés, à travers les filtres. service est un onglet de
+    l'étape 4 (« commerce »), kind le type précis dans cet onglet (« Boulangerie »).
+    """
     filters, params = ["sg.statut = %s"], [statut]
     if city:
         filters.append("EXISTS (SELECT 1 FROM histo_poi h JOIN cities c ON c.id = h.city_id"
                        " WHERE h.poi_id = p.id AND c.name = %s)")
         params.append(city)
-    if service:
-        filters.append("EXISTS (SELECT 1 FROM poi_service ps JOIN services s ON s.id = ps.service_id"
-                       " WHERE ps.poi_id = p.id AND s.name = %s)")
-        params.append(service)
     cursor.execute(f"""
         SELECT sg.id, sg.poi_id, sg.source, sg.signal_type, sg.detail, p.id AS p_id, p.name, p.address, p.url,
+               p.latitude, p.longitude, p.maps_url,
                (SELECT MIN(s.name) FROM poi_service ps JOIN services s ON s.id = ps.service_id
-                WHERE ps.poi_id = p.id) AS service
+                WHERE ps.poi_id = p.id) AS service_name,
+               (SELECT MIN(s.category) FROM poi_service ps JOIN services s ON s.id = ps.service_id
+                WHERE ps.poi_id = p.id) AS service_category,
+               (SELECT r.categorie FROM restaurants r WHERE r.poi_id = p.id) AS table_categorie,
+               (SELECT c.categorie FROM commerces c WHERE c.poi_id = p.id) AS shop_categorie,
+               (SELECT MIN(c.name) FROM histo_poi h JOIN cities c ON c.id = h.city_id WHERE h.poi_id = p.id) AS commune
         FROM poi_signals sg JOIN poi p ON p.id = sg.poi_id
         WHERE {' AND '.join(filters)}
     """, tuple(params))
@@ -228,28 +387,45 @@ def _pending(cursor, service: str | None, city: str | None, statut: str = "a_rel
         tab = SIGNAL_TAB.get(row["signal_type"])
         if not tab:
             continue
+        # Le type précis : la catégorie de la fiche de l'agent (« Crêperie », « Marché »), sinon le nom du service.
+        precise = SHEET_LABELS.get(row.get("table_categorie") or row.get("shop_categorie")) or row.get("service_name")
+        onglet = step4_tab(row.get("service_category"))
+        if (service and onglet != service) or (kind and precise != kind):
+            continue
         groups.setdefault((tab, row["poi_id"]), []).append(row)
         pois[row["poi_id"]] = {"id": row["p_id"], "name": row["name"], "address": row["address"],
-                               "url": row["url"], "service": row["service"]}
+                               "url": row["url"], "maps_url": row.get("maps_url"), "service": precise, "onglet": onglet,
+                               "commune": row["commune"],
+                               "latitude": row["latitude"], "longitude": row["longitude"]}
     return groups, pois
 
 
-def get_reviews(tab: str = "liens", service: str | None = None, city: str | None = None) -> dict:
-    """Une file de relecture, ses compteurs, les filtres et les dernières décisions."""
-    if tab not in TAB_SIGNALS:
+def get_reviews(tab: str = "liens", service: str | None = None, city: str | None = None, kind: str | None = None) -> dict:
+    """
+    Une file de relecture, ou toutes (ALL_TABS), ses compteurs, les filtres et les dernières décisions. service est un
+    onglet de l'étape 4, kind un type précis dans cet onglet (le sous-filtre, quand l'onglet en a plusieurs).
+    """
+    if tab not in TAB_SIGNALS and tab != ALL_TABS:
         raise ValueError(f"File inconnue : {tab}")
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        groups, pois = _pending(cursor, service, city)
+        groups, pois = _pending(cursor, service, city, kind=kind)
         counts = {name: 0 for name in TAB_SIGNALS}
         for name, _ in groups:
             counts[name] += 1
-        cards = [build_card(tab, pois[poi_id], signals) for (name, poi_id), signals in groups.items() if name == tab]
-        # Un lieu à fermeture signalée n'entre pas dans le lot : son lien attend qu'on tranche la fermeture.
-        masked = _masked_ids(cursor, [card["poi_id"] for card in cards]) if tab == "liens" else set()
+        counts[ALL_TABS] = sum(counts.values())
+        # Le nombre de lieux par onglet, puis par type dans l'onglet choisi, dans la file et la ville choisies.
+        all_groups, all_pois = _pending(cursor, None, city) if service or kind else (groups, pois)
+        in_tab = [poi_id for name, poi_id in all_groups if tab in (name, ALL_TABS)]
+        service_counts = Counter(all_pois[poi_id]["onglet"] for poi_id in in_tab)
+        type_counts = Counter(all_pois[poi_id]["service"] or "" for poi_id in in_tab
+                              if service and all_pois[poi_id]["onglet"] == service)
+        cards = [build_card(name, pois[poi_id], signals) for (name, poi_id), signals in groups.items() if tab in (name, ALL_TABS)]
+        # Un lieu à fermeture signalée : son lien attend qu'on tranche la fermeture.
+        masked = _masked_ids(cursor, [card["poi_id"] for card in cards if card["tab"] == "liens"])
         for card in cards:
-            if card["poi_id"] in masked:
+            if card["tab"] == "liens" and card["poi_id"] in masked:
                 card["auto"] = False
                 card["proposal"] = "ce lieu est masqué pour une fermeture signalée : à trancher d'abord."
         cards.sort(key=lambda card: (card["nom"] or "").lower())
@@ -267,9 +443,10 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
         recent = [{"id": row["id"], "nom": row["name"], "action": ACTION_LABELS.get(row["decision"], row["decision"]),
                    "note": row["note"] or "", "par": row["decided_by"], "le": row["decided_at"].strftime("%d/%m/%Y")}
                   for row in cursor.fetchall()]
-        audit = _audit_sample(cursor)
+        audit = _audit_sample(cursor, tab, service, city)
         cursor.close()
-        return {"tab": tab, "counts": counts, "total": len(cards), "cards": cards[:PAGE_SIZE],
+        return {"tab": tab, "counts": counts, "service_counts": dict(service_counts), "type_counts": dict(type_counts),
+                "total": len(cards), "cards": cards[:PAGE_SIZE],
                 "cities": cities, "recent": recent, "audit": audit}
     finally:
         MySQLUtils.disconnect(connection)
@@ -283,18 +460,44 @@ def _masked_ids(cursor, poi_ids: list) -> set:
     return {row["id"] for row in cursor.fetchall()}
 
 
-def _audit_sample(cursor) -> list:
-    """Quelques décisions de la règle, tirées au sort : si elles sont fausses, on resserre la règle."""
-    cursor.execute("""
+def _audit_sample(cursor, tab: str, service: str | None = None, city: str | None = None) -> list:
+    """
+    Quelques décisions de la règle, tirées au sort dans la file et les filtres affichés : si elles sont fausses, on
+    resserre la règle. Chacune dit ce que la règle a lu (le signal) : le lien du lieu seul faisait croire qu'elle
+    avait jugé le lien (Steak 'n Shake, un renommage OSM classé sans suite, 7 novembre 2026).
+    """
+    filters, params = ["d.objet_type = %s", "d.decided_by = %s", "d.annulee_at IS NULL", "d.note IS NULL"], [POI, RULE_AUTHOR]
+    if tab != ALL_TABS:
+        filters.append("JSON_UNQUOTE(JSON_EXTRACT(d.detail, '$.file')) = %s")
+        params.append(tab)
+    if city:
+        filters.append("EXISTS (SELECT 1 FROM histo_poi h JOIN cities c ON c.id = h.city_id"
+                       " WHERE h.poi_id = p.id AND c.name = %s)")
+        params.append(city)
+    if service and service != NO_TAB:
+        categories = tab_categories(service) or ("",)
+        filters.append("EXISTS (SELECT 1 FROM poi_service ps JOIN services s ON s.id = ps.service_id"
+                       f" WHERE ps.poi_id = p.id AND s.category IN ({', '.join(['%s'] * len(categories))}))")
+        params.extend(categories)
+    cursor.execute(f"""
         SELECT d.id, d.decision, d.detail, p.name, p.address, p.url FROM decisions d JOIN poi p ON p.id = d.objet_id
-        WHERE d.objet_type = %s AND d.decided_by = %s AND d.annulee_at IS NULL AND d.note IS NULL
-        ORDER BY RAND() LIMIT %s
-    """, (POI, RULE_AUTHOR, AUDIT_SIZE))
+        WHERE {' AND '.join(filters)} ORDER BY RAND() LIMIT %s
+    """, (*params, AUDIT_SIZE))
+    rows = cursor.fetchall()
+    signal_ids = [signal_id for row in rows for signal_id in _detail(row).get("signal_ids", [])]
+    signals = {}
+    if signal_ids:
+        marks = ",".join(["%s"] * len(signal_ids))
+        cursor.execute(f"SELECT id, source, signal_type, detail FROM poi_signals WHERE id IN ({marks})", tuple(signal_ids))
+        signals = {signal["id"]: signal for signal in cursor.fetchall()}
     sample = []
-    for row in cursor.fetchall():
-        detail = json.loads(row["detail"]) if isinstance(row["detail"], str) else (row["detail"] or {})
+    for row in rows:
+        detail = _detail(row)
+        read = [signals[signal_id] for signal_id in detail.get("signal_ids", []) if signal_id in signals]
         sample.append({"id": row["id"], "nom": row["name"], "adresse": row["address"] or "",
                        "action": ACTION_LABELS.get(row["decision"], row["decision"]),
+                       "signal": "; ".join(f"{SIGNAL_LABELS.get(signal['signal_type'], signal['signal_type'])} : {proof_text(signal)}"
+                                           for signal in read),
                        "url": row["url"] or detail.get("avant", {}).get("url")})
     return sample
 
@@ -312,7 +515,8 @@ def confirm_audit(decision_id: int) -> None:
         MySQLUtils.disconnect(connection)
 
 
-def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by: str, months: list | None) -> None:
+def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by: str, months: list | None,
+               url: str | None = None, name: str | None = None) -> None:
     cursor.execute("""
         SELECT sg.id, sg.poi_id, sg.source, sg.signal_type, sg.detail FROM poi_signals sg
         WHERE sg.poi_id = %s AND sg.statut = 'a_relire'
@@ -321,18 +525,30 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     if not signals:
         raise ValueError("Ce lieu n'a plus rien à relire dans cette file")
     card = build_card(tab, {"id": poi_id, "name": ""}, signals)
-    if action not in card["actions"]:
+    if action not in card["actions"] and action not in RULE_ACTIONS:
         raise ValueError(f"Décision impossible ici : {action}")
-    fields = applied_fields(action, card, months)
+    fields = applied_fields(action, card, months, url, name)
     cursor.execute(f"SELECT {', '.join(APPLIED_COLUMNS)} FROM poi WHERE id = %s", (poi_id,))
     before = cursor.fetchone()
     if fields:
         assignments = ", ".join(f"{column} = %s" for column in fields)
         cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*fields.values(), poi_id))
-    signal_ids = [signal["id"] for signal in signals]
-    marks = ",".join(["%s"] * len(signal_ids))
-    cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
-                   (ACTIONS[action], *signal_ids))
+    if action == "valider_pepite":
+        # La fiche reste si la décision est annulée : le lieu redevient masqué, l'étape 4 ne le montre plus.
+        # La fiche va dans la table de l'agent qui l'a préparée : restaurants ou commerces.
+        sheet_writer = SHEET_WRITERS.get(signals[0].get("source"), restaurant_service.save_validated_sheet)
+        sheet_writer(cursor, poi_id, _detail(signals[0]).get("fiche"))
+    # Ajouter un lien depuis une autre file ne tranche pas ce qu'elle demande (le nom, la fermeture) : le signal reste.
+    signal_ids = [] if SIDE_ACTIONS.get(action, tab) != tab else [signal["id"] for signal in signals]
+    if action == "retirer":
+        # Un lieu retiré n'a plus rien à relire : ses signaux des autres files sont tranchés avec lui (et rouverts si
+        # la décision est annulée).
+        cursor.execute("SELECT id FROM poi_signals WHERE poi_id = %s AND statut = 'a_relire'", (poi_id,))
+        signal_ids = [row["id"] for row in cursor.fetchall()]
+    if signal_ids:
+        marks = ",".join(["%s"] * len(signal_ids))
+        cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
+                       (ACTIONS[action], *signal_ids))
     detail = {"file": tab, "signal_ids": signal_ids, "avant": {column: before[column] for column in fields}}
     cursor.execute("""
         INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
@@ -340,9 +556,10 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     """, (POI, poi_id, action, (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
 
 
-def decide(tab: str, poi_ids: list, action: str, note: str, decided_by: str, months: list | None = None) -> None:
+def decide(tab: str, poi_ids: list, action: str, note: str, decided_by: str, months: list | None = None,
+           url: str | None = None, name: str | None = None) -> None:
     """Enregistre et applique une décision, sur un lieu ou sur un lot de liens contrôlés, en une transaction."""
-    if tab not in TAB_SIGNALS or action not in ACTIONS:
+    if tab not in TAB_SIGNALS or action not in ACTIONS or action in RULE_ACTIONS:
         raise ValueError("Décision inconnue")
     if len(poi_ids) > 1 and (tab != "liens" or action != "valider_lien"):
         raise ValueError("Seuls les liens se valident par lot")
@@ -350,7 +567,7 @@ def decide(tab: str, poi_ids: list, action: str, note: str, decided_by: str, mon
     try:
         cursor = connection.cursor(dictionary=True)
         for poi_id in poi_ids:
-            decide_one(cursor, tab, poi_id, action, note, decided_by, months)
+            decide_one(cursor, tab, poi_id, action, note, decided_by, months, url, name)
         connection.commit()
         cursor.close()
     except Exception:
@@ -376,8 +593,9 @@ def cancel_decision(decision_id: int) -> None:
             assignments = ", ".join(f"{column} = %s" for column in before)
             cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*before.values(), row["objet_id"]))
         signal_ids = detail["signal_ids"]
-        marks = ",".join(["%s"] * len(signal_ids))
-        cursor.execute(f"UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL WHERE id IN ({marks})", tuple(signal_ids))
+        if signal_ids:
+            marks = ",".join(["%s"] * len(signal_ids))
+            cursor.execute(f"UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL WHERE id IN ({marks})", tuple(signal_ids))
         cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
         connection.commit()
         cursor.close()

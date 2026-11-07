@@ -38,11 +38,13 @@
           <i class="fas fa-arrow-left"></i> Catégories
         </button>
         <h2 class="sublist-title" id="sublistTitle"></h2>
+        {# Filtre par type (Boulangerie, Marché...) : rempli par step4_services.js, pour les commerces et la restauration. #}
+        <div id="typeFilter" style="display:none; flex-wrap:wrap; gap:8px; margin:0 0 14px;"></div>
         {# Une grille de cartes par catégorie (générées par step4_services.js) ;
            seule celle de la catégorie ouverte est affichée. #}
         <div class="services-lists">
           {% for category in ['eau', 'vidange', 'gasoil', 'supermarche', 'commerce',
-                              'restauration', 'toilettes', 'hygiene', 'culture', 'urgence'] %}
+                              'restauration', 'cafe', 'toilettes', 'hygiene', 'laverie', 'culture', 'urgence'] %}
           <div class="services-grid" id="{{ category }}" style="display:none;"></div>
           {% endfor %}
         </div>
