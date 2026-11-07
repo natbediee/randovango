@@ -50,6 +50,9 @@ AGENTS = {
     "find_service_links": AgentConfig(QUALITE, "medium", 900, web=True),
     "find_restaurants": AgentConfig(QUALITE, "medium", 900, web=True),
     "analyze_restaurants": AgentConfig(QUALITE, "medium", 900, web=True),
+    # La preuve d'un lot de 5 lieux prend au plus 148 s sur les 134 communes du 6 novembre 2026. Au-delà, l'agent tourne
+    # autour d'un lieu introuvable (Ploudalmézeau) : find_proofs relance alors le lot lieu par lieu.
+    "prove_restaurants": AgentConfig(QUALITE, "medium", 300, web=True),
     # Opus plutôt que Sonnet : comparaison sur 10 spots (rapport/comparaison_modeles.md).
     "harmonize_spots": AgentConfig(QUALITE, "low", 180),
     "dedupe_spots": AgentConfig(QUALITE, "low", 180),

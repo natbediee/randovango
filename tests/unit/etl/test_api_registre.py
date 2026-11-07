@@ -90,3 +90,15 @@ def test_a_closed_place_needs_no_notice(monkeypatch):
     monkeypatch.setattr(api_registre, "last_notice", lambda siren: called.append(siren) or {})
     assert [line["nom"] for line in api_registre.read_register("29190")["enseignes_fermees"]] == ["LA MARINA"]
     assert called == []
+
+
+def test_the_position_is_kept_for_the_zones():
+    register = _register()
+    add_establishment(register, _place(latitude="48.413256461", longitude="-4.478869501"), COMPANY, {}, "2021")
+    assert register["actifs"][0]["position"] == [48.413256461, -4.478869501]
+
+
+def test_a_hidden_position_leaves_the_line_without_position():
+    register = _register()
+    add_establishment(register, _place(latitude="[NON-DIFFUSIBLE]", longitude="[NON-DIFFUSIBLE]"), COMPANY, {}, "2021")
+    assert register["actifs"] and "position" not in register["actifs"][0]

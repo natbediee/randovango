@@ -117,3 +117,10 @@ def test_a_commune_not_treated_keeps_its_own_restaurants(monkeypatch):
     rows = [_row(1, "La Cabane", "restaurant", "x", "1 bd, 29217 Plougonvelin"), _row(2, "La Cormorandière", "restaurant", None, "Place, 29280 Locmaria-Plouzané")]
     result, _ = _get_poi(monkeypatch, rows)
     assert {poi["name"] for poi in result["restauration"]} == {"La Cabane", "La Cormorandière"}
+
+
+def test_a_big_city_shows_its_fifteen_tables_nearest_the_spot(monkeypatch):
+    tables = [_row(number, f"Table {number}", "restaurant", "x", "1 rue, 29217 Plougonvelin", latitude=48.34 + 0.001 * number)
+              for number in reversed(range(20))]
+    result, _ = _get_poi(monkeypatch, tables, spot=(48.34, -4.70))
+    assert [poi["name"] for poi in result["restauration"]] == [f"Table {number}" for number in range(15)]

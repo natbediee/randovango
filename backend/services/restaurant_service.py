@@ -3,6 +3,8 @@ Enregistre ce que l'agent find_restaurants.py a trouvé.
 
     fiche    : le registre ou une page acceptée montre un restaurant à l'adresse, et on a une position. Le lieu s'affiche à l'étape 4 ;
     à relire : un tel lieu, mais sans position ou avec une enseigne fermée au registre, en signal a_confirmer, masqué s'il est nouveau ;
+               de même, avec ou sans page, un lieu que l'agent n'a pas pu trancher (row["a_relire"]) : preuve sans réponse
+               à temps, ou bar au registre dit servir des repas ;
     écarté   : ni registre ni page acceptée, ou une liquidation judiciaire. Rien n'est écrit en base, il ne reste que dans le fichier de l'agent.
 
 Un restaurant est un POI : on réutilise la ligne d'un lieu déjà connu (même nom, ou ancien nom),
@@ -19,6 +21,7 @@ from etl.load.load_poi import get_or_create_source, insert_histo_poi, insert_ser
 from etl.load.load_poi_checks import save_signal
 from services.pepite_service import is_generic, match_poi, name_key
 from utils.db_utils import MySQLUtils
+from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.geo_utils import geocode_address_ban, get_bounding_box, haversine_distance_km
 from utils.logger_util import LoggerUtil
 
@@ -27,6 +30,7 @@ logger = LoggerUtil.get_logger("agent_restaurants")
 SOURCE = "agent_restaurants"
 SERVICE_CATEGORY = "restaurant"
 MAX_KM = 15                 # au-delà, l'adresse géocodée n'est pas celle de la commune cherchée
+OLD_NAME_KM = 1             # un ancien nom ne retrouve un lieu connu qu'à cette distance de l'adresse (Cléder : 0,51 km pour le même lieu)
 MAX_ARTICLE_MONTHS = 18     # un article ancien ne prouve pas que le lieu existe encore
 FRENCH_MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
                  "septembre", "octobre", "novembre", "décembre")
@@ -100,6 +104,25 @@ def load_city(name: str) -> dict | None:
     return rows[0] if rows else None
 
 
+def commune_spots(name: str) -> list:
+    """
+    Les spots proposables dont l'adresse est dans la commune : ils découpent une grande ville en zones de recherche.
+    L'adresse, pas la distance au centre : celui de Brest est à Sainte-Anne du Portzic, à 9,6 km de ses derniers spots.
+    """
+    placeholders = ",".join(["%s"] * len(HIDDEN_SPOT_TYPES))
+    connection = MySQLUtils.connect()
+    cursor = connection.cursor()
+    cursor.execute(f"""SELECT id, latitude, longitude, address, city_label FROM spots
+                       WHERE (city_label = %s OR address LIKE %s) AND type IS NOT NULL AND type NOT IN ({placeholders})
+                         AND duplicate_of_spot_id IS NULL AND p4n_removed = 0 AND (nuit_interdite IS NULL OR nuit_interdite = 0)
+                       ORDER BY id""", (name, f"%{name}", *HIDDEN_SPOT_TYPES))
+    rows = _rows(cursor)
+    cursor.close()
+    MySQLUtils.disconnect(connection)
+    in_commune = re.compile(rf"\b\d{{5}}\s+{re.escape(name)}$", re.I)
+    return [row for row in rows if row["city_label"] == name or in_commune.search(row["address"] or "")]
+
+
 def _known_restaurants(cursor, city: dict) -> list:
     """Les restaurants déjà en base autour de la commune, pour réutiliser leur ligne."""
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], MAX_KM)
@@ -119,11 +142,20 @@ def _position(city: dict, address: str | None) -> tuple | None:
 
 
 def _find_known(row: dict, position: tuple | None, city: dict, known: list) -> dict | None:
-    """La ligne du lieu : son nom d'abord, son ancien nom ensuite (Mary Stuart, devenu La Petite Folie)."""
+    """
+    La ligne du lieu : son nom d'abord, son ancien nom ensuite (Mary Stuart, devenu La Petite Folie). L'ancien nom ne
+    vaut qu'à l'adresse même : « Le Triskell », ancien nom du Neuf à Ploudalmézeau, désignait aussi un restaurant à
+    10 km, et Le Neuf a été perdu (7 novembre 2026). Sans position, on ne cherche pas par l'ancien nom.
+    """
     latitude, longitude = position or (city["latitude"], city["longitude"])
     for name in (row["nom"], row.get("ancien_nom")):
         if not name:
             continue
+        if name != row["nom"]:
+            if not position:
+                continue
+            known = [poi for poi in known if poi["latitude"] is not None
+                     and haversine_distance_km(latitude, longitude, poi["latitude"], poi["longitude"]) <= OLD_NAME_KM]
         same = [poi for poi in known if compact_name(poi["name"]) == compact_name(name) and not is_generic(name_key(name))]
         if same:
             return min(same, key=lambda poi: haversine_distance_km(latitude, longitude, poi["latitude"], poi["longitude"]))
@@ -213,7 +245,9 @@ def is_liquidated(row: dict) -> bool:
 
 
 def review_reason(row: dict, located) -> str | None:
-    """Pourquoi ce lieu, qui a une page acceptée, doit attendre une relecture au lieu d'être montré, ou None."""
+    """Pourquoi ce lieu doit attendre une relecture au lieu d'être montré, ou None."""
+    if row.get("a_relire"):
+        return row["a_relire"]
     if row.get("alerte_registre"):
         return f"registre : {row['alerte_registre']}"
     return None if located else "position introuvable"
@@ -238,7 +272,7 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
                 summary["liquidation"] += 1
                 continue
             accepted = [page for page in row["pages"] if page_accepted(page, commune=city["name"])]
-            if not accepted and not row.get("au_registre"):
+            if not accepted and not row.get("au_registre") and not row.get("a_relire"):
                 logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, ni registre ni page acceptée")
                 summary["sans_page"] += 1
                 continue

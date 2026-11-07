@@ -26,6 +26,9 @@ sort aussi (Hôtel Vent d'Iroise, 5 novembre 2026).
 LA PREUVE VIENT À PART, PAR PETITS LOTS
 Au pilote du 3 novembre 2026, un seul appel pour 17 lieux n'a laissé qu'environ 9 s par lieu, et 8 sont restés sans page.
 Seuls les lieux que le code n'a pas pu accepter passent par find_proofs.
+Un lot qui dépasse son délai est relancé lieu par lieu : à Ploudalmézeau, le 7 novembre 2026, cinq bars sans page ont
+fait échouer la commune trois fois, et les vrais restaurants du lot avec eux. Un lieu seul qui dépasse encore son délai
+n'est pas écarté : il attend une relecture humaine (signal a_confirmer), car l'agent n'a rien conclu.
 
 UN DOUBLON DOIT ÊTRE À LA MÊME ADRESSE, ET L'AGENT DIT LEQUEL
 Le nom ne le montre pas : Laer-Mor était le nom des Boucaniers, Sainte-Barbe l'hôtel de La Corniche. L'adresse ne
@@ -38,6 +41,7 @@ from datetime import date
 
 from agents.find_service_links import check_links_of, citation_found
 from agents.llm_config import make_llm_service
+from agents.llm_service import LLMTimeout
 from agents.pepite_common import EXCLUDED_SITES_PROMPT, is_excluded_site
 from services import restaurant_service
 from utils.logger_util import LoggerUtil
@@ -47,6 +51,7 @@ logger = LoggerUtil.get_logger("agent_restaurants")
 PAGE_TYPES = ["site", "office_tourisme", "guide", "presse", "facebook", "instagram", "mairie"]
 DETAIL_FIELDS = ["saison", "distinction"]
 PROOF_BATCH = 5
+PROOF_TIMED_OUT = "preuve : l'agent n'a pas répondu à temps"
 MONTHS = tuple(restaurant_service.name_key(month) for month in restaurant_service.FRENCH_MONTHS)
 
 SYSTEM_PROMPT = f"""Tu vérifies pour les voyageurs de Randovango, une application de randonnée en van, des restaurants déjà
@@ -220,7 +225,7 @@ def analyze_commune(city: dict, restaurants: list, register: dict | None = None,
 def _ask_proofs(city: dict, batch: list) -> list:
     places = [{"numero": number, "nom": row["nom"], "adresse": row.get("adresse"), "genre": row.get("genre")}
               for number, row in enumerate(batch, 1)]
-    service = make_llm_service("analyze_restaurants")
+    service = make_llm_service("prove_restaurants")
     answer = service.complete_json(PROOF_PROMPT, f"COMMUNE : {city['name']}\nLIEUX : {json.dumps(places, ensure_ascii=False)}", PROOF_SCHEMA)
     by_number = {place["numero"]: place for place in answer["lieux"]}
     run = service.last_run
@@ -229,13 +234,26 @@ def _ask_proofs(city: dict, batch: list) -> list:
     return [by_number.get(number, {}) for number in range(1, len(batch) + 1)]
 
 
+def _proofs_of_batch(city: dict, batch: list) -> list:
+    """Les preuves d'un lot, ou lieu par lieu s'il dépasse son délai. Un lieu seul trop long attend une relecture."""
+    try:
+        return _ask_proofs(city, batch)
+    except LLMTimeout:
+        if len(batch) == 1:
+            logger.info(f"[restaurants] {city['name']} (preuves) : {batch[0]['nom']} sans réponse à temps, à relire")
+            return [{"a_relire": PROOF_TIMED_OUT}]
+        logger.info(f"[restaurants] {city['name']} (preuves) : lot trop long, relancé lieu par lieu")
+        with ThreadPoolExecutor(max_workers=len(batch)) as pool:
+            return [proof for answer in pool.map(lambda row: _proofs_of_batch(city, [row]), batch) for proof in answer]
+
+
 def find_proofs(city: dict, restaurants: list, trace: dict | None = None) -> list:
     """Pour chaque lieu sans page acceptée, dans le même ordre, ce que l'analyste a trouvé. Lève LLMUnavailable."""
     batches = [restaurants[start:start + PROOF_BATCH] for start in range(0, len(restaurants), PROOF_BATCH)]
     if not batches:
         return []
     with ThreadPoolExecutor(max_workers=len(batches)) as pool:
-        proofs = [proof for answer in pool.map(lambda batch: _ask_proofs(city, batch), batches) for proof in answer]
+        proofs = [proof for answer in pool.map(lambda batch: _proofs_of_batch(city, batch), batches) for proof in answer]
     if trace is not None:
         trace["preuves"] = [{"nom": row["nom"], **proof} for row, proof in zip(restaurants, proofs)]
     return proofs

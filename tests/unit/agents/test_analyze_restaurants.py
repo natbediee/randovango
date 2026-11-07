@@ -1,4 +1,7 @@
-from agents import analyze_restaurants
+import pytest
+
+from agents import analyze_restaurants, llm_config
+from agents.llm_service import LLMTimeout, LLMUnavailable
 from agents.analyze_restaurants import apply_analysis, control_details, value_in_citation
 
 
@@ -190,3 +193,39 @@ def test_a_detail_on_a_refused_page_is_dropped(monkeypatch):
 def test_the_analyst_reads_every_page_found_except_the_excluded_sites():
     row = {"pages": [{"url": "https://guide.michelin.com/x"}, {"url": "https://iroise-bretagne.bzh/x"}, {"url": "https://iroise-bretagne.bzh/x"}]}
     assert analyze_restaurants.pages_to_read(row) == ["https://iroise-bretagne.bzh/x"]
+
+
+def test_a_batch_too_long_is_asked_again_place_by_place(monkeypatch):
+    def answer(message):
+        if message.count('"numero"') > 1:
+            raise LLMTimeout("trop long")
+        if "Le Galion" in message:
+            raise LLMTimeout("trop long")
+        return {"lieux": [{"numero": 1, "preuve_url": "https://x.fr"}]}
+
+    service = _Service(answer)
+    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: service)
+    rows = [{"nom": name} for name in ("Le Kraken", "Le Galion", "Le Caïman")]
+    proofs = analyze_restaurants.find_proofs({"name": "Ploudalmézeau"}, rows)
+    assert len(service.messages) == 4
+    assert proofs[0]["preuve_url"] == proofs[2]["preuve_url"] == "https://x.fr"
+    assert proofs[1] == {"a_relire": analyze_restaurants.PROOF_TIMED_OUT}
+
+
+def test_a_quota_limit_is_not_taken_for_a_batch_too_long(monkeypatch):
+    def answer(message):
+        raise LLMUnavailable("You've hit your session limit")
+
+    service = _Service(answer)
+    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: service)
+    with pytest.raises(LLMUnavailable):
+        analyze_restaurants.find_proofs({"name": "X"}, [{"nom": "A"}, {"nom": "B"}])
+    assert len(service.messages) == 1
+
+
+def test_proofs_have_their_own_shorter_delay(monkeypatch):
+    names = []
+    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: names.append(name) or _Service({"lieux": []}))
+    analyze_restaurants.find_proofs({"name": "X"}, [{"nom": "A"}])
+    assert names == ["prove_restaurants"]
+    assert llm_config.AGENTS["prove_restaurants"].timeout < llm_config.AGENTS["analyze_restaurants"].timeout

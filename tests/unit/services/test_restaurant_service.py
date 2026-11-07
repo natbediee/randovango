@@ -233,3 +233,25 @@ def test_a_failure_writes_nothing(monkeypatch):
     with pytest.raises(RuntimeError):
         restaurant_service.save_commune(CITY, {"restaurants": [{"nom": "X", "adresse": "1 quai", "pages": []}]}, 7, "modele")
     assert connection.rolled_back and not connection.committed
+
+
+def test_a_place_the_agent_could_not_settle_waits_for_a_review(monkeypatch):
+    reason = "preuve : l'agent n'a pas répondu à temps"
+    summary, calls = _save(monkeypatch, {"nom": "Le Neuf", "a_relire": reason, "pages": []})
+    assert summary == {"fiches": 0, "a_confirmer": 1, "sans_page": 0, "liquidation": 0} and calls["flag"] == [reason] and calls["sheet"] == []
+
+
+TRISKELL = {"id": 1741, "name": "Le Triskell", "latitude": 48.4658, "longitude": -4.75981, "masque": 0}
+PLOUDALMEZEAU = {"name": "Ploudalmézeau", "latitude": 48.5439, "longitude": -4.655}
+
+
+def test_an_old_name_finds_a_known_place_only_at_the_address():
+    row = {"nom": "Le Neuf", "ancien_nom": "Le Triskell"}
+    assert restaurant_service._find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) is None
+    assert restaurant_service._find_known(row, (48.4659, -4.7598), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
+    assert restaurant_service._find_known(row, None, PLOUDALMEZEAU, [TRISKELL]) is None
+
+
+def test_the_current_name_still_finds_a_place_away_from_the_address():
+    row = {"nom": "Le Triskell", "ancien_nom": None}
+    assert restaurant_service._find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
