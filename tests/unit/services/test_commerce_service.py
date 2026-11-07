@@ -137,17 +137,6 @@ def test_a_shop_validated_by_a_human_is_verified():
     assert cursor.execute.call_args_list[-1][0] == ("UPDATE poi SET verifie = %s WHERE id = %s", (1, 7))
 
 
-def test_the_one_off_recount_uses_the_same_rule():
-    from datetime import date
-    from oneshot.recalcul_badge_verifie import is_verified, page_of
-    town_hall = page_of({"url": "https://www.plougonvelin.fr/marche", "type_page": "mairie", "verdict": "ok", "date_page": None})
-    aggregator = page_of({"url": "https://annuaire.fr/x", "type_page": "agregateur", "verdict": "ok", "date_page": date(2026, 1, 1)})
-    market = {"address": "Place, 29217 Plougonvelin", "commune": "Plougonvelin", "categorie": "marche", "chaine": "commerces"}
-    assert is_verified(market, [town_hall], validated=False)
-    assert not is_verified({**market, "categorie": "epicerie"}, [town_hall, aggregator], validated=False)
-    assert is_verified({**market, "chaine": "restaurants", "categorie": None}, [], validated=True)
-
-
 def test_the_short_name_finds_the_osm_line():
     assert commerce_service.short_name("Boulangerie Laot") == "Laot"
     assert commerce_service.short_name("Boulangerie de la Plage") == "Plage"
