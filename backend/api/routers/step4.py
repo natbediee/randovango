@@ -2,7 +2,7 @@ import re
 
 from fastapi import APIRouter, Query, Body
 from services.plan_service import insert_or_update_plan
-from services.restaurant_selection_service import TABLE_CATEGORY_LABELS, is_new, maps_url
+from services.restaurant_selection_service import TABLE_CATEGORY_LABELS, TABLES_SHOWN, is_new, maps_url
 from utils.db_utils import MySQLUtils
 from utils.display_utils import enrich_poi, poi_subtitle
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -44,13 +44,14 @@ def display_rank(poi: dict, city_name: str) -> tuple:
 
 def order_category(pois: list, category: str, city_name: str) -> list:
     """
-    Les MAX_POI_PER_CATEGORY plus proches. Pour la restauration, toutes les tables de la commune, de la plus proche à la plus
-    loin, sans limite : la limite cachait Les Boucaniers et La Balise. Les autres lieux ne font que compléter jusqu'à cette limite.
+    Les MAX_POI_PER_CATEGORY plus proches. Pour la restauration, les TABLES_SHOWN tables de la commune les plus proches du
+    spot : la limite de 10 cachait Les Boucaniers et La Balise, et sans limite Brest, cherchée zone par zone, en montrerait
+    une centaine. Le tri par distance suffit à donner celles de la zone du spot. Les autres lieux complètent jusqu'à 10.
     """
     pois = sorted(pois, key=lambda poi: display_rank(poi, city_name))
     if category != RESTAURATION_CATEGORY:
         return pois[:MAX_POI_PER_CATEGORY]
-    tables = [poi for poi in pois if is_own_table(poi, city_name)]
+    tables = [poi for poi in pois if is_own_table(poi, city_name)][:TABLES_SHOWN]
     others = [poi for poi in pois if not is_own_table(poi, city_name)]
     return tables + others[:max(0, MAX_POI_PER_CATEGORY - len(tables))]
 

@@ -45,6 +45,10 @@ class LLMUnavailable(RuntimeError):
     """Erreur levée quand on ne peut pas obtenir de réponse exploitable de Claude."""
 
 
+class LLMTimeout(LLMUnavailable):
+    """Claude n'a pas répondu dans le délai : l'appelant peut réessayer autrement, une limite de quota reste un LLMUnavailable."""
+
+
 # --- 1. Appel via l'API Anthropic ---------------------------------------------
 
 class LLMService:
@@ -220,10 +224,12 @@ class ClaudeCodeLLMService:
         #    d'environnement, que le programme `claude` lancé juste après pourra lire.
         ServiceUtil.load_env()
 
-        # 3. Construire la commande, un élément de la liste par mot.
+        # 3. Construire la commande, un élément de la liste par mot. La question n'y
+        #    figure pas : elle part par l'entrée standard (étape 4), car Linux refuse
+        #    un argument de plus de 128 Ko (« Argument list too long », vu sur Brest).
         command = [
             "claude",
-            "-p", user,                          # -p : pose la question, affiche la réponse, quitte
+            "-p",                                # -p : lit la question, affiche la réponse, quitte
             "--system-prompt", system,           # les consignes générales
             "--json-schema", json.dumps(schema), # la forme du JSON attendu
             # stream-json : une ligne JSON par étape (réflexion, appel d'outil...) puis
@@ -252,13 +258,14 @@ class ClaudeCodeLLMService:
         try:
             process = subprocess.run(
                 command,
+                input=user,           # la question, envoyée par l'entrée standard
                 capture_output=True,  # récupère ce que le programme affiche
                 text=True,            # ... sous forme de texte (str) et non d'octets
                 timeout=self.timeout,
                 cwd=tempfile.gettempdir(),
             )
         except subprocess.TimeoutExpired:
-            raise LLMUnavailable(f"claude -p n'a pas répondu en {self.timeout} secondes.")
+            raise LLMTimeout(f"claude -p n'a pas répondu en {self.timeout} secondes.")
 
         # 5. Lire la réponse : une ligne JSON par étape. On note les outils appelés
         #    (StructuredOutput est l'étape interne qui produit le JSON final, on

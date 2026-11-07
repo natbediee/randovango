@@ -18,6 +18,7 @@ Le nom d'un entrepreneur individuel n'est jamais gardé : c'est celui d'une pers
 Si un registre ne répond pas, la recherche continue sans lui.
 """
 import json
+import re
 import time
 
 import requests
@@ -77,6 +78,11 @@ def add_establishment(register: dict, establishment: dict, firm: dict, notice: d
     """Range un établissement : actif avec son signal, radié, enseigne fermée récente, ou rien."""
     line = {"nom": place_name(establishment, firm), "adresse": establishment.get("adresse"),
             "activite": establishment.get("activite_principale")}
+    # La position découpe une grande ville en zones (find_restaurants.py) ; l'agent ne la lit pas. Un établissement
+    # non diffusible donne « [NON-DIFFUSIBLE] » à la place : sa ligne reste, sans position (Brest, 6 novembre 2026).
+    position = establishment.get("latitude"), establishment.get("longitude")
+    if all(re.fullmatch(r"-?\d+(\.\d+)?", str(value or "")) for value in position):
+        line["position"] = [float(value) for value in position]
     if establishment.get("etat_administratif") != "A":
         closed_on = establishment.get("date_fermeture") or ""
         if line["nom"] and closed_on >= oldest_closure:

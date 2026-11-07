@@ -255,3 +255,111 @@ def test_control_row_puts_the_citation_on_the_proof_page(monkeypatch):
            "preuve_citation": "Crêperie", "preuve_date": "2026-09"}
     pages = find_restaurants.control_row(row, "Plougonvelin")
     assert [page.get("citation") for page in pages] == [None, "Crêperie"] and pages[1]["date_page"] == "2026-09"
+
+
+# --- Grandes villes : une recherche par zone autour des spots ---
+
+def _line(name, latitude, activity="56.10A"):
+    return {"nom": name, "adresse": "1 rue", "activite": activity, "actif_depuis": "2020-01-01", "position": [latitude, -4.5]}
+
+
+def test_close_spots_share_a_zone_and_a_far_one_has_its_own():
+    spots = [{"latitude": 48.380, "longitude": -4.5, "address": "A"}, {"latitude": 48.385, "longitude": -4.5, "address": "B"},
+             {"latitude": 48.420, "longitude": -4.5, "address": "C"}]
+    assert [zone["repere"] for zone in find_restaurants.commune_zones(CITY, spots)] == ["A", "C"]
+
+
+def test_a_big_city_without_spot_is_searched_around_its_centre():
+    assert find_restaurants.commune_zones(CITY, []) == [{"latitude": 48.3, "longitude": -4.7, "repere": "le centre de la commune"}]
+
+
+def test_the_agent_never_reads_the_positions():
+    register = {"actifs": [_line("NOUS", 48.38)], "enseignes_fermees": [], "radies": []}
+    assert find_restaurants.register_for_agent(register)["actifs"] == [{key: value for key, value in _line("NOUS", 48.38).items() if key != "position"}]
+
+
+def test_a_zone_reads_only_the_nearest_restaurants_of_the_register():
+    zone = {"latitude": 48.38, "longitude": -4.5, "repere": "A"}
+    lines = [_line(f"Loin {number}", 48.38 + 0.0001 * number) for number in range(60)]
+    register = {"actifs": [_line("Bar", 48.38, "56.30Z"), _line("Hors zone", 48.42), *reversed(lines)], "enseignes_fermees": [], "radies": []}
+    kept = find_restaurants.register_for_agent(register, zone)["actifs"]
+    assert [line["nom"] for line in kept] == [f"Loin {number}" for number in range(find_restaurants.ZONE_LINES)]
+    assert all("position" not in line for line in kept)
+
+
+def test_the_message_of_a_zone_gives_its_landmark():
+    zone = {"latitude": 48.38, "longitude": -4.5, "repere": "Rue Jim Sévellec, 29200 Brest"}
+    assert "ZONE : à moins de 1.5 km de Rue Jim Sévellec, 29200 Brest (48.38000, -4.50000)" in build_message(CITY, None, zone)
+
+
+class _ZoneAgent(_Agent):
+    def __init__(self):
+        super().__init__()
+        self.messages = []
+
+    def complete_json(self, system, message, schema):
+        self.messages.append(message)
+        return super().complete_json(system, message, schema)
+
+
+def test_a_big_city_is_searched_zone_by_zone_and_keeps_each_place_once(monkeypatch, tmp_path):
+    agent = _ZoneAgent()
+    _chain(monkeypatch, tmp_path, agent, registered="NOUS")
+    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(find_restaurants.ZONE_FROM)]],
+           "enseignes_fermees": [], "radies": []}
+    monkeypatch.setattr(find_restaurants.api_registre, "load_register", lambda city: big)
+    monkeypatch.setattr(find_restaurants.restaurant_service, "commune_spots", lambda name: [
+        {"latitude": 48.38, "longitude": -4.5, "address": "A"}, {"latitude": 48.42, "longitude": -4.5, "address": "C"}])
+    answer = find_restaurants.search_commune(CITY)
+    assert [row["nom"] for row in answer["restaurants"]] == ["NOUS", "Riboul"]
+    searches = [message for message in agent.messages if "ZONE" in message]
+    assert len(searches) == 2 * (find_restaurants.YEAR_SEARCHES + 1)
+    # La recherche comme l'analyste ne lisent que les lignes de la zone : 40 sur 101, et aucune pour la zone sans restaurant.
+    assert sorted(message.count('"Table ') for message in searches) == [0] * 4 + [find_restaurants.ZONE_LINES - 1] * 4
+    assert all(message.count('"Table ') <= find_restaurants.ZONE_LINES for message in agent.messages)
+    trace = json.loads(next(tmp_path.iterdir()).read_text())
+    assert len(trace["zones"]) == 2 and "final" in trace
+
+
+def test_an_ordinary_commune_does_not_look_for_zones(monkeypatch, tmp_path):
+    _chain(monkeypatch, tmp_path, _Agent())
+    monkeypatch.setattr(find_restaurants.restaurant_service, "commune_spots", lambda name: pytest.fail("pas de zone ici"))
+    assert find_restaurants.search_commune(CITY)["restaurants"]
+
+
+def test_the_register_name_of_a_creperie_is_the_name_found():
+    assert find_restaurants.place_key("LA CREPERIE DU CHATEAU D'EAU") == find_restaurants.place_key("Le Château d'Eau")
+
+
+def test_a_bar_said_to_serve_meals_waits_for_a_review():
+    register = {"actifs": [{"nom": "LE NEUF", "adresse": "9 RUE DE BREST 29830 PLOUDALMEZEAU", "activite": "56.30Z"}]}
+    brasserie = {"nom": "Le Neuf", "genre": "bar-tabac-brasserie", "adresse": "9 rue de Brest, 29830 Ploudalmézeau"}
+    pub = {"nom": "Le Neuf", "genre": "pub irlandais", "adresse": "9 rue de Brest, 29830 Ploudalmézeau"}
+    assert find_restaurants.bar_said_restaurant(brasserie, register)
+    assert not find_restaurants.bar_said_restaurant(pub, register)
+    assert not find_restaurants.bar_said_restaurant(brasserie, None)
+
+
+def test_a_proof_without_answer_in_time_sends_the_place_to_review():
+    row = _row()
+    add_proofs(row, {"a_relire": "preuve : l'agent n'a pas répondu à temps"}, "Plougonvelin")
+    assert row["a_relire"] == "preuve : l'agent n'a pas répondu à temps" and not has_accepted_page(row, "Plougonvelin")
+
+
+class _BarAgent(_Agent):
+    def complete_json(self, system, message, schema):
+        answer = super().complete_json(system, message, schema)
+        for row in answer.get("restaurants", []):
+            row["genre"] = "bar-tabac-brasserie"
+        return answer
+
+
+def test_a_bar_said_to_serve_meals_needs_no_proof_search(monkeypatch, tmp_path):
+    _chain(monkeypatch, tmp_path, _BarAgent())
+    monkeypatch.setattr(find_restaurants.api_registre, "load_register", lambda city: {"actifs": [{"nom": "NOUS", "activite": "56.30Z"}]})
+    answer = find_restaurants.search_commune(CITY)
+    by_name = {row["nom"]: row for row in answer["restaurants"]}
+    assert by_name["NOUS"]["a_relire"] == find_restaurants.BAR_SAID_RESTAURANT and not by_name["NOUS"]["au_registre"]
+    assert "a_relire" not in by_name["Riboul"]
+    trace = json.loads(next(tmp_path.iterdir()).read_text())
+    assert "preuves" not in trace

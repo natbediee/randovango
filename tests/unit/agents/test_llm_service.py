@@ -112,3 +112,22 @@ def test_batch_finished_reads_the_processing_status() -> None:
         ))
     )
     assert service.batch_finished("batch_1") is True
+
+
+def test_a_long_question_goes_through_standard_input(monkeypatch) -> None:
+    # Le registre de Brest dépasse 128 Ko : en argument, Linux refusait la commande.
+    from agents import llm_service
+    calls = {}
+
+    def fake_run(command, **kwargs):
+        calls["command"], calls["input"] = command, kwargs.get("input")
+        result = {"type": "result", "is_error": False, "structured_output": {"ok": True}}
+        return SimpleNamespace(stdout=json.dumps(result), stderr="", returncode=0)
+
+    monkeypatch.setattr(llm_service.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(llm_service.ServiceUtil, "load_env", staticmethod(lambda: None))
+    monkeypatch.setattr(llm_service.subprocess, "run", fake_run)
+    question = "x" * 300_000
+    assert llm_service.ClaudeCodeLLMService("modele-test").complete_json("sys", question, SCHEMA) == {"ok": True}
+    assert calls["input"] == question
+    assert all(len(part) < 128_000 for part in calls["command"])

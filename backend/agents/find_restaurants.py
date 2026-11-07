@@ -63,6 +63,7 @@ from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from etl.extract import api_registre
 from services import restaurant_service
 from services.restaurant_selection_service import TABLE_CATEGORIES
+from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_restaurants")
@@ -79,14 +80,26 @@ logger = LoggerUtil.get_logger("agent_restaurants")
 #   9 : catégorie fixe ; l'analyste ne cherche plus le budget ni les jours de fermeture, et lit la distinction ailleurs que dans les guides
 #  10 : un hôtel dont l'analyste ne trouve pas le nom du restaurant est retiré
 #  11 : la phrase "pourquoi" est affichée au voyageur, sans sources ni doutes
-RESTAURANTS_PROMPT_VERSION = 11
+#  12 : une grande ville est cherchée zone par zone, autour de ses spots
+RESTAURANTS_PROMPT_VERSION = 12
 
 MAX_PLACES = 15
 YEAR_SEARCHES = 3
 RESTAURATION_ACTIVITY = "56.10"     # restauration ; 56.30 est un débit de boissons (L'Univers, un bar-tabac), 55 l'hôtellerie
+BAR_ACTIVITY = "56.30"
+# Un bar au registre que les recherches disent servir des repas attend une relecture (Le Neuf, bar-tabac-brasserie de
+# Ploudalmézeau, une pépite selon les avis lus le 7 novembre 2026) : le code de bar ne prouve pas qu'on y mange.
+MEAL_WORDS = ("brasserie", "restaurant", "creperie", "pizzeria")
+BAR_SAID_RESTAURANT = "registre : débit de boissons, dit servir des repas par les recherches"
 COMMON_STREET_WORDS = {"rue", "route", "boulevard", "bd", "avenue", "av", "place", "quai", "chemin", "impasse", "allee", "lieudit", "lieu", "dit",
                        "ld", "de", "du", "des", "la", "le", "les", "l", "d"}
 PAGE_TYPES = ["site", "office_tourisme", "guide", "presse", "facebook", "instagram", "mairie", "agregateur"]
+# Une grande ville, par zones autour de ses spots : le registre de Brest (733 lignes actives, 145 Ko) ne tenait pas
+# dans la commande, et 15 lieux pour toute la ville auraient été pris au hasard. Le 6 novembre 2026, ses 44 spots
+# font 10 zones de 1,5 km ; trois comptent 178 à 270 restaurants au registre, d'où les 40 lignes les plus proches du spot.
+ZONE_FROM = 100      # au-delà de 100 lignes actives au registre, la commune est cherchée par zones
+ZONE_KM = 1.5
+ZONE_LINES = 40
 TRACE_DIR = Path(os.getenv("RANDOVANGO_LOG_DIR", "/usr/src/logs")) / "agent_restaurants"
 
 SYSTEM_PROMPT = f"""Tu cherches pour les voyageurs de Randovango, une application de randonnée en van,
@@ -105,6 +118,11 @@ Pour un hôtel, retiens son restaurant s'il en a un, sous le nom du restaurant.
 Le message peut contenir une liste tirée des registres officiels. Elle sert d'indice : elle contient des lieux sans table pour
 les voyageurs, et il y manque des lieux (adresses d'été, restaurants d'hôtel). Un lieu absent peut très bien exister.
 Pour une ligne sans nom, cherche l'adresse pour savoir qui l'occupe.
+
+## La zone
+Pour une grande ville, le message donne une ZONE : un repère, sa position et un rayon. Cherche seulement les lieux de la
+commune situés dans cette zone : d'autres recherches couvrent le reste de la ville. Le registre ne contient alors que les
+lignes les plus proches du repère.
 
 ## Les pages
 "lien" et "preuve_url" : la meilleure page où tu as vu le lieu, même un agrégateur (type "agregateur"). "preuve_citation",
@@ -162,7 +180,8 @@ SCHEMA = {
 def place_key(name: str) -> str:
     """« La Crêperie Riboul » et « Riboul », « Spiaggia Restaurant » et « Spiaggia » sont le même lieu d'un passage à l'autre."""
     words = [word for word in restaurant_service.name_key(name).split() if word not in ("creperie", "restaurant")]
-    while words and words[0] in ("l", "la", "le", "les"):
+    # « La Crêperie du Château d'Eau » au registre est « Le Château d'Eau » des recherches (Ploudalmézeau, 7 novembre 2026).
+    while words and words[0] in ("l", "la", "le", "les", "d", "de", "du", "des"):
         words.pop(0)
     return "".join(words) or restaurant_service.compact_name(name)
 
@@ -231,9 +250,56 @@ def _ask(city: dict, label: str, prompt: str, message: str) -> dict:
     return answer
 
 
-def build_message(city: dict, register: dict | None) -> str:
+def build_message(city: dict, register: dict | None, zone: dict | None = None) -> str:
     message = f"COMMUNE : {city['name']}, {city.get('department') or 'France'}"
+    if zone:
+        message += f"\nZONE : à moins de {ZONE_KM} km de {zone['repere']} ({zone['latitude']:.5f}, {zone['longitude']:.5f})"
     return f"{message}\nREGISTRE : {json.dumps(register, ensure_ascii=False)}" if register else message
+
+
+def is_big_city(register: dict | None) -> bool:
+    return len((register or {}).get("actifs", [])) > ZONE_FROM
+
+
+def commune_zones(city: dict, spots: list) -> list:
+    """
+    Une zone par groupe de spots d'une grande ville : un spot à moins de ZONE_KM d'une zone déjà faite en fait partie.
+    Sans spot, une seule zone, autour du centre.
+    """
+    zones = []
+    for spot in spots:
+        latitude, longitude = float(spot["latitude"]), float(spot["longitude"])
+        if not any(haversine_distance_km(latitude, longitude, zone["latitude"], zone["longitude"]) <= ZONE_KM for zone in zones):
+            zones.append({"latitude": latitude, "longitude": longitude, "repere": spot["address"]})
+    return zones or [{"latitude": float(city["latitude"]), "longitude": float(city["longitude"]), "repere": "le centre de la commune"}]
+
+
+def register_for_agent(register: dict | None, zone: dict | None = None) -> dict | None:
+    """
+    Ce que l'agent lit du registre : sans les positions. Pour une zone, seulement les restaurants à moins de ZONE_KM du
+    repère, les ZONE_LINES plus proches. Le code garde le registre entier pour les preuves et la date « nouveau ».
+    """
+    if not register:
+        return register
+
+    def kept(lines: list) -> list:
+        if zone is None:
+            return lines
+        placed = sorted(((haversine_distance_km(zone["latitude"], zone["longitude"], *line["position"]), number, line)
+                         for number, line in enumerate(lines)
+                         if line.get("position") and line.get("activite", "").startswith(RESTAURATION_ACTIVITY)))
+        return [line for distance, _, line in placed if distance <= ZONE_KM][:ZONE_LINES]
+
+    return {kind: [{key: value for key, value in line.items() if key != "position"} for line in kept(lines)]
+            for kind, lines in register.items()}
+
+
+def merge_zones(answers: list) -> dict:
+    """Un lieu vu depuis deux zones voisines n'est gardé qu'une fois, avec la fiche de la première."""
+    places = {}
+    for row in (row for answer in answers for row in answer["restaurants"]):
+        places.setdefault(place_key(row["nom"]), row)
+    return {"restaurants": list(places.values()), "ecartes": [row for answer in answers for row in answer["ecartes"]]}
 
 
 def has_accepted_page(row: dict, commune: str) -> bool:
@@ -242,6 +308,8 @@ def has_accepted_page(row: dict, commune: str) -> bool:
 
 def add_proofs(row: dict, proof: dict, commune: str) -> None:
     """Les pages de l'analyste s'ajoutent à celles déjà trouvées : aucune n'est jetée."""
+    if proof.get("a_relire"):
+        row["a_relire"] = proof["a_relire"]
     if proof.get("adresse") and not row.get("adresse"):
         row["adresse"] = proof["adresse"]
     if not proof.get("preuve_url"):
@@ -276,6 +344,16 @@ def in_register(row: dict, register: dict | None) -> bool:
                for line in lines)
 
 
+def bar_said_restaurant(row: dict, register: dict | None) -> bool:
+    """Un bar actif au registre, à ce nom ou à cette adresse, que les recherches disent servir des repas."""
+    genre = restaurant_service.name_key(row.get("genre") or "")
+    if not any(word in genre for word in MEAL_WORDS):
+        return False
+    lines = [line for line in (register or {}).get("actifs", []) if line.get("activite", "").startswith(BAR_ACTIVITY)]
+    return any((line.get("nom") and place_key(line["nom"]) == place_key(row["nom"])) or same_address(row.get("adresse"), line.get("adresse"))
+               for line in lines)
+
+
 def registered_since(name: str, register: dict | None) -> str | None:
     """
     La date du registre à ce nom, la plus ancienne s'il y a deux établissements. Une seule condition, le nom : une société
@@ -294,32 +372,51 @@ def write_trace(city: dict, trace: dict) -> Path:
     return path
 
 
+def search_zone(city: dict, register: dict | None, zone: dict | None, trace: dict, label: str = "") -> dict:
+    """Les recherches d'une commune ou d'une de ses zones, en même temps, puis le contrôle et l'analyse."""
+    name = city["name"]
+    seen = register_for_agent(register, zone)
+    message = build_message(city, seen, zone)
+    searches = [(f"{label}année {number + 1}", SYSTEM_PROMPT) for number in range(YEAR_SEARCHES)] + [(f"{label}été", SEASON_PROMPT)]
+    with ThreadPoolExecutor(max_workers=len(searches)) as pool:
+        answers = list(pool.map(lambda search: _ask(city, search[0], search[1], message), searches))
+    trace["recherches"] = answers
+    answer = merge_answers(*answers)
+    disputed = [row["nom"] for row in answer["restaurants"] if row.get("dit_ferme")]
+    if disputed:
+        logger.info(f"[restaurants] {name} : retenus et dits fermés par une autre recherche {disputed}")
+    for row in answer["restaurants"]:
+        row["pages"] = control_row(row, name)
+    trace["controle"] = [{"nom": row["nom"], "pages": row["pages"]} for row in answer["restaurants"]]
+    answer["restaurants"] = analyze_restaurants.analyze_commune(city, answer["restaurants"], seen, trace)
+    # Les preuves et la date « nouveau » se lisent dans le registre entier : un lieu peut y être inscrit hors de sa zone.
+    missing = [row for row in answer["restaurants"] if not has_accepted_page(row, name) and not in_register(row, register)]
+    for row in [row for row in missing if bar_said_restaurant(row, register)]:
+        row["a_relire"] = BAR_SAID_RESTAURANT
+        missing.remove(row)
+    for row, proof in zip(missing, analyze_restaurants.find_proofs(city, missing, trace)):
+        add_proofs(row, proof, name)
+    for row in answer["restaurants"]:
+        row |= analyze_restaurants.control_details(row, name)
+        row["registre_depuis"] = registered_since(row["nom"], register)
+        row["au_registre"] = in_register(row, register)
+    return answer
+
+
 def search_commune(city: dict) -> dict:
-    """Les recherches d'une commune, en même temps, puis le contrôle et l'analyse. Lève LLMUnavailable si l'agent n'a pas pu répondre."""
+    """La commune entière, ou zone par zone pour une grande ville. Lève LLMUnavailable si l'agent n'a pas pu répondre."""
     name = city["name"]
     register = api_registre.load_register(city)
-    message = build_message(city, register)
     trace = {"commune": name, "version": RESTAURANTS_PROMPT_VERSION, "registre": register}
-    searches = [(f"année {number + 1}", SYSTEM_PROMPT) for number in range(YEAR_SEARCHES)] + [("été", SEASON_PROMPT)]
     try:
-        with ThreadPoolExecutor(max_workers=len(searches)) as pool:
-            answers = list(pool.map(lambda search: _ask(city, search[0], search[1], message), searches))
-        trace["recherches"] = answers
-        answer = merge_answers(*answers)
-        disputed = [row["nom"] for row in answer["restaurants"] if row.get("dit_ferme")]
-        if disputed:
-            logger.info(f"[restaurants] {name} : retenus et dits fermés par une autre recherche {disputed}")
-        for row in answer["restaurants"]:
-            row["pages"] = control_row(row, name)
-        trace["controle"] = [{"nom": row["nom"], "pages": row["pages"]} for row in answer["restaurants"]]
-        answer["restaurants"] = analyze_restaurants.analyze_commune(city, answer["restaurants"], register, trace)
-        missing = [row for row in answer["restaurants"] if not has_accepted_page(row, name) and not in_register(row, register)]
-        for row, proof in zip(missing, analyze_restaurants.find_proofs(city, missing, trace)):
-            add_proofs(row, proof, name)
-        for row in answer["restaurants"]:
-            row |= analyze_restaurants.control_details(row, name)
-            row["registre_depuis"] = registered_since(row["nom"], register)
-            row["au_registre"] = in_register(row, register)
+        if not is_big_city(register):
+            answer = search_zone(city, register, None, trace)
+        else:
+            zones = commune_zones(city, restaurant_service.commune_spots(name))
+            logger.info(f"[restaurants] {name} : {len(zones)} zones de {ZONE_KM} km autour des spots")
+            trace["zones"] = [{"zone": zone} for zone in zones]
+            answer = merge_zones([search_zone(city, register, zone, zone_trace, f"zone {number} / {len(zones)}, ")
+                                  for number, (zone, zone_trace) in enumerate(zip(zones, trace["zones"]), start=1)])
         trace["final"] = answer["restaurants"]
         return answer
     finally:

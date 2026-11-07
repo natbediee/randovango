@@ -16,6 +16,9 @@ from urllib.parse import quote_plus
 
 # Une liste fixe : le genre, écrit librement, classait Ar Dagenta en bistrot puis en pizzeria.
 TABLE_CATEGORIES = ["gastronomique", "poisson", "creperie", "pizzeria", "plage", "bistrot", "traditionnel"]
+# Les tables de la commune montrées au voyageur, les plus proches du spot. 15 : le plus de tables d'une commune cherchée
+# d'un seul tenant (Le Conquet, novembre 2026), et le plus de lieux qu'une recherche de l'agent garde.
+TABLES_SHOWN = 15
 TABLE_CATEGORY_LABELS = {"gastronomique": "Gastronomique", "poisson": "Poisson et fruits de mer", "creperie": "Crêperie", "pizzeria": "Pizzeria",
                          "plage": "Adresse de plage", "bistrot": "Bistrot, bar", "traditionnel": "Cuisine traditionnelle"}
 NEW_MONTHS = 12
