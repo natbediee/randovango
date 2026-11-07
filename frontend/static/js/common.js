@@ -140,6 +140,20 @@
     var dayLabel = timeline.querySelector('[data-timeline-day]');
     if (dayLabel) dayLabel.textContent = 'Jour ' + current;
 
+    // Nom de la ville du jour, tiré de la liste gardée par l'étape 1 (step1_city.js) :
+    // le serveur ne connaît pas la ville choisie, elle vit dans localStorage.
+    var cityLabel = timeline.querySelector('[data-timeline-city]');
+    if (cityLabel) {
+      try {
+        var names = JSON.parse(localStorage.getItem('cityNames')) || {};
+        var name = names[localStorage.getItem('selectedCityId')];
+        if (name) {
+          cityLabel.textContent = name;
+          cityLabel.title = name;
+        }
+      } catch (e) { /* liste illisible : on garde « Ville » */ }
+    }
+
     function chips(from, to) {
       var html = '';
       for (var d = from; d <= to; d++) {

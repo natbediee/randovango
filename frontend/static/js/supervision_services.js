@@ -1,13 +1,23 @@
 // Supervision des services (admin) : les vérifications proposent, l'admin tranche
 // (services/poi_review_service.py). La sécurité est côté API : le lien ou le nom appliqués
-// viennent du signal enregistré, cette page n'envoie que le choix.
+// viennent du signal enregistré, cette page n'envoie que le choix. Seule exception : un lien ou un nom
+// trouvés par l'admin (« Mettre ce lien », « Renommer ainsi »), contrôlés par l'API.
 
-const TABS = { fermetures: 'Fermetures et reprises', liens: 'Liens', saison: 'Saison', morts: 'Liens morts' };
+const TABS = { fermetures: 'Doute sur le nom', liens: 'Liens', saison: 'Saison', doublons: 'Doublons', confirmer: 'À confirmer' };
+// Les onglets de l'étape 4 (CATEGORY_META de step4_services.js), dans le même ordre, puis les services sans onglet :
+// le voyageur ne les voit jamais. Seuls les onglets qui ont des lieux à relire sont proposés.
+const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Gasoil'], ['supermarche', 'Supermarché'],
+                      ['commerce', 'Commerce'], ['restauration', 'Restauration'], ['cafe', 'Café, bar'], ['toilettes', 'Toilettes'],
+                      ['hygiene', 'Hygiène'], ['laverie', 'Laverie'], ['culture', 'Culture & Loisirs'], ['urgence', 'Urgences'],
+                      ['hors_etape4', "Hors étape 4"]];
+// Hors du filtre : la règle tranche tous les liens morts, seule une décision annulée en ramène un, visible dans « Tous ».
+const HIDDEN_TABS = { morts: 'Liens morts' };
 const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 
-let currentTab = 'fermetures';
+// La page du bilan ouvre directement une file : /supervision/services?tab=liens.
+const requestedTab = new URLSearchParams(window.location.search).get('tab');
+let currentTab = requestedTab in TABS ? requestedTab : 'tous';
 let currentCards = [];
-const removedFromBatch = new Set();
 
 function authToken() {
     return sessionStorage.getItem('jwtToken') || localStorage.getItem('userToken');
@@ -20,7 +30,8 @@ function showMessage(text) {
 }
 
 function filters() {
-    return { service: document.getElementById('filterService').value, ville: document.getElementById('filterCity').value };
+    return { service: document.getElementById('filterService').value, type: document.getElementById('filterType').value,
+             ville: document.getElementById('filterCity').value };
 }
 
 function filterQuery() {
@@ -61,64 +72,92 @@ function monthChips(card) {
     return `<div class="services-months"><span>Mois d'ouverture</span><div>${chips}</div></div>`;
 }
 
+// Une recherche Google sur le nom et l'adresse : pour l'admin seulement, nos agents n'ouvrent jamais Google.
+function searchUrl(name, address) {
+    return `https://www.google.com/search?q=${encodeURIComponent(`${name} ${address || ''}`.trim())}`;
+}
+
+// L'adresse, sinon la commune : un objet OSM n'a souvent pas d'adresse.
+function where(card) {
+    if (card.adresse) return card.adresse;
+    return card.commune ? `Commune : ${card.commune} (pas d'adresse)` : 'Ni adresse ni commune connues';
+}
+
+// Les liens pour vérifier soi-même : la page de la proposition, le lien que le lieu affiche aujourd'hui, et une recherche.
+function cardLinks(card) {
+    const links = [];
+    const proposed = safeLink(card.link);
+    const current = safeLink(card.url_actuelle);
+    if (proposed) links.push(['Page proposée', proposed]);
+    if (current && card.url_actuelle !== card.link) links.push(['Lien actuel du lieu', current]);
+    // Le lien Google Maps saisi à la main, sinon la position : c'est celui que le voyageur verra.
+    const savedMaps = safeLink(card.maps_actuel);
+    if (savedMaps) {
+        links.push(['Voir sur la carte', savedMaps]);
+    } else if (card.position) {
+        const [lat, lon] = card.position;
+        links.push(['Voir sur la carte', `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`]);
+    }
+    links.push(['Rechercher sur le web', searchUrl(card.nom, card.adresse || card.commune)]);
+    return `<div class="review-card__links">${links.map(([label, url]) =>
+        `<p><span class="muted">${label} :</span> <a href="${url}" target="_blank" rel="noopener">${label === 'Rechercher sur le web' ? escapeHtml(`${card.nom} ${card.adresse || card.commune}`)
+            : label === 'Voir sur la carte' ? 'Google Maps' : url}</a></p>`).join('')}</div>`;
+}
+
+// La fiche d'un lieu dans une file : un lieu peut être dans deux files, la clé les sépare.
+function cardKey(card) {
+    return `${card.tab}-${card.poi_id}`;
+}
+
 function reviewCard(card) {
-    const link = safeLink(card.link);
-    const buttons = card.boutons.map(button => `
+    const typed = card.boutons.find(button => button.action === 'autre_lien');
+    const named = card.boutons.find(button => button.action === 'autre_nom');
+    const mapped = card.boutons.find(button => button.action === 'autre_maps');
+    const buttons = card.boutons.filter(button => !['autre_lien', 'autre_nom', 'autre_maps'].includes(button.action)).map(button => `
         <button class="btn ${button.style === 'main' ? 'btn--primary' : button.style === 'remove' ? 'review-card__btn-remove' : 'btn--outline'}"
-                onclick="decide(${card.poi_id}, '${button.action}')">${escapeHtml(button.label)}</button>`).join('');
+                onclick="decide('${cardKey(card)}', '${button.action}')">${escapeHtml(button.label)}</button>`).join('');
     return `
-        <article class="review-card" data-poi="${card.poi_id}">
+        <article class="review-card review-card--wide" data-key="${cardKey(card)}" data-poi="${card.poi_id}" data-tab="${card.tab}">
             <div class="review-card__body">
                 <div class="spot-tags">
                     <span class="spot-type">${escapeHtml(card.service)}</span>
+                    <span class="spot-type">${escapeHtml(TABS[card.tab] || HIDDEN_TABS[card.tab] || card.tab)}</span>
                     <span class="status-badge services-tag--${card.gravite}">${escapeHtml(card.signal)}</span>
                 </div>
                 <h2>${escapeHtml(card.nom)}</h2>
-                <p class="muted">${escapeHtml(card.adresse)}</p>
+                <p class="muted">${escapeHtml(where(card))}</p>
                 <p><strong>Proposition :</strong> ${escapeHtml(card.proposal)}</p>
                 ${proofs(card)}
-                ${link ? `<div class="review-card__links"><a href="${link}" target="_blank" rel="noopener">${link}</a></div>` : ''}
+                ${cardLinks(card)}
                 ${monthChips(card)}
             </div>
             <div class="review-card__actions">
-                ${buttons}
-                <label class="label">Note (facultative)
-                    <input type="text" class="review-card__note" maxlength="255" placeholder="Appelé le 3 novembre">
-                </label>
+                <div class="review-card__decisions">${buttons}</div>
+                <div class="review-card__fields">
+                    ${typed ? `<label class="label">Un meilleur lien trouvé ?
+                        <span class="review-card__field">
+                            <input type="url" class="review-card__url" maxlength="490" placeholder="https://">
+                            <button class="btn btn--outline btn--sm" onclick="decide('${cardKey(card)}', 'autre_lien')">${escapeHtml(typed.label)}</button>
+                        </span>
+                    </label>` : ''}
+                    ${mapped ? `<label class="label">Le bon lien Google Maps ?
+                        <span class="review-card__field">
+                            <input type="url" class="review-card__maps" maxlength="490" placeholder="https://maps.app.goo.gl/...">
+                            <button class="btn btn--outline btn--sm" onclick="decide('${cardKey(card)}', 'autre_maps')">${escapeHtml(mapped.label)}</button>
+                        </span>
+                    </label>` : ''}
+                    ${named ? `<label class="label">Un autre nom trouvé ?
+                        <span class="review-card__field">
+                            <input type="text" class="review-card__name" maxlength="150" placeholder="Le nouveau nom">
+                            <button class="btn btn--outline btn--sm" onclick="decide('${cardKey(card)}', 'autre_nom')">${escapeHtml(named.label)}</button>
+                        </span>
+                    </label>` : ''}
+                    <label class="label">Note (facultative)
+                        <input type="text" class="review-card__note" maxlength="255" placeholder="Appelé le 3 novembre">
+                    </label>
+                </div>
             </div>
         </article>`;
-}
-
-function renderBatch(cards) {
-    const section = document.getElementById('autoSection');
-    const kept = cards.filter(card => !removedFromBatch.has(card.poi_id));
-    if (!cards.length) {
-        section.style.display = 'none';
-        return;
-    }
-    section.style.display = '';
-    section.innerHTML = `
-        <div class="services-auto__head">
-            <div>
-                <h2 class="services-title">Liens à valider d'un coup</h2>
-                <p class="muted">Contrôlés par le code, ou indiqués dans OSM. Ôte ceux qui ne te plaisent pas, puis valide le reste.</p>
-            </div>
-            <button class="btn btn--primary" onclick="validateBatch()" ${kept.length ? '' : 'disabled'}>Valider les ${kept.length} liens</button>
-        </div>
-        <div>${cards.map(card => {
-            const removed = removedFromBatch.has(card.poi_id);
-            const link = safeLink(card.url);
-            return `
-            <div class="services-auto__row ${removed ? 'is-removed' : ''}">
-                <div class="services-auto__name">
-                    <strong>${escapeHtml(card.nom)}</strong> <span class="muted">· ${escapeHtml(card.adresse)}</span>
-                    ${link ? `<a href="${link}" target="_blank" rel="noopener">${link}</a>` : ''}
-                </div>
-                <span class="spot-type">${escapeHtml(card.type_page)}</span>
-                <span class="services-auto__proof">${escapeHtml(card.preuves[0].texte)}</span>
-                <button class="btn btn--outline btn--sm" onclick="toggleBatch(${card.poi_id})">${removed ? 'Remettre' : 'Ôter'}</button>
-            </div>`;
-        }).join('')}</div>`;
 }
 
 function renderAudit(sample) {
@@ -130,7 +169,9 @@ function renderAudit(sample) {
         <div class="services-auto__row">
             <div class="services-auto__name">
                 <strong>${escapeHtml(item.nom)}</strong> <span class="muted">· ${escapeHtml(item.adresse)}</span>
-                ${link ? `<a href="${link}" target="_blank" rel="noopener">${link}</a>` : ''}
+                ${item.signal ? `<p class="muted">La règle a lu : ${escapeHtml(item.signal)}</p>` : ''}
+                ${link ? `<p><span class="muted">Lien actuel du lieu :</span> <a href="${link}" target="_blank" rel="noopener">${link}</a></p>`
+                       : `<p><span class="muted">Pas de lien :</span> <a href="${searchUrl(item.nom, item.adresse)}" target="_blank" rel="noopener">rechercher sur Google</a></p>`}
             </div>
             <span class="spot-type">${escapeHtml(item.action)}</span>
             <button class="btn btn--outline btn--sm" onclick="confirmAudit(${item.id})">C'est juste</button>
@@ -141,23 +182,45 @@ function renderAudit(sample) {
 
 function render(data) {
     currentCards = data.cards;
-    const waiting = Object.values(data.counts).reduce((sum, count) => sum + count, 0);
+    // « tous » est déjà la somme des files : l'ajouter aux autres compterait tout deux fois.
+    const waiting = data.counts.tous;
     document.getElementById('reviewsCount').textContent =
         waiting === 0 ? 'Rien à relire' : `${waiting} décision${waiting > 1 ? 's' : ''} en attente`;
-    document.getElementById('servicesTabs').innerHTML = Object.entries(TABS).map(([tab, label]) => `
-        <button role="tab" aria-selected="${tab === currentTab}" class="services-tab ${tab === currentTab ? 'is-on' : ''}"
-                onclick="selectTab('${tab}')">${label} · ${data.counts[tab]}</button>`).join('');
+    // Le nombre de lieux par type, dans le problème et la ville choisis.
+    const serviceSelect = document.getElementById('filterService');
+    const chosenService = serviceSelect.value;
+    const byService = data.service_counts || {};
+    const allServices = Object.values(byService).reduce((sum, count) => sum + count, 0);
+    serviceSelect.innerHTML = `<option value="">Tous (${allServices})</option>` + SERVICE_TABS
+        .filter(([key]) => byService[key] || key === chosenService)
+        .map(([key, label]) =>
+            `<option value="${key}" ${key === chosenService ? 'selected' : ''}>${escapeHtml(label)} (${byService[key] || 0})</option>`).join('');
+    // Le sous-filtre : les types précis de l'onglet choisi (Boulangerie, Marché...), seulement s'il y en a plusieurs.
+    const typeSelect = document.getElementById('filterType');
+    const chosenType = typeSelect.value;
+    const byType = data.type_counts || {};
+    const types = Object.keys(byType).sort((a, b) => byType[b] - byType[a] || a.localeCompare(b));
+    const typeLabel = document.getElementById('filterTypeLabel');
+    if (chosenService && (types.length > 1 || chosenType)) {
+        const inTab = Object.values(byType).reduce((sum, count) => sum + count, 0);
+        typeSelect.innerHTML = `<option value="">Tous (${inTab})</option>` + types.map(name =>
+            `<option value="${escapeHtml(name)}" ${name === chosenType ? 'selected' : ''}>${escapeHtml(name || 'Sans type')} (${byType[name]})</option>`).join('');
+        typeLabel.style.display = '';
+    } else {
+        typeSelect.innerHTML = '<option value="">Tous</option>';
+        typeLabel.style.display = 'none';
+    }
+
+    document.getElementById('filterProblem').innerHTML = [['tous', 'Tous'], ...Object.entries(TABS)].map(([tab, label]) =>
+        `<option value="${tab}" ${tab === currentTab ? 'selected' : ''}>${label} (${data.counts[tab]})</option>`).join('');
 
     const citySelect = document.getElementById('filterCity');
     const chosenCity = citySelect.value;
     citySelect.innerHTML = '<option value="">Toutes</option>' + data.cities.map(city =>
         `<option ${city === chosenCity ? 'selected' : ''}>${escapeHtml(city)}</option>`).join('');
 
-    const batch = currentTab === 'liens' ? data.cards.filter(card => card.auto) : [];
-    const single = currentTab === 'liens' ? data.cards.filter(card => !card.auto) : data.cards;
-    renderBatch(batch);
-    document.getElementById('cardsTitle').style.display = currentTab === 'liens' && single.length ? '' : 'none';
-    document.getElementById('cardsList').innerHTML = single.map(reviewCard).join('');
+    // Un lien à la fois : chaque fiche a son bouton Valider (le lot « à valider d'un coup » est retiré, 7 novembre 2026).
+    document.getElementById('cardsList').innerHTML = data.cards.map(reviewCard).join('');
     document.getElementById('emptyNote').style.display = data.cards.length ? 'none' : '';
 
     const more = document.getElementById('moreNote');
@@ -182,7 +245,7 @@ async function load() {
 }
 
 function selectTab(tab) {
-    currentTab = tab;
+    currentTab = tab || 'tous';
     load();
 }
 
@@ -191,33 +254,26 @@ function toggleMonth(button) {
     button.setAttribute('aria-pressed', on);
 }
 
-function toggleBatch(poiId) {
-    if (removedFromBatch.has(poiId)) removedFromBatch.delete(poiId);
-    else removedFromBatch.add(poiId);
-    renderBatch(currentCards.filter(card => card.auto));
-}
-
-async function send(poiIds, action, note, months) {
+async function send(tab, poiIds, action, note, months, url = null, name = null) {
     try {
         showMessage('');
         render(await servicesFetch('/decisions', {
             method: 'POST',
-            body: JSON.stringify({ tab: currentTab, poi_ids: poiIds, action, note, mois: months, ...filters() }),
+            body: JSON.stringify({ tab, vue: currentTab, poi_ids: poiIds, action, note, mois: months, url, nom: name, ...filters() }),
         }));
     } catch (error) {
         showMessage(error.message);
     }
 }
 
-function decide(poiId, action) {
-    const card = document.querySelector(`[data-poi="${poiId}"]`);
+function decide(key, action) {
+    const card = document.querySelector(`[data-key="${key}"]`);
     const months = [...card.querySelectorAll('.services-chip.is-on')].map(chip => Number(chip.dataset.month));
-    send([poiId], action, card.querySelector('.review-card__note').value, months);
-}
-
-function validateBatch() {
-    const poiIds = currentCards.filter(card => card.auto && !removedFromBatch.has(card.poi_id)).map(card => card.poi_id);
-    if (poiIds.length) send(poiIds, 'valider_lien', '', []);
+    // Le lien Google Maps part dans le même champ que le lien du lieu : la décision dit lequel c'est.
+    const typedUrl = card.querySelector(action === 'autre_maps' ? '.review-card__maps' : '.review-card__url');
+    const typedName = card.querySelector('.review-card__name');
+    send(card.dataset.tab, [Number(card.dataset.poi)], action, card.querySelector('.review-card__note').value, months,
+         typedUrl ? typedUrl.value.trim() : null, typedName ? typedName.value.trim() : null);
 }
 
 async function confirmAudit(decisionId) {
@@ -243,7 +299,13 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = window.APP_URLS.contributorLogin;
         return;
     }
-    document.getElementById('filterService').addEventListener('change', load);
+    document.getElementById('filterService').addEventListener('change', () => {
+        // Un autre onglet n'a pas les mêmes types : le sous-filtre repart de « Tous ».
+        document.getElementById('filterType').innerHTML = '<option value="">Tous</option>';
+        load();
+    });
+    document.getElementById('filterType').addEventListener('change', load);
     document.getElementById('filterCity').addEventListener('change', load);
+    document.getElementById('filterProblem').addEventListener('change', event => selectTab(event.target.value));
     load();
 });

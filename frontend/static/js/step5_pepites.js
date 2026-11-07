@@ -41,7 +41,9 @@ document.addEventListener('DOMContentLoaded', async function () {
     await addChosenHikeToMap(pepitesMap, cityId, localStorage.getItem('selectedHiking'), currentDay);
 
     // Arrivé par le rappel de la barre du bas : la sortie ramène au jour en préparation.
-    showReturnFromNews();
+    // Sinon, c'est le jour en préparation : le rappel pourra désormais le concerner.
+    if (vanyNewsReturn()) showReturnFromNews();
+    else markPepitesVisited(planId, currentDay);
 
     // --- 4. Chargement API ---
     loadPepites();

@@ -54,9 +54,9 @@ def test_the_commune_tables_go_from_the_nearest_to_the_farthest(monkeypatch):
             {**_row(2, "Autre crêperie", "restaurant", "x", "2 rue, 29217 Plougonvelin"), "categorie": "creperie"},
             {**_row(3, "Pizza", "restaurant", "x", "3 rue, 29217 Plougonvelin", latitude=48.35), "categorie": "pizzeria"},
             {**_row(4, "Étoilé", "restaurant", "x", "4 rue, 29217 Plougonvelin", latitude=48.38), "categorie": "gastronomique", "distinction": "Étoile Michelin"},
-            _row(5, "Café", "cafe", None, "5 rue, 29217 Plougonvelin")]
+            _row(5, "Bistrot d'OSM", "fast_food", None, "5 rue, 29217 Plougonvelin")]
     result, _ = _get_poi(monkeypatch, rows)
-    assert [poi["name"] for poi in result["restauration"]] == ["Crêperie proche", "Autre crêperie", "Pizza", "Étoilé", "Café"]
+    assert [poi["name"] for poi in result["restauration"]] == ["Crêperie proche", "Autre crêperie", "Pizza", "Étoilé", "Bistrot d'OSM"]
 
 
 def test_a_table_shows_its_category_and_an_old_one_stays_a_restaurant(monkeypatch):
@@ -99,11 +99,13 @@ def test_other_categories_keep_their_limit(monkeypatch):
     assert len(result["toilettes"]) == 10
 
 
-def test_every_restaurant_has_a_maps_link_and_a_café_does_not(monkeypatch):
+def test_every_restaurant_and_every_café_has_a_maps_link(monkeypatch):
     rows = [_row(1, "Nom d'OSM", "restaurant", None, "1 rue, 29280 Locmaria-Plouzané"), _row(2, "Café", "cafe", None, "2 rue, 29217 Plougonvelin")]
     result, _ = _get_poi(monkeypatch, rows)
-    links = {poi["name"]: poi["maps_url"] for poi in result["restauration"]}
-    assert "query=Nom+d%27OSM+1+rue" in links["Nom d'OSM"] and links["Café"] is None
+    # Les cafés ont leur onglet depuis le 7 novembre 2026 : la restauration ne garde que les endroits où l'on mange.
+    assert "query=Nom+d%27OSM+1+rue" in result["restauration"][0]["maps_url"]
+    # Toutes les cartes de services ont le bouton Google Maps (7 novembre 2026), sauf le carburant.
+    assert [poi["name"] for poi in result["cafe"]] == ["Café"] and "query=Caf%C3%A9+2+rue" in result["cafe"][0]["maps_url"]
 
 
 def test_new_comes_from_the_register_date(monkeypatch):

@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from etl import etl_osm
+from services import poi_duplicates_service
 
 
 @pytest.fixture
@@ -17,6 +18,7 @@ def steps(monkeypatch, tmp_path):
     monkeypatch.setattr(etl_osm, "transform_osm", fake.transform)
     monkeypatch.setattr(etl_osm, "load_osm_poi", fake.load)
     monkeypatch.setattr(etl_osm, "CATCH_UP_FILE", tmp_path / "osm_a_rattraper.json")
+    monkeypatch.setattr(poi_duplicates_service, "after_load", fake.duplicates)
     return fake
 
 
@@ -28,6 +30,7 @@ def test_success_returns_the_number_of_places(steps) -> None:
     assert etl_osm.run_osm_etl("Dinard") == 2
     steps.load.assert_called_once()
     assert _catch_up_file() == {}
+    steps.duplicates.assert_called_once_with("Dinard")
 
 
 def test_failure_is_written_to_the_file_and_nothing_is_loaded(steps) -> None:

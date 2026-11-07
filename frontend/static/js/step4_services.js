@@ -9,7 +9,7 @@
 
 // Toutes les catégories de services, dans l'ordre d'affichage des tuiles.
 const POI_CATEGORIES = ['eau', 'vidange', 'gasoil', 'supermarche', 'commerce',
-                        'restauration', 'toilettes', 'hygiene', 'culture', 'urgence'];
+                        'restauration', 'cafe', 'toilettes', 'hygiene', 'laverie', 'culture', 'urgence'];
 
 // Icône (Font Awesome) et libellé de chaque catégorie, pour les tuiles de la vue 1
 // et le titre de la sous-liste (vue 2).
@@ -20,8 +20,10 @@ const CATEGORY_META = {
     supermarche:  { icon: 'fa-cart-arrow-down', label: 'Supermarché' },
     commerce:     { icon: 'fa-shopping-basket', label: 'Commerce' },
     restauration: { icon: 'fa-utensils',        label: 'Restauration' },
+    cafe:         { icon: 'fa-mug-hot',         label: 'Café, bar' },
     toilettes:    { icon: 'fa-toilet',          label: 'Toilettes' },
     hygiene:      { icon: 'fa-shower',          label: 'Hygiène' },
+    laverie:      { icon: 'fa-shirt',           label: 'Laverie' },
     culture:      { icon: 'fa-camera',          label: 'Culture & Loisirs' },
     urgence:      { icon: 'fa-first-aid',       label: 'Urgences' }
 };
@@ -41,6 +43,11 @@ let subtitlesByCategory = {};
 let poisByCategory = {};
 // Catégorie ouverte dans la sous-liste (null = vue tuiles = tous les marqueurs).
 let activeCategory = null;
+// Type choisi dans le filtre de la sous-liste (« Boulangerie », « Marché »...), null = tous.
+let activeType = null;
+// Les onglets dont les agents écrivent les fiches, avec une catégorie par lieu : le filtre par type n'y apparaît
+// que s'il y a au moins deux types à choisir.
+const TYPE_FILTER_CATEGORIES = ['commerce', 'restauration', 'cafe'];
 // Services retenus les jours précédents, pour le rappel lecture seule (vue tuiles).
 // Purement informatif : ces POI ne sont JAMAIS ajoutés à selectedPoiIds.
 let previousDaysServices = [];
@@ -53,8 +60,9 @@ let previousPoiDay = new Map();
 // (activeCategory === null), tous les marqueurs sont visibles (vue d'ensemble).
 function updateMapMarkersVisibility() {
     if (!serviceMap) return;
-    poiMarkers.forEach(({ marker, category }) => {
-        const matches = activeCategory === null || category === activeCategory;
+    poiMarkers.forEach(({ marker, category, poi }) => {
+        const matches = (activeCategory === null || category === activeCategory)
+            && (activeType === null || poi.service_type_label === activeType);
         if (matches && !serviceMap.hasLayer(marker)) {
             marker.addTo(serviceMap);
         } else if (!matches && serviceMap.hasLayer(marker)) {
@@ -145,7 +153,10 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // --- 4. Chargement API : POI au plus près du spot choisi si disponible ---
     try {
-        let poiUrl = `/api/step4/poi?city_id=${cityId}&distance_km=5`;        if (chosenSpotCoords) {
+        let poiUrl = `/api/step4/poi?city_id=${cityId}&distance_km=5`;
+        // La date du jour préparé : un lieu fermé en cette saison n'est pas proposé (Kervouroc en novembre).
+        const dayDate = tripDayDate(currentDay);
+        if (dayDate) poiUrl += `&day_date=${dayDate}`;        if (chosenSpotCoords) {
             poiUrl += `&spot_lat=${chosenSpotCoords.lat}&spot_lon=${chosenSpotCoords.lon}`;
         }
         const data = await apiGet(poiUrl);
@@ -225,6 +236,7 @@ function renderCategory(categoryId, poiList) {
         // .service-card--near-spot : à pied du spot, la carte est entourée comme un spot sur la rando
         card.className = 'service-card' + (poi.near_spot ? ' service-card--near-spot' : '') + (selectedPoiIds.has(poi.id) ? ' selected' : '');
         card.id = `poi-card-${poi.id}`;
+        card.dataset.type = poi.service_type_label;
         card.innerHTML = `
             <div class="service-content-grid">
                 <!-- Comme la fiche spot : catégorie et vérifié sur une ligne, puis le nom, le texte et le lien -->
@@ -239,7 +251,10 @@ function renderCategory(categoryId, poiList) {
                     ${poi.address && !poi.maps_url ? `<p class="service-address"><i class="fas fa-map-marker-alt"></i> ${poi.address}</p>` : ''}
                     ${poi.description ? `<p class="service-description">${escapeHtml(poi.description)}</p>` : ''}
                     ${poi.distinction ? `<p class="service-address"><i class="fas fa-star"></i> ${escapeHtml(poi.distinction)}</p>` : ''}
-                    ${poi.url && !poi.maps_url ? `<p class="service-address"><a href="${escapeHtml(poi.url)}" target="_blank" rel="noopener">Site : ${escapeHtml(poi.url_label)}</a></p>` : ''}                </div>
+                    ${poi.jours ? `<p class="service-address"><i class="fas fa-calendar-day"></i> ${escapeHtml(poi.jours)}</p>` : ''}
+                    ${poi.saison_label ? `<p class="service-address"><i class="fas fa-sun"></i> ${escapeHtml(poi.saison_label)}</p>` : ''}
+                    <!-- Le lien du lieu (son site, ou la page qui le prouve) reste à côté du bouton Google Maps : c'est le recours du voyageur. -->
+                    ${poi.url ? `<p class="service-address"><a href="${escapeHtml(poi.url)}" target="_blank" rel="noopener">Site : ${escapeHtml(poi.url_label)}</a></p>` : ''}                </div>
                 <div class="service-right">
                     <!-- Essai de mise en page : pour un restaurant, le bouton Voir ouvre Google Maps -->
                     ${poi.maps_url ? `<a href="${escapeHtml(poi.maps_url)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm btn-external">Voir sur Google Maps ↗
@@ -342,6 +357,7 @@ function renderPreviousServices() {
 // Vue 2 : ouvrir la sous-liste d'un type de service.
 function openCategory(category) {
     activeCategory = category;
+    activeType = null;
     document.getElementById('categoryTilesView').style.display = 'none';
     const sublist = document.getElementById('serviceSublistView');
     sublist.style.display = 'block';
@@ -359,6 +375,9 @@ function openCategory(category) {
     if (titleEl) titleEl.textContent = meta.label;
     const subtitleEl = document.getElementById('step4Subtitle');
     if (subtitleEl) subtitleEl.textContent = subtitlesByCategory[category] || '';
+
+    // Un onglet rouvert repart sur « Tout » : ses cartes filtrées la fois d'avant réapparaissent.
+    filterByType(category, null);
 
     // Marqueurs de la catégorie seulement
     updateMapMarkersVisibility();
@@ -378,9 +397,60 @@ function openCategory(category) {
         .scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Filtre par type de la sous-liste : « Tout », puis un bouton par type présent (« Boulangerie (3) »).
+// Les types viennent des cartes elles-mêmes : seul ce qui est affiché peut être choisi.
+function renderTypeFilter(category) {
+    const filter = document.getElementById('typeFilter');
+    if (!filter) return;
+    const counts = new Map();
+    (poisByCategory[category] || []).forEach(poi => {
+        counts.set(poi.service_type_label, (counts.get(poi.service_type_label) || 0) + 1);
+    });
+    if (!TYPE_FILTER_CATEGORIES.includes(category) || counts.size < 2) {
+        filter.style.display = 'none';
+        filter.innerHTML = '';
+        return;
+    }
+    const total = (poisByCategory[category] || []).length;
+    const chips = [[null, `Tout (${total})`],
+                   ...[...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                                            .map(([type, count]) => [type, `${type} (${count})`])];
+    filter.innerHTML = chips.map(([type, label], index) =>
+        `<button type="button" class="chip${type === activeType ? ' is-active' : ''}" data-index="${index}">${escapeHtml(label)}</button>`
+    ).join('');
+    filter.querySelectorAll('button').forEach(button => {
+        button.addEventListener('click', () => filterByType(category, chips[Number(button.dataset.index)][0]));
+    });
+    filter.style.display = 'flex';
+}
+
+function filterByType(category, type) {
+    activeType = type;
+    const grid = document.getElementById(category);
+    if (grid) {
+        grid.querySelectorAll('.service-card').forEach(card => {
+            card.style.display = type === null || card.dataset.type === type ? '' : 'none';
+        });
+    }
+    renderTypeFilter(category);
+    updateMapMarkersVisibility();
+}
+
+// Date (AAAA-MM-JJ) du jour préparé : la date de départ choisie au début, plus le numéro du jour moins un.
+// Sans date de départ, null : l'API prend alors la date d'aujourd'hui.
+function tripDayDate(dayNumber) {
+    const start = localStorage.getItem('selectedStartDate');
+    if (!start) return null;
+    const day = new Date(start + 'T12:00:00');
+    if (isNaN(day)) return null;
+    day.setDate(day.getDate() + (dayNumber || 1) - 1);
+    return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+}
+
 // Retour à la vue tuiles (recalcule les pastilles « déjà ajouté »).
 function showCategoryTiles() {
     activeCategory = null;
+    activeType = null;
     document.getElementById('serviceSublistView').style.display = 'none';
     document.getElementById('categoryTilesView').style.display = 'block';
     renderCategoryTiles();

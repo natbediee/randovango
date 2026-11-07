@@ -473,8 +473,10 @@ POI_CATEGORY_LABELS = {
     "supermarche":  {"singular": "supermarché",         "plural": "supermarchés",         "gender": "m"},
     "commerce":     {"singular": "commerce",            "plural": "commerces",            "gender": "m"},
     "restauration": {"singular": "restaurant",          "plural": "restaurants",          "gender": "m"},
+    "cafe":         {"singular": "café ou bar",         "plural": "cafés et bars",        "gender": "m"},
     "toilettes":    {"singular": "point toilettes",     "plural": "points toilettes",     "gender": "m"},
     "hygiene":      {"singular": "point hygiène",       "plural": "points hygiène",       "gender": "m"},
+    "laverie":      {"singular": "laverie",             "plural": "laveries",             "gender": "f"},
     "culture":      {"singular": "site culturel",       "plural": "sites culturels",      "gender": "m"},
     "urgence":      {"singular": "service d'urgence",   "plural": "services d'urgence",   "gender": "m"},
 }
@@ -491,8 +493,10 @@ POI_CATEGORY_ICONS = {
     "supermarche":  "fa-cart-arrow-down",
     "commerce":     "fa-shopping-basket",
     "restauration": "fa-utensils",
+    "cafe":         "fa-mug-hot",
     "toilettes":    "fa-toilet",
     "hygiene":      "fa-shower",
+    "laverie":      "fa-shirt",
     "culture":      "fa-camera",
     "urgence":      "fa-first-aid",
 }

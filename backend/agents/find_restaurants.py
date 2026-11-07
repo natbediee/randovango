@@ -62,6 +62,7 @@ from agents.llm_config import make_llm_service, model_of
 from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from etl.extract import api_registre
 from services import restaurant_service
+from services.restaurant_service import place_key, same_address
 from services.restaurant_selection_service import TABLE_CATEGORIES
 from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
@@ -91,8 +92,6 @@ BAR_ACTIVITY = "56.30"
 # Ploudalmézeau, une pépite selon les avis lus le 7 novembre 2026) : le code de bar ne prouve pas qu'on y mange.
 MEAL_WORDS = ("brasserie", "restaurant", "creperie", "pizzeria")
 BAR_SAID_RESTAURANT = "registre : débit de boissons, dit servir des repas par les recherches"
-COMMON_STREET_WORDS = {"rue", "route", "boulevard", "bd", "avenue", "av", "place", "quai", "chemin", "impasse", "allee", "lieudit", "lieu", "dit",
-                       "ld", "de", "du", "des", "la", "le", "les", "l", "d"}
 PAGE_TYPES = ["site", "office_tourisme", "guide", "presse", "facebook", "instagram", "mairie", "agregateur"]
 # Une grande ville, par zones autour de ses spots : le registre de Brest (733 lignes actives, 145 Ko) ne tenait pas
 # dans la commande, et 15 lieux pour toute la ville auraient été pris au hasard. Le 6 novembre 2026, ses 44 spots
@@ -175,15 +174,6 @@ SCHEMA = {
                            "ferme": {"type": "boolean"}, "page": TEXT}}},
     },
 }
-
-
-def place_key(name: str) -> str:
-    """« La Crêperie Riboul » et « Riboul », « Spiaggia Restaurant » et « Spiaggia » sont le même lieu d'un passage à l'autre."""
-    words = [word for word in restaurant_service.name_key(name).split() if word not in ("creperie", "restaurant")]
-    # « La Crêperie du Château d'Eau » au registre est « Le Château d'Eau » des recherches (Ploudalmézeau, 7 novembre 2026).
-    while words and words[0] in ("l", "la", "le", "les", "d", "de", "du", "des"):
-        words.pop(0)
-    return "".join(words) or restaurant_service.compact_name(name)
 
 
 def found_pages(row: dict) -> list:
@@ -319,22 +309,6 @@ def add_proofs(row: dict, proof: dict, commune: str) -> None:
              "preuve_citation": proof.get("preuve_citation"), "preuve_date": proof.get("preuve_date")}
     known = {page["url"].strip() for page in row["pages"]}
     row["pages"] += [page for page in control_row({**row, **found, "pages_vues": None}, commune) if page["url"].strip() not in known]
-
-
-def street_words(address: str | None) -> list:
-    """Les mots de l'adresse, sans le code postal ni ce qui le suit, et sans les mots communs à toutes les rues."""
-    street = re.split(r"\b\d{5}\b", address or "")[0]
-    return [word for word in restaurant_service.name_key(street).split() if word not in COMMON_STREET_WORDS]
-
-
-def same_address(first: str | None, second: str | None) -> bool:
-    """Même numéro et même rue. Sans numéro, on ne conclut pas : le boulevard de la Mer compte plusieurs tables."""
-    words, others = street_words(first), street_words(second)
-    number = next((word for word in words if word.isdigit()), None)
-    if not number or number != next((word for word in others if word.isdigit()), None):
-        return False
-    street, other_street = {word for word in words if not word.isdigit()}, {word for word in others if not word.isdigit()}
-    return bool(street and other_street) and len(street & other_street) / min(len(street), len(other_street)) >= 0.5
 
 
 def in_register(row: dict, register: dict | None) -> bool:
