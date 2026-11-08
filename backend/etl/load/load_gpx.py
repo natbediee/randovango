@@ -12,6 +12,20 @@ logger = LoggerUtil.get_logger("etl_gpx")
 
 ServiceUtil.load_env()
 
+def find_city(cursor, city_name, insee):
+    """
+    La ville de ce nom dans cette commune. Le nom seul confondrait deux homonymes (Saint-Philibert, Morbihan et
+    Côte-d'Or) ; une ville sans code (commune pas encore connue) reste reconnue à son nom.
+    """
+    if not insee:
+        cursor.execute("SELECT id FROM cities WHERE name = %s ORDER BY id LIMIT 1", (city_name,))
+    else:
+        cursor.execute("SELECT id FROM cities WHERE name = %s AND (insee = %s OR insee IS NULL)"
+                       " ORDER BY insee IS NULL, id LIMIT 1", (city_name, insee))
+    row = cursor.fetchone()
+    return row[0] if row else None
+
+
 def load_gpx_data(data, gpx_path, verifie=0) -> str:
     """
     Charge les données GPX transformées dans MongoDB et MySQL, puis archive le fichier.
@@ -37,22 +51,26 @@ def load_gpx_data(data, gpx_path, verifie=0) -> str:
     start_lon = data['start_lon']
     description = data['description']
     # city_name déjà défini ci-dessus
+    commune, insee = data.get('commune'), data.get('insee')
     cursor = mysql_conn.cursor()
-    cursor.execute("SELECT id FROM cities WHERE name = %s", (city_name,))
-    result = cursor.fetchone()
-    if result:
-        city_id = result[0]
+    city_id = find_city(cursor, city_name, insee)
+    if city_id:
         logger.info(f"[load] : Ville {city_name} trouvée avec ID={city_id}")
+        if insee:
+            # Une ville d'avant la colonne insee reçoit sa commune au passage.
+            cursor.execute("UPDATE cities SET commune = %s, insee = %s WHERE id = %s AND insee IS NULL", (commune, insee, city_id))
+            mysql_conn.commit()
     else:
         # Récupérer infos admin
         department, region, country = get_admin_info_from_coordinates(start_lat, start_lon)
         cursor.execute(
-            "INSERT INTO cities (name, latitude, longitude, department, region, country) VALUES (%s, %s, %s, %s, %s, %s)",
-            (city_name, start_lat, start_lon, department, region, country)
+            "INSERT INTO cities (name, latitude, longitude, department, region, country, commune, insee)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (city_name, start_lat, start_lon, department, region, country, commune, insee)
         )
         mysql_conn.commit()
         city_id = cursor.lastrowid
-        logger.info(f"[load] : Ville {city_name} créée avec ID={city_id}, {department}, {region}, {country}")
+        logger.info(f"[load] : Ville {city_name} ({commune or 'commune inconnue'}) créée avec ID={city_id}, {department}, {region}, {country}")
     cursor.close()
 
     # --- Gestion de la source ---

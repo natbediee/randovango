@@ -22,7 +22,7 @@ from etl.load.load_poi_checks import save_signal
 from services.pepite_service import is_generic, match_poi, name_key
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
-from utils.geo_utils import geocode_address_ban, get_bounding_box, haversine_distance_km
+from utils.geo_utils import city_commune, geocode_address_ban, get_bounding_box, haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_restaurants")
@@ -95,9 +95,11 @@ def _rows(cursor) -> list:
 
 
 def load_city(name: str) -> dict | None:
+    """La ville et sa commune officielle : Trézien se cherche comme Plouarzel. Sans commune connue, son nom."""
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
-    cursor.execute("SELECT id, name, latitude, longitude, department FROM cities WHERE name = %s", (name,))
+    cursor.execute("SELECT id, name, commune, insee, latitude, longitude, department"
+                   " FROM cities WHERE name = %s", (name,))
     rows = _rows(cursor)
     cursor.close()
     MySQLUtils.disconnect(connection)
@@ -271,7 +273,7 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
                 logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, {row['alerte_registre']}")
                 summary["liquidation"] += 1
                 continue
-            accepted = [page for page in row["pages"] if page_accepted(page, commune=city["name"])]
+            accepted = [page for page in row["pages"] if page_accepted(page, commune=city_commune(city))]
             if not accepted and not row.get("au_registre") and not row.get("a_relire"):
                 logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, ni registre ni page acceptée")
                 summary["sans_page"] += 1

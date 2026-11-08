@@ -2,7 +2,7 @@ import math
 import os
 import re
 import gpxpy
-from utils.geo_utils import get_city_from_coordinates
+from utils.geo_utils import get_city_from_coordinates, get_commune_from_coordinates
 
 def extract_points(gpx):
 	"""Extrait la liste des points (lat, lon, ele) de toutes les traces du GPX."""
@@ -60,10 +60,11 @@ def transform_gpx(gpx_content, fname) -> dict:
 	elif gpx.tracks and gpx.tracks[0].description:
 		description = gpx.tracks[0].description
 
-	# Détection de la ville à la phase de transformation
-	city_name = None
+	# Détection de la ville à la phase de transformation : le lieu (Nominatim) et sa commune officielle.
+	city_name = commune = insee = None
 	if start_lat and start_lon:
-		city_name = get_city_from_coordinates(start_lat, start_lon, language='fr')
+		commune, insee = get_commune_from_coordinates(start_lat, start_lon)
+		city_name = get_city_from_coordinates(start_lat, start_lon, language='fr') or commune
 	# Si la ville n'est pas trouvée, on arrête la transformation (aucun chargement)
 	if not city_name:
 		return None
@@ -138,5 +139,7 @@ def transform_gpx(gpx_content, fname) -> dict:
 		'start_lat': start_lat,
 		'start_lon': start_lon,
 		'description': description,
-		'city_name': city_name
+		'city_name': city_name,
+		'commune': commune,
+		'insee': insee
 	}

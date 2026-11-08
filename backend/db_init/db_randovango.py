@@ -116,6 +116,8 @@ def init_database():
         statements = [
             # 1. tables de base sans dépendances
             # 1. table cities
+            # name est le lieu que connaît le voyageur (Trézien, Portsall) ; commune et insee, la commune officielle
+            # qui le contient (Plouarzel, 29177), d'après geo.api.gouv.fr. Vides si l'API n'a pas répondu.
             """
             CREATE TABLE IF NOT EXISTS cities (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -124,7 +126,9 @@ def init_database():
                 longitude FLOAT NOT NULL,
                 department VARCHAR(255),
                 region VARCHAR(255),
-                country VARCHAR(255)
+                country VARCHAR(255),
+                commune VARCHAR(255),
+                insee CHAR(5)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 2. table sources

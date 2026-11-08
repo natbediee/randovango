@@ -63,7 +63,7 @@ from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from etl.extract import api_registre
 from services import restaurant_service
 from services.restaurant_selection_service import TABLE_CATEGORIES
-from utils.geo_utils import haversine_distance_km
+from utils.geo_utils import city_commune, haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_restaurants")
@@ -251,7 +251,7 @@ def _ask(city: dict, label: str, prompt: str, message: str) -> dict:
 
 
 def build_message(city: dict, register: dict | None, zone: dict | None = None) -> str:
-    message = f"COMMUNE : {city['name']}, {city.get('department') or 'France'}"
+    message = f"COMMUNE : {city_commune(city)}, {city.get('department') or 'France'}"
     if zone:
         message += f"\nZONE : à moins de {ZONE_KM} km de {zone['repere']} ({zone['latitude']:.5f}, {zone['longitude']:.5f})"
     return f"{message}\nREGISTRE : {json.dumps(register, ensure_ascii=False)}" if register else message
@@ -374,7 +374,7 @@ def write_trace(city: dict, trace: dict) -> Path:
 
 def search_zone(city: dict, register: dict | None, zone: dict | None, trace: dict, label: str = "") -> dict:
     """Les recherches d'une commune ou d'une de ses zones, en même temps, puis le contrôle et l'analyse."""
-    name = city["name"]
+    name = city_commune(city)
     seen = register_for_agent(register, zone)
     message = build_message(city, seen, zone)
     searches = [(f"{label}année {number + 1}", SYSTEM_PROMPT) for number in range(YEAR_SEARCHES)] + [(f"{label}été", SEASON_PROMPT)]
@@ -405,7 +405,7 @@ def search_zone(city: dict, register: dict | None, zone: dict | None, trace: dic
 
 def search_commune(city: dict) -> dict:
     """La commune entière, ou zone par zone pour une grande ville. Lève LLMUnavailable si l'agent n'a pas pu répondre."""
-    name = city["name"]
+    name = city_commune(city)
     register = api_registre.load_register(city)
     trace = {"commune": name, "version": RESTAURANTS_PROMPT_VERSION, "registre": register}
     try:

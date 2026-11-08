@@ -5,6 +5,7 @@ from services.plan_service import insert_or_update_plan
 from services.restaurant_selection_service import TABLE_CATEGORY_LABELS, TABLES_SHOWN, is_new, maps_url
 from utils.db_utils import MySQLUtils
 from utils.display_utils import enrich_poi, poi_subtitle
+from utils.geo_utils import city_commune
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
 router = APIRouter()
@@ -88,7 +89,7 @@ def get_poi(
     
     # Récupérer les coordonnées de la ville
     cursor.execute(
-        "SELECT name, latitude, longitude FROM cities WHERE id = %s", 
+        "SELECT name, commune, latitude, longitude FROM cities WHERE id = %s",
         (city_id,)
     )
     city = cursor.fetchone()
@@ -156,7 +157,8 @@ def get_poi(
         ORDER BY s.category, p.name ASC
     """
 
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city['name']}"))
+    # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
+    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
     poi_list = keep_checked_restaurants(cursor.fetchall())
 
     cursor.close()
@@ -216,7 +218,7 @@ def get_poi(
 
     # Ne garder que les premiers POI de chaque catégorie
     for category, pois in categorized_poi.items():
-        categorized_poi[category] = order_category(pois, category, city['name'])
+        categorized_poi[category] = order_category(pois, category, city_commune(city))
 
     # Phrases de sous-titre par catégorie, calculées APRÈS la troncature,
     # pour correspondre au nombre réellement affiché.
