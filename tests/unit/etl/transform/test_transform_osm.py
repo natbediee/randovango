@@ -133,3 +133,13 @@ def test_pick_osm_element_refuses_a_distant_object() -> None:
     far = {"type": "node", "lat": 43.3, "lon": 5.4}
     assert pick_osm_element([far, near], 48.0, -4.0) is near
     assert pick_osm_element([far], 48.0, -4.0) is None
+
+
+def test_an_unnamed_laundry_is_kept_with_its_operator() -> None:
+    """Les deux laveries autour de Plougonvelin n'ont pas de nom dans OSM (7 novembre 2026) : elles n'étaient jamais chargées."""
+    osm_json = {"elements": [{"type": "node", "id": 13110805364, "lat": 48.34, "lon": -4.72,
+                              "tags": {"shop": "laundry", "operator": "Util", "self_service": "yes"}},
+                             {"type": "node", "id": 1293779523, "lat": 48.36, "lon": -4.76, "tags": {"shop": "laundry"}},
+                             {"type": "node", "id": 3, "lat": 48.36, "lon": -4.76, "tags": {"amenity": "toilets", "operator": "Mairie"}}]}
+    df = transform_osm(osm_json, "Plougonvelin")
+    assert list(df["name"]) == ["Laverie Util", "Laverie", "Toilettes publiques"]

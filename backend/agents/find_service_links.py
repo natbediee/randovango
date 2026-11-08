@@ -26,12 +26,14 @@ Rejouable : les lieux déjà traités avec cette version du prompt ne sont pas r
 """
 import argparse
 import html
+import io
 import json
 import re
 from datetime import date
 from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
+from pypdf import PdfReader
 
 from agents.llm_config import make_llm_service
 from agents.llm_service import LLMUnavailable
@@ -168,6 +170,30 @@ def is_aggregator(url: str) -> bool:
     return any(part in domain(url) for part in AGGREGATORS)
 
 
+def is_pdf(response) -> bool:
+    content_type = response.headers.get("Content-Type", "").lower()
+    return "application/pdf" in content_type or (response.content[:5] == b"%PDF-")
+
+
+def pdf_text(content: bytes) -> str:
+    """
+    Le texte d'un PDF (plan-guide d'office de tourisme, bulletin municipal). Lu comme une page web, il ne donnait que du
+    code : 140 pages jugées « nom absent » à tort (8 novembre 2026, « 8 à huit » dans le plan-guide de l'île de Batz).
+    Un PDF abîmé ou protégé rend un texte vide : la page est alors jugée illisible, comme avant.
+    """
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        text = []
+        for page in reader.pages:
+            text.append(page.extract_text() or "")
+            if sum(len(part) for part in text) > MAX_PAGE_CHARS:
+                break
+        return " ".join(text)[:MAX_PAGE_CHARS]
+    except Exception as error:     # pypdf lève des erreurs variées sur un fichier abîmé
+        logger.info(f"[liens] PDF illisible : {type(error).__name__}")
+        return ""
+
+
 def read_page(url: str) -> dict:
     """La page telle que le code la voit : texte, titre, méta et données structurées, puis le code brut."""
     if is_excluded_site(url):
@@ -176,6 +202,9 @@ def read_page(url: str) -> dict:
         response = requests.get(url, headers=BROWSER_HEADERS, timeout=FETCH_TIMEOUT_SECONDS, allow_redirects=True)
     except requests.RequestException as error:
         return {"statut": None, "erreur": type(error).__name__, "final": url, "texte": "", "brut": ""}
+    if is_pdf(response):
+        text = name_key(pdf_text(response.content))
+        return {"statut": response.status_code, "final": response.url, "texte": text, "brut": text}
     raw = response.text[:MAX_PAGE_CHARS]
     meta = " ".join(re.findall(r"<meta[^>]+content=[\"']([^\"']+)", raw, flags=re.I))
     structured = " ".join(re.findall(r"<script[^>]+ld\+json[^>]*>(.*?)</script>", raw, flags=re.I | re.S))

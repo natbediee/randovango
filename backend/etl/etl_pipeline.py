@@ -52,6 +52,9 @@ def scraping_background(city):
         logger.info("[ETL-BG] Chargement Wikidata...")
         load_wikidata_poi(df_wiki=df_wiki, city_name=city)
         logger.info(f"[ETL-BG] Wikidata chargé pour la ville : {city}")
+        # Un lieu de Wikidata est souvent déjà venu d'OSM (Fort Montbarey, Tour Vauban) : la règle des doublons repasse.
+        from services import poi_duplicates_service
+        poi_duplicates_service.after_load(city)
     except Exception as e:
         logger.error(f"[ETL-BG] Erreur Wikidata: {e}")
 

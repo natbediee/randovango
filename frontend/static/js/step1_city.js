@@ -107,6 +107,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // les attributs data-* que lisent la carte, la recherche et la fiche ville).
     try {
         const citiesData = await apiGet('/api/step1/cities');
+        // Noms des villes gardés pour le bandeau des étapes suivantes (common.js, initDayTimeline).
+        localStorage.setItem('cityNames', JSON.stringify(Object.fromEntries(citiesData.map(city => [city.id, city.name]))));
         citiesData.forEach(city => {
             const opt = document.createElement('option');
             opt.value = city.id;

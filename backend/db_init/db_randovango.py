@@ -260,6 +260,7 @@ def init_database():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 8. poi (dépend de cities, sources)
+            # maps_url : le lien Google Maps qu'un admin a saisi dans /supervision, à la place de celui que le code fabrique
             """
             CREATE TABLE IF NOT EXISTS poi (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -277,6 +278,7 @@ def init_database():
                 statut_saison VARCHAR(10),
                 mois_ouverture JSON,
                 address VARCHAR(512),
+                maps_url VARCHAR(512),
                 unique (original_id, source_id),
                 INDEX idx_poi_latlon (latitude, longitude),
                 FOREIGN KEY (source_id) REFERENCES sources(id)
@@ -329,6 +331,23 @@ def init_database():
                 budget VARCHAR(50),
                 jours_fermeture VARCHAR(150),
                 distinction VARCHAR(100),
+                ancien_nom VARCHAR(255),
+                categorie VARCHAR(30),
+                registre_depuis DATE,
+                prompt_version INT,
+                model VARCHAR(50),
+                trouve_le DATETIME NOT NULL,
+                FOREIGN KEY (poi_id) REFERENCES poi(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 quater bis. spécialisation de poi : un commerce (boulangerie, épicerie, marché, producteur) trouvé
+            # par l'agent find_commerces.py. « jours » : le jour et l'heure d'un marché, lus sur une page acceptée.
+            """
+            CREATE TABLE IF NOT EXISTS commerces (
+                poi_id INT NOT NULL PRIMARY KEY,
+                genre VARCHAR(100) NOT NULL,
+                pourquoi TEXT,
+                jours VARCHAR(150),
                 ancien_nom VARCHAR(255),
                 categorie VARCHAR(30),
                 registre_depuis DATE,

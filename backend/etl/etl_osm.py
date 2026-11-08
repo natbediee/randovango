@@ -58,4 +58,7 @@ def run_osm_etl(city: str) -> int | None:
         _update_catch_up(city, "echec")
         raise
     _update_catch_up(city, None)
+    # Import ici : la règle charge les services de la supervision, inutiles pour lire ce module.
+    from services import poi_duplicates_service
+    poi_duplicates_service.after_load(city)
     return 0 if df_osm is None else len(df_osm)

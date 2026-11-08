@@ -18,7 +18,12 @@ DEFAULT_NAME_BY_TYPE = {
     'sanitary_dump_station': 'Vidange camping-car',
     'waste_disposal': 'Poubelle',
     'shelter': 'Abri',
+    # Une laverie automatique n'a souvent qu'un exploitant (« Util », « Revolution ») : 2 laveries sur 2 sans nom autour
+    # de Plougonvelin le 7 novembre 2026, jamais chargées. Le nom devient « Laverie Util », ou « Laverie » seul.
+    'laundry': 'Laverie',
 }
+# Les types dont le nom de secours prend la marque ou l'exploitant : « Toilettes publiques Mairie » ne dirait rien.
+NAMED_BY_OPERATOR = ('laundry',)
 
 # Le lien d'un lieu, du plus utile au moins utile. Beaucoup de contributeurs n'écrivent
 # que contact:website, ou seulement la page Facebook : 159 restaurants sur 1 775 sans lien
@@ -213,6 +218,9 @@ def transform_osm(osm_json : dict,city : str) -> pd.DataFrame:
 
         if not name:
             name = DEFAULT_NAME_BY_TYPE.get(poi_type)
+            operator = tags.get('brand') or tags.get('operator')
+            if name and operator and poi_type in NAMED_BY_OPERATOR:
+                name = f"{name} {operator}"
 
         if name and poi_type and lat is not None and lon is not None:
             # Filtrage spécial pour 'information'

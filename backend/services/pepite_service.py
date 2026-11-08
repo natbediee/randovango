@@ -447,9 +447,17 @@ def record_search(cursor, day: dict, mode: str, found: int, prompt_version: int,
     )
 
 
+LIGATURES = str.maketrans({"œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE", "ß": "ss"})
+
+
 def name_key(name: str) -> str:
-    """Nom comparable : minuscules, sans accents ni ponctuation (« Cinéma Le Dauphin » -> "cinema le dauphin")."""
-    ascii_name = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    """
+    Nom comparable : minuscules, sans accents ni ponctuation (« Cinéma Le Dauphin » -> "cinema le dauphin"). Les
+    ligatures s'écrivent en deux lettres, comme au registre : « Bœuf » -> "boeuf" (8 novembre 2026, la lettre « œ » était
+    effacée et « Au Bœuf Charolais » ne retrouvait plus « AU BOEUF CHAROLAIS »).
+    """
+    name = (name or "").translate(LIGATURES)
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
     return " ".join(re.findall(r"[a-z0-9]+", ascii_name))
 
 

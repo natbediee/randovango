@@ -304,11 +304,18 @@ def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: st
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT MAX(id) AS id FROM spot_verifications WHERE spot_id = %s", (spot_id,))
         verification_id = cursor.fetchone()["id"]
+        # Le badge d'avant, remis si on annule : la plupart des spots sont vérifiés sans aucune décision.
+        cursor.execute("SELECT verifie FROM spots WHERE id = %s", (spot_id,))
+        spot = cursor.fetchone()
+        if not spot:
+            raise ValueError(f"Spot inconnu : {spot_id}")
+        detail = {"avant": {"verifie": bool(spot["verifie"])}}
         cursor.execute("""
             INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, verification_id,
-                                   a_savoir_corrige)
-            VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s)
-        """, (SPOT, spot_id, decision, (note or "").strip()[:255] or None, decided_by, verification_id, a_savoir))
+                                   a_savoir_corrige, detail)
+            VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s)
+        """, (SPOT, spot_id, decision, (note or "").strip()[:255] or None, decided_by, verification_id, a_savoir,
+              json.dumps(detail)))
         cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s", (decision == "garder", spot_id))
         connection.commit()
         cursor.close()
@@ -329,16 +336,21 @@ def correct_a_savoir(decision_id: int, a_savoir: str) -> None:
 
 
 def cancel_decision(decision_id: int) -> None:
-    """Annule une décision (erreur de clic) : elle reste tracée, et le spot revient à la relecture."""
+    """
+    Annule une décision (erreur de clic) : elle reste tracée, et le spot revient à la relecture. Le badge reprend sa
+    valeur d'avant la décision ; une décision plus ancienne ne l'a pas gardée : le doute revient, le badge part.
+    """
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT objet_id, detail FROM decisions WHERE id = %s AND objet_type = %s", (decision_id, SPOT))
+        decision = cursor.fetchone()
         cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
-        # De nouveau sans décision humaine : le doute revient, et le badge avec lui.
-        cursor.execute("""
-            UPDATE spots s JOIN decisions d ON d.objet_id = s.id AND d.objet_type = 'spot'
-            SET s.verifie = 0 WHERE d.id = %s
-        """, (decision_id,))
+        if decision:
+            detail = decision["detail"]
+            before = (json.loads(detail) if isinstance(detail, str) else detail or {}).get("avant", {})
+            cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s",
+                           (bool(before.get("verifie", False)), decision["objet_id"]))
         connection.commit()
         cursor.close()
     finally:
