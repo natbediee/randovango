@@ -16,6 +16,8 @@ Fonctionnalité: La supervision est réservée aux admins
       | expiré   | GET     | /api/supervision/reviews       |
       | absent   | POST    | /api/supervision/decisions     |
       | invalide | DELETE  | /api/supervision/decisions/1   |
+      | absent   | GET     | /api/supervision/bilan         |
+      | absent   | POST    | /api/supervision/edit/services/decisions |
 
   Plan du scénario: Un compte qui n'est pas admin est refusé partout
     Étant donné un utilisateur connecté avec le rôle "<role>"
@@ -34,6 +36,19 @@ Fonctionnalité: La supervision est réservée aux admins
       | contributor | POST    | /api/supervision/services/decisions     |
       | contributor | POST    | /api/supervision/services/audit/1       |
       | contributor | DELETE  | /api/supervision/services/decisions/1   |
+      | contributor | GET     | /api/supervision/bilan                  |
+      | contributor | GET     | /api/supervision/edit/services           |
+      | contributor | POST    | /api/supervision/services/fiche          |
+      | contributor | GET     | /api/supervision/edit/services/fiche/1   |
+      | contributor | POST    | /api/supervision/edit/services/fiche     |
+      | contributor | POST    | /api/supervision/edit/services/decisions |
+      | contributor | DELETE  | /api/supervision/edit/services/decisions/1 |
+      | contributor | GET     | /api/supervision/edit/spots              |
+      | contributor | POST    | /api/supervision/edit/spots/decisions    |
+      | contributor | PUT     | /api/supervision/edit/spots/decisions/1  |
+      | contributor | DELETE  | /api/supervision/edit/spots/decisions/1  |
+      | contributor | POST    | /api/supervision/edit/spots/openings     |
+      | contributor | DELETE  | /api/supervision/edit/spots/openings/1   |
 
   Scénario: Un admin enregistre une décision à son nom
     Étant donné un utilisateur connecté avec le rôle "admin"

@@ -1,5 +1,6 @@
 """
 Ce que les registres officiels disent des restaurants d'une commune : SIRENE, puis le BODACC.
+Les commerces (agents/find_commerces.py) lisent le même registre avec leurs propres codes d'activité.
 
 UN INDICE POUR LES AGENTS, JAMAIS UNE PREUVE
 Test du 3 novembre 2026 sur Plougonvelin et Le Conquet, même prompt, 3 recherches avec et 3 sans : NOUS, Riboul et
@@ -96,18 +97,18 @@ def add_establishment(register: dict, establishment: dict, firm: dict, notice: d
     register["actifs"].append({**line, "actif_depuis": establishment.get("date_creation")})
 
 
-def read_register(code: str) -> dict:
-    """Le registre d'une commune, page après page."""
+def read_register(code: str, activities: tuple = ACTIVITIES) -> dict:
+    """Le registre d'une commune, page après page, pour ces codes d'activité (ceux des restaurants par défaut)."""
     register = {"actifs": [], "enseignes_fermees": [], "radies": []}
     oldest_closure = str(time.gmtime().tm_year - CLOSED_YEARS_KEPT)
     notices, page = {}, 1
     while True:
-        data = _get(SIRENE_URL, {"code_commune": code, "activite_principale": ",".join(ACTIVITIES), "per_page": 25,
+        data = _get(SIRENE_URL, {"code_commune": code, "activite_principale": ",".join(activities), "per_page": 25,
                                  "page": page, "limite_matching_etablissements": 100, "minimal": "true",
                                  "include": "matching_etablissements"})
         for firm in data["results"]:
             for establishment in firm.get("matching_etablissements") or []:
-                if establishment.get("commune") != code or establishment.get("activite_principale") not in ACTIVITIES:
+                if establishment.get("commune") != code or establishment.get("activite_principale") not in activities:
                     continue
                 notice = {}
                 if establishment.get("etat_administratif") == "A":
@@ -118,11 +119,13 @@ def read_register(code: str) -> dict:
         page += 1
 
 
-def load_register(city: dict) -> dict | None:
+def load_register(city: dict, activities: tuple = ACTIVITIES) -> dict | None:
     """Le registre de la commune, ou None s'il n'a pas pu être lu : la recherche se passe alors de lui."""
     try:
         code = city.get("insee") or commune_code(city["latitude"], city["longitude"])
         return read_register(code) if code else None
+        code = commune_code(city["latitude"], city["longitude"])
+        return read_register(code, activities) if code else None
     except (requests.RequestException, ValueError, KeyError) as error:
-        logger.warning(f"[restaurants] {city['name']} : registre illisible ({error})")
+        logger.warning(f"[registre] {city['name']} : registre illisible ({error})")
         return None

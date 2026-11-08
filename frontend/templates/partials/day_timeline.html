@@ -16,7 +16,9 @@
       <ol class="timeline__steps">
         {% for label, n in day_steps %}
           <li class="timeline__step {% if n == active_step %}is-active{% elif n < active_step %}is-done{% endif %}">
-            {% if n < active_step %}<i class="fas fa-check" aria-hidden="true"></i>{% endif %} {{ label }}
+            {% if n < active_step %}<i class="fas fa-check" aria-hidden="true"></i>{% endif %}
+            {# Étape Ville franchie : common.js remplace « Ville » par le nom de la ville du jour. #}
+            <span {% if n == 1 and active_step > 1 %}data-timeline-city{% endif %}>{{ label }}</span>
           </li>
         {% endfor %}
       </ol>

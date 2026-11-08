@@ -62,8 +62,10 @@ POI_CATEGORY_STYLES = {
     "supermarche":  ("#6E9A3C", "", "Supermarché"),       # fa-cart-arrow-down
     "commerce":     ("#9A6E3C", "", "Commerce"),          # fa-shopping-basket
     "restauration": ("#C58A2E", "", "Restauration"),      # fa-utensils
+    "cafe":         ("#8C5A6E", "", "Café, bar"),         # fa-mug-hot
     "toilettes":    ("#6E8CA0", "", "Toilettes"),         # fa-toilet
     "hygiene":      ("#4FA3A0", "", "Hygiène / douche"),  # fa-shower
+    "laverie":      ("#5E8F7A", "", "Laverie"),           # fa-shirt
     "culture":      ("#8A6BA1", "", "Culture / visite"),  # fa-camera
     "urgence":      ("#B04A4A", "", "Urgence"),           # fa-first-aid
 }

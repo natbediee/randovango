@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Supervision, bilan - RandoVanGo{% endblock %}
+
+{% block page_content %}
+{# Réservé aux admins : supervision_bilan.js renvoie à la connexion, et l'API refuse les autres comptes.
+   Ce qu'il reste à trancher, file par file ; chaque ligne mène à la file concernée. #}
+<div class="container stack" style="gap:18px;">
+
+  {% with active='bilan' %}{% include 'partials/supervision_nav.html' %}{% endwith %}
+
+  <p class="supervision-msg" id="supervisionMsg" style="display:none;"></p>
+
+  <div class="bilan-totals" id="bilanTotals"></div>
+
+  <section class="bilan-block" id="spotsBlock" style="display:none;">
+    <h2 class="services-title">Spots</h2>
+    <div id="spotsRows"></div>
+  </section>
+
+  <section class="bilan-block" id="servicesBlock" style="display:none;">
+    <h2 class="services-title">Services, par file</h2>
+    <div id="servicesRows"></div>
+  </section>
+
+  <div class="bilan-split">
+    <section class="bilan-block" id="citiesBlock" style="display:none;">
+      <h2 class="services-title">À trancher, par ville</h2>
+      <p class="muted">Spots et services réunis, les villes les plus chargées d'abord.</p>
+      <div id="citiesRows"></div>
+    </section>
+
+    <section class="bilan-block" id="typesBlock" style="display:none;">
+      <h2 class="services-title">Services à trancher, par type de lieu</h2>
+      <div id="typesRows"></div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/supervision_bilan.js') }}"></script>
+{% endblock %}

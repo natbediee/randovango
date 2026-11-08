@@ -1,3 +1,4 @@
+import re
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import logging
@@ -252,3 +253,31 @@ if __name__ == "__main__":
     lat, lon, dist = 43.2747, 5.44028, 10
     bbox = get_bounding_box(lat, lon, dist)
     print(f"BBOX pour ({lat}, {lon}) sur {dist} km : {bbox}")
+
+LOCALITY_MIN_SCORE = 0.9
+
+
+def geocode_locality_ban(address, latitude=None, longitude=None, timeout=5):
+    """
+    Le lieu-dit d'une adresse de campagne (« Lieu-dit Le Lannou, 29217 Plougonvelin ») par la Base Adresse Nationale :
+    le centre du hameau, assez précis pour une ferme ou une crêperie isolée. À part de geocode_address_ban, qui reste
+    précise à la rue pour les spots : seuls les lieux des agents s'en servent, et seulement en second essai (7 novembre
+    2026 : la Biscuiterie de la Pointe Saint-Mathieu et le Potager de Saint-Mathieu restaient « position introuvable »).
+    Renvoie (latitude, longitude), ou None si la BAN ne trouve pas un lieu-dit avec un score d'au moins 0,9.
+    """
+    # « Lieu-dit Le Lannou » fait chuter le score de la BAN : le mot n'appartient pas au nom du lieu-dit.
+    query = re.sub(r"^\s*(lieu[- ]?dit|ld)\s+", "", address, flags=re.I)
+    params = {"q": query, "limit": 1, "type": "locality"}
+    if latitude is not None and longitude is not None:
+        params |= {"lat": latitude, "lon": longitude}
+    try:
+        response = requests.get(BAN_URL, params=params, timeout=timeout)
+        response.raise_for_status()
+        features = response.json().get("features") or []
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"BAN injoignable pour « {address} » : {e}")
+        return None
+    if not features or features[0]["properties"].get("score", 0) < LOCALITY_MIN_SCORE:
+        return None
+    found_longitude, found_latitude = features[0]["geometry"]["coordinates"]
+    return found_latitude, found_longitude

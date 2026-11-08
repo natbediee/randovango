@@ -358,6 +358,12 @@ button { font-family: inherit; cursor: pointer; }
   margin-right: 5px;
 }
 .timeline__step i { font-size: 9px; }
+/* Ville du jour à la place de « Ville » : un nom long est coupé, le nom complet au survol. */
+.timeline__step [data-timeline-city] {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .timeline__step.is-done { color: var(--done-light); }
 .timeline__step.is-active {
   color: var(--accent-light-2);
@@ -2229,9 +2235,37 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .supervision-recent__edit textarea { margin: 6px 0; }
 .supervision-recent h2 { font-size: 15px; margin: 0 0 6px; color: var(--muted); }
 .supervision-recent p { margin: 0 0 5px; font-size: 13px; }
+/* Fiche des services : une colonne, les décisions en ligne dessous, puis les cases côte à côte. */
+.review-card--wide { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.review-card--wide .review-card__actions { gap: 10px; border-top: 1px solid var(--card-border); padding-top: 12px; }
+.review-card__decisions { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-card__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: end; }
+.review-card__field { display: flex; gap: 6px; margin-top: 4px; }
+.review-card__field input { flex: 1; min-width: 0; }
+.review-card__field .btn { white-space: nowrap; }
+.review-card__fields input { height: 34px; box-sizing: border-box; padding: 4px 10px; font: inherit; font-weight: 400; font-size: 13px;
+  text-transform: none; letter-spacing: 0; border: 1px solid var(--card-border); border-radius: 8px; }
+.review-card__fields .review-card__note { margin-top: 4px; }
 @media (max-width: 768px) {
   .review-card { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Supervision : le bilan */
+.bilan-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.bilan-total { display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; background: var(--white); border: 1px solid var(--card-border); border-radius: var(--r-card-sm); color: var(--ink); text-decoration: none; }
+a.bilan-total:hover { border-color: var(--teal); }
+.bilan-total strong { font-size: 28px; line-height: 1.1; }
+.bilan-total span { font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.bilan-block { background: var(--white); border: 1px solid var(--card-border); border-radius: var(--r-card-sm); padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bilan-block > p { margin: 0 0 4px; font-size: 13px; }
+.bilan-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+.bilan-row { display: grid; grid-template-columns: minmax(0, 1fr) 30% 44px; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--divider); font-size: 14px; }
+.bilan-row.is-empty { color: var(--muted); }
+.bilan-row__label { overflow-wrap: anywhere; }
+.bilan-row__bar { height: 8px; border-radius: 4px; background: var(--mint-2); overflow: hidden; }
+.bilan-row__bar span { display: block; height: 100%; background: var(--teal); border-radius: 4px; }
+.bilan-row__n { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bilan-more summary { min-height: 44px; display: flex; align-items: center; color: var(--teal-dark); font-weight: 600; font-size: 14px; cursor: pointer; border-top: 1px solid var(--divider); }
 
 /* Supervision des services */
 .services-filters { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2258,3 +2292,48 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .services-months > div { display: flex; flex-wrap: wrap; gap: 4px; }
 .services-chip { min-width: 44px; min-height: 44px; padding: 0 8px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--white); color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .services-chip.is-on { border-color: var(--teal-dark); background: var(--mint); color: var(--ink); font-weight: 700; }
+
+/* Supervision : la fiche complète d'un service (supervision_fiche.js), dans « Modifier » et dans la relecture.
+   À gauche ce que voit le voyageur, à droite tout ce qui se corrige ; un champ mis en doute par le signal est encadré. */
+.fiche { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 16px; align-items: start; }
+.fiche__caption { font-size: 12px; font-weight: 700; color: var(--muted); margin: 0 0 6px; }
+.fiche-preview { background: var(--white); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px; }
+.fiche-preview h4 { margin: 8px 0 4px; font-size: 16px; }
+.fiche-preview__text { font-size: 14px; margin: 4px 0; }
+.fiche-preview__line { font-size: 13px; color: var(--muted); margin: 2px 0; }
+.fiche__form { display: flex; flex-direction: column; gap: 8px; }
+.fiche__form .label { display: flex; flex-direction: column; gap: 3px; }
+.fiche__form input, .fiche__form textarea, .fiche__form select { box-sizing: border-box; width: 100%; padding: 6px 10px; font: inherit;
+  font-weight: 400; font-size: 13px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--white); color: var(--ink); }
+.fiche__form input, .fiche__form select { height: 36px; }
+.fiche__pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.fiche__form .services-months { margin-top: 4px; }
+.fiche__form .services-chip { min-width: 40px; min-height: 36px; }
+.fiche-doubt input, .fiche-doubt textarea, .fiche-doubt select { border: 2px solid var(--warn-bd); background: var(--warn-bg); }
+.fiche-doubt { color: var(--warn-tx); }
+.fiche-banner { background: var(--warn-bg); border: 1px solid var(--warn-bd); border-radius: 10px; padding: 10px 12px; color: #7A6224; font-size: 13px; }
+.fiche-banner strong { font-size: 14px; }
+.fiche-banner ul { margin: 6px 0 0; padding-left: 18px; }
+.fiche-banner p { margin: 6px 0 0; font-size: 13px; }
+.fiche-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--card-border); padding-top: 12px; }
+.fiche-actions__spacer { flex: 1; }
+.edit-list { border: 1px solid var(--card-border); border-radius: 12px; background: var(--white); overflow: hidden; }
+.edit-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; border: 0; border-top: 1px solid var(--card-border);
+  background: transparent; font: inherit; font-size: 14px; text-align: left; cursor: pointer; color: var(--ink); min-height: 44px; }
+.edit-list > .edit-row:first-child { border-top: 0; }
+.edit-row:hover, .edit-row.is-open { background: var(--mint-2); }
+.edit-row__name { font-weight: 700; }
+.edit-row__place { margin-left: auto; color: var(--muted); font-size: 13px; }
+.edit-open { padding: 14px; background: var(--mint-2); display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 760px) {
+  .fiche, .fiche__pair { grid-template-columns: minmax(0, 1fr); }
+}
+/* La relecture montre d'abord ce que voit le voyageur : un clic sur l'aperçu ouvre le formulaire de la fiche. */
+.fiche--closed { grid-template-columns: minmax(0, 520px); }
+.fiche--closed .fiche__form { display: none; }
+.fiche__caption { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fiche-preview--clickable { cursor: pointer; }
+.fiche--closed .fiche-preview--clickable:hover { border-color: var(--teal-dark); }
+/* Le numéro d'un lieu ou d'un spot dans la supervision, à donner aux agents : un clic le sélectionne en entier. */
+.fiche-id { display: inline-block; padding: 1px 7px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--white);
+  color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 400; user-select: all; cursor: text; }

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from jose import jwt
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from api.routers import etl, supervision
+from api.routers import etl, supervision, supervision_bilan
 
 scenarios("features/supervision_droits.feature")
 
@@ -45,9 +45,19 @@ def world(monkeypatch):
     monkeypatch.setattr(supervision.poi_review_service, "decide", record)
     monkeypatch.setattr(supervision.poi_review_service, "confirm_audit", record)
     monkeypatch.setattr(supervision.poi_review_service, "cancel_decision", record)
+    monkeypatch.setattr(supervision_bilan.supervision_summary_service, "get_summary", review_calls)
+    monkeypatch.setattr(supervision.poi_edit_service, "search", review_calls)
+    monkeypatch.setattr(supervision.poi_edit_service, "decide", record)
+    monkeypatch.setattr(supervision.poi_edit_service, "decide_sheet", record)
+    monkeypatch.setattr(supervision.poi_edit_service, "get_sheet", review_calls)
+    monkeypatch.setattr(supervision.poi_edit_service, "attach_sheets", lambda reviews: reviews)
+    monkeypatch.setattr(supervision.spot_edit_service, "search", review_calls)
+    monkeypatch.setattr(supervision.spot_edit_service, "decide_opening", record)
+    monkeypatch.setattr(supervision.supervision_service, "cancel_opening_decision", record)
 
     app = FastAPI()
     app.include_router(supervision.router, prefix="/api/supervision")
+    app.include_router(supervision_bilan.router, prefix="/api/supervision")
     state.client = TestClient(app)
     return state
 

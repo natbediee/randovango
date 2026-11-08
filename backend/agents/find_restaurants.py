@@ -62,6 +62,7 @@ from agents.llm_config import make_llm_service, model_of
 from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from etl.extract import api_registre
 from services import restaurant_service
+from services.restaurant_service import place_key, same_address
 from services.restaurant_selection_service import TABLE_CATEGORIES
 from utils.geo_utils import city_commune, haversine_distance_km
 from utils.logger_util import LoggerUtil
@@ -81,7 +82,8 @@ logger = LoggerUtil.get_logger("agent_restaurants")
 #  10 : un hôtel dont l'analyste ne trouve pas le nom du restaurant est retiré
 #  11 : la phrase "pourquoi" est affichée au voyageur, sans sources ni doutes
 #  12 : une grande ville est cherchée zone par zone, autour de ses spots
-RESTAURANTS_PROMPT_VERSION = 12
+#  13 : grille de catégories valable dans toute la France, et un "pourquoi" fait des seuls mots lus
+RESTAURANTS_PROMPT_VERSION = 13
 
 MAX_PLACES = 15
 YEAR_SEARCHES = 3
@@ -91,8 +93,6 @@ BAR_ACTIVITY = "56.30"
 # Ploudalmézeau, une pépite selon les avis lus le 7 novembre 2026) : le code de bar ne prouve pas qu'on y mange.
 MEAL_WORDS = ("brasserie", "restaurant", "creperie", "pizzeria")
 BAR_SAID_RESTAURANT = "registre : débit de boissons, dit servir des repas par les recherches"
-COMMON_STREET_WORDS = {"rue", "route", "boulevard", "bd", "avenue", "av", "place", "quai", "chemin", "impasse", "allee", "lieudit", "lieu", "dit",
-                       "ld", "de", "du", "des", "la", "le", "les", "l", "d"}
 PAGE_TYPES = ["site", "office_tourisme", "guide", "presse", "facebook", "instagram", "mairie", "agregateur"]
 # Une grande ville, par zones autour de ses spots : le registre de Brest (733 lignes actives, 145 Ko) ne tenait pas
 # dans la commande, et 15 lieux pour toute la ville auraient été pris au hasard. Le 6 novembre 2026, ses 44 spots
@@ -133,10 +133,15 @@ postale si tu l'as, sinon null. Si le lieu a changé de nom, donne l'ancien dans
 Dans "ecartes", les lieux vus sans les retenir et pourquoi. "ferme" est true seulement si une page dit que le lieu a fermé
 définitivement ou changé de main. Une fermeture de saison ou de congés n'en est pas une.
 
-"nom" : le seul nom du lieu. "genre" : quelques mots. "categorie" : celle qui décrit le mieux ce qu'on y mange ou le lieu :
-gastronomique, poisson (poisson et fruits de mer), creperie, pizzeria, plage (cabane, paillote, guinguette, adresse de plage),
-bistrot (bistrot, bar ou café qui sert à manger), traditionnel (le reste). "pourquoi" : une phrase neutre, tirée de ce que tu
-as lu, sur ce que le lieu propose. Elle est affichée au voyageur : décris le lieu seulement, sans parler de tes sources
+"nom" : le seul nom du lieu. "genre" : quelques mots, avec le nom local du lieu (crêperie, winstub, bouchon, estaminet...).
+"categorie" : la même grille partout en France, celle qui décrit le mieux ce qu'on y mange ou le lieu :
+regionale (cuisine de la région : crêperie, winstub, flammekueche, bouchon lyonnais...), poisson (seulement si une page
+dit que la carte est surtout faite de poisson ou de fruits de mer ; être sur un port ne suffit pas), gastronomique,
+bistrot (bistrot, brasserie, bar ou café qui sert à manger), pizzeria (pizzeria, cuisine italienne), monde (cuisine d'un
+autre pays : asiatique, maghrébine, africaine...), rapide (kebab, burger, snack, vente à emporter), plage (cabane,
+paillote, guinguette, adresse de plage), francaise (le reste). "pourquoi" : une phrase neutre, faite seulement de ce que
+tu as lu sur une page, sur ce que le lieu propose. N'y mets ni "surtout", ni "spécialité", ni "face à la mer" si aucune
+page ne le dit. Elle est affichée au voyageur : décris le lieu seulement, sans parler de tes sources
 (annuaire, avis, fiche) ni de tes doutes (« à confirmer », « à vérifier »). Si tu ne sais rien de plus, dis seulement le genre
 et l'endroit. Pas de superlatif.
 
@@ -175,15 +180,6 @@ SCHEMA = {
                            "ferme": {"type": "boolean"}, "page": TEXT}}},
     },
 }
-
-
-def place_key(name: str) -> str:
-    """« La Crêperie Riboul » et « Riboul », « Spiaggia Restaurant » et « Spiaggia » sont le même lieu d'un passage à l'autre."""
-    words = [word for word in restaurant_service.name_key(name).split() if word not in ("creperie", "restaurant")]
-    # « La Crêperie du Château d'Eau » au registre est « Le Château d'Eau » des recherches (Ploudalmézeau, 7 novembre 2026).
-    while words and words[0] in ("l", "la", "le", "les", "d", "de", "du", "des"):
-        words.pop(0)
-    return "".join(words) or restaurant_service.compact_name(name)
 
 
 def found_pages(row: dict) -> list:
@@ -321,22 +317,6 @@ def add_proofs(row: dict, proof: dict, commune: str) -> None:
     row["pages"] += [page for page in control_row({**row, **found, "pages_vues": None}, commune) if page["url"].strip() not in known]
 
 
-def street_words(address: str | None) -> list:
-    """Les mots de l'adresse, sans le code postal ni ce qui le suit, et sans les mots communs à toutes les rues."""
-    street = re.split(r"\b\d{5}\b", address or "")[0]
-    return [word for word in restaurant_service.name_key(street).split() if word not in COMMON_STREET_WORDS]
-
-
-def same_address(first: str | None, second: str | None) -> bool:
-    """Même numéro et même rue. Sans numéro, on ne conclut pas : le boulevard de la Mer compte plusieurs tables."""
-    words, others = street_words(first), street_words(second)
-    number = next((word for word in words if word.isdigit()), None)
-    if not number or number != next((word for word in others if word.isdigit()), None):
-        return False
-    street, other_street = {word for word in words if not word.isdigit()}, {word for word in others if not word.isdigit()}
-    return bool(street and other_street) and len(street & other_street) / min(len(street), len(other_street)) >= 0.5
-
-
 def in_register(row: dict, register: dict | None) -> bool:
     """Le registre connaît-il un établissement de restauration actif à ce nom ou à cette adresse ? Un bar n'en est pas la preuve."""
     lines = [line for line in (register or {}).get("actifs", []) if line.get("activite", "").startswith(RESTAURATION_ACTIVITY)]
@@ -389,6 +369,8 @@ def search_zone(city: dict, register: dict | None, zone: dict | None, trace: dic
         row["pages"] = control_row(row, name)
     trace["controle"] = [{"nom": row["nom"], "pages": row["pages"]} for row in answer["restaurants"]]
     answer["restaurants"] = analyze_restaurants.analyze_commune(city, answer["restaurants"], seen, trace)
+    # L'alerte de l'analyste se vérifie dans le registre entier (restaurant_service.alert_contradicted).
+    restaurant_service.clear_contradicted_alerts(answer["restaurants"], register, name, "restaurants")
     # Les preuves et la date « nouveau » se lisent dans le registre entier : un lieu peut y être inscrit hors de sa zone.
     missing = [row for row in answer["restaurants"] if not has_accepted_page(row, name) and not in_register(row, register)]
     for row in [row for row in missing if bar_said_restaurant(row, register)]:

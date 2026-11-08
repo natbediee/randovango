@@ -111,6 +111,9 @@ class _SeasonCursor:
     def fetchone(self):
         return (1,) if self.decided else None
 
+    def fetchall(self):
+        return []      # aucune correction humaine (restaurant_service.human_fields)
+
     def close(self):
         pass
 
@@ -158,7 +161,7 @@ def _save(monkeypatch, row, known=()):
     monkeypatch.setattr(restaurant_service, "_known_restaurants", lambda cursor, city: list(known))
     monkeypatch.setattr(restaurant_service, "_position", lambda city, address: (48.3, -4.7))
     monkeypatch.setattr(restaurant_service, "_find_known", lambda row, position, city, known: known[0] if known else None)
-    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail: calls["flag"].append(reason))
+    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail, link=None: calls["flag"].append(reason))
     monkeypatch.setattr(restaurant_service, "_create_poi", lambda cursor, row, position, city, source, masked: 99)
     monkeypatch.setattr(restaurant_service, "_save_sheet", lambda cursor, poi_id, row, version, model: calls["sheet"].append(poi_id))
     monkeypatch.setattr(restaurant_service, "_save_proofs", lambda cursor, poi_id, pages: None)
@@ -198,12 +201,14 @@ def test_a_liquidation_removes_the_place_without_review(monkeypatch):
 
 def test_an_old_link_stays_when_no_page_was_accepted():
     cursor = MagicMock()
+    cursor.fetchone.return_value = None
     restaurant_service._update_poi(cursor, {"id": 5, "name": "A", "url": "https://a.fr"}, {"lien": None, "adresse": "1 place"}, None)
     assert "url" not in cursor.execute.call_args[0][0]
 
 
 def test_an_old_facebook_link_gives_way_to_the_accepted_page():
     cursor = MagicMock()
+    cursor.fetchone.return_value = None
     poi = {"id": 5, "name": "La Ria", "url": "https://www.facebook.com/laria29/"}
     restaurant_service._update_poi(cursor, poi, {"lien": "https://www.iroise-bretagne.bzh/restaurant/la-ria/", "adresse": "1 place"}, None)
     assert "https://www.iroise-bretagne.bzh/restaurant/la-ria/" in cursor.execute.call_args[0][1]
@@ -255,3 +260,77 @@ def test_an_old_name_finds_a_known_place_only_at_the_address():
 def test_the_current_name_still_finds_a_place_away_from_the_address():
     row = {"nom": "Le Triskell", "ancien_nom": None}
     assert restaurant_service._find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
+
+
+def _known(name, address, latitude=48.27, longitude=-4.49):
+    return {"id": 7, "name": name, "address": address, "latitude": latitude, "longitude": longitude, "masque": 0}
+
+
+def test_the_same_table_under_a_longer_name_is_found_at_the_same_address():
+    racines = _known("Racines", "82 Boulevard de la France Libre, 29160 Crozon")
+    row = {"nom": "Restaurant Racines", "adresse": "82 boulevard de la France Libre, 29160 Crozon"}
+    assert restaurant_service._find_known(row, (48.0, -4.0), CITY, [racines]) == racines
+    chaumine = _known("Crêperie La Chaumine", "4 Square de l'Abéric, 29830 Ploudalmézeau")
+    row = {"nom": "La Chaumine Biligou", "adresse": "4 square de l'Aberic, 29830 Ploudalmézeau"}
+    assert restaurant_service._find_known(row, (48.0, -4.0), CITY, [chaumine]) == chaumine
+
+
+def test_two_tables_sharing_an_address_stay_two():
+    hostellerie = _known("L'Hostellerie", "1 place de la Mairie, 29217 Le Conquet")
+    row = {"nom": "Bistrot 1954", "adresse": "1 place de la Mairie, 29217 Le Conquet"}
+    assert restaurant_service._find_known(row, (48.0, -4.0), CITY, [hostellerie]) is None
+
+
+def test_a_place_without_street_number_is_found_by_its_name_and_position():
+    chateau = _known("La Crêperie du Château d'Eau", "Saint-Roch, 29830 Ploudalmézeau", 48.5300, -4.6600)
+    row = {"nom": "Crêperie Le Château d'Eau", "adresse": "Saint-Roch, 29830 Ploudalmézeau"}
+    assert restaurant_service._find_known(row, (48.5300, -4.6600), CITY, [chateau]) == chateau
+    assert restaurant_service._find_known(row, (48.5400, -4.6600), CITY, [chateau]) is None
+
+
+def test_the_measured_duplicates_are_found():
+    pairs = [("Pizzeria Ty Forn", "Ty Forn", "17 T rue Pierre Brossolette, 29770 Plogoff"),
+             ("Marmaris Kebab", "Marmaris", "42 place Napoléon III, 29200 Brest"),
+             ("Restaurant de l'Oceania Quimper", "Restaurant Oceania", "17 rue du Poher, 29000 Quimper"),
+             ("Restaurant du Camping Le Conleau", "Restaurant du Flower Camping Le Conleau", "188 avenue du Maréchal Juin, 56000 Vannes"),
+             ("1930 Conleau", "Le 1930", "3 Allée des Frères Cadoret, 56000 Vannes")]
+    for first, second, address in pairs:
+        poi = _known(first, address)
+        assert restaurant_service._find_known({"nom": second, "adresse": address}, (48.0, -4.0), CITY, [poi]) == poi, second
+
+
+def test_a_place_to_confirm_keeps_the_sheet_prepared_by_the_agent(monkeypatch):
+    details = []
+    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail, link=None: details.append(detail))
+    _save_one = {"nom": "Le Neuf", "genre": "bar-tabac brasserie", "categorie": "brasserie", "pourquoi": "Le bistrot du bourg.",
+                 "a_relire": "registre : débit de boissons, dit servir des repas par les recherches", "pages": []}
+    calls = {"connection": _Connection()}
+    monkeypatch.setattr(restaurant_service.MySQLUtils, "connect", staticmethod(lambda: calls["connection"]))
+    monkeypatch.setattr(restaurant_service.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
+    monkeypatch.setattr(restaurant_service, "get_or_create_source", lambda cursor, name: 1)
+    monkeypatch.setattr(restaurant_service, "_known_restaurants", lambda cursor, city: [])
+    monkeypatch.setattr(restaurant_service, "_position", lambda city, address: (48.3, -4.7))
+    restaurant_service.save_commune(CITY, {"restaurants": [_save_one]}, 12, "modele")
+    assert details[0]["fiche"]["genre"] == "bar-tabac brasserie" and details[0]["fiche"]["prompt_version"] == 12
+
+
+def test_validating_a_place_without_a_prepared_sheet_is_refused():
+    with pytest.raises(ValueError):
+        restaurant_service.save_validated_sheet(MagicMock(), 1, None)
+
+
+def test_a_link_decided_by_a_human_is_never_replaced_by_the_agent():
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (1,)
+    restaurant_service._update_poi(cursor, {"id": 5, "name": "Le Neuf", "url": "https://leneuf.fr"},
+                                   {"lien": "https://iroise-bretagne.bzh/le-neuf", "adresse": "9 rue de Brest"}, None)
+    assert "url" not in cursor.execute.call_args[0][0]
+    assert restaurant_service.RULE_AUTHOR in cursor.execute.call_args_list[0][0][1]
+
+
+def test_a_name_decided_by_a_human_is_never_replaced_by_the_agent():
+    cursor = MagicMock()
+    cursor.fetchone.side_effect = [None, (1,)]
+    restaurant_service._update_poi(cursor, {"id": 5, "name": "Le Triskell", "url": None},
+                                   {"lien": "https://leneuf.fr", "nom": "Le Neuf", "ancien_nom": "Le Triskell", "adresse": "9 rue de Brest"}, None)
+    assert "name" not in cursor.execute.call_args[0][0] and "url" in cursor.execute.call_args[0][0]

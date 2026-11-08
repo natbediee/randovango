@@ -56,7 +56,9 @@ def extract_osm(city: str) -> dict:
     logger.info(f"[Extract] : Bounding box : {bbox} (rayon ~5-6 km)")
 
     # 3. Requête Overpass QL utilisant la bounding box
-    # Récupère un large éventail de POI, le filtrage se fera en transformation
+    # Récupère un large éventail de POI, le filtrage se fera en transformation.
+    # Plus d'abris, de parkings ni de poubelles (8 novembre 2026) : l'étape 4 ne les montre jamais
+    # (utils/service_utils.POI_FRONTEND_CATEGORY_MAP), ils n'encombraient que la supervision (3 435 lieux, sans nom).
     overpass_query = f"""
                 [out:json][timeout:45];
                 (
@@ -67,8 +69,6 @@ def extract_osm(city: str) -> dict:
                     nwr["natural"="beach"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="drinking_water"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="toilets"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
-                    nwr["amenity"="shelter"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
-                    nwr["amenity"="parking"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="restaurant"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="cafe"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="pharmacy"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
@@ -81,7 +81,6 @@ def extract_osm(city: str) -> dict:
                     nwr["amenity"="fuel"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="shower"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="sanitary_dump_station"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
-                    nwr["amenity"="waste_disposal"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["shop"="laundry"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     // Culture et loisirs : alimentent l'étape 4 et servent à retrouver
                     // la position des pépites de Vany (pepite_service.locate).

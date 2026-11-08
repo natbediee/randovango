@@ -66,6 +66,9 @@ def main():
                     load_wikidata_poi(df_wiki, city_name=city_name)
             except Exception as e:
                 logger.error(f"[POI][Wikidata] Échec pour city_id={city_id} ({city_name}) : {e}")
+        if city_id in missing_osm or city_id in missing_wikidata:
+            from services import poi_duplicates_service
+            poi_duplicates_service.after_load(city_name)
 
     # Rattrapage P4N (si city_id absent de histo_scrap)
     missing_scrap = all_city_ids - histo_scrap_city_ids

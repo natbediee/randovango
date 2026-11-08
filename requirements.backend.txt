@@ -21,3 +21,4 @@ staticmap==0.5.7 # Carte statique (tuiles OSM + marqueurs) pour le carnet PDF
 fontawesomefree==6.4.0 # Police Font Awesome (mêmes icônes que le site) pour les marqueurs de la carte PDF
 mcp==2.3.0 # Serveur MCP : outils de lecture de la base pour les agents Claude (agents/mcp_randovango.py)
 anthropic==0.75.0 # Client Anthropic (harmonisation des descriptions des spots)
+pypdf==5.1.0 # Texte des PDF lus par les agents (guides d'office de tourisme, bulletins municipaux)
