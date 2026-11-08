@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api.routers.etl import get_current_user
@@ -5,6 +7,7 @@ from services import poi_edit_service, poi_review_service, spot_edit_service, su
 from services.authentification import get_roles_for_user
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def require_admin(user=Depends(get_current_user)) -> dict:
@@ -53,11 +56,16 @@ def delete_opening_decision(decision_id: int, _admin=Depends(require_admin)):
     return supervision_service.get_reviews()
 
 
+def _service_reviews(tab: str, service: str | None = None, city: str | None = None, kind: str | None = None) -> dict:
+    """Une file de relecture, chaque lieu avec sa fiche complète (poi_edit_service.attach_sheets)."""
+    return poi_edit_service.attach_sheets(poi_review_service.get_reviews(tab, service, city, kind))
+
+
 @router.get("/services", summary="Service checks awaiting a human decision, one queue at a time.")
 def get_service_reviews(tab: str = "liens", service: str | None = None, ville: str | None = None, type: str | None = None,
                         _admin=Depends(require_admin)):
     try:
-        return poi_review_service.get_reviews(tab, service or None, ville or None, type or None)
+        return _service_reviews(tab, service or None, ville or None, type or None)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 
@@ -74,15 +82,35 @@ def post_service_decision(data: dict = Body(...), admin=Depends(require_admin)):
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
     # La page peut montrer toutes les files (« vue ») : on la renvoie telle qu'elle était.
-    return poi_review_service.get_reviews(data.get("vue") or data["tab"], data.get("service") or None,
+    return _service_reviews(data.get("vue") or data["tab"], data.get("service") or None,
                                           data.get("ville") or None, data.get("type") or None)
+
+
+@router.post("/services/fiche", summary="Saves a corrected sheet from a review card.")
+def post_service_sheet(data: dict = Body(...), admin=Depends(require_admin)):
+    """
+    data = {"tab": "confirmer", "poi_id": 12, "changes": {"texte": "...", "genre": "crêperie"}, "note": "",
+    "vue": "tous", "service": "", "ville": "", "type": ""}. Corriger le champ que la file met en doute la tranche.
+    """
+    if not isinstance(data.get("poi_id"), int):
+        raise HTTPException(status_code=422, detail="Lieu invalide")
+    try:
+        poi_edit_service.decide_sheet(data["poi_id"], data.get("changes"), data.get("note") or "", admin["username"],
+                                      data.get("tab"))
+        return _service_reviews(data.get("vue") or data.get("tab"), data.get("service") or None,
+                                data.get("ville") or None, data.get("type") or None)
+    except ValueError as error:
+        # Le motif du refus dans le journal : la page ne le montrait qu'en haut, hors de vue (8 novembre 2026).
+        logger.warning("Fiche refusée (lieu %s, file %s, champs %s) : %s", data["poi_id"], data.get("tab"),
+                       sorted(data.get("changes") or {}), error)
+        raise HTTPException(status_code=422, detail=str(error))
 
 
 @router.post("/services/audit/{decision_id}", summary="Marks a rule decision as checked by a human.")
 def post_service_audit(decision_id: int, tab: str = "liens", service: str | None = None, ville: str | None = None,
                        type: str | None = None, _admin=Depends(require_admin)):
     poi_review_service.confirm_audit(decision_id)
-    return poi_review_service.get_reviews(tab, service or None, ville or None, type or None)
+    return _service_reviews(tab, service or None, ville or None, type or None)
 
 
 @router.delete("/services/decisions/{decision_id}", summary="Cancels a service decision and restores the place.")
@@ -90,7 +118,7 @@ def delete_service_decision(decision_id: int, tab: str = "liens", service: str |
                             ville: str | None = None, type: str | None = None, _admin=Depends(require_admin)):
     try:
         poi_review_service.cancel_decision(decision_id)
-        return poi_review_service.get_reviews(tab, service or None, ville or None, type or None)
+        return _service_reviews(tab, service or None, ville or None, type or None)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 
@@ -126,6 +154,27 @@ def post_edit_service(data: dict = Body(...), admin=Depends(require_admin)):
         poi_edit_service.decide(data["poi_id"], data.get("action"), data.get("note") or "", admin["username"],
                                 data.get("mois"), data.get("url"), data.get("nom"))
         return _edit_services({**data, "nom": data.get("nom_recherche")})
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+
+
+@router.get("/edit/services/fiche/{poi_id}", summary="The full sheet of one place, as the traveller sees it.")
+def get_edit_sheet(poi_id: int, _admin=Depends(require_admin)):
+    try:
+        return poi_edit_service.get_sheet(poi_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+
+
+@router.post("/edit/services/fiche", summary="Saves a corrected sheet: every field the traveller sees, at once.")
+def post_edit_sheet(data: dict = Body(...), admin=Depends(require_admin)):
+    """data = {"poi_id": 32498, "changes": {"name": "...", "texte": "...", "mois": [3, 4]}, "note": "", "ville": 12,
+    "service": "commerce", "type": "", "nom_recherche": "keruzas"}. Renvoie la recherche et la fiche à jour."""
+    if not isinstance(data.get("poi_id"), int):
+        raise HTTPException(status_code=422, detail="Lieu invalide")
+    try:
+        poi_edit_service.decide_sheet(data["poi_id"], data.get("changes"), data.get("note") or "", admin["username"])
+        return {**_edit_services({**data, "nom": data.get("nom_recherche")}), "fiche": poi_edit_service.get_sheet(data["poi_id"])}
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 

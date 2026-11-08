@@ -375,6 +375,9 @@ SPOT_SERVICE_CATEGORIES = {
     "car_wash":              ("🧽", "Lavage camping-car"),
     "bakery":                ("🥐", "Boulangerie"),
     "shop":                  ("🥐", "Boulangerie"),
+    "butcher":               ("✓", "Boucherie, poissonnerie, fromagerie"),
+    "wine":                  ("✓", "Cave"),
+    "confectionery":         ("✓", "Gourmandises"),
     "caravan_site":          ("✓", "Caravaneige"),
     # Activités
     "hiking":                ("✓", "Randonnée"),

@@ -95,7 +95,8 @@ def test_only_links_can_be_decided_in_batch() -> None:
 
 
 def test_every_action_has_its_wording() -> None:
-    assert set(review.ACTIONS) == set(review.ACTION_LABELS) == set(review.ACTION_BUTTONS) | set(review.RULE_ACTIONS)
+    # La fiche corrigée à la main (poi_edit_service.decide_sheet) a son libellé, mais son propre formulaire, pas de bouton.
+    assert set(review.ACTIONS) == set(review.ACTION_LABELS) - {"modifier_fiche"} == set(review.ACTION_BUTTONS) | set(review.RULE_ACTIONS)
     assert set(review.APPLIED_COLUMNS) >= {"url", "name", "masque"}
 
 
@@ -105,7 +106,7 @@ def _to_confirm(sheet):
                        "indice": "Bar-tabac-brasserie du bourg.", "page": "https://iroise-bretagne.bzh/x", "fiche": sheet}}
 
 
-def test_a_place_to_confirm_shows_why_and_can_become_a_pepite():
+def test_a_place_to_confirm_shows_why_and_can_be_confirmed():
     card = review.build_card("confirmer", {"id": 32485, "name": "Le Neuf"}, [_to_confirm({"genre": "bar-tabac brasserie"})])
     assert card["actions"] == ["valider_pepite", "retirer", "autre_nom", "autre_lien", "autre_maps"] and "débit de boissons" in card["preuves"][0]["texte"]
     assert review.applied_fields("valider_pepite", card, None) == {"masque": 0}
@@ -235,3 +236,11 @@ def test_a_google_maps_link_closes_no_queue():
     card = review.build_card("liens", {"id": 1, "name": "Laverie"}, [
         {"id": 4, "signal_type": "lien_agent", "source": "agent", "detail": {"url": "https://x.fr", "niveau": "a_valider"}}])
     assert "autre_maps" in card["actions"] and review.SIDE_ACTIONS["autre_maps"] is None
+
+
+def test_an_apostrophe_in_a_typed_link_is_encoded_not_refused():
+    url = "https://www.google.com/maps/place/A+Fleur+d'Eau/@48.09,-4.33,17z"
+    assert review.typed_link(url) == "https://www.google.com/maps/place/A+Fleur+d%27Eau/@48.09,-4.33,17z"
+    assert review.typed_maps_link(url)["latitude"] == 48.09
+    with pytest.raises(ValueError):
+        review.typed_link("https://a.fr/<script>")

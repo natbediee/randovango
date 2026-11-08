@@ -5,7 +5,7 @@ un lieu peut venir à la fois d'OSM, de Wikidata et d'un agent. Le chargement ne
 poi est (original_id, source_id), donc chaque objet devient un lieu.
 
     même lieu : même nom et même service, à DOUBLE_M au plus (SAME_SPOT_M pour un nom passe-partout comme « Toilettes
-                publiques » ou « Poubelle » : deux blocs sur une même plage restent deux lieux). L'un est masqué sous
+                publiques » ou « Point d'eau potable » : deux blocs sur une même plage restent deux lieux). L'un est masqué sous
                 le nom RULE_AUTHOR, l'autre reste. Annulable dans la supervision ;
     doute     : même nom à plus de DOUBLE_M (jusqu'à PAIR_M), ou à un autre numéro de la rue, ou deux lieux déjà
                 tranchés par un humain. Signal doublon_service, à trancher dans la file « Doublons » de /supervision/services ;
@@ -25,8 +25,9 @@ Deux jumeaux qui ont chacun une fiche, ou un jumeau sans fiche déjà tranché p
 UNE DÉCISION HUMAINE PRIME : un lieu dont le signal a déjà été tranché n'est plus repris, et une fusion que quelqu'un a
 annulée ne sera pas refaite par la règle. Rien n'est effacé.
 
-7 novembre 2026, premier passage (pilote de 100 lieux puis passe complète) : 349 lieux masqués (abris de bus, poubelles
-et toilettes posées au même endroit, commerces dessinés deux fois dans OSM, copies OSM des fiches d'agent), 51 doutes.
+7 novembre 2026, premier passage (pilote de 100 lieux puis passe complète) : 349 lieux masqués, 51 doutes. Le 8 novembre,
+les abris, parkings et poubelles ont été supprimés de la base et ne sont plus importés : il reste 135 lieux masqués
+(toilettes posées au même endroit, commerces dessinés deux fois dans OSM, copies OSM des fiches d'agent) et 25 doutes.
 
 UTILISATION (dans le conteneur backend, depuis /usr/src/app) :
     python -m services.poi_duplicates_service --essai              # compte et liste, n'écrit rien

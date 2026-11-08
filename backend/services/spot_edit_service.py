@@ -12,6 +12,7 @@ import re
 from datetime import date
 
 from services import supervision_service as supervision
+from services.poi_edit_service import address_town, in_city
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import get_bounding_box
 
@@ -62,22 +63,27 @@ def spot_card(spot: dict, verification: dict | None, decision: dict | None, a_sa
     }
 
 
-def _search_rows(cursor, city: dict | None, name: str) -> list:
+def _search_rows(cursor, city: dict | None, name: str, cities: list | None = None) -> list:
     # Les spots que l'étape 3 peut proposer (spot_selection_service.proposable_spots), masqués compris.
     filters, params = ["s.duplicate_of_spot_id IS NULL", "s.p4n_removed = 0"], []
     if city:
         min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], ZONE_KM)
-        filters.append("s.latitude BETWEEN %s AND %s AND s.longitude BETWEEN %s AND %s")
-        params += [min_lat, max_lat, min_lon, max_lon]
+        # Comme pour les services (poi_edit_service.in_city) : la commune du spot, sinon la ville la plus proche.
+        filters.append("((s.latitude BETWEEN %s AND %s AND s.longitude BETWEEN %s AND %s) OR s.address LIKE %s OR s.city_label = %s)")
+        params += [min_lat, max_lat, min_lon, max_lon, f"%{city['name']}", city["name"]]
     if name:
         filters.append("(s.name LIKE %s OR s.place_label LIKE %s)")
         params += [f"%{name}%", f"%{name}%"]
     cursor.execute(f"""
-        SELECT s.id, s.name, s.type, s.place_label, s.city_label, s.url, s.postal_code, s.latitude, s.longitude,
+        SELECT s.id, s.name, s.type, s.place_label, s.city_label, s.address, s.url, s.postal_code, s.latitude, s.longitude,
                s.verifie, s.nuit_interdite, s.opening_period, s.ouverture_statut, s.ouverture_debut, s.ouverture_fin
         FROM spots s WHERE {' AND '.join(filters)}
     """, tuple(params))
-    return cursor.fetchall()
+    rows = cursor.fetchall()
+    if not city:
+        return rows
+    return [row for row in rows
+            if in_city(address_town(row.get("address")) or row.get("city_label"), row["latitude"], row["longitude"], city, cities)]
 
 
 def _opening_ids(cursor, spot_ids: list) -> dict:
@@ -110,8 +116,9 @@ def search(city_id: int | None = None, name: str | None = None, on_date: date | 
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id, name FROM cities ORDER BY name")
-        cities = cursor.fetchall()
+        cursor.execute("SELECT id, name, latitude, longitude FROM cities ORDER BY name")
+        all_cities = cursor.fetchall()
+        cities = [{"id": row["id"], "name": row["name"]} for row in all_cities]
         city = None
         if city_id is not None:
             cursor.execute("SELECT id, name, latitude, longitude FROM cities WHERE id = %s", (city_id,))
@@ -121,7 +128,7 @@ def search(city_id: int | None = None, name: str | None = None, on_date: date | 
         searched = bool(city or len(name) >= MIN_NAME_SEARCH)
         cards = []
         if searched:
-            rows = _search_rows(cursor, city, name)
+            rows = _search_rows(cursor, city, name, all_cities)
             ids = [row["id"] for row in rows]
             states = supervision._spot_states(cursor)
             texts = supervision.reworked_a_savoir(cursor, ids, on_date or date.today())

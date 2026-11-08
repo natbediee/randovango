@@ -1,7 +1,7 @@
 // Supervision des services (admin) : les vérifications proposent, l'admin tranche
 // (services/poi_review_service.py). La sécurité est côté API : le lien ou le nom appliqués
-// viennent du signal enregistré, cette page n'envoie que le choix. Seule exception : un lien ou un nom
-// trouvés par l'admin (« Mettre ce lien », « Renommer ainsi »), contrôlés par l'API.
+// viennent du signal enregistré, cette page n'envoie que le choix. Seule exception : la fiche complète
+// (supervision_fiche.js), corrigée par l'admin et contrôlée par l'API (poi_edit_service.decide_sheet).
 
 const TABS = { fermetures: 'Doute sur le nom', liens: 'Liens', saison: 'Saison', doublons: 'Doublons', confirmer: 'À confirmer' };
 // Les onglets de l'étape 4 (CATEGORY_META de step4_services.js), dans le même ordre, puis les services sans onglet :
@@ -12,7 +12,6 @@ const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Gasoil
                       ['hors_etape4', "Hors étape 4"]];
 // Hors du filtre : la règle tranche tous les liens morts, seule une décision annulée en ramène un, visible dans « Tous ».
 const HIDDEN_TABS = { morts: 'Liens morts' };
-const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 
 // La page du bilan ouvre directement une file : /supervision/services?tab=liens.
 const requestedTab = new URLSearchParams(window.location.search).get('tab');
@@ -58,20 +57,6 @@ function safeLink(url) {
     return /^https?:\/\//.test(url || '') ? escapeHtml(url) : null;
 }
 
-function proofs(card) {
-    return `<div class="review-card__proofs"><span>Ce que disent les sources</span><ul>${card.preuves.map(proof =>
-        `<li><strong>${escapeHtml(proof.source)} :</strong> ${escapeHtml(proof.texte)}</li>`).join('')}</ul></div>`;
-}
-
-function monthChips(card) {
-    if (card.tab !== 'saison') return '';
-    const chips = MONTHS.map((label, index) => `
-        <button type="button" class="services-chip ${card.months.includes(index) ? 'is-on' : ''}"
-                aria-pressed="${card.months.includes(index)}" data-month="${index}"
-                onclick="toggleMonth(this)">${label}</button>`).join('');
-    return `<div class="services-months"><span>Mois d'ouverture</span><div>${chips}</div></div>`;
-}
-
 // Une recherche Google sur le nom et l'adresse : pour l'admin seulement, nos agents n'ouvrent jamais Google.
 function searchUrl(name, address) {
     return `https://www.google.com/search?q=${encodeURIComponent(`${name} ${address || ''}`.trim())}`;
@@ -109,53 +94,44 @@ function cardKey(card) {
     return `${card.tab}-${card.poi_id}`;
 }
 
+// Corriger ici le champ que la file met en doute la tranche (poi_edit_service.CLOSING_FIELDS).
+// « Enregistrer mes corrections » corrige la fiche ; seuls les autres boutons tranchent la file, sauf quand on corrige
+// le champ qu'elle met en doute (poi_edit_service.CLOSING_FIELDS).
+const CLOSING_HINTS = { fermetures: 'Corriger le nom dans la fiche tranche aussi ce doute.',
+                        liens: 'Corriger le lien dans la fiche tranche aussi ce signal.',
+                        saison: 'Corriger la saison dans la fiche la valide aussi.',
+                        confirmer: "« Enregistrer mes corrections » garde le lieu à confirmer, caché au voyageur. « Confirmer et afficher le lieu » le montre au voyageur, avec tes corrections.",
+                        doublons: 'Enregistrer mes corrections ne tranche pas le doublon.' };
+
+function sheetKey(card) {
+    return `rev-${cardKey(card)}`;
+}
+
+// En haut, ce qu'il faut vérifier et ce que disent les sources ; dessous, la même fiche que l'onglet « Modifier »,
+// les champs mis en doute encadrés ; en bas, les décisions de la file.
 function reviewCard(card) {
-    const typed = card.boutons.find(button => button.action === 'autre_lien');
-    const named = card.boutons.find(button => button.action === 'autre_nom');
-    const mapped = card.boutons.find(button => button.action === 'autre_maps');
     const buttons = card.boutons.filter(button => !['autre_lien', 'autre_nom', 'autre_maps'].includes(button.action)).map(button => `
         <button class="btn ${button.style === 'main' ? 'btn--primary' : button.style === 'remove' ? 'review-card__btn-remove' : 'btn--outline'}"
                 onclick="decide('${cardKey(card)}', '${button.action}')">${escapeHtml(button.label)}</button>`).join('');
     return `
         <article class="review-card review-card--wide" data-key="${cardKey(card)}" data-poi="${card.poi_id}" data-tab="${card.tab}">
-            <div class="review-card__body">
+            <div class="fiche-banner">
                 <div class="spot-tags">
+                    ${ficheId('poi', card.poi_id)}
                     <span class="spot-type">${escapeHtml(card.service)}</span>
                     <span class="spot-type">${escapeHtml(TABS[card.tab] || HIDDEN_TABS[card.tab] || card.tab)}</span>
                     <span class="status-badge services-tag--${card.gravite}">${escapeHtml(card.signal)}</span>
                 </div>
-                <h2>${escapeHtml(card.nom)}</h2>
-                <p class="muted">${escapeHtml(where(card))}</p>
-                <p><strong>Proposition :</strong> ${escapeHtml(card.proposal)}</p>
-                ${proofs(card)}
+                <p><strong>À vérifier : ${escapeHtml(card.proposal)}</strong></p>
+                <ul>${card.preuves.map(proof => `<li><strong>${escapeHtml(proof.source)} :</strong> ${escapeHtml(proof.texte)}</li>`).join('')}</ul>
                 ${cardLinks(card)}
-                ${monthChips(card)}
             </div>
-            <div class="review-card__actions">
-                <div class="review-card__decisions">${buttons}</div>
-                <div class="review-card__fields">
-                    ${typed ? `<label class="label">Un meilleur lien trouvé ?
-                        <span class="review-card__field">
-                            <input type="url" class="review-card__url" maxlength="490" placeholder="https://">
-                            <button class="btn btn--outline btn--sm" onclick="decide('${cardKey(card)}', 'autre_lien')">${escapeHtml(typed.label)}</button>
-                        </span>
-                    </label>` : ''}
-                    ${mapped ? `<label class="label">Le bon lien Google Maps ?
-                        <span class="review-card__field">
-                            <input type="url" class="review-card__maps" maxlength="490" placeholder="https://maps.app.goo.gl/...">
-                            <button class="btn btn--outline btn--sm" onclick="decide('${cardKey(card)}', 'autre_maps')">${escapeHtml(mapped.label)}</button>
-                        </span>
-                    </label>` : ''}
-                    ${named ? `<label class="label">Un autre nom trouvé ?
-                        <span class="review-card__field">
-                            <input type="text" class="review-card__name" maxlength="150" placeholder="Le nouveau nom">
-                            <button class="btn btn--outline btn--sm" onclick="decide('${cardKey(card)}', 'autre_nom')">${escapeHtml(named.label)}</button>
-                        </span>
-                    </label>` : ''}
-                    <label class="label">Note (facultative)
-                        <input type="text" class="review-card__note" maxlength="255" placeholder="Appelé le 3 novembre">
-                    </label>
-                </div>
+            ${card.fiche ? ficheHtml(card.fiche, sheetKey(card), card.a_verifier || [], true) : `<h2>${escapeHtml(card.nom)}</h2><p class="muted">${escapeHtml(where(card))}</p>`}
+            <p class="supervision-msg fiche-msg" role="alert" style="display:none;"></p>
+            <div class="fiche-actions">
+                ${buttons}
+                ${card.fiche ? `<button class="btn btn--outline" onclick="saveReviewSheet('${cardKey(card)}')">Enregistrer mes corrections</button>` : ''}
+                ${CLOSING_HINTS[card.tab] ? `<span class="muted" style="font-size:13px;">${CLOSING_HINTS[card.tab]}</span>` : ''}
             </div>
         </article>`;
 }
@@ -249,31 +225,91 @@ function selectTab(tab) {
     load();
 }
 
-function toggleMonth(button) {
-    const on = button.classList.toggle('is-on');
-    button.setAttribute('aria-pressed', on);
-}
-
 async function send(tab, poiIds, action, note, months, url = null, name = null) {
+    const card = document.querySelector(`[data-key="${tab}-${poiIds[0]}"]`);
     try {
-        showMessage('');
+        cardMessage(card, '');
         render(await servicesFetch('/decisions', {
             method: 'POST',
             body: JSON.stringify({ tab, vue: currentTab, poi_ids: poiIds, action, note, mois: months, url, nom: name, ...filters() }),
         }));
     } catch (error) {
-        showMessage(error.message);
+        cardMessage(card, error.message);
     }
 }
 
-function decide(key, action) {
+// Les changements de la fiche encore à enregistrer. Valider la saison lit les mois cochés dans la fiche : ils n'en sont pas.
+function pendingChanges(card, action) {
+    if (!card.querySelector('[data-fiche]')) return {};
+    const changes = ficheChanges(`rev-${card.dataset.key}`);
+    if (['valider_saison', 'pas_saisonnier'].includes(action)) {
+        delete changes.statut_saison;
+        delete changes.mois;
+    }
+    return changes;
+}
+
+function cardNote(card) {
+    return card.querySelector('[data-fiche]') ? ficheNote(`rev-${card.dataset.key}`) : '';
+}
+
+// Le message d'une décision refusée, sous les boutons de la carte : en haut de la page, on ne le voyait pas.
+function cardMessage(card, text) {
+    showMessage(text);
+    const box = card && card.querySelector('.fiche-msg');
+    if (!box) return;
+    box.textContent = text;
+    box.style.display = text ? '' : 'none';
+    if (text) box.scrollIntoView({ block: 'nearest' });
+}
+
+const NOTHING_CHANGED = "Rien n'a changé";
+
+async function saveSheetRequest(card, changes) {
+    return servicesFetch('/fiche', {
+        method: 'POST',
+        body: JSON.stringify({ tab: card.dataset.tab, vue: currentTab, poi_id: Number(card.dataset.poi), changes,
+                               note: cardNote(card), ...filters() }),
+    });
+}
+
+async function saveReviewSheet(key) {
+    const card = document.querySelector(`[data-key="${key}"]`);
+    const changes = pendingChanges(card, null);
+    if (!Object.keys(changes).length) {
+        cardMessage(card, 'Rien n\'a changé sur cette fiche.');
+        return;
+    }
+    try {
+        cardMessage(card, '');
+        render(await saveSheetRequest(card, changes));
+    } catch (error) {
+        cardMessage(card, error.message);
+    }
+}
+
+async function decide(key, action) {
     const card = document.querySelector(`[data-key="${key}"]`);
     const months = [...card.querySelectorAll('.services-chip.is-on')].map(chip => Number(chip.dataset.month));
-    // Le lien Google Maps part dans le même champ que le lien du lieu : la décision dit lequel c'est.
-    const typedUrl = card.querySelector(action === 'autre_maps' ? '.review-card__maps' : '.review-card__url');
-    const typedName = card.querySelector('.review-card__name');
-    send(card.dataset.tab, [Number(card.dataset.poi)], action, card.querySelector('.review-card__note').value, months,
-         typedUrl ? typedUrl.value.trim() : null, typedName ? typedName.value.trim() : null);
+    const changes = pendingChanges(card, action);
+    if (Object.keys(changes).length) {
+        if (action === 'valider_pepite') {
+            // Le lieu est affiché avec la fiche corrigée : on l'enregistre d'abord.
+            // « Rien n'a changé » : la fiche en base est déjà celle de la saisie, on confirme quand même.
+            try {
+                await saveSheetRequest(card, changes);
+            } catch (error) {
+                if (!error.message.startsWith(NOTHING_CHANGED)) {
+                    cardMessage(card, `Confirmation arrêtée : ${error.message}`);
+                    return;
+                }
+            }
+        } else if (!['retirer', 'fusionner'].includes(action)) {
+            cardMessage(card, 'Tu as modifié la fiche : clique d\'abord « Enregistrer mes corrections », ou recharge la page pour oublier tes modifications.');
+            return;
+        }
+    }
+    send(card.dataset.tab, [Number(card.dataset.poi)], action, cardNote(card), months);
 }
 
 async function confirmAudit(decisionId) {

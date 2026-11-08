@@ -50,8 +50,8 @@ def test_the_commune_sheets_are_not_pushed_out_by_nearer_places(monkeypatch):
 
 
 def test_the_commune_tables_go_from_the_nearest_to_the_farthest(monkeypatch):
-    rows = [{**_row(1, "Crêperie proche", "restaurant", "x", "1 rue, 29217 Plougonvelin"), "categorie": "creperie"},
-            {**_row(2, "Autre crêperie", "restaurant", "x", "2 rue, 29217 Plougonvelin"), "categorie": "creperie"},
+    rows = [{**_row(1, "Crêperie proche", "restaurant", "x", "1 rue, 29217 Plougonvelin"), "categorie": "regionale"},
+            {**_row(2, "Autre crêperie", "restaurant", "x", "2 rue, 29217 Plougonvelin"), "categorie": "regionale"},
             {**_row(3, "Pizza", "restaurant", "x", "3 rue, 29217 Plougonvelin", latitude=48.35), "categorie": "pizzeria"},
             {**_row(4, "Étoilé", "restaurant", "x", "4 rue, 29217 Plougonvelin", latitude=48.38), "categorie": "gastronomique", "distinction": "Étoile Michelin"},
             _row(5, "Bistrot d'OSM", "fast_food", None, "5 rue, 29217 Plougonvelin")]
@@ -60,10 +60,10 @@ def test_the_commune_tables_go_from_the_nearest_to_the_farthest(monkeypatch):
 
 
 def test_a_table_shows_its_category_and_an_old_one_stays_a_restaurant(monkeypatch):
-    rows = [{**_row(1, "Riboul", "restaurant", "x", "1 rue, 29217 Plougonvelin"), "categorie": "creperie"},
+    rows = [{**_row(1, "Riboul", "restaurant", "x", "1 rue, 29217 Plougonvelin"), "categorie": "regionale"},
             _row(2, "Ancienne", "restaurant", "x", "2 rue, 29217 Plougonvelin")]
     result, _ = _get_poi(monkeypatch, rows)
-    assert {poi["name"]: poi["service_type_label"] for poi in result["restauration"]} == {"Riboul": "Crêperie", "Ancienne": "restaurant"}
+    assert {poi["name"]: poi["service_type_label"] for poi in result["restauration"]} == {"Riboul": "Cuisine régionale", "Ancienne": "restaurant"}
 
 
 def test_a_table_shows_the_agent_sentence_when_osm_has_no_description(monkeypatch):
@@ -89,7 +89,7 @@ def test_without_a_spot_the_distance_is_from_the_centre(monkeypatch):
 
 
 def test_every_table_of_the_commune_is_shown_beyond_ten(monkeypatch):
-    tables = [{**_row(number, f"Table {number}", "restaurant", "x", "1 rue, 29217 Plougonvelin"), "categorie": "creperie"} for number in range(13)]
+    tables = [{**_row(number, f"Table {number}", "restaurant", "x", "1 rue, 29217 Plougonvelin"), "categorie": "regionale"} for number in range(13)]
     result, _ = _get_poi(monkeypatch, [*tables, _row(100, "Café", "cafe", None, "2 rue, 29217 Plougonvelin")])
     assert len(result["restauration"]) == 13
 

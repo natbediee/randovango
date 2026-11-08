@@ -36,6 +36,10 @@ SERVICE_CATEGORY_LABEL_MAP = {
     'gallery': 'Galerie',
     'farm': 'Vente à la ferme',
     'brewery': 'Brasserie',
+    # Les catégories de l'agent commerces sans service OSM à elles (8 novembre 2026, commerce_selection_service).
+    'butcher': 'Boucherie, poissonnerie, fromagerie',
+    'wine': 'Cave',
+    'confectionery': 'Gourmandises',
 }
 
 # Mapping label -> type OSM/Wikidata (pour import ou reverse)
@@ -62,6 +66,9 @@ POI_FRONTEND_CATEGORY_MAP = {
     "marketplace":            "commerce",
     "farm":                   "commerce",
     "brewery":                "commerce",
+    "butcher":                "commerce",
+    "wine":                   "commerce",
+    "confectionery":          "commerce",
     # Restauration
     "restaurant":             "restauration",
     # Café, bar : un onglet à part (7 novembre 2026). La restauration ne garde que les endroits où l'on mange ;
