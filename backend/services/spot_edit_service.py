@@ -14,7 +14,7 @@ from datetime import date
 from services import supervision_service as supervision
 from services.poi_edit_service import address_town, in_city
 from utils.db_utils import MySQLUtils
-from utils.geo_utils import get_bounding_box
+from utils.geo_utils import city_commune, get_bounding_box
 
 ZONE_KM = 5          # le rayon par défaut de l'étape 3 (step3.py)
 PAGE_SIZE = 50
@@ -69,8 +69,8 @@ def _search_rows(cursor, city: dict | None, name: str, cities: list | None = Non
     if city:
         min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], ZONE_KM)
         # Comme pour les services (poi_edit_service.in_city) : la commune du spot, sinon la ville la plus proche.
-        filters.append("((s.latitude BETWEEN %s AND %s AND s.longitude BETWEEN %s AND %s) OR s.address LIKE %s OR s.city_label = %s)")
-        params += [min_lat, max_lat, min_lon, max_lon, f"%{city['name']}", city["name"]]
+        filters.append("((s.latitude BETWEEN %s AND %s AND s.longitude BETWEEN %s AND %s) OR s.address LIKE %s OR s.city_label IN (%s, %s))")
+        params += [min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}", city["name"], city_commune(city)]
     if name:
         filters.append("(s.name LIKE %s OR s.place_label LIKE %s)")
         params += [f"%{name}%", f"%{name}%"]
@@ -121,7 +121,7 @@ def search(city_id: int | None = None, name: str | None = None, on_date: date | 
         cities = [{"id": row["id"], "name": row["name"]} for row in all_cities]
         city = None
         if city_id is not None:
-            cursor.execute("SELECT id, name, latitude, longitude FROM cities WHERE id = %s", (city_id,))
+            cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities WHERE id = %s", (city_id,))
             city = cursor.fetchone()
             if not city:
                 raise ValueError(f"Ville inconnue : {city_id}")

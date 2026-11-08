@@ -263,3 +263,21 @@ def test_the_search_keeps_the_places_of_the_city_and_shows_their_town():
         {"id": 3, "name": "Crêperie", "address": "Poull Zarab, 29253 Île-de-Batz", "latitude": 48.746, "longitude": -4.02, "commune": "Roscoff"}]
     rows = edit._search_rows(cursor, BATZ, "", CITIES)
     assert [(row["id"], row["commune"]) for row in rows] == [(1, "Île-de-Batz"), (3, "Île-de-Batz")]
+
+
+TREZIEN = {"id": 26, "name": "Trézien", "commune": "Plouarzel", "latitude": 48.424, "longitude": -4.76797}
+
+
+def test_a_hamlet_holds_the_addresses_of_its_commune():
+    """Les adresses écrivent la commune (« 29810 Plouarzel »), un spot Park4Night peut écrire le lieu-dit."""
+    assert edit.in_city("Plouarzel", 48.41, -4.79, TREZIEN, [TREZIEN])
+    assert edit.in_city("Trézien", 48.41, -4.79, TREZIEN, [TREZIEN])
+    assert not edit.in_city("Lampaul-Plouarzel", 48.44, -4.78, TREZIEN, [TREZIEN])
+
+
+def test_the_search_of_a_hamlet_asks_for_its_commune_and_shows_it():
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [{"id": 1, "name": "Abri", "address": None, "latitude": 48.42, "longitude": -4.77, "commune": None}]
+    rows = edit._search_rows(cursor, TREZIEN, "", [TREZIEN])
+    assert cursor.execute.call_args[0][1][4] == "%Plouarzel"
+    assert rows[0]["commune"] == "Plouarzel"

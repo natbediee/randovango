@@ -123,8 +123,6 @@ def load_register(city: dict, activities: tuple = ACTIVITIES) -> dict | None:
     """Le registre de la commune, ou None s'il n'a pas pu être lu : la recherche se passe alors de lui."""
     try:
         code = city.get("insee") or commune_code(city["latitude"], city["longitude"])
-        return read_register(code) if code else None
-        code = commune_code(city["latitude"], city["longitude"])
         return read_register(code, activities) if code else None
     except (requests.RequestException, ValueError, KeyError) as error:
         logger.warning(f"[registre] {city['name']} : registre illisible ({error})")

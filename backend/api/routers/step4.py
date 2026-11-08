@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from datetime import date
 
 from fastapi import APIRouter, Query, Body
@@ -69,8 +70,21 @@ def keep_checked_restaurants(poi_list: list) -> list:
             or postcode_of(poi.get("address")) not in treated | {None}]
 
 
+def town_key(address: str | None) -> str | None:
+    """
+    La commune d'une adresse, ce qui suit le code postal, sans majuscules, accents ni tirets : « 29810 Lampaul-Plouarzel »
+    donne « lampaul plouarzel », et « 5 route de Trézien, 29810 Plouarzel » donne « plouarzel ».
+    """
+    match = re.search(r"\b\d{5}\s+([^,]+?)\s*$", address or "")
+    if not match:
+        return None
+    plain = unicodedata.normalize("NFKD", match.group(1)).encode("ascii", "ignore").decode()
+    return " ".join(re.sub(r"[-'’]", " ", plain).lower().split())
+
+
 def is_own_table(poi: dict, city_name: str) -> bool:
-    return bool(poi.get("genre")) and city_name.lower() in (poi.get("address") or "").lower()
+    """Une fiche de la commune : celle de son adresse, pas un nom de rue (route de Trézien) ni une voisine (Lampaul-Plouarzel)."""
+    return bool(poi.get("genre")) and town_key(poi.get("address")) == town_key(f"00000 {city_name}")
 
 
 def display_rank(poi: dict, city_name: str) -> tuple:
@@ -230,8 +244,6 @@ def get_poi(
 
     # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
     cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
-    poi_list = keep_checked_restaurants(cursor.fetchall())
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city['name']}"))
     poi_list = keep_checked_commerces(keep_checked_restaurants(cursor.fetchall()))
 
     cursor.close()
