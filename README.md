@@ -220,6 +220,27 @@ Le pipeline ETL extrait, transforme et charge les données depuis plusieurs sour
 
 ## Développement
 
+### Tester une branche à côté du projet principal
+
+Chaque chantier a son worktree git (par exemple `~/Dev/randovango-carburants` sur `feature/carburants`).
+`docker-compose.branche.yml` y lance un deuxième backend avec le code de la branche, branché sur les mêmes bases
+MySQL et Mongo. Le backend principal, les bases, le front et nginx ne sont pas touchés.
+
+Depuis le dossier du worktree :
+```bash
+BRANCHE=carburants PORT=8001 docker compose -f docker-compose.branche.yml up -d
+```
+L'API de la branche est alors sur http://localhost:8001/docs ; celle du projet principal reste sur le port 8000.
+Les tables nouvelles de la branche se créent quand on le décide :
+```bash
+docker exec fastapi_backend_carburants python db_init/db_randovango.py
+```
+Pour arrêter ce conteneur seulement :
+```bash
+BRANCHE=carburants docker compose -f docker-compose.branche.yml down
+```
+Toujours avec `-f` : sans lui, `docker compose` lirait `docker-compose.yml`, celui du projet principal.
+
 ### Logs
 Les logs sont générés dans le dossier `logs/` et affichés dans la console.
 

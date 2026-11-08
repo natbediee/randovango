@@ -355,6 +355,50 @@ def init_database():
                 FOREIGN KEY (poi_id) REFERENCES poi(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
+            # 9 sexies. spécialisation de poi : une station déclarée sur prix-carburants.gouv.fr.
+            # Le fichier de l'État prouve que la station existe ; OSM ne donne que la marque, par l'identifiant
+            # ref:FR:prix-carburants. Le nom et la position affichés sont dans poi (position OSM : celle de l'État est
+            # parfois arrondie). L'adresse, la ville et la position de l'État sont gardées telles quelles.
+            """
+            CREATE TABLE IF NOT EXISTS stations_carburant (
+                poi_id INT NOT NULL PRIMARY KEY,
+                pdv_id VARCHAR(10) NOT NULL,
+                osm_element VARCHAR(30),
+                lien_osm VARCHAR(12) NOT NULL,
+                marque VARCHAR(100),
+                adresse_etat VARCHAR(255),
+                code_postal CHAR(5),
+                ville_etat VARCHAR(120),
+                latitude_etat DOUBLE,
+                longitude_etat DOUBLE,
+                route CHAR(1),
+                automate_24_24 TINYINT(1),
+                horaires JSON,
+                services JSON,
+                fermeture_type VARCHAR(12),
+                fermeture_debut DATETIME,
+                fermeture_fin DATETIME,
+                lu_le DATETIME NOT NULL,
+                UNIQUE (pdv_id),
+                FOREIGN KEY (poi_id) REFERENCES poi(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 septies. le dernier prix connu de chaque carburant d'une station (dépend de stations_carburant).
+            # releve_le est la date où la station a déclaré son prix (attribut maj du fichier), pas celle de notre passage.
+            # Un carburant en rupture définitive n'est pas vendu : il n'a pas de prix.
+            """
+            CREATE TABLE IF NOT EXISTS prix_carburants (
+                poi_id INT NOT NULL,
+                carburant VARCHAR(10) NOT NULL,
+                prix DECIMAL(5,3),
+                releve_le DATETIME,
+                rupture_type VARCHAR(12),
+                rupture_debut DATETIME,
+                rupture_fin DATETIME,
+                PRIMARY KEY (poi_id, carburant),
+                FOREIGN KEY (poi_id) REFERENCES stations_carburant(poi_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
             # 10.table poi_service (association POI <-> services)
             """
             CREATE TABLE IF NOT EXISTS poi_service (
