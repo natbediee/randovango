@@ -156,3 +156,43 @@ def test_a_place_held_by_the_register_alone_waits_for_a_review():
 def test_the_cafe_search_is_the_only_one_asked_for_cafes():
     assert "Pas de café ni de bar" in find_commerces.SYSTEM_PROMPT and "Pas de café ni de bar" in find_commerces.SEASON_PROMPT
     assert "Pas de café ni de bar" not in find_commerces.CAFE_PROMPT and "56.30Z" in find_commerces.REGISTER_ACTIVITIES
+
+
+def test_a_shop_at_its_name_in_the_register_is_proved_without_a_page():
+    register = {"actifs": [{"nom": "MADEMOISELLE TOMATES", "adresse": "580 ROUTE DE ROLEA 29217 PLOUGONVELIN",
+                            "activite": "47.21Z", "actif_depuis": "2024-03-15"},
+                           {"nom": "LE PAINSEUM", "adresse": "AVENUE DE LA GARE 29000 QUIMPER", "activite": "10.71C",
+                            "actif_depuis": "2025-03-20"}]}
+    dead = [{"url": "https://emploi.fr/x", "type_page": "agregateur", "verdict": "lien_mort"}]
+    bakery = {"nom": "Le Painseum", "categorie": "boulangerie", "genre": "boulangerie", "pages": dead}
+    farm = {"nom": "Mademoiselle Tomates", "categorie": "producteur", "genre": "producteur de tomates", "pages": dead}
+    butcher = {"nom": "Le Painseum", "categorie": "producteur", "genre": "boucherie", "pages": dead}
+    assert find_commerces.register_is_proof(bakery, register) and find_commerces.register_only_reason(bakery, register, "Quimper") is None
+    assert find_commerces.register_is_proof(butcher, register)
+    assert not find_commerces.register_is_proof(farm, register)
+    assert find_commerces.register_only_reason(farm, register, "Plougonvelin") is None
+
+
+def test_a_farm_in_the_register_still_gets_a_proof_search(monkeypatch, tmp_path):
+    _chain(monkeypatch, tmp_path, _Agent(), registered="LE GALL")
+    monkeypatch.setattr(find_commerces, "is_farm", lambda row: row["nom"] == "Le Gall")
+    answer = find_commerces.search_commune(CITY)
+    gall = next(row for row in answer["commerces"] if row["nom"] == "Le Gall")
+    assert [row["nom"] for row in json.loads(next(tmp_path.iterdir()).read_text())["preuves"]] == ["Le Gall"]
+    # La page trouvée cite la ferme : elle est gardée, sans relecture.
+    assert gall["au_registre"] is True and not gall.get("a_relire")
+
+
+def test_a_farm_without_a_page_naming_it_is_not_held_by_the_register():
+    farm = {"nom": "Mademoiselle Tomates", "categorie": "producteur", "genre": "vente à la ferme",
+            "pages": [{"url": "https://emploi.fr/x", "type_page": "agregateur", "verdict": "lien_mort"}]}
+    assert find_commerces.is_farm(farm) and not find_commerces.has_named_page(farm)
+    assert not find_commerces.is_farm({**farm, "genre": "boucherie"})
+
+
+def test_a_chain_at_several_addresses_must_be_registered_at_the_place_address():
+    register = {"actifs": [{"nom": "CARREFOUR EXPRESS", "adresse": "27 RUE EDOUARD CORBIERE 29200 BREST", "activite": "47.11B"},
+                           {"nom": "CARREFOUR EXPRESS", "adresse": "14 RUE MARECHAL FRANCHET D'ESPEREY 29200 BREST", "activite": "47.11C"}]}
+    shop = {"nom": "Carrefour Express", "categorie": "epicerie", "genre": "supérette", "pages": []}
+    assert find_commerces.register_is_proof({**shop, "adresse": "27 rue Édouard Corbière, 29200 Brest"}, register)
+    assert not find_commerces.register_is_proof({**shop, "adresse": "3 rue de Siam, 29200 Brest"}, register)

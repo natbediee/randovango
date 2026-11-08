@@ -111,6 +111,9 @@ class _SeasonCursor:
     def fetchone(self):
         return (1,) if self.decided else None
 
+    def fetchall(self):
+        return []      # aucune correction humaine (restaurant_service.human_fields)
+
     def close(self):
         pass
 
@@ -158,7 +161,7 @@ def _save(monkeypatch, row, known=()):
     monkeypatch.setattr(restaurant_service, "_known_restaurants", lambda cursor, city: list(known))
     monkeypatch.setattr(restaurant_service, "_position", lambda city, address: (48.3, -4.7))
     monkeypatch.setattr(restaurant_service, "_find_known", lambda row, position, city, known: known[0] if known else None)
-    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail: calls["flag"].append(reason))
+    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail, link=None: calls["flag"].append(reason))
     monkeypatch.setattr(restaurant_service, "_create_poi", lambda cursor, row, position, city, source, masked: 99)
     monkeypatch.setattr(restaurant_service, "_save_sheet", lambda cursor, poi_id, row, version, model: calls["sheet"].append(poi_id))
     monkeypatch.setattr(restaurant_service, "_save_proofs", lambda cursor, poi_id, pages: None)
@@ -298,7 +301,7 @@ def test_the_measured_duplicates_are_found():
 
 def test_a_place_to_confirm_keeps_the_sheet_prepared_by_the_agent(monkeypatch):
     details = []
-    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail: details.append(detail))
+    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail, link=None: details.append(detail))
     _save_one = {"nom": "Le Neuf", "genre": "bar-tabac brasserie", "categorie": "brasserie", "pourquoi": "Le bistrot du bourg.",
                  "a_relire": "registre : débit de boissons, dit servir des repas par les recherches", "pages": []}
     calls = {"connection": _Connection()}

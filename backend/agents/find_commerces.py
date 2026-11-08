@@ -39,7 +39,7 @@ from agents.llm_config import make_llm_service, model_of
 from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from etl.extract import api_registre
 from services import commerce_service, restaurant_service
-from services.commerce_selection_service import SHOP_CATEGORIES
+from services.commerce_selection_service import PRODUCER, SHOP_CATEGORIES
 from services.commerce_service import place_key
 from services.restaurant_service import same_address
 from utils.geo_utils import haversine_distance_km
@@ -53,7 +53,11 @@ logger = LoggerUtil.get_logger("agent_commerces")
 #       sans horaires (non contrôlés) ; l'enseigne derrière le nom de société du registre ; un lieu que seul le registre
 #       tient attend une relecture (Lagadec, Vins et Boissons : une cave inscrite en avril 2026, pas encore ouverte) ;
 #       l'analyste signale un autre nom actif à l'adresse (Leonetti, radiée en 2014)
-COMMERCES_PROMPT_VERSION = 2
+#   3 : 8 novembre 2026, deux catégories de plus à la demande de l'utilisatrice : cave (vins, bières, spiritueux) et
+#       gourmandise (chocolaterie, confiserie, biscuiterie, torréfacteur, épices), rangées avant en épicerie
+#   4 : 8 novembre 2026, artisan (boucher, poissonnier, fromager, traiteur), rangé avant avec les producteurs ;
+#       producteur ne garde que la ferme, le maraîcher et l'éleveur
+COMMERCES_PROMPT_VERSION = 4
 
 MAX_PLACES = 15
 # Boulangerie, pâtisserie, alimentation générale, supérette, fruits et légumes, boucherie, charcuterie, poissonnerie,
@@ -63,6 +67,10 @@ BAR_ACTIVITY = "56.30"
 REGISTER_ACTIVITIES = ("10.71C", "10.71D", "10.13B", "47.11B", "47.11C", "47.21Z", "47.22Z", "47.23Z", "47.24Z",
                        "47.25Z", "47.29Z", "56.30Z")
 REGISTER_ONLY = "registre seul : aucune page ne cite ce nom"
+# Le genre d'un producteur à la ferme : 3 des 40 producteurs tenus par le registre le 8 novembre 2026, les autres sont
+# des bouchers, poissonniers et fromagers.
+FARM_WORDS = ("ferme", "producteur", "productrice", "maraîch", "maraich", "exploitation", "élevage", "eleveur", "éleveur",
+              "verger", "potager", "cueillette")
 TRACE_DIR = Path(os.getenv("RANDOVANGO_LOG_DIR", "/usr/src/logs")) / "agent_commerces"
 
 NO_CAFE = "Pas de café ni de bar : une autre recherche s'en charge."
@@ -72,8 +80,8 @@ Nous sommes le {date.today().isoformat()}.
 
 ## Ce qu'on veut
 Dresse la liste la plus complète possible, jusqu'à {MAX_PLACES} lieux de la commune où un voyageur peut acheter à manger
-sur place : boulangerie, épicerie, supérette, épicerie fine, cave, marché, vente à la ferme, maraîcher, fromager,
-boucher, poissonnier. Un autre agent vérifiera ensuite chaque lieu : ne retire pas un lieu parce que tu n'as pas encore de
+sur place : boulangerie, épicerie, supérette, épicerie fine, cave, chocolaterie, biscuiterie, marché, vente à la ferme,
+maraîcher, fromager, boucher, poissonnier. Un autre agent vérifiera ensuite chaque lieu : ne retire pas un lieu parce que tu n'as pas encore de
 preuve solide, et continue à chercher tant que tu trouves de nouveaux noms.
 Pas de supermarché ni d'hypermarché, pas de grossiste, pas de vente aux seuls professionnels, pas de restaurant.
 {NO_CAFE}
@@ -101,8 +109,10 @@ Dans "ecartes", les lieux vus sans les retenir et pourquoi. "ferme" est true seu
 définitivement, changé de main, ou, pour un marché, qu'il n'a plus lieu. Une fermeture de saison ou de congés n'en est pas une.
 
 "nom" : le seul nom du lieu. "genre" : quelques mots. "categorie" : boulangerie (boulangerie, pâtisserie), epicerie
-(épicerie, supérette, épicerie fine, cave), marche (marché, halle), producteur (vente à la ferme, maraîcher, fromager,
-boucher, poissonnier). "pourquoi" : une phrase neutre, tirée de ce que tu as lu, sur ce que le lieu propose. Elle est
+(épicerie, supérette, épicerie fine), cave (cave à vins, bières ou spiritueux), gourmandise (chocolaterie, confiserie,
+biscuiterie, torréfacteur, épices), artisan (boucherie, charcuterie, poissonnerie, fromagerie, traiteur), marche (marché,
+halle), producteur (vente à la ferme, maraîcher, éleveur, producteur qui vend ce qu'il cultive ou élève). Un lieu qui fait les deux va là où le voyageur fait ses courses : une cave-épicerie en epicerie, une
+boulangerie-biscuiterie en boulangerie. "pourquoi" : une phrase neutre, tirée de ce que tu as lu, sur ce que le lieu propose. Elle est
 affichée au voyageur : décris le lieu seulement, sans parler de tes sources (annuaire, avis, fiche) ni de tes doutes
 (« à confirmer », « à vérifier »). Si tu ne sais rien de plus, dis seulement le genre et l'endroit. Pas de superlatif.
 Pas d'horaires ni de jours d'ouverture dans "pourquoi" : rien ne les contrôle, et le jour d'un marché est lu à part.
@@ -220,22 +230,55 @@ def in_register(row: dict, register: dict | None) -> bool:
     return bool(lines_of(row, register))
 
 
+def named_lines(row: dict, register: dict | None) -> list:
+    """Les lignes actives du registre au nom du lieu (pas seulement à son adresse)."""
+    return [line for line in register_lines(row, register)
+            if line.get("nom") and place_key(line["nom"]) == place_key(row["nom"])]
+
+
 def registered_since(row: dict, register: dict | None) -> str | None:
     """La date du registre à ce nom, la plus ancienne s'il y a deux établissements. Un marché n'en a pas."""
-    dates = [line["actif_depuis"] for line in register_lines(row, register)
-             if line.get("nom") and line.get("actif_depuis") and place_key(line["nom"]) == place_key(row["nom"])]
-    return min(dates, default=None)
+    return min((line["actif_depuis"] for line in named_lines(row, register) if line.get("actif_depuis")), default=None)
+
+
+def is_farm(row: dict) -> bool:
+    """Un producteur à la ferme, pas une boutique : la catégorie « producteur » range aussi bouchers et poissonniers."""
+    genre = (row.get("genre") or "").lower()
+    return row.get("categorie") == PRODUCER and any(word in genre for word in FARM_WORDS)
+
+
+def register_is_proof(row: dict, register: dict | None) -> bool:
+    """
+    Le registre suffit à prouver une boutique ou un débit de boissons inscrit à son nom : actif, il est ouvert au public.
+    Pas une ferme : le registre ne dit pas qu'elle vend sur place, ni où ni quand (Mademoiselle Tomates, maraîcher sous
+    serre à Plougonvelin). Décision de l'utilisatrice du 8 novembre 2026.
+    Une enseigne inscrite à plusieurs adresses (Carrefour Express à Brest) doit l'être à celle du lieu : son nom seul
+    ne dit pas laquelle est encore ouverte.
+    """
+    lines = named_lines(row, register)
+    if is_farm(row) or not lines:
+        return False
+    if len(lines) > 1 and row.get("adresse"):
+        return any(same_address(row["adresse"], line.get("adresse")) for line in lines)
+    return True
+
+
+def has_named_page(row: dict) -> bool:
+    """Une page contrôlée cite le nom, même un agrégateur."""
+    return any(page.get("verdict") in AUTO_VERDICTS for page in row["pages"])
 
 
 def register_only_reason(row: dict, register: dict | None, commune: str) -> str | None:
     """
-    Un lieu que seul le registre tient, sans aucune page qui cite son nom, attend une relecture (pilote du 7 novembre
-    2026) : le registre montre une activité à l'adresse, pas le nom. « Leonetti-Degavre », radiée en 2014, tenait par la
-    ligne SRB (Service de remplacement boucher) au même numéro. La ligne trouvée est donnée pour aider à trancher.
+    Un lieu que seul le registre tient par son adresse, sans aucune page qui cite son nom, attend une relecture
+    (pilote du 7 novembre 2026) : le registre montre une activité à l'adresse, pas le nom. « Leonetti-Degavre », radiée
+    en 2014, tenait par la ligne SRB (Service de remplacement boucher) au même numéro. La ligne trouvée est donnée pour
+    aider à trancher. Une ligne au même nom prouve le lieu (register_is_proof) ; un producteur sans page est écarté
+    (search_zone) : aucun des deux ne va en relecture.
     """
     if has_accepted_page(row, commune) or not in_register(row, register):
         return None
-    if any(page.get("verdict") in AUTO_VERDICTS for page in row["pages"]):
+    if has_named_page(row) or register_is_proof(row, register) or is_farm(row):
         return None
     lines = "; ".join(f"{line.get('nom') or 'sans nom'} ({line.get('activite')}, depuis {line.get('actif_depuis')})"
                       for line in lines_of(row, register))
@@ -281,14 +324,19 @@ def search_zone(city: dict, register: dict | None, zone: dict | None, trace: dic
         row["pages"] = control_row(row, name)
     trace["controle"] = [{"nom": row["nom"], "pages": row["pages"]} for row in answer["commerces"]]
     answer["commerces"] = analyze_commerces.analyze_commune(city, answer["commerces"], seen, trace)
+    # L'alerte de l'analyste se vérifie dans le registre entier (restaurant_service.alert_contradicted).
+    restaurant_service.clear_contradicted_alerts(answer["commerces"], register, name, "commerces")
     # Les preuves et la date « nouveau » se lisent dans le registre entier : un lieu peut y être inscrit hors de sa zone.
-    missing = [row for row in answer["commerces"] if not has_accepted_page(row, name) and not in_register(row, register)]
+    # L'agent des preuves cherche pour tout lieu que le registre ne prouve pas : avant le 8 novembre 2026, il sautait
+    # les lieux inscrits à leur seule adresse et les producteurs, qui finissaient en relecture sans deuxième recherche.
+    missing = [row for row in answer["commerces"] if not has_accepted_page(row, name) and not register_is_proof(row, register)]
     for row, proof in zip(missing, analyze_commerces.find_proofs(city, missing, trace)):
         add_proofs(row, proof, name)
     for row in answer["commerces"]:
         row |= analyze_commerces.control_details(row, name)
         row["registre_depuis"] = registered_since(row, register)
-        row["au_registre"] = in_register(row, register)
+        # Une ferme sans page qui la cite n'est pas gardée par le registre : elle est écartée (register_is_proof).
+        row["au_registre"] = in_register(row, register) and (not is_farm(row) or has_named_page(row))
         reason = register_only_reason(row, register, name)
         if reason and not row.get("a_relire"):
             row["a_relire"] = reason

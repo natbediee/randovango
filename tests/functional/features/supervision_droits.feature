@@ -38,6 +38,9 @@ Fonctionnalité: La supervision est réservée aux admins
       | contributor | DELETE  | /api/supervision/services/decisions/1   |
       | contributor | GET     | /api/supervision/bilan                  |
       | contributor | GET     | /api/supervision/edit/services           |
+      | contributor | POST    | /api/supervision/services/fiche          |
+      | contributor | GET     | /api/supervision/edit/services/fiche/1   |
+      | contributor | POST    | /api/supervision/edit/services/fiche     |
       | contributor | POST    | /api/supervision/edit/services/decisions |
       | contributor | DELETE  | /api/supervision/edit/services/decisions/1 |
       | contributor | GET     | /api/supervision/edit/spots              |

@@ -16,12 +16,16 @@ from datetime import date
 from urllib.parse import quote_plus
 
 # Une liste fixe : le genre, écrit librement, classait Ar Dagenta en bistrot puis en pizzeria.
-TABLE_CATEGORIES = ["gastronomique", "poisson", "creperie", "pizzeria", "plage", "bistrot", "traditionnel"]
+# La même grille dans toute la France (8 novembre 2026) : l'ancienne était bretonne (crêperie), et « traditionnel » mêlait
+# couscous, buffet asiatique, kebab et brasserie d'hôtel. Le nom local reste dans le genre : une crêperie, une winstub ou
+# un bouchon sont de la cuisine régionale. « poisson » seulement si une page dit que la carte en est surtout faite.
+TABLE_CATEGORIES = ["regionale", "poisson", "gastronomique", "bistrot", "pizzeria", "monde", "rapide", "plage", "francaise"]
 # Les tables de la commune montrées au voyageur, les plus proches du spot. 15 : le plus de tables d'une commune cherchée
 # d'un seul tenant (Le Conquet, novembre 2026), et le plus de lieux qu'une recherche de l'agent garde.
 TABLES_SHOWN = 15
-TABLE_CATEGORY_LABELS = {"gastronomique": "Gastronomique", "poisson": "Poisson et fruits de mer", "creperie": "Crêperie", "pizzeria": "Pizzeria",
-                         "plage": "Adresse de plage", "bistrot": "Bistrot, bar", "traditionnel": "Cuisine traditionnelle"}
+TABLE_CATEGORY_LABELS = {"regionale": "Cuisine régionale", "poisson": "Poisson et fruits de mer", "gastronomique": "Gastronomique",
+                         "bistrot": "Bistrot, brasserie", "pizzeria": "Pizzeria, italien", "monde": "Cuisine du monde",
+                         "rapide": "Restauration rapide", "plage": "Plage, guinguette", "francaise": "Cuisine française"}
 NEW_MONTHS = 12
 FRENCH_MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
                  "septembre", "octobre", "novembre", "décembre")

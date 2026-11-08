@@ -82,7 +82,8 @@ logger = LoggerUtil.get_logger("agent_restaurants")
 #  10 : un hôtel dont l'analyste ne trouve pas le nom du restaurant est retiré
 #  11 : la phrase "pourquoi" est affichée au voyageur, sans sources ni doutes
 #  12 : une grande ville est cherchée zone par zone, autour de ses spots
-RESTAURANTS_PROMPT_VERSION = 12
+#  13 : grille de catégories valable dans toute la France, et un "pourquoi" fait des seuls mots lus
+RESTAURANTS_PROMPT_VERSION = 13
 
 MAX_PLACES = 15
 YEAR_SEARCHES = 3
@@ -132,10 +133,15 @@ postale si tu l'as, sinon null. Si le lieu a changé de nom, donne l'ancien dans
 Dans "ecartes", les lieux vus sans les retenir et pourquoi. "ferme" est true seulement si une page dit que le lieu a fermé
 définitivement ou changé de main. Une fermeture de saison ou de congés n'en est pas une.
 
-"nom" : le seul nom du lieu. "genre" : quelques mots. "categorie" : celle qui décrit le mieux ce qu'on y mange ou le lieu :
-gastronomique, poisson (poisson et fruits de mer), creperie, pizzeria, plage (cabane, paillote, guinguette, adresse de plage),
-bistrot (bistrot, bar ou café qui sert à manger), traditionnel (le reste). "pourquoi" : une phrase neutre, tirée de ce que tu
-as lu, sur ce que le lieu propose. Elle est affichée au voyageur : décris le lieu seulement, sans parler de tes sources
+"nom" : le seul nom du lieu. "genre" : quelques mots, avec le nom local du lieu (crêperie, winstub, bouchon, estaminet...).
+"categorie" : la même grille partout en France, celle qui décrit le mieux ce qu'on y mange ou le lieu :
+regionale (cuisine de la région : crêperie, winstub, flammekueche, bouchon lyonnais...), poisson (seulement si une page
+dit que la carte est surtout faite de poisson ou de fruits de mer ; être sur un port ne suffit pas), gastronomique,
+bistrot (bistrot, brasserie, bar ou café qui sert à manger), pizzeria (pizzeria, cuisine italienne), monde (cuisine d'un
+autre pays : asiatique, maghrébine, africaine...), rapide (kebab, burger, snack, vente à emporter), plage (cabane,
+paillote, guinguette, adresse de plage), francaise (le reste). "pourquoi" : une phrase neutre, faite seulement de ce que
+tu as lu sur une page, sur ce que le lieu propose. N'y mets ni "surtout", ni "spécialité", ni "face à la mer" si aucune
+page ne le dit. Elle est affichée au voyageur : décris le lieu seulement, sans parler de tes sources
 (annuaire, avis, fiche) ni de tes doutes (« à confirmer », « à vérifier »). Si tu ne sais rien de plus, dis seulement le genre
 et l'endroit. Pas de superlatif.
 
@@ -363,6 +369,8 @@ def search_zone(city: dict, register: dict | None, zone: dict | None, trace: dic
         row["pages"] = control_row(row, name)
     trace["controle"] = [{"nom": row["nom"], "pages": row["pages"]} for row in answer["restaurants"]]
     answer["restaurants"] = analyze_restaurants.analyze_commune(city, answer["restaurants"], seen, trace)
+    # L'alerte de l'analyste se vérifie dans le registre entier (restaurant_service.alert_contradicted).
+    restaurant_service.clear_contradicted_alerts(answer["restaurants"], register, name, "restaurants")
     # Les preuves et la date « nouveau » se lisent dans le registre entier : un lieu peut y être inscrit hors de sa zone.
     missing = [row for row in answer["restaurants"] if not has_accepted_page(row, name) and not in_register(row, register)]
     for row in [row for row in missing if bar_said_restaurant(row, register)]:

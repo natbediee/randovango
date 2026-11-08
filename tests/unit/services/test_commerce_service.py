@@ -30,7 +30,7 @@ def _save(monkeypatch, row, known=()):
     monkeypatch.setattr(commerce_service, "_known_commerces", lambda cursor, city: list(known))
     monkeypatch.setattr(commerce_service, "_position", lambda city, address: (48.3, -4.7))
     monkeypatch.setattr(commerce_service, "_find_known", lambda row, position, city, known: known[0] if known else None)
-    monkeypatch.setattr(commerce_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail:
+    monkeypatch.setattr(commerce_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail, link=None:
                         calls["flag"].append((reason, detail)))
     monkeypatch.setattr(commerce_service, "_create_poi", lambda cursor, row, position, city, source, masked:
                         calls["created"].append(row["lien"]) or 99)
@@ -86,8 +86,8 @@ def test_the_sheet_goes_to_the_commerces_table():
     cursor = MagicMock()
     commerce_service.save_validated_sheet(cursor, 7, {"genre": "marché", "jours": "jeudi matin", "categorie": "marche",
                                                       "prompt_version": 1, "model": "modele"})
-    sql, params = cursor.execute.call_args_list[0][0]
-    assert "INTO commerces" in sql and params[0] == 7 and "jeudi matin" in params
+    sql, params = next(call[0] for call in cursor.execute.call_args_list if "INTO commerces" in call[0][0])
+    assert params[0] == 7 and "jeudi matin" in params
 
 
 def test_validating_a_shop_without_a_prepared_sheet_is_refused():
@@ -193,3 +193,68 @@ def test_a_visible_twin_wins_over_a_masked_one():
     row = {"nom": "Boulangerie Lemaire", "adresse": "1 rue"}
     assert commerce_service.find_known(row, (48.40, -4.00), CITY, [masked, visible])["id"] == 2
     assert commerce_service.find_known(row, (48.40, -4.00), CITY, [masked])["id"] == 1
+
+
+def test_the_register_and_a_page_naming_the_shop_make_it_verified(monkeypatch):
+    marks = []
+    monkeypatch.setattr(commerce_service, "set_verified", lambda cursor, poi_id, verified: marks.append(verified))
+    directory = {"url": "https://www.myboulange.fr/la-meule-de-pierre", "type_page": "agregateur", "verdict": "ok"}
+    _save(monkeypatch, {"nom": "La Meule de Pierre", "categorie": "boulangerie", "au_registre": True,
+                        "registre_depuis": "2024-01-18", "pages": [directory]})
+    _save(monkeypatch, {"nom": "Le Gall", "categorie": "boulangerie", "au_registre": True, "pages": [directory]})
+    assert marks == [True, False]
+
+
+def test_a_text_corrected_by_a_human_survives_a_new_pass(monkeypatch):
+    from services import restaurant_service
+    monkeypatch.setattr(restaurant_service, "human_fields", lambda cursor, poi_id: {"pourquoi", "url"})
+    cursor = MagicMock()
+    cursor.fetchone.return_value = ("Le texte corrigé dans la supervision",)
+    commerce_service._save_sheet(cursor, 7, {"genre": "boulangerie", "pourquoi": "Texte de l'agent", "categorie": "boulangerie"}, 2, "modele")
+    params = next(call[0][1] for call in cursor.execute.call_args_list if "INTO commerces" in call[0][0])
+    assert "Le texte corrigé dans la supervision" in params and "Texte de l'agent" not in params
+
+
+def test_a_new_pass_leaves_the_place_fields_a_human_corrected(monkeypatch):
+    from services import restaurant_service
+    monkeypatch.setattr(restaurant_service, "human_fields", lambda cursor, poi_id: {"address", "maps_url", "saison"})
+    monkeypatch.setattr(restaurant_service, "_decided_by_human", lambda cursor, poi_id, decisions: False)
+    cursor = MagicMock()
+    poi = {"id": 7, "name": "Le Gall"}
+    restaurant_service._update_poi(cursor, poi, {"adresse": "1 rue", "lien": "https://legall.fr"}, (48.3, -4.7))
+    sql, params = cursor.execute.call_args_list[-1][0]
+    assert sql == "UPDATE poi SET url = %s WHERE id = %s" and params == ("https://legall.fr", 7)
+    cursor.reset_mock()
+    cursor.fetchone.return_value = None
+    restaurant_service._save_season(cursor, 7, {"saisonnier": True, "mois_ouverture": "juillet à août"})
+    assert not any("statut_saison" in call[0][0] for call in cursor.execute.call_args_list)
+
+
+def test_an_alert_contradicted_by_an_active_line_at_the_same_name_and_address_is_cleared():
+    from services import restaurant_service
+    register = {"actifs": [{"nom": "A FLEUR D'EAU", "adresse": "25 QUAI DU GRAND PORT 29100 DOUARNENEZ", "activite": "56.10A",
+                            "actif_depuis": "2025-05-15"}]}
+    row = {"nom": "A Fleur d'Eau", "adresse": "25 quai du Grand Port, 29100 Douarnenez",
+           "alerte_registre": "enseigne fermée le 2025-07-01, sans établissement actif du même nom"}
+    other = {**row, "nom": "Au Vieux Logis", "alerte_registre": "autre nom actif à l'adresse : TMT 29"}
+    liquidated = {**row, "alerte_registre": "Ouverture d'une liquidation judiciaire"}
+    rows = [row, other, liquidated]
+    restaurant_service.clear_contradicted_alerts(rows, register, "Douarnenez", "restaurants")
+    assert row["alerte_registre"] is None and other["alerte_registre"] and liquidated["alerte_registre"]
+
+
+def test_a_place_to_confirm_keeps_its_accepted_page(monkeypatch):
+    linked = []
+    calls = {"connection": _Connection()}
+    monkeypatch.setattr(commerce_service.MySQLUtils, "connect", staticmethod(lambda: calls["connection"]))
+    monkeypatch.setattr(commerce_service.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
+    monkeypatch.setattr(commerce_service, "get_or_create_source", lambda cursor, name: 1)
+    monkeypatch.setattr(commerce_service, "_known_commerces", lambda cursor, city: [])
+    monkeypatch.setattr(commerce_service, "_known_tables", lambda cursor, city: [])
+    monkeypatch.setattr(commerce_service, "_position", lambda city, address: None)
+    monkeypatch.setattr(commerce_service, "send_to_review", lambda cursor, poi_id, reason, detail: True)
+    monkeypatch.setattr(commerce_service, "_create_poi", lambda cursor, row, position, city, source, masked: linked.append((row["lien"], masked)) or 9)
+    site = {"url": "https://www.legall.fr", "type_page": "site", "verdict": "ok"}
+    summary = commerce_service.save_commune(CITY, {"commerces": [{"nom": "Le Gall", "categorie": "boulangerie", "genre": "boulangerie",
+                                                                  "lien": "https://facebook.com/legall", "pages": [site]}]}, 2, "modele")
+    assert summary["a_confirmer"] == 1 and linked == [("https://www.legall.fr", True)]

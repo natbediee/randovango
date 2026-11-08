@@ -80,11 +80,12 @@ ACTION_LABELS = {
     "valider_saison": "saison validée", "pas_saisonnier": "pas saisonnier",
     "retirer_lien": "lien retiré", "garder_lien": "lien gardé",
     "fusionner": "fusionné", "deux_lieux": "deux lieux",
-    "valider_pepite": "pépite validée",
+    "valider_pepite": "lieu confirmé",
     "sans_suite": "classé sans suite",
     "autre_lien": "lien saisi à la main",
     "autre_nom": "renommé à la main",
     "autre_maps": "lien Google Maps saisi à la main",
+    "modifier_fiche": "fiche modifiée",
 }
 ACTION_BUTTONS = {
     "valider_lien": ("Valider le lien", "main"), "valider_lien_nom": ("Valider le lien et le nom", "main"),
@@ -93,7 +94,7 @@ ACTION_BUTTONS = {
     "valider_saison": ("Valider la saison", "main"), "pas_saisonnier": ("Pas saisonnier", "line"),
     "retirer_lien": ("Retirer le lien", "main"), "garder_lien": ("Garder le lien", "line"),
     "fusionner": ("Même lieu : fusionner", "remove"), "deux_lieux": ("Deux lieux", "line"),
-    "valider_pepite": ("Valider la pépite", "main"),
+    "valider_pepite": ("Confirmer et afficher le lieu", "main"),
     "autre_lien": ("Mettre ce lien", "line"),
     "autre_nom": ("Renommer ainsi", "line"),
     "autre_maps": ("Mettre ce lien Google Maps", "line"),
@@ -129,7 +130,11 @@ def tab_categories(service: str) -> tuple:
 SHEET_WRITERS = {restaurant_service.SOURCE: restaurant_service.save_validated_sheet,
                  commerce_service.SOURCE: commerce_service.save_validated_sheet}
 # Les seules colonnes qu'une décision peut changer, et donc remettre.
-APPLIED_COLUMNS = ("url", "name", "masque", "ferme_moment", "statut_saison", "mois_ouverture", "maps_url", "latitude", "longitude")
+APPLIED_COLUMNS = ("url", "name", "masque", "ferme_moment", "statut_saison", "mois_ouverture", "maps_url", "latitude", "longitude",
+                   "address", "description")
+# Les champs de fiche qu'une fiche corrigée à la main (poi_edit_service.decide_sheet) peut changer, table par table.
+SHEET_COLUMNS = {"restaurants": ("genre", "pourquoi", "categorie", "distinction"),
+                 "commerces": ("genre", "pourquoi", "categorie", "jours")}
 OSM_MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
 def signal_detail(signal: dict) -> dict:
@@ -243,7 +248,8 @@ def _to_confirm_card(signals: list) -> dict:
     detail = _detail(signals[0])
     sheet = detail.get("fiche") or {}
     genre = f" ({sheet['genre']})" if sheet.get("genre") else ""
-    return {"link": detail.get("page"), "proposal": f"une pépite{genre} ? Valider l'affiche avec la fiche de l'agent.",
+    # « valider_pepite » est un nom interne gardé pour les décisions déjà prises : ce sont des services, pas des pépites.
+    return {"link": detail.get("page"), "proposal": f"ce lieu{genre} existe-t-il ? Le confirmer l'affiche au voyageur, avec sa fiche.",
             "actions": ["valider_pepite", "retirer"] if sheet.get("genre") else ["retirer"]}
 
 
@@ -279,8 +285,12 @@ def build_card(tab: str, poi: dict, signals: list) -> dict:
 
 
 def typed_link(url: str | None) -> str:
-    """Le lien qu'un admin a trouvé lui-même : une adresse web complète, et rien d'autre."""
-    url = (url or "").strip()
+    """
+    Le lien qu'un admin a trouvé lui-même : une adresse web complète, et rien d'autre. Une apostrophe ou un guillemet sont
+    encodés comme le fait un navigateur : le lien Google Maps de « A Fleur d'Eau » contient « d'Eau » (8 novembre 2026).
+    Encodés, ils ne peuvent plus sortir d'un attribut href. Une espace reste refusée : ce n'est pas une adresse.
+    """
+    url = (url or "").strip().replace("'", "%27").replace('"', "%22")
     if not re.fullmatch(r"https?://[^\s\"'<>]{4,490}", url):
         raise ValueError("Lien invalide : colle une adresse complète, qui commence par https://")
     return url
@@ -592,6 +602,8 @@ def cancel_decision(decision_id: int) -> None:
         if before:
             assignments = ", ".join(f"{column} = %s" for column in before)
             cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*before.values(), row["objet_id"]))
+        if detail.get("avant_fiche"):
+            restore_sheet(cursor, row["objet_id"], detail["avant_fiche"])
         signal_ids = detail["signal_ids"]
         if signal_ids:
             marks = ",".join(["%s"] * len(signal_ids))
@@ -601,3 +613,25 @@ def cancel_decision(decision_id: int) -> None:
         cursor.close()
     finally:
         MySQLUtils.disconnect(connection)
+
+
+def restore_sheet(cursor, poi_id: int, before: dict) -> None:
+    """
+    Remet la fiche d'avant une fiche corrigée à la main : dans sa table (restaurants, commerces), ou dans le signal d'un
+    lieu à confirmer, dont la fiche préparée par l'agent n'est pas encore en table.
+    """
+    columns = SHEET_COLUMNS.get(before.get("table"), ())
+    values = {column: value for column, value in (before.get("values") or {}).items() if column in columns}
+    if not values:
+        return
+    if before.get("origine") == "table":
+        assignments = ", ".join(f"{column} = %s" for column in values)
+        cursor.execute(f"UPDATE {before['table']} SET {assignments} WHERE poi_id = %s", (*values.values(), poi_id))
+    elif before.get("origine") == "signal":
+        cursor.execute("SELECT detail FROM poi_signals WHERE id = %s", (before["signal_id"],))
+        signal = cursor.fetchone()
+        if signal:
+            detail = _detail(signal)
+            detail["fiche"] = {**(detail.get("fiche") or {}), **values}
+            cursor.execute("UPDATE poi_signals SET detail = %s WHERE id = %s",
+                           (json.dumps(detail, ensure_ascii=False, default=str), before["signal_id"]))

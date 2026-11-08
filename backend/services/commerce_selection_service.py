@@ -15,14 +15,20 @@ COMMERCE_SERVICES = tuple(category for category, tab in POI_FRONTEND_CATEGORY_MA
 # Les cafés et bars ont leur onglet (7 novembre 2026) : l'agent commerces les cherche, celui des restaurants non.
 CAFE_SERVICES = tuple(category for category, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab == "cafe")
 # Une liste fixe, comme celle des restaurants : le genre, écrit librement, ne range pas deux passages pareil.
-# Le boucher, le poissonnier et le fromager vont avec les producteurs (« Producteur, artisan »).
-SHOP_CATEGORIES = ["boulangerie", "epicerie", "marche", "producteur", "cafe"]
-SHOP_CATEGORY_LABELS = {"boulangerie": "Boulangerie", "epicerie": "Épicerie, supérette", "marche": "Marché",
-                        "producteur": "Producteur, artisan", "cafe": "Café, bar"}
+# Cave et Gourmandises (8 novembre 2026) : rangées avant en épicerie, des chocolateries s'y retrouvaient.
+# Artisan (8 novembre 2026) : boucher, poissonnier, fromager, traiteur, rangés avant avec les producteurs. Sur 162 fiches
+# « Producteur, artisan », 99 étaient des boutiques, affichées « Vente à la ferme » (Au Bœuf Charolais).
+SHOP_CATEGORIES = ["boulangerie", "epicerie", "cave", "gourmandise", "artisan", "marche", "producteur", "cafe"]
+SHOP_CATEGORY_LABELS = {"boulangerie": "Boulangerie", "epicerie": "Épicerie, supérette", "cave": "Cave",
+                        "gourmandise": "Gourmandises", "artisan": "Boucherie, poissonnerie, fromagerie",
+                        "marche": "Marché", "producteur": "Producteur, ferme", "cafe": "Café, bar"}
 # Le service OSM de chaque catégorie : un commerce créé par l'agent rejoint l'onglet « commerce »
 # (utils/service_utils.POI_FRONTEND_CATEGORY_MAP) et le carnet affiche le nom de ce service.
-SHOP_SERVICES = {"boulangerie": "bakery", "epicerie": "convenience", "marche": "marketplace", "producteur": "farm", "cafe": "cafe"}
+SHOP_SERVICES = {"boulangerie": "bakery", "epicerie": "convenience", "cave": "wine", "gourmandise": "confectionery",
+                 "artisan": "butcher",
+                 "marche": "marketplace", "producteur": "farm", "cafe": "cafe"}
 # Les commerces de la commune montrés au voyageur, les plus proches du spot : la même limite que les tables.
 SHOPS_SHOWN = 15
 MARKET = "marche"
 CAFE = "cafe"
+PRODUCER = "producteur"

@@ -250,19 +250,64 @@ def _decided_by_human(cursor, poi_id: int, decisions: tuple) -> bool:
     return cursor.fetchone() is not None
 
 
+class _DictRows:
+    """Un curseur qui rend des dictionnaires, comme celui qu'attend poi_edit_service, à partir de celui d'un agent."""
+
+    def __init__(self, cursor):
+        self.cursor = cursor
+
+    def execute(self, sql, params=None):
+        self.cursor.execute(sql, params)
+
+    def fetchall(self):
+        rows = self.cursor.fetchall()
+        if not rows or isinstance(rows[0], dict):
+            return rows
+        columns = [column[0] for column in self.cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+
+
+def human_fields(cursor, poi_id: int) -> set:
+    """
+    Les champs qu'un humain a corrigés dans la supervision (onglet « Modifier », poi_edit_service.human_fields) : un
+    passage d'agent les laisse tels quels (8 novembre 2026). Noms : name, address, url, maps_url (position comprise),
+    description, saison (statut et mois), et genre, pourquoi, categorie, jours, distinction pour la fiche.
+    """
+    from services import poi_edit_service   # ici : poi_edit_service importe ce module
+    return poi_edit_service.human_fields(_DictRows(cursor), poi_id)
+
+
+def keep_human_sheet(cursor, table: str, poi_id: int, row: dict, columns: tuple) -> dict:
+    """La fiche de l'agent, avec les valeurs déjà en base pour les champs qu'un humain a corrigés."""
+    kept = sorted(human_fields(cursor, poi_id) & set(columns))
+    if not kept:
+        return row
+    cursor.execute(f"SELECT {', '.join(kept)} FROM {table} WHERE poi_id = %s", (poi_id,))
+    old = cursor.fetchone()
+    if not old:
+        return row
+    return {**row, **(old if isinstance(old, dict) else dict(zip(kept, old)))}
+
+
 def _update_poi(cursor, poi: dict, row: dict, position: tuple | None) -> None:
     """
     L'adresse et la position de l'agent sont meilleures qu'OSM, et son lien est une page acceptée : l'ancien pouvait être
-    Facebook. Un lien ou un nom tranché par un humain dans la supervision n'est plus touché (7 novembre 2026).
+    Facebook. Un lien ou un nom tranché par un humain dans la supervision n'est plus touché (7 novembre 2026), ni rien
+    de ce qu'il a corrigé dans l'onglet « Modifier » (8 novembre 2026) : un lien Google Maps saisi fixe aussi la position.
     """
-    fields = {"address": row.get("adresse")}
-    if row.get("lien") and not _decided_by_human(cursor, poi["id"], HUMAN_LINK_DECISIONS):
+    human = human_fields(cursor, poi["id"])
+    fields = {} if "address" in human else {"address": row.get("adresse")}
+    if row.get("lien") and "url" not in human and not _decided_by_human(cursor, poi["id"], HUMAN_LINK_DECISIONS):
         fields["url"] = row["lien"]
-    if position:
+    if position and "maps_url" not in human:
         fields |= {"latitude": position[0], "longitude": position[1]}
     if row.get("ancien_nom") and name_key(poi["name"]) == name_key(row["ancien_nom"]) \
-            and not _decided_by_human(cursor, poi["id"], HUMAN_NAME_DECISIONS):
+            and "name" not in human and not _decided_by_human(cursor, poi["id"], HUMAN_NAME_DECISIONS):
         fields["name"] = row["nom"]
+    if poi.get("masque"):
+        fields["masque"] = 0     # la ligne masquée en attendant la relecture s'affiche avec sa fiche
+    if not fields:
+        return
     assignments = ", ".join(f"{column} = %s" for column in fields)
     cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*fields.values(), poi["id"]))
 
@@ -273,7 +318,7 @@ def _save_season(cursor, poi_id: int, row: dict) -> None:
         SELECT 1 FROM decisions WHERE objet_type = 'poi' AND objet_id = %s AND annulee_at IS NULL
         AND decision IN ('valider_saison', 'pas_saisonnier')
     """, (poi_id,))
-    if cursor.fetchone():
+    if cursor.fetchone() or "saison" in human_fields(cursor, poi_id):
         return
     if not row.get("saisonnier"):
         cursor.execute("UPDATE poi SET statut_saison = NULL, mois_ouverture = NULL WHERE id = %s", (poi_id,))
@@ -306,6 +351,7 @@ def save_validated_sheet(cursor, poi_id: int, sheet: dict) -> None:
 
 
 def _save_sheet(cursor, poi_id: int, row: dict, version: int, model: str) -> None:
+    row = keep_human_sheet(cursor, "restaurants", poi_id, row, ("genre", "pourquoi", "distinction", "categorie"))
     cursor.execute("""
         REPLACE INTO restaurants (poi_id, genre, pourquoi, distinction, ancien_nom, categorie, registre_depuis,
                                   prompt_version, model, trouve_le)
@@ -327,12 +373,51 @@ def _save_proofs(cursor, poi_id: int, pages: list) -> None:
               page["verdict"], datetime.now()))
 
 
-def _flag(cursor, row: dict, position: tuple | None, city: dict, known: list, source_id: int, reason: str, detail: dict) -> None:
-    """À confirmer : sur la ligne du lieu s'il est connu, sinon sur une nouvelle ligne masquée."""
+def waiting_for_review(cursor, poi_id: int, source: str) -> bool:
+    """La ligne attend la relecture de cet agent : c'est lui qui l'a masquée (_flag), pas un humain."""
+    cursor.execute("""SELECT 1 FROM poi_signals WHERE poi_id = %s AND source = %s AND signal_type = 'a_confirmer'
+                      AND statut = 'a_relire' LIMIT 1""", (poi_id, source))
+    return cursor.fetchone() is not None
+
+
+def best_link(accepted: list) -> str | None:
+    """Le lien gardé : toujours une page acceptée, son site si on l'a, et rien sinon."""
+    best = min(accepted, key=lambda page: TYPE_RANK.get(page["type_page"], len(TYPE_RANK)), default=None)
+    return best["url"] if best else None
+
+
+def alert_contradicted(row: dict, register: dict | None) -> bool:
+    """
+    L'alerte de l'analyste est contredite par le registre lui-même : un établissement actif au même nom et à la même
+    adresse. A Fleur d'Eau (Douarnenez) : enseigne de l'ancien exploitant fermée le 1er juillet 2025, celle du nouveau
+    active depuis le 15 mai 2025 ; l'analyste avait écrit « sans établissement actif du même nom » (8 novembre 2026).
+    Une liquidation n'est jamais effacée.
+    """
+    if not row.get("alerte_registre") or is_liquidated(row):
+        return False
+    return any(line.get("nom") and place_key(line["nom"]) == place_key(row["nom"])
+               and same_address(row.get("adresse"), line.get("adresse"))
+               for line in (register or {}).get("actifs", []))
+
+
+def clear_contradicted_alerts(rows: list, register: dict | None, commune: str, label: str) -> None:
+    for row in rows:
+        if alert_contradicted(row, register):
+            logger.info(f"[{label}] {commune} : alerte de {row['nom']} effacée, le registre a un établissement actif"
+                        f" à ce nom et à cette adresse ({row['alerte_registre']})")
+            row["alerte_registre"] = None
+
+
+def _flag(cursor, row: dict, position: tuple | None, city: dict, known: list, source_id: int, reason: str, detail: dict,
+          link: str | None = None) -> None:
+    """
+    À confirmer : sur la ligne du lieu s'il est connu, sinon sur une nouvelle ligne masquée, avec la page acceptée
+    (link) : confirmer le lieu l'affiche avec son lien (8 novembre 2026, A Fleur d'Eau s'affichait sans son site).
+    """
     poi = _find_known(row, position, city, known)
     if poi and poi["masque"]:
         return
-    poi_id = poi["id"] if poi else _create_poi(cursor, {**row, "lien": None}, position, city, source_id, masked=True)
+    poi_id = poi["id"] if poi else _create_poi(cursor, {**row, "lien": link}, position, city, source_id, masked=True)
     cursor.execute("SELECT 1 FROM restaurants WHERE poi_id = %s", (poi_id,))
     if not cursor.fetchone():
         save_signal(cursor, poi_id, SOURCE, "a_confirmer", {"raison": reason, "adresse": row.get("adresse"), **detail})
@@ -364,7 +449,9 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
         for row in answer["restaurants"]:
             position = _position(city, row.get("adresse"))
             poi = _find_known(row, position, city, known)
-            if poi and poi["masque"]:
+            # Une ligne masquée par un humain ou une décision reste à l'écart ; celle que l'agent a masquée en attendant
+            # la relecture se reprend (8 novembre 2026 : A Fleur d'Eau et Episervice restaient bloqués).
+            if poi and poi["masque"] and not waiting_for_review(cursor, poi["id"], SOURCE):
                 continue
             if is_liquidated(row):
                 logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, {row['alerte_registre']}")
@@ -379,12 +466,11 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
             if reason:
                 _flag(cursor, row, position, city, known, source_id, reason,
                       {"indice": row.get("pourquoi"), "page": row.get("lien"),
-                       "verdicts": [page.get("verdict") for page in row["pages"]], "fiche": sheet_of(row, version, model)})
+                       "verdicts": [page.get("verdict") for page in row["pages"]], "fiche": sheet_of(row, version, model)},
+                      link=best_link(accepted))
                 summary["a_confirmer"] += 1
                 continue
-            # Le lien gardé est toujours une page acceptée, son site si on l'a, et rien sinon.
-            best = min(accepted, key=lambda page: TYPE_RANK.get(page["type_page"], len(TYPE_RANK)), default=None)
-            row = {**row, "lien": best["url"] if best else None}
+            row = {**row, "lien": best_link(accepted)}
             if poi:
                 _update_poi(cursor, poi, row, position)
                 poi_id = poi["id"]
