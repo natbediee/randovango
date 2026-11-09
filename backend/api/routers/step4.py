@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from datetime import date
 
 from fastapi import APIRouter, Query, Body
@@ -10,6 +11,7 @@ from services.restaurant_selection_service import (TABLE_CATEGORY_LABELS, TABLES
 from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
 from utils.db_utils import MySQLUtils
 from utils.display_utils import enrich_poi, poi_subtitle
+from utils.geo_utils import city_commune
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
 router = APIRouter()
@@ -68,8 +70,21 @@ def keep_checked_restaurants(poi_list: list) -> list:
             or postcode_of(poi.get("address")) not in treated | {None}]
 
 
+def town_key(address: str | None) -> str | None:
+    """
+    La commune d'une adresse, ce qui suit le code postal, sans majuscules, accents ni tirets : « 29810 Lampaul-Plouarzel »
+    donne « lampaul plouarzel », et « 5 route de Trézien, 29810 Plouarzel » donne « plouarzel ».
+    """
+    match = re.search(r"\b\d{5}\s+([^,]+?)\s*$", address or "")
+    if not match:
+        return None
+    plain = unicodedata.normalize("NFKD", match.group(1)).encode("ascii", "ignore").decode()
+    return " ".join(re.sub(r"[-'’]", " ", plain).lower().split())
+
+
 def is_own_table(poi: dict, city_name: str) -> bool:
-    return bool(poi.get("genre")) and city_name.lower() in (poi.get("address") or "").lower()
+    """Une fiche de la commune : celle de son adresse, pas un nom de rue (route de Trézien) ni une voisine (Lampaul-Plouarzel)."""
+    return bool(poi.get("genre")) and town_key(poi.get("address")) == town_key(f"00000 {city_name}")
 
 
 def display_rank(poi: dict, city_name: str) -> tuple:
@@ -152,7 +167,7 @@ def get_poi(
     
     # Récupérer les coordonnées de la ville
     cursor.execute(
-        "SELECT name, latitude, longitude FROM cities WHERE id = %s", 
+        "SELECT name, commune, latitude, longitude FROM cities WHERE id = %s",
         (city_id,)
     )
     city = cursor.fetchone()
@@ -227,7 +242,8 @@ def get_poi(
         ORDER BY s.category, p.name ASC
     """
 
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city['name']}"))
+    # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
+    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
     poi_list = keep_checked_commerces(keep_checked_restaurants(cursor.fetchall()))
 
     cursor.close()
@@ -301,7 +317,7 @@ def get_poi(
 
     # Ne garder que les premiers POI de chaque catégorie
     for category, pois in categorized_poi.items():
-        categorized_poi[category] = order_category(pois, category, city['name'])
+        categorized_poi[category] = order_category(pois, category, city_commune(city))
 
     # Phrases de sous-titre par catégorie, calculées APRÈS la troncature,
     # pour correspondre au nombre réellement affiché.

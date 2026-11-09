@@ -31,7 +31,7 @@ from services.pepite_service import name_key
 from services.restaurant_service import (_find_known, best_link, waiting_for_review, _position, _rows, _save_proofs, _save_season, _update_poi,
                                          is_liquidated, keep_human_sheet, review_reason, set_verified)
 from utils.db_utils import MySQLUtils
-from utils.geo_utils import get_bounding_box, haversine_distance_km
+from utils.geo_utils import city_commune, get_bounding_box, haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_commerces")
@@ -248,7 +248,7 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
                 logger.info(f"[commerces] {city['name']} : {row['nom']} écarté, {row['alerte_registre']}")
                 summary["liquidation"] += 1
                 continue
-            accepted = [page for page in row["pages"] if page_accepted(page, row.get("categorie"), city["name"])]
+            accepted = [page for page in row["pages"] if page_accepted(page, row.get("categorie"), city_commune(city))]
             if not accepted and not row.get("au_registre") and not row.get("a_relire"):
                 logger.info(f"[commerces] {city['name']} : {row['nom']} écarté, ni registre ni page acceptée")
                 summary["sans_page"] += 1

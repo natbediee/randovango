@@ -196,3 +196,22 @@ def test_a_chain_at_several_addresses_must_be_registered_at_the_place_address():
     shop = {"nom": "Carrefour Express", "categorie": "epicerie", "genre": "supérette", "pages": []}
     assert find_commerces.register_is_proof({**shop, "adresse": "27 rue Édouard Corbière, 29200 Brest"}, register)
     assert not find_commerces.register_is_proof({**shop, "adresse": "3 rue de Siam, 29200 Brest"}, register)
+
+
+class _RecordingAgent(_Agent):
+    def __init__(self):
+        super().__init__()
+        self.messages = []
+
+    def complete_json(self, system, message, schema):
+        self.messages.append(message)
+        return super().complete_json(system, message, schema)
+
+
+def test_a_hamlet_is_searched_as_its_commune(monkeypatch, tmp_path):
+    """Trézien est en Plouarzel : les agents, le contrôle des pages et la trace cherchent la commune officielle."""
+    agent = _RecordingAgent()
+    _chain(monkeypatch, tmp_path, agent)
+    find_commerces.search_commune({**CITY, "name": "Trézien", "commune": "Plouarzel"})
+    assert agent.messages and all(message.startswith("COMMUNE : Plouarzel") for message in agent.messages)
+    assert json.loads(next(tmp_path.iterdir()).read_text())["commune"] == "Plouarzel"

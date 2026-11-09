@@ -22,7 +22,7 @@ from services import commerce_service, poi_review_service as review, restaurant_
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
 from utils.db_utils import MySQLUtils
-from utils.geo_utils import get_bounding_box, haversine_distance_km
+from utils.geo_utils import city_commune, get_bounding_box, haversine_distance_km
 
 EDIT_FILE = "modifier"
 ZONE_KM = 5          # le rayon par défaut de l'étape 4 (step4.py)
@@ -72,7 +72,7 @@ def place_card(row: dict) -> dict:
 def _city(cursor, city_id: int | None) -> dict | None:
     if city_id is None:
         return None
-    cursor.execute("SELECT id, name, latitude, longitude FROM cities WHERE id = %s", (city_id,))
+    cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities WHERE id = %s", (city_id,))
     city = cursor.fetchone()
     if not city:
         raise ValueError(f"Ville inconnue : {city_id}")
@@ -99,9 +99,13 @@ def town_key(town: str | None) -> str:
 
 
 def in_city(town: str | None, latitude, longitude, city: dict, cities: list) -> bool:
-    """Le lieu est-il dans la ville du filtre ? Sa commune s'il en a une, sinon la ville de l'appli la plus proche."""
+    """
+    Le lieu est-il dans la ville du filtre ? Sa commune s'il en a une, sinon la ville de l'appli la plus proche.
+    Une adresse écrit la commune officielle (« 29810 Plouarzel »), pas le lieu-dit de la ville (Trézien) : les deux
+    sont acceptés, le nom restant celui d'un spot étiqueté par Park4Night.
+    """
     if town:
-        return town_key(town) == town_key(city["name"])
+        return town_key(town) in {town_key(city["name"]), town_key(city_commune(city))}
     if latitude is None or longitude is None:
         return False
     nearest = min(cities, key=lambda other: haversine_distance_km(float(latitude), float(longitude),
@@ -116,7 +120,7 @@ def _search_rows(cursor, city: dict | None, name: str, cities: list | None = Non
         # Les candidats : la zone de l'étape 4, plus les adresses de la commune hors de la zone (la Pointe Saint-Mathieu,
         # à 5,2 km de Plougonvelin). in_city tranche ensuite.
         filters.append("((p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s) OR p.address LIKE %s)")
-        params += [min_lat, max_lat, min_lon, max_lon, f"%{city['name']}"]
+        params += [min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"]
     if name:
         filters.append("p.name LIKE %s")
         params.append(f"%{name}%")
@@ -135,7 +139,7 @@ def _search_rows(cursor, city: dict | None, name: str, cities: list | None = Non
     rows = cursor.fetchall()
     for row in rows:
         # La commune affichée : celle de l'adresse, pas la première des villes dont la zone contient le lieu.
-        row["commune"] = address_town(row.get("address")) or (city["name"] if city else row.get("commune"))
+        row["commune"] = address_town(row.get("address")) or (city_commune(city) if city else row.get("commune"))
     if not city:
         return rows
     return [row for row in rows if in_city(address_town(row.get("address")), row["latitude"], row["longitude"], city, cities)]

@@ -42,7 +42,7 @@ from services import commerce_service, restaurant_service
 from services.commerce_selection_service import PRODUCER, SHOP_CATEGORIES
 from services.commerce_service import place_key
 from services.restaurant_service import same_address
-from utils.geo_utils import haversine_distance_km
+from utils.geo_utils import city_commune, haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_commerces")
@@ -308,7 +308,7 @@ def write_trace(city: dict, trace: dict) -> Path:
 
 def search_zone(city: dict, register: dict | None, zone: dict | None, trace: dict, label: str = "") -> dict:
     """Les recherches d'une commune ou d'une de ses zones, en même temps, puis le contrôle et l'analyse."""
-    name = city["name"]
+    name = city_commune(city)
     seen = register_for_agent(register, zone)
     message = build_message(city, seen, zone)
     searches = ([(f"{label}année {number + 1}", SYSTEM_PROMPT) for number in range(YEAR_SEARCHES)]
@@ -345,7 +345,7 @@ def search_zone(city: dict, register: dict | None, zone: dict | None, trace: dic
 
 def search_commune(city: dict) -> dict:
     """La commune entière, ou zone par zone pour une grande ville. Lève LLMUnavailable si l'agent n'a pas pu répondre."""
-    name = city["name"]
+    name = city_commune(city)
     register = api_registre.load_register(city, REGISTER_ACTIVITIES)
     trace = {"commune": name, "version": COMMERCES_PROMPT_VERSION, "registre": register}
     try:
@@ -369,11 +369,19 @@ def main():
     parser.add_argument("--ville", required=True, action="append", help="Commune de la table cities (répétable)")
     parser.add_argument("--essai", action="store_true", help="N'écrit rien en base : les réponses restent dans le fichier")
     args = parser.parse_args()
+    searched = set()
     for name in args.ville:
         city = restaurant_service.load_city(name)
         if not city:
             logger.error(f"[commerces] {name} : commune inconnue")
             continue
+        if city["name"] != name:
+            logger.info(f"[commerces] {name} : cherchée comme {city_commune(city)}, depuis la ville {city['name']}")
+        # Une commune n'est cherchée qu'une fois : --ville Morgat --ville Le Fret ne paie qu'une recherche de Crozon.
+        if restaurant_service.commune_key(city) in searched:
+            logger.info(f"[commerces] {name} : {city_commune(city)} déjà cherchée")
+            continue
+        searched.add(restaurant_service.commune_key(city))
         answer = search_commune(city)
         if args.essai:
             print(json.dumps({"ville": name, "lieux": [row["nom"] for row in answer["commerces"]]}, ensure_ascii=False))
