@@ -5,6 +5,7 @@ from etl.extract.scraper_p4n import run_p4n_scraper
 from etl.transform.transform_p4n import transform_p4n
 from etl.load.load_p4n import load_p4n_to_mysql
 from etl.etl_osm import run_osm_etl
+from etl.etl_carburants import run_city_etl as run_fuel_etl
 from etl.extract.api_wikidata import extract_wikidata
 from etl.transform.transform_wikidata import transform_wikidata
 from etl.load.load_poi import load_wikidata_poi
@@ -34,6 +35,13 @@ def scraping_background(city):
             logger.info(f"[ETL-BG] OSM chargé pour la ville : {city} ({nb_places} lieux)")
     except Exception as e:
         logger.error(f"[ETL-BG] Erreur OSM: {e}")
+
+    # 1 bis. Stations-service et prix des carburants (rapide - fichier de l'État + Overpass). Non bloquant.
+    try:
+        nb_stations = run_fuel_etl(city)
+        logger.info(f"[ETL-BG] Carburants pour {city} : {nb_stations} stations")
+    except Exception as fuel_error:
+        logger.warning(f"[ETL-BG] Carburants ignorés pour {city} : {fuel_error}")
 
     # 2. Extraction Wikidata (rapide - API)
     try:

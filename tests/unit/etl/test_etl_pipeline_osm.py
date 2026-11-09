@@ -10,6 +10,7 @@ def test_osm_failure_is_reported_and_the_next_steps_still_run(monkeypatch) -> No
     connection = MagicMock()
     monkeypatch.setattr(etl_pipeline, "logger", logger)
     monkeypatch.setattr(etl_pipeline, "run_osm_etl", lambda city: None)
+    monkeypatch.setattr(etl_pipeline, "run_fuel_etl", lambda city: 0)
     monkeypatch.setattr(etl_pipeline, "extract_wikidata", extract_wikidata)
     monkeypatch.setattr(etl_pipeline.MySQLUtils, "connect", lambda: connection)
     monkeypatch.setattr(etl_pipeline.MySQLUtils, "disconnect", lambda conn: None)

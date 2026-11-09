@@ -220,6 +220,38 @@ Le pipeline ETL extrait, transforme et charge les données depuis plusieurs sour
 
 ## Développement
 
+### Tester une branche à côté du projet principal
+
+Chaque chantier a son dossier de branche (un worktree git), rangé à côté du dossier principal :
+```
+~/Dev/randovango        le projet principal, sur main : bases, front, nginx, backend sur le port 8000, le seul .env
+~/Dev/randovango-91     la branche 91-prix-carburants, backend sur le port 8001
+~/Dev/randovango-93     une autre branche, backend sur le port 8002
+```
+`docker-compose.branche.yml` y lance un deuxième backend avec le code de la branche, branché sur les mêmes bases
+MySQL et Mongo. Le backend principal, les bases, le front et nginx ne sont pas touchés.
+
+- **Un port par branche** (8001, 8002…) : deux backends de branche ne peuvent pas partager le même port.
+- **Un seul `.env`** : le fichier monte `../randovango/.env`, celui du dossier principal. Aucune copie dans les
+  dossiers de branche, d'où la place imposée à côté de `~/Dev/randovango`.
+- **L'image `randovango-backend`** est celle du projet principal : quand les dépendances changent, la reconstruire
+  d'abord depuis `~/Dev/randovango` (`docker compose build backend`).
+
+Depuis le dossier du worktree :
+```bash
+BRANCHE=carburants PORT=8001 docker compose -f docker-compose.branche.yml up -d
+```
+L'API de la branche est alors sur http://localhost:8001/docs ; celle du projet principal reste sur le port 8000.
+Les tables nouvelles de la branche se créent quand on le décide :
+```bash
+docker exec fastapi_backend_carburants python db_init/db_randovango.py
+```
+Pour arrêter ce conteneur seulement :
+```bash
+BRANCHE=carburants docker compose -f docker-compose.branche.yml down
+```
+Toujours avec `-f` : sans lui, `docker compose` lirait `docker-compose.yml`, celui du projet principal.
+
 ### Logs
 Les logs sont générés dans le dossier `logs/` et affichés dans la console.
 

@@ -16,7 +16,7 @@ const POI_CATEGORIES = ['eau', 'vidange', 'gasoil', 'supermarche', 'commerce',
 const CATEGORY_META = {
     eau:          { icon: 'fa-tint',            label: 'Eau' },
     vidange:      { icon: 'fa-recycle',         label: 'Vidange' },
-    gasoil:       { icon: 'fa-gas-pump',        label: 'Gasoil' },
+    gasoil:       { icon: 'fa-gas-pump',        label: 'Carburant' },
     supermarche:  { icon: 'fa-cart-arrow-down', label: 'Supermarché' },
     commerce:     { icon: 'fa-shopping-basket', label: 'Commerce' },
     restauration: { icon: 'fa-utensils',        label: 'Restauration' },
@@ -48,6 +48,12 @@ let activeType = null;
 // Les onglets dont les agents écrivent les fiches, avec une catégorie par lieu : le filtre par type n'y apparaît
 // que s'il y a au moins deux types à choisir.
 const TYPE_FILTER_CATEGORIES = ['commerce', 'restauration', 'cafe'];
+// L'onglet carburant a son propre filtre : par carburant vendu (le gazole par défaut, celui des vans), puis le tri par
+// prix de ce carburant ou par distance du spot. Les pastilles de prix arrivent prêtes de l'API (poi.prix).
+const FUEL_CATEGORY = 'gasoil';
+const DEFAULT_FUEL = 'Gazole';
+let activeFuel = DEFAULT_FUEL;      // null = « Tout »
+let fuelSort = 'prix';              // 'prix' ou 'distance'
 // Services retenus les jours précédents, pour le rappel lecture seule (vue tuiles).
 // Purement informatif : ces POI ne sont JAMAIS ajoutés à selectedPoiIds.
 let previousDaysServices = [];
@@ -62,7 +68,8 @@ function updateMapMarkersVisibility() {
     if (!serviceMap) return;
     poiMarkers.forEach(({ marker, category, poi }) => {
         const matches = (activeCategory === null || category === activeCategory)
-            && (activeType === null || poi.service_type_label === activeType);
+            && (activeType === null || poi.service_type_label === activeType)
+            && (category !== FUEL_CATEGORY || activeCategory !== FUEL_CATEGORY || sellsFuel(poi, activeFuel));
         if (matches && !serviceMap.hasLayer(marker)) {
             marker.addTo(serviceMap);
         } else if (!matches && serviceMap.hasLayer(marker)) {
@@ -246,9 +253,12 @@ function renderCategory(categoryId, poiList) {
                         <span class="spot-type">${poi.service_type_label}</span>
                         <span class="status-badge ${poi.badge.css}">${poi.badge.text}</span>
                         ${poi.nouveau ? '<span class="status-badge top">Nouveau</span>' : ''}
+                        ${poi.automate_24_24 ? '<span class="status-badge fuel-open">24h/24</span>' : ''}
+                        ${poi.fermeture_label ? `<span class="status-badge pending">${escapeHtml(poi.fermeture_label)}</span>` : ''}
                         ${previousPoiDay.has(poi.id) ? `<span class="status-badge planned"><i class="fas fa-check"></i> J${previousPoiDay.get(poi.id)} déjà planifié</span>` : ''}                    </div>
                     <h4>${poi.name}</h4>
                     ${poi.address && !poi.maps_url ? `<p class="service-address"><i class="fas fa-map-marker-alt"></i> ${poi.address}</p>` : ''}
+                    ${poi.prix ? fuelPricesHtml(poi) : ''}
                     ${poi.description ? `<p class="service-description">${escapeHtml(poi.description)}</p>` : ''}
                     ${poi.distinction ? `<p class="service-address"><i class="fas fa-star"></i> ${escapeHtml(poi.distinction)}</p>` : ''}
                     ${poi.jours ? `<p class="service-address"><i class="fas fa-calendar-day"></i> ${escapeHtml(poi.jours)}</p>` : ''}
@@ -358,6 +368,11 @@ function renderPreviousServices() {
 function openCategory(category) {
     activeCategory = category;
     activeType = null;
+    // L'onglet carburant rouvert repart sur le gazole, trié par prix.
+    if (category === FUEL_CATEGORY) {
+        activeFuel = DEFAULT_FUEL;
+        fuelSort = 'prix';
+    }
     document.getElementById('categoryTilesView').style.display = 'none';
     const sublist = document.getElementById('serviceSublistView');
     sublist.style.display = 'block';
@@ -402,6 +417,11 @@ function openCategory(category) {
 function renderTypeFilter(category) {
     const filter = document.getElementById('typeFilter');
     if (!filter) return;
+    if (category === FUEL_CATEGORY) {
+        renderFuelFilter(filter);
+        return;
+    }
+    filter.style.flexDirection = '';    // l'onglet carburant met ses deux rangées l'une sous l'autre
     const counts = new Map();
     (poisByCategory[category] || []).forEach(poi => {
         counts.set(poi.service_type_label, (counts.get(poi.service_type_label) || 0) + 1);
@@ -433,7 +453,110 @@ function filterByType(category, type) {
         });
     }
     renderTypeFilter(category);
+    if (category === FUEL_CATEGORY) applyFuelView();
     updateMapMarkersVisibility();
+}
+
+// --- Onglet carburant : pastilles de prix, filtre par carburant, tri ---
+
+// Le prix vendu d'un carburant dans une station (une pastille en rupture ne compte pas), ou null.
+function fuelPrice(poi, fuel) {
+    const badge = (poi.prix || []).find(b => b.carburant === fuel && !b.rupture && b.prix !== null);
+    return badge ? badge.prix : null;
+}
+
+function sellsFuel(poi, fuel) {
+    return fuel === null || fuelPrice(poi, fuel) !== null;
+}
+
+function formatFuelPrice(price) {
+    return `${price.toFixed(3).replace('.', ',')} €`;
+}
+
+// La ligne des prix : une pastille par carburant (ordre de l'API), puis la phrase des dates.
+// Le carburant choisi passe devant et « le moins cher » s'y affiche : c'est applyFuelView qui le fait.
+function fuelPricesHtml(poi) {
+    const badges = poi.prix.map((b, rank) => `
+        <span class="fuel-price${b.ancien ? ' fuel-price--old' : ''}${b.rupture ? ' fuel-price--out' : ''}"
+              data-fuel="${escapeHtml(b.carburant)}" data-rank="${rank}">
+            <span>${escapeHtml(b.label)}</span>
+            ${b.rupture ? '<span>en rupture</span>' : `<b>${formatFuelPrice(b.prix)}</b>`}
+            ${b.ancien ? `<span class="fuel-price__date">${escapeHtml(b.date_label)}</span>` : ''}
+            <span class="fuel-price__cheapest">le moins cher</span>
+        </span>`).join('');
+    return `<div class="fuel-prices">${badges}</div>` +
+        (poi.prix_resume ? `<p class="fuel-prices__summary">${escapeHtml(poi.prix_resume)}</p>` : '');
+}
+
+// Les carburants vendus dans l'onglet, dans l'ordre des pastilles, avec le nombre de stations qui les vendent.
+function fuelsOnSale(stations) {
+    const fuels = new Map();
+    stations.forEach(poi => (poi.prix || []).forEach(b => {
+        if (!fuels.has(b.carburant)) fuels.set(b.carburant, { label: b.label, count: 0 });
+        if (fuelPrice(poi, b.carburant) !== null) fuels.get(b.carburant).count += 1;
+    }));
+    return [...fuels.entries()].filter(([, info]) => info.count > 0);
+}
+
+function renderFuelFilter(filter) {
+    const stations = poisByCategory[FUEL_CATEGORY] || [];
+    const fuels = fuelsOnSale(stations);
+    if (activeFuel !== null && !fuels.some(([fuel]) => fuel === activeFuel)) activeFuel = null;
+    const chip = (active, label, attrs) =>
+        `<button type="button" class="chip${active ? ' is-active' : ''}" aria-pressed="${active}" ${attrs}>${escapeHtml(label)}</button>`;
+    const sortLabel = `Prix ${activeFuel === null ? 'du gazole' : 'du ' + fuels.find(([fuel]) => fuel === activeFuel)[1].label}`;
+    filter.innerHTML =
+        `<div class="fuel-filter" role="group" aria-label="Filtrer par carburant">
+            <span class="fuel-filter__label">Carburant</span>
+            ${chip(activeFuel === null, `Tout (${stations.length})`, 'data-fuel=""')}
+            ${fuels.map(([fuel, info]) => chip(fuel === activeFuel, `${info.label} (${info.count})`, `data-fuel="${escapeHtml(fuel)}"`)).join('')}
+        </div>
+        <div class="fuel-filter" role="group" aria-label="Trier les stations">
+            <span class="fuel-filter__label">Trier par</span>
+            ${chip(fuelSort === 'prix', sortLabel, 'data-sort="prix"')}
+            ${chip(fuelSort === 'distance', 'Distance du spot', 'data-sort="distance"')}
+        </div>`;
+    filter.querySelectorAll('[data-fuel]').forEach(button => button.addEventListener('click', () => {
+        activeFuel = button.dataset.fuel || null;
+        filterByType(FUEL_CATEGORY, null);
+    }));
+    filter.querySelectorAll('[data-sort]').forEach(button => button.addEventListener('click', () => {
+        fuelSort = button.dataset.sort;
+        filterByType(FUEL_CATEGORY, null);
+    }));
+    filter.style.display = stations.length ? 'flex' : 'none';
+    filter.style.flexDirection = 'column';
+}
+
+// Range les cartes (prix du carburant choisi, ou distance), cache celles qui ne le vendent pas, met ce carburant
+// devant sur chaque carte et marque le moins cher. Les cartes ne sont pas refaites : leurs marqueurs restent liés.
+function applyFuelView() {
+    const grid = document.getElementById(FUEL_CATEGORY);
+    const stations = poisByCategory[FUEL_CATEGORY] || [];
+    if (!grid) return;
+    const priceFuel = activeFuel || DEFAULT_FUEL;
+    const shown = stations.filter(poi => sellsFuel(poi, activeFuel));
+    const prices = shown.map(poi => fuelPrice(poi, priceFuel)).filter(price => price !== null);
+    const cheapest = prices.length > 1 ? Math.min(...prices) : null;
+    const byDistance = (a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity);
+    const byPrice = (a, b) => (fuelPrice(a, priceFuel) ?? Infinity) - (fuelPrice(b, priceFuel) ?? Infinity) || byDistance(a, b);
+    [...stations].sort(fuelSort === 'prix' ? byPrice : byDistance).forEach(poi => {
+        const card = document.getElementById(`poi-card-${poi.id}`);
+        if (!card) return;
+        grid.appendChild(card);
+        card.style.display = shown.includes(poi) ? '' : 'none';
+        const line = card.querySelector('.fuel-prices');
+        if (!line) return;
+        const pills = [...line.querySelectorAll('.fuel-price')].sort((a, b) => a.dataset.rank - b.dataset.rank);
+        pills.forEach(pill => {
+            const chosen = pill.dataset.fuel === priceFuel;
+            pill.classList.toggle('is-chosen', chosen);
+            pill.classList.toggle('is-cheapest', chosen && cheapest !== null && fuelPrice(poi, priceFuel) === cheapest);
+            line.appendChild(pill);
+        });
+        const chosenPill = pills.find(pill => pill.dataset.fuel === priceFuel);
+        if (chosenPill) line.prepend(chosenPill);
+    });
 }
 
 // Date (AAAA-MM-JJ) du jour préparé : la date de départ choisie au début, plus le numéro du jour moins un.

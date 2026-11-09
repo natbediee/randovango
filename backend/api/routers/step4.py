@@ -6,8 +6,11 @@ from fastapi import APIRouter, Query, Body
 from services.commerce_selection_service import CAFE_SERVICES, COMMERCE_SERVICES, SHOP_CATEGORY_LABELS, SHOPS_SHOWN
 from services.commerce_selection_service import CAFE as CAFE_SHEET
 from services.plan_service import insert_or_update_plan
+from services.station_selection_service import (closure_label, is_closed_for_good, price_badges, prices_summary,
+                                                station_maps_url)
 from services.restaurant_selection_service import (TABLE_CATEGORY_LABELS, TABLES_SHOWN, is_new, is_out_of_season, maps_url,
                                                    season_label)
+from etl.load.load_carburants import FUEL_SERVICE, SOURCE_NAME as FUEL_SOURCE
 from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
 from utils.db_utils import MySQLUtils
 from utils.display_utils import enrich_poi, poi_subtitle
@@ -23,8 +26,9 @@ COMMERCE_CATEGORY = "commerce"
 CAFE_CATEGORY = "cafe"
 # Les onglets dont l'agent écrit des fiches, et combien de fiches de la commune y sont montrées.
 SHEETS_SHOWN = {RESTAURATION_CATEGORY: TABLES_SHOWN, COMMERCE_CATEGORY: SHOPS_SHOWN, CAFE_CATEGORY: SHOPS_SHOWN}
-# Toutes les cartes de services ont le bouton Google Maps (7 novembre 2026), sauf le carburant, laissé tel quel.
-NO_MAPS_CATEGORIES = ("gasoil",)
+# Toutes les cartes de services ont le bouton Google Maps (7 novembre 2026). Celui d'une station se construit à part,
+# avec la marque, pour tomber sur la station et non sur le supermarché voisin (services/station_selection_service.py).
+FUEL_CATEGORY = "gasoil"
 # Les noms de secours d'OSM (etl/transform/transform_osm.py) : le lien Google part alors de la position.
 GENERIC_NAMES = set(DEFAULT_NAME_BY_TYPE.values())
 
@@ -45,6 +49,29 @@ def keep_checked(poi_list: list, services: tuple, has_sheet) -> list:
         return poi_list
     return [poi for poi in poi_list if poi["service_category"] not in services or has_sheet(poi)
             or postcode_of(poi.get("address")) not in treated | {None}]
+
+
+def keep_state_stations(poi_list: list) -> list:
+    """
+    Les stations-service : l'État est la référence (etl/etl_carburants.py). Seules les stations de prix-carburants.gouv.fr
+    sont montrées ; elles portent déjà le nom et la position d'OSM. Une station d'OSM ou d'une autre source, sans
+    données de l'État, ne l'est jamais : ni doublon, ni station qui ne déclare pas ses prix (Total de Portsall).
+    """
+    return [poi for poi in poi_list if poi["service_category"] != FUEL_SERVICE or poi.get("source_name") == FUEL_SOURCE]
+
+
+def station_fields(poi: dict) -> dict:
+    """
+    Ce que la carte d'une station ajoute aux autres cartes : ses pastilles de prix, la phrase des dates, l'automate et
+    une fermeture temporaire. Les prix sont ceux d'aujourd'hui, pas du jour du voyage : l'ancienneté se compte donc
+    depuis aujourd'hui.
+    """
+    today = date.today()
+    badges = price_badges(poi.get("station_prix"), today)
+    return {"prix": badges, "prix_resume": prices_summary(badges, poi.get("station_lu_le")),
+            "automate_24_24": poi.get("station_automate") == 1,
+            "fermeture_label": closure_label(poi.get("station_fermeture_type"), poi.get("station_fermeture_debut"),
+                                             poi.get("station_fermeture_fin"), today)}
 
 
 def keep_checked_commerces(poi_list: list) -> list:
@@ -227,10 +254,25 @@ def get_poi(
             c.registre_depuis AS commerce_registre_depuis,
             c.jours,
             p.statut_saison,
-            p.mois_ouverture
+            p.mois_ouverture,
+            src.name AS source_name,
+            sc.marque AS station_marque,
+            sc.code_postal AS station_code_postal,
+            sc.ville_etat AS station_ville,
+            sc.automate_24_24 AS station_automate,
+            sc.fermeture_type AS station_fermeture_type,
+            sc.fermeture_debut AS station_fermeture_debut,
+            sc.fermeture_fin AS station_fermeture_fin,
+            sc.lu_le AS station_lu_le,
+            -- Les prix de la station en une colonne JSON : pas de deuxième requête, pas de ligne en double.
+            (SELECT JSON_ARRAYAGG(JSON_OBJECT('carburant', pc.carburant, 'prix', pc.prix, 'releve_le', pc.releve_le,
+                                              'rupture_type', pc.rupture_type))
+             FROM prix_carburants pc WHERE pc.poi_id = sc.poi_id) AS station_prix
         FROM poi p
         JOIN poi_service ps ON p.id = ps.poi_id
         JOIN services s ON ps.service_id = s.id
+        LEFT JOIN sources src ON src.id = p.source_id
+        LEFT JOIN stations_carburant sc ON sc.poi_id = p.id
         LEFT JOIN restaurants r ON r.poi_id = p.id
         LEFT JOIN commerces c ON c.poi_id = p.id
         WHERE p.masque = 0
@@ -244,7 +286,7 @@ def get_poi(
 
     # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
     cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
-    poi_list = keep_checked_commerces(keep_checked_restaurants(cursor.fetchall()))
+    poi_list = keep_state_stations(keep_checked_commerces(keep_checked_restaurants(cursor.fetchall())))
 
     cursor.close()
     MySQLUtils.disconnect(cnx)
@@ -274,6 +316,9 @@ def get_poi(
         service_cat = poi.get('service_category', '').lower()
         frontend_category = category_mapping.get(service_cat)
         if not frontend_category:
+            continue
+        # Une station que l'État dit fermée pour de bon n'a pas de carte.
+        if frontend_category == FUEL_CATEGORY and is_closed_for_good(poi.get('station_fermeture_type')):
             continue
 
         poi_id = poi['id']
@@ -308,11 +353,15 @@ def get_poi(
             "jours": poi.get('jours'),
             "nouveau": is_new(sheet['registre_depuis']),
             # Le lien Google Maps saisi par un admin dans /supervision passe avant celui que le code fabrique.
-            "maps_url": None if frontend_category in NO_MAPS_CATEGORIES else poi.get('maps_saisi') or maps_url(
-                poi['name'], poi['address'], poi['latitude'], poi['longitude'], generic=is_generic_name(poi['name'])),
+            "maps_url": poi.get('maps_saisi') or (
+                station_maps_url(poi.get('station_marque'), poi['address'], poi.get('station_code_postal'),
+                                 poi.get('station_ville'), poi['latitude'], poi['longitude'])
+                if frontend_category == FUEL_CATEGORY else maps_url(
+                    poi['name'], poi['address'], poi['latitude'], poi['longitude'], generic=is_generic_name(poi['name']))),
             "statut_saison": poi['statut_saison'],
             "saison_label": season_label(poi['statut_saison'], poi['mois_ouverture']),
-            "mois_ouverture": poi['mois_ouverture']
+            "mois_ouverture": poi['mois_ouverture'],
+            **(station_fields(poi) if frontend_category == FUEL_CATEGORY else {})
         }))
 
     # Ne garder que les premiers POI de chaque catégorie
