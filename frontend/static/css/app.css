@@ -1269,6 +1269,25 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .service-right .btn-external, .spot-right .btn-external { font-size: 12.5px; padding: 6px 12px; text-align: center; }
 .service-description { font-size: 13px; color: var(--ink); margin: 0; line-height: 1.5; }
 
+/* Onglet carburant (step4) : la ligne des prix d'une station, le filtre par carburant et le tri. */
+.status-badge.fuel-open { color: var(--ok-tx); background: var(--ok-bg); border: 1px solid var(--ok-bd); }
+.fuel-prices { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.fuel-price {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; font-size: 12.5px;
+  border-radius: var(--r-pill); background: var(--cream); border: 1px solid var(--card-border); color: var(--ink);
+}
+.fuel-price b { font-weight: 700; }
+.fuel-price.is-chosen { background: var(--mint); border-color: var(--teal); font-weight: 700; }
+.fuel-price.is-chosen b { font-size: 13.5px; }
+.fuel-price--old { color: #7A5F1E; background: var(--warn-bg); border-color: var(--warn-bd); }
+.fuel-price--out { color: var(--muted); background: var(--white); border-style: dashed; }
+.fuel-price__date { font-size: 11px; }
+.fuel-price__cheapest { display: none; font-size: 11px; font-weight: 700; color: var(--teal-dark); }
+.fuel-price.is-cheapest .fuel-price__cheapest { display: inline; }
+.fuel-prices__summary { font-size: 11.5px; color: var(--muted); margin: 2px 0 0; }
+.fuel-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fuel-filter__label { font-size: 13px; font-weight: 700; color: var(--ink); margin-right: 2px; }
+
 /* Onglets de catégories (step4) - chip + icône */
 .category-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
 .category-tab.active { color: var(--teal); background: var(--mint); border-color: var(--teal); }

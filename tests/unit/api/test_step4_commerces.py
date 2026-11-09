@@ -113,16 +113,16 @@ def test_shop_sheets_without_cafes_do_not_hide_the_osm_cafes(monkeypatch):
     assert [poi["name"] for poi in result["cafe"]] == ["Le Café du Port"]
 
 
-def test_every_service_card_has_a_maps_link_except_fuel(monkeypatch):
+def test_every_service_card_has_a_maps_link(monkeypatch):
     rows = [{**_row(1, "Laverie", "laundry", None, None), "latitude": 48.3424, "longitude": -4.72313},
             _row(2, "Toilettes publiques", "toilets", None, "Place, 29217 Plougonvelin"),
             _row(3, "Musée", "museum", None, "1 rue, 29217 Plougonvelin"),
-            _row(4, "Station Total", "fuel", None, "Route, 29217 Plougonvelin")]
+            {**_row(4, "Station Total", "fuel", None, "Route, 29217 Plougonvelin"), "source_name": "prix-carburants"}]
     result, _ = _get_poi(monkeypatch, rows)
     assert result["laverie"][0]["maps_url"].endswith("query=48.342400%2C-4.723130")
     assert result["toilettes"][0]["maps_url"].endswith("%2C-4.700000")
     assert "query=Mus%C3%A9e+1+rue" in result["culture"][0]["maps_url"]
-    assert result["gasoil"][0]["maps_url"] is None
+    assert result["gasoil"][0]["maps_url"].endswith("%2C-4.700000")    # sans marque : la position
 
 
 def test_a_place_without_a_position_is_left_out(monkeypatch):
