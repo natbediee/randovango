@@ -363,3 +363,15 @@ def test_a_bar_said_to_serve_meals_needs_no_proof_search(monkeypatch, tmp_path):
     assert "a_relire" not in by_name["Riboul"]
     trace = json.loads(next(tmp_path.iterdir()).read_text())
     assert "preuves" not in trace
+
+
+def test_a_commune_asked_twice_is_searched_once(monkeypatch):
+    """--ville Morgat --ville Le Fret : deux villes de Crozon, une seule recherche payée."""
+    crozon = {"id": 57, "name": "Crozon", "commune": "Crozon", "insee": "29042", "department": "Finistère",
+              "latitude": 48.25, "longitude": -4.49}
+    searched = []
+    monkeypatch.setattr(sys, "argv", ["find_restaurants", "--ville", "Morgat", "--ville", "Le Fret", "--essai"])
+    monkeypatch.setattr(find_restaurants.restaurant_service, "load_city", lambda name: crozon)
+    monkeypatch.setattr(find_restaurants, "search_commune", lambda city: searched.append(city["name"]) or {"restaurants": []})
+    find_restaurants.main()
+    assert searched == ["Crozon"]

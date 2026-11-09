@@ -411,11 +411,19 @@ def main():
     parser.add_argument("--ville", required=True, action="append", help="Commune de la table cities (répétable)")
     parser.add_argument("--essai", action="store_true", help="N'écrit rien en base : les réponses restent dans le fichier")
     args = parser.parse_args()
+    searched = set()
     for name in args.ville:
         city = restaurant_service.load_city(name)
         if not city:
             logger.error(f"[restaurants] {name} : commune inconnue")
             continue
+        if city["name"] != name:
+            logger.info(f"[restaurants] {name} : cherchée comme {city_commune(city)}, depuis la ville {city['name']}")
+        # Une commune n'est cherchée qu'une fois : --ville Morgat --ville Le Fret ne paie qu'une recherche de Crozon.
+        if restaurant_service.commune_key(city) in searched:
+            logger.info(f"[restaurants] {name} : {city_commune(city)} déjà cherchée")
+            continue
+        searched.add(restaurant_service.commune_key(city))
         answer = search_commune(city)
         if args.essai:
             print(json.dumps({"ville": name, "lieux": [row["nom"] for row in answer["restaurants"]]}, ensure_ascii=False))

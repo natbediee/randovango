@@ -127,16 +127,47 @@ def _rows(cursor) -> list:
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
-def load_city(name: str) -> dict | None:
-    """La ville et sa commune officielle : Trézien se cherche comme Plouarzel. Sans commune connue, son nom."""
+# UNE COMMUNE, UNE RECHERCHE (8 novembre 2026). Plusieurs villes de l'appli sont dans la même commune : Crozon, Morgat,
+# Le Fret et Tal ar Groas sont toutes en Crozon (29042). Les agents restaurants et commerces cherchent une commune : ils
+# la cherchent une fois, depuis la ville qui porte son nom si l'appli l'a (Crozon), sinon depuis la première ville.
+def commune_key(city: dict) -> str:
+    """Le code INSEE, ou le nom d'une ville dont la commune n'est pas encore connue."""
+    return city.get("insee") or city["name"]
+
+
+def one_city_per_commune(cities: list) -> list:
+    """Une ville par commune, dans l'ordre des communes : celle qui porte le nom de la commune, sinon la première."""
+    chosen = {}
+    for city in cities:
+        best = chosen.get(commune_key(city))
+        if best is None or (city["name"] == city.get("commune") and best["name"] != best.get("commune")):
+            chosen[commune_key(city)] = city
+    return list(chosen.values())
+
+
+def load_cities() -> list:
+    """Toutes les villes, avec leur commune officielle (cities.commune et cities.insee, etl/fill_communes.py)."""
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
-    cursor.execute("SELECT id, name, commune, insee, latitude, longitude, department"
-                   " FROM cities WHERE name = %s", (name,))
+    cursor.execute("SELECT id, name, commune, insee, latitude, longitude, department FROM cities ORDER BY id")
     rows = _rows(cursor)
     cursor.close()
     MySQLUtils.disconnect(connection)
-    return rows[0] if rows else None
+    return rows
+
+
+def load_city(name: str) -> dict | None:
+    """
+    La ville d'où chercher la commune de `name` : Morgat se cherche comme Crozon, depuis la ville Crozon. Trézien, seule
+    ville de l'appli en Plouarzel, se cherche comme Plouarzel depuis Trézien. Sans commune connue, la ville elle-même.
+    `name` peut aussi être une commune : les traces des agents gardent « Plouarzel », que cities ne nomme pas.
+    """
+    cities = load_cities()
+    asked = (next((city for city in cities if city["name"] == name), None)
+             or next((city for city in cities if city.get("commune") == name), None))
+    if not asked:
+        return None
+    return one_city_per_commune([city for city in cities if commune_key(city) == commune_key(asked)])[0]
 
 
 def commune_spots(name: str) -> list:
