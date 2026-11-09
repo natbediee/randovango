@@ -1,3 +1,5 @@
+import pytest
+
 from etl.extract import api_registre
 from etl.extract.api_registre import add_establishment, place_name
 
@@ -102,3 +104,12 @@ def test_a_hidden_position_leaves_the_line_without_position():
     register = _register()
     add_establishment(register, _place(latitude="[NON-DIFFUSIBLE]", longitude="[NON-DIFFUSIBLE]"), COMPANY, {}, "2021")
     assert register["actifs"] and "position" not in register["actifs"][0]
+
+
+def test_a_known_insee_code_and_the_asked_activities_read_the_register(monkeypatch):
+    """La commune connue de cities (Trézien → 29177) évite une question à geo.api.gouv.fr ; les commerces lisent leurs codes."""
+    monkeypatch.setattr(api_registre, "commune_code", lambda *args: pytest.fail("code INSEE déjà connu"))
+    asked = []
+    monkeypatch.setattr(api_registre, "read_register", lambda code, activities: asked.append((code, activities)) or {})
+    api_registre.load_register({"name": "Trézien", "insee": "29177", "latitude": 48.42, "longitude": -4.77}, ("47.24Z",))
+    assert asked == [("29177", ("47.24Z",))]

@@ -126,3 +126,36 @@ def test_a_big_city_shows_its_fifteen_tables_nearest_the_spot(monkeypatch):
               for number in reversed(range(20))]
     result, _ = _get_poi(monkeypatch, tables, spot=(48.34, -4.70))
     assert [poi["name"] for poi in result["restauration"]] == [f"Table {number}" for number in range(15)]
+
+
+class _HamletCursor(_Cursor):
+    """Trézien, lieu-dit de Plouarzel : les adresses de ses lieux finissent par « 29810 Plouarzel »."""
+    queries = 0
+
+    def execute(self, sql, params=None):
+        if "FROM poi" in sql:
+            self.queries += 1
+        super().execute(sql, params)
+
+    def fetchone(self):
+        return {"name": "Trézien", "commune": "Plouarzel", "latitude": 48.424, "longitude": -4.76797}
+
+
+def test_a_hamlet_asks_once_for_the_sheets_of_its_commune(monkeypatch):
+    cursor = _HamletCursor([_row(1, "Ty Pesked", "restaurant", "crêperie", "1 rue du Bourg, 29810 Plouarzel")])
+    connection = type("Connection", (), {"cursor": lambda self, dictionary=False: cursor})()
+    monkeypatch.setattr(step4.MySQLUtils, "connect", staticmethod(lambda: connection))
+    monkeypatch.setattr(step4.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
+    result = step4.get_poi(city_id=26, distance_km=5, spot_lat=None, spot_lon=None)
+    assert cursor.queries == 1 and cursor.params[-1] == "%Plouarzel"
+    assert [poi["name"] for poi in result["restauration"]] == ["Ty Pesked"]
+
+
+def test_a_table_of_the_commune_is_read_after_its_postcode():
+    """Ni un nom de rue (route de Trézien), ni une commune voisine qui contient le nom (Lampaul-Plouarzel)."""
+    assert step4.is_own_table({"genre": "pizzeria", "address": "5 route de Trézien, 29810 Plouarzel"}, "Plouarzel")
+    assert step4.is_own_table({"genre": "crêperie", "address": "1 rue, 29810 PLOUARZEL"}, "Plouarzel")
+    assert step4.is_own_table({"genre": "bar", "address": "Le Bourg, 29253 Ile de Batz"}, "Île-de-Batz")
+    assert not step4.is_own_table({"genre": "bar", "address": "158 rue de Porscave, 29810 Lampaul-Plouarzel"}, "Plouarzel")
+    assert not step4.is_own_table({"genre": "pizzeria", "address": "5 route de Trézien, 29810 Plouarzel"}, "Trézien")
+    assert not step4.is_own_table({"genre": "bar", "address": "Rue du Port"}, "Plouarzel")

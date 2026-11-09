@@ -50,7 +50,7 @@ def _get(url: str, params: dict) -> dict:
 
 
 def commune_code(latitude: float, longitude: float) -> str | None:
-    """Le code INSEE de la commune qui contient ce point : la table cities ne le garde pas."""
+    """Le code INSEE de la commune qui contient ce point, pour une ville dont cities ne le garde pas encore."""
     rows = _get(COMMUNE_URL, {"lat": latitude, "lon": longitude, "fields": "code"})
     return rows[0]["code"] if rows else None
 
@@ -122,7 +122,7 @@ def read_register(code: str, activities: tuple = ACTIVITIES) -> dict:
 def load_register(city: dict, activities: tuple = ACTIVITIES) -> dict | None:
     """Le registre de la commune, ou None s'il n'a pas pu être lu : la recherche se passe alors de lui."""
     try:
-        code = commune_code(city["latitude"], city["longitude"])
+        code = city.get("insee") or commune_code(city["latitude"], city["longitude"])
         return read_register(code, activities) if code else None
     except (requests.RequestException, ValueError, KeyError) as error:
         logger.warning(f"[registre] {city['name']} : registre illisible ({error})")

@@ -334,3 +334,23 @@ def test_a_name_decided_by_a_human_is_never_replaced_by_the_agent():
     restaurant_service._update_poi(cursor, {"id": 5, "name": "Le Triskell", "url": None},
                                    {"lien": "https://leneuf.fr", "nom": "Le Neuf", "ancien_nom": "Le Triskell", "adresse": "9 rue de Brest"}, None)
     assert "name" not in cursor.execute.call_args[0][0] and "url" in cursor.execute.call_args[0][0]
+
+
+CROZON_CITIES = [{"id": 15, "name": "Tal ar Groas", "commune": "Crozon", "insee": "29042"},
+                 {"id": 16, "name": "Le Fret", "commune": "Crozon", "insee": "29042"},
+                 {"id": 26, "name": "Trézien", "commune": "Plouarzel", "insee": "29177"},
+                 {"id": 57, "name": "Crozon", "commune": "Crozon", "insee": "29042"},
+                 {"id": 99, "name": "Nouvelle", "commune": None, "insee": None}]
+
+
+def test_a_commune_is_searched_from_the_city_bearing_its_name():
+    assert [city["id"] for city in restaurant_service.one_city_per_commune(CROZON_CITIES)] == [57, 26, 99]
+
+
+@pytest.mark.parametrize("asked, searched", [("Le Fret", "Crozon"), ("Crozon", "Crozon"), ("Trézien", "Trézien"),
+                                             ("Plouarzel", "Trézien"), ("Nouvelle", "Nouvelle"),
+                                             ("Inconnue", None)])
+def test_a_hamlet_is_searched_from_the_city_of_its_commune(monkeypatch, asked, searched):
+    monkeypatch.setattr(restaurant_service, "load_cities", lambda: CROZON_CITIES)
+    city = restaurant_service.load_city(asked)
+    assert (city["name"] if city else None) == searched

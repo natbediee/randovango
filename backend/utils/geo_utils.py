@@ -188,6 +188,34 @@ def get_city_from_coordinates(latitude, longitude, language='fr', timeout=10, ma
             sleep(2)
     return None
 
+COMMUNE_URL = "https://geo.api.gouv.fr/communes"
+
+
+def get_commune_from_coordinates(latitude, longitude, timeout=10):
+    """
+    La commune officielle qui contient ce point, d'après le découpage de l'État (geo.api.gouv.fr, gratuit) :
+    (nom, code INSEE). Nominatim donne le lieu le plus proche, parfois un village : Trézien pour la pointe de
+    Corsen, qui est en Plouarzel. Renvoie (None, None) si l'API ne répond pas : on ne bloque jamais l'appelant.
+    """
+    try:
+        response = requests.get(COMMUNE_URL, params={"lat": latitude, "lon": longitude, "fields": "nom,code"},
+                                timeout=timeout, headers={"User-Agent": "randovango"})
+        response.raise_for_status()
+        rows = response.json()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"geo.api.gouv.fr injoignable pour ({latitude}, {longitude}) : {e}")
+        return None, None
+    if not rows:
+        logger.warning(f"Aucune commune française pour ({latitude}, {longitude})")
+        return None, None
+    return rows[0]["nom"], rows[0]["code"]
+
+
+def city_commune(city: dict) -> str:
+    """La commune d'une ville de la table cities, sinon son nom tant que la commune n'est pas connue."""
+    return city.get("commune") or city["name"]
+
+
 BAN_URL = "https://api-adresse.data.gouv.fr/search/"
 BAN_MIN_SCORE = 0.5
 

@@ -76,3 +76,12 @@ def test_cancelling_a_spot_decision_gives_back_the_badge_it_had(detail, badge):
         supervision.cancel_decision(55)
     update = next(call[0][1] for call in cursor.execute.call_args_list if call[0][0].startswith("UPDATE spots"))
     assert update == (badge, 1368)
+
+
+def test_the_spots_of_a_hamlet_are_asked_by_its_name_and_its_commune():
+    city = {"id": 26, "name": "Trézien", "commune": "Plouarzel", "latitude": 48.424, "longitude": -4.76797}
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [{**SPOT, "address": None, "city_label": "Plouarzel"}]
+    rows = edit._search_rows(cursor, city, "", [city])
+    assert cursor.execute.call_args[0][1][-3:] == ("%Plouarzel", "Trézien", "Plouarzel")
+    assert len(rows) == 1

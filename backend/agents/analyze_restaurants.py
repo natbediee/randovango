@@ -44,6 +44,7 @@ from agents.llm_config import make_llm_service
 from agents.llm_service import LLMTimeout
 from agents.pepite_common import EXCLUDED_SITES_PROMPT, is_excluded_site
 from services import restaurant_service
+from utils.geo_utils import city_commune
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_restaurants")
@@ -203,7 +204,7 @@ def analyze_commune(city: dict, restaurants: list, register: dict | None = None,
     places = [{"numero": number, "nom": row["nom"], "adresse": row.get("adresse"), "pages": pages_to_read(row),
                **({"dit_ferme": {"raison": row["dit_ferme"].get("raison"), "page": row["dit_ferme"].get("page")}} if row.get("dit_ferme") else {})}
               for number, row in enumerate(restaurants, 1)]
-    message = f"COMMUNE : {city['name']}\nLIEUX : {json.dumps(places, ensure_ascii=False)}"
+    message = f"COMMUNE : {city_commune(city)}\nLIEUX : {json.dumps(places, ensure_ascii=False)}"
     if register:
         message += f"\nREGISTRE : {json.dumps(register, ensure_ascii=False)}"
     service = make_llm_service("analyze_restaurants")
@@ -226,7 +227,7 @@ def _ask_proofs(city: dict, batch: list) -> list:
     places = [{"numero": number, "nom": row["nom"], "adresse": row.get("adresse"), "genre": row.get("genre")}
               for number, row in enumerate(batch, 1)]
     service = make_llm_service("prove_restaurants")
-    answer = service.complete_json(PROOF_PROMPT, f"COMMUNE : {city['name']}\nLIEUX : {json.dumps(places, ensure_ascii=False)}", PROOF_SCHEMA)
+    answer = service.complete_json(PROOF_PROMPT, f"COMMUNE : {city_commune(city)}\nLIEUX : {json.dumps(places, ensure_ascii=False)}", PROOF_SCHEMA)
     by_number = {place["numero"]: place for place in answer["lieux"]}
     run = service.last_run
     logger.info(f"[restaurants] {city['name']} (preuves) : {[row['nom'] for row in batch]},"
