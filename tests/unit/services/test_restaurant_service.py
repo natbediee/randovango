@@ -1,4 +1,3 @@
-from dataclasses import replace
 from datetime import date
 from unittest.mock import MagicMock
 
@@ -184,9 +183,9 @@ def _save(monkeypatch, row, known=()):
     monkeypatch.setattr(service_store, "create_poi", lambda category, cursor, row, position, city, source, masked: 99)
     monkeypatch.setattr(service_store, "save_sheet", lambda category, cursor, poi_id, row, version, model: calls["sheet"].append(poi_id))
     monkeypatch.setattr(service_store, "_save_proofs", lambda cursor, poi_id, pages: None)
-    # Un réglage de test : le lieu connu est le premier de la liste, sans passer par les règles de nom.
-    category = replace(RESTAURANTS, find_known=lambda row, position, city, known: known[0] if known else None)
-    return service_store.save_commune(category, CITY, {"restaurants": [row]}, 7, "modele"), calls
+    # Le service connu est le premier de la liste, sans passer par les règles de nom.
+    monkeypatch.setattr(service_store, "find_known", lambda row, position, city, known, within_km=1: known[0] if known else None)
+    return service_store.save_commune(RESTAURANTS, CITY, {"restaurants": [row]}, 7, "modele"), calls
 
 
 PAGE = {"url": "https://riboul.fr", "type_page": "site", "verdict": "ok"}

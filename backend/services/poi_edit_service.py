@@ -22,6 +22,7 @@ from services import poi_review_service as review, service_store
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
 from utils.db_utils import MySQLUtils
+from utils.display_utils import PENDING_DOUBT_SQL, shown_verified
 from utils.geo_utils import city_commune, get_bounding_box, haversine_distance_km
 
 EDIT_FILE = "modifier"
@@ -228,6 +229,8 @@ def decide_one(cursor, poi_id: int, action: str, note: str, decided_by: str, mon
         VALUES (%s, %s, %s, %s, %s, NOW(), %s)
     """, (review.POI, poi_id, action, (note or "").strip()[:255] or None, decided_by,
           json.dumps(detail, ensure_ascii=False, default=str)))
+    if action == "autre_maps":
+        review.confirm_located(cursor, poi_id, fields, decided_by)
 
 
 def decide(poi_id: int, action: str, note: str, decided_by: str, months: list | None = None,
@@ -307,7 +310,7 @@ def sheet_view(poi: dict, sheet: dict | None, service_name: str | None = None) -
         "poi_id": poi["id"], "nom": poi.get("name") or "", "adresse": poi.get("address") or "",
         "url": poi.get("url") or "", "maps_url": poi.get("maps_url") or "",
         "position": [float(poi["latitude"]), float(poi["longitude"])] if poi.get("latitude") is not None else None,
-        "verifie": bool(poi.get("verifie")), "masque": bool(poi.get("masque")),
+        "verifie": shown_verified(poi.get("verifie"), poi.get("doute")), "masque": bool(poi.get("masque")),
         "texte": (poi.get("description") if text_target == "description" else values.get("pourquoi")) or "",
         "texte_cible": text_target,
         "genre": values.get("genre") or "", "categorie": values.get("categorie") or "",
@@ -460,6 +463,7 @@ def decide_sheet_one(cursor, poi_id: int, changes: dict, note: str, decided_by: 
         VALUES (%s, %s, %s, %s, %s, NOW(), %s)
     """, (review.POI, poi_id, SHEET_DECISION, (note or "").strip()[:255] or None, decided_by,
           json.dumps(detail, ensure_ascii=False, default=str)))
+    review.confirm_located(cursor, poi_id, poi_fields, decided_by)
     return changed
 
 
@@ -486,6 +490,7 @@ def _sheet_views(cursor, poi_ids: list) -> dict:
     marks = ",".join(["%s"] * len(poi_ids))
     cursor.execute(f"""
         SELECT p.id, p.latitude, p.longitude, p.masque, {', '.join(f'p.{column}' for column in POI_SHEET_COLUMNS)},
+               {PENDING_DOUBT_SQL} AS doute,
                (SELECT MIN(s.name) FROM poi_service ps JOIN services s ON s.id = ps.service_id
                 WHERE ps.poi_id = p.id) AS service_name
         FROM poi p WHERE p.id IN ({marks})

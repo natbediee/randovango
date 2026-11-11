@@ -5,6 +5,7 @@ import pytest
 from agents import find_services, service_chain
 from agents.find_commerces import COMMERCES
 from agents.find_restaurants import RESTAURANTS
+from agents.find_supermarches import SUPERMARCHES
 from agents.llm_service import passage_courant
 from services import service_store
 
@@ -63,9 +64,9 @@ def test_a_passage_runs_every_category_under_one_identifier(monkeypatch):
     """Un passage cherche puis enregistre chaque catégorie de la commune, toutes sous le même identifiant."""
     calls = _passage(monkeypatch)
     results = find_services.run_passage(CITY)
-    assert [key for key, _, _ in calls["searched"]] == ["restaurants", "commerces"] == calls["saved"]
+    assert [key for key, _, _ in calls["searched"]] == ["restaurants", "commerces", "supermarches"] == calls["saved"]
     assert {passage for _, _, passage in calls["searched"]} == {results["passage"]} and len(results["passage"]) == 32
-    assert results["restaurants"] == results["commerces"] == {"fiches": 1}
+    assert results["restaurants"] == results["commerces"] == results["supermarches"] == {"fiches": 1}
     assert passage_courant() is None
 
 
@@ -107,7 +108,66 @@ def test_a_commune_asked_twice_is_searched_once(monkeypatch):
 def test_every_category_of_the_chain_is_known_to_the_supervision():
     """La supervision connaît toutes les catégories de la chaîne, pour écrire la fiche d'un service confirmé."""
     from services import poi_review_service as review
-    assert review.CATEGORIES == {RESTAURANTS.source: RESTAURANTS, COMMERCES.source: COMMERCES}
+    assert review.CATEGORIES == {RESTAURANTS.source: RESTAURANTS, COMMERCES.source: COMMERCES, SUPERMARCHES.source: SUPERMARCHES}
+
+
+# --- Rejouer les règles sur les fichiers déjà payés ---
+
+def _replay(monkeypatch, version):
+    """
+    Un fichier de Plougonvelin par catégorie, écrit à cette version des consignes. Rend ce qui est enregistré
+    (catégorie, essai), et les fichiers du passage.
+    """
+    saved = []
+    files = {category.key: {"commune": "Plougonvelin", "version": version(category), "registre": None, "final": []}
+             for category in find_services.CATEGORIES}
+    monkeypatch.setattr(service_chain, "latest_traces", lambda category: {"Plougonvelin": files[category.key]})
+    monkeypatch.setattr(service_chain, "search_commune", lambda category, city: pytest.fail("un rejeu ne cherche rien"))
+    monkeypatch.setattr(service_store, "save_commune",
+                        lambda category, city, answer, version, model, trial: saved.append((category.key, trial)) or {"fiches": 0})
+    monkeypatch.setattr(service_store, "load_city", lambda name: CITY)
+    monkeypatch.setattr(find_services, "model_of", lambda agent: "modele")
+    return saved, files
+
+
+def test_a_replay_saves_again_without_any_agent(monkeypatch):
+    """--rejouer enregistre de nouveau chaque catégorie depuis son fichier, sans appeler d'agent, tous les passages par défaut."""
+    saved, _ = _replay(monkeypatch, lambda category: category.prompt_version)
+    monkeypatch.setattr(sys, "argv", ["find_services", "--rejouer"])
+    find_services.main()
+    assert saved == [("restaurants", False), ("commerces", False), ("supermarches", False)]
+
+
+def test_a_file_of_older_instructions_is_replayed_only_as_a_trial(monkeypatch):
+    """Un fichier écrit avec d'anciennes consignes n'est pas réécrit en base (sa grille de catégories a changé) : il se rejoue à l'essai."""
+    saved, files = _replay(monkeypatch, lambda category: category.prompt_version - 1)
+    results = find_services.replay_passage(CITY, files)
+    assert saved == [] and "à l'essai seulement" in results["restaurants"]["passe"]
+    find_services.replay_passage(CITY, files, trial=True)
+    assert saved == [("restaurants", True), ("commerces", True), ("supermarches", True)]
+
+
+def test_a_category_without_file_is_passed(monkeypatch):
+    """Une catégorie qui n'a jamais cherché cette commune n'a pas de fichier : le rejeu la passe, les autres sont rejouées."""
+    saved, files = _replay(monkeypatch, lambda category: category.prompt_version)
+    results = find_services.replay_passage(CITY, {**files, "commerces": None})
+    assert saved == [("restaurants", False), ("supermarches", False)] and results["commerces"] == {"passe": "aucun fichier"}
+
+
+def test_a_passage_made_under_a_town_name_is_replayed_under_that_name(monkeypatch):
+    """Les passages d'avant le 8 novembre 2026 portent le nom de la ville : Morgat et Le Fret, deux villes de Crozon, sont rejoués chacun avec son fichier."""
+    saved = []
+    crozon = {**CITY, "id": 57, "name": "Crozon", "commune": "Crozon", "insee": "29042"}
+    files = {name: {"commune": name, "version": 1, "registre": None, "final": [{"nom": name}]} for name in ("Le Fret", "Morgat")}
+    monkeypatch.setattr(service_chain, "latest_traces", lambda category: files)
+    monkeypatch.setattr(service_chain, "replay_rules", lambda category, trace: {"file": trace["commune"], "preuve_a_chercher": []})
+    monkeypatch.setattr(service_store, "save_commune",
+                        lambda category, city, answer, version, model, trial: saved.append((city["name"], answer["file"])) or {})
+    monkeypatch.setattr(service_store, "load_city", lambda name: crozon)
+    monkeypatch.setattr(find_services, "model_of", lambda agent: "modele")
+    monkeypatch.setattr(sys, "argv", ["find_services", "--rejouer", "--essai", "--categorie", "restaurants"])
+    find_services.main()
+    assert saved == [("Crozon", "Le Fret"), ("Crozon", "Morgat")]
 
 
 # --- Un seul passage à la fois ---

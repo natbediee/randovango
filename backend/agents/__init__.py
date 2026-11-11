@@ -5,6 +5,7 @@ Les outils communs :
     - llm_service.py    : la seule porte d'accès à Claude (API Anthropic ou
                           programme `claude`) ; les agents ne l'appellent jamais
                           directement
+    - llm_config.py     : le modèle, l'effort et le délai de chaque agent, au même endroit
     - mcp_randovango.py : serveur MCP, des outils de lecture de la base que les
                           agents appellent quand ils en ont besoin
 
@@ -16,6 +17,23 @@ Les agents, qui sont des transformations POST-CHARGEMENT (le "T" d'un ELT) :
     - discover_places.py : cherche sur le web les lieux qui valent le détour autour
                            d'une ville (site, point de vue, patrimoine), une fois pour
                            toutes, après le chargement de ses POI
+
+La chaîne des services, une commune après l'autre (restaurants, commerces et cafés, supermarchés) :
+    - find_services.py     : le lancement. Un passage par commune, toutes ses catégories l'une après
+                             l'autre sous le même identifiant (llm_calls.passage_id), un seul lancement
+                             à la fois. --essai n'écrit rien, --rejouer applique les règles d'aujourd'hui
+                             aux passages déjà payés, sans rappeler d'agent
+    - service_chain.py     : le tronc commun des agents. Les recherches, le contrôle des pages par le
+                             code, l'analyste (fermeture, doublon, lieu inutile au voyageur), puis une
+                             preuve cherchée pour les seuls lieux qui n'en ont pas
+    - service_category.py  : ServiceCategory, le réglage d'une catégorie : ce qui la distingue des autres
+    - find_restaurants.py, find_commerces.py, find_supermarches.py : un réglage par catégorie, avec ses
+                             consignes et ses règles de preuve au registre. Pour en ajouter une, écrire son
+                             réglage et l'inscrire dans find_services.CATEGORIES
+    - find_service_links.py : contrôle des pages (le nom du lieu y est-il ?) et liens des services d'OSM
+L'enregistrement est dans services/service_store.py : un agent enrichit le service déjà en base, quel
+que soit son onglet, au lieu d'en créer un second ; ce qu'un humain a décidé dans /supervision prime.
+Les stations-service n'y passent pas : leur source est l'État, sans agent (etl/etl_carburants.py).
 
 Des agents appelés à la demande, pendant le parcours de l'utilisateur :
     - find_pepites.py    : cherche sur le web l'agenda du séjour (événement, marché,

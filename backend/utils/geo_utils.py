@@ -220,7 +220,7 @@ BAN_URL = "https://api-adresse.data.gouv.fr/search/"
 BAN_MIN_SCORE = 0.5
 
 
-def geocode_address_ban(address, latitude=None, longitude=None, timeout=5):
+def geocode_address_ban(address, latitude=None, longitude=None, timeout=5, min_score=BAN_MIN_SCORE):
     """
     Géocodage d'une adresse postale française par la Base Adresse Nationale
     (api-adresse.data.gouv.fr, publique et gratuite), précise au numéro de rue.
@@ -241,7 +241,7 @@ def geocode_address_ban(address, latitude=None, longitude=None, timeout=5):
     if not features:
         return None
     properties = features[0]["properties"]
-    if properties.get("type") not in ("housenumber", "street") or properties.get("score", 0) < BAN_MIN_SCORE:
+    if properties.get("type") not in ("housenumber", "street") or properties.get("score", 0) < min_score:
         return None
     found_longitude, found_latitude = features[0]["geometry"]["coordinates"]
     return found_latitude, found_longitude
@@ -278,6 +278,48 @@ def geocode_locality_ban(address, latitude=None, longitude=None, timeout=5):
         logger.warning(f"BAN injoignable pour « {address} » : {e}")
         return None
     if not features or features[0]["properties"].get("score", 0) < LOCALITY_MIN_SCORE:
+        return None
+    found_longitude, found_latitude = features[0]["geometry"]["coordinates"]
+    return found_latitude, found_longitude
+
+
+SURE_SCORE = 0.8
+WAY_WORDS = ("rue", "avenue", "boulevard", "route", "chemin", "impasse", "allee", "allée", "place", "quai", "square")
+
+
+def geocode_sure_address_ban(address, latitude=None, longitude=None, timeout=5):
+    """
+    La même recherche que geocode_address_ban, mais gardée seulement si la Base Adresse est sûre d'elle (score d'au moins
+    0,8). Pour un deuxième essai sur une adresse raccourcie : entre 0,5 et 0,6, elle rend une autre rue (« Halles
+    Saint-Martin » -> « rue des Halles Saint-Louis », « Front de mer » -> « rue de Coat-Mez », essai du 11 novembre 2026).
+    """
+    return geocode_address_ban(address, latitude, longitude, timeout, min_score=SURE_SCORE)
+
+
+def geocode_way_ban(address, latitude=None, longitude=None, timeout=5):
+    """
+    Une rue que la Base Adresse range parmi les lieux-dits : « 6 rue Jacques Rueff, 56000 Vannes » revient en « locality »
+    nommée « Rue Jacques Rueff », score 0,83, et était refusée (Les Gaillards et Tablapizza, restés « position
+    introuvable », 11 novembre 2026). Acceptée seulement si l'adresse commence par un numéro, si le lieu-dit rendu porte un
+    nom de rue, et si le score atteint SURE_SCORE.
+    """
+    if not re.match(r"\s*\d", address or ""):
+        return None
+    params = {"q": address, "limit": 1}
+    if latitude is not None and longitude is not None:
+        params |= {"lat": latitude, "lon": longitude}
+    try:
+        response = requests.get(BAN_URL, params=params, timeout=timeout)
+        response.raise_for_status()
+        features = response.json().get("features") or []
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"BAN injoignable pour « {address} » : {e}")
+        return None
+    if not features:
+        return None
+    properties = features[0]["properties"]
+    name = (properties.get("name") or "").strip().lower()
+    if properties.get("type") != "locality" or properties.get("score", 0) < SURE_SCORE or not name.startswith(WAY_WORDS):
         return None
     found_longitude, found_latitude = features[0]["geometry"]["coordinates"]
     return found_latitude, found_longitude

@@ -1,10 +1,10 @@
 import re
 import unicodedata
+from collections import Counter
 from datetime import date
 
 from fastapi import APIRouter, Query, Body
-from services.commerce_selection_service import CAFE_SERVICES, COMMERCE_SERVICES, SHOP_CATEGORY_LABELS, SHOPS_SHOWN
-from services.commerce_selection_service import CAFE as CAFE_SHEET
+from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB, SHOP_CATEGORY_LABELS, SHOPS_SHOWN
 from services.plan_service import insert_or_update_plan
 from services.station_selection_service import (closure_label, is_closed_for_good, price_badges, prices_summary,
                                                 station_maps_url)
@@ -13,7 +13,8 @@ from services.restaurant_selection_service import (TABLE_CATEGORY_LABELS, TABLES
 from etl.load.load_carburants import FUEL_SERVICE, SOURCE_NAME as FUEL_SOURCE
 from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
 from utils.db_utils import MySQLUtils
-from utils.display_utils import enrich_poi, poi_subtitle
+from utils import display_utils
+from utils.display_utils import PENDING_DOUBT_SQL, enrich_poi, poi_subtitle
 from utils.geo_utils import city_commune
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
@@ -24,8 +25,10 @@ RESTAURANT_SERVICE = "restaurant"
 RESTAURATION_CATEGORY = "restauration"
 COMMERCE_CATEGORY = "commerce"
 CAFE_CATEGORY = "cafe"
-# Les onglets dont l'agent écrit des fiches, et combien de fiches de la commune y sont montrées.
-SHEETS_SHOWN = {RESTAURATION_CATEGORY: TABLES_SHOWN, COMMERCE_CATEGORY: SHOPS_SHOWN, CAFE_CATEGORY: SHOPS_SHOWN}
+SUPERMARKET_CATEGORY = "supermarche"
+# Les onglets dont un agent écrit des fiches, et combien de fiches de la commune y sont montrées.
+SHEETS_SHOWN = {RESTAURATION_CATEGORY: TABLES_SHOWN, COMMERCE_CATEGORY: SHOPS_SHOWN, CAFE_CATEGORY: SHOPS_SHOWN,
+                SUPERMARKET_CATEGORY: SHOPS_SHOWN}
 # Toutes les cartes de services ont le bouton Google Maps (7 novembre 2026). Celui d'une station se construit à part,
 # avec la marque, pour tomber sur la station et non sur le supermarché voisin (services/station_selection_service.py).
 FUEL_CATEGORY = "gasoil"
@@ -76,11 +79,16 @@ def station_fields(poi: dict) -> dict:
 
 def keep_checked_commerces(poi_list: list) -> list:
     """
-    La règle des restaurants pour les commerces (agents/find_commerces.py) : boulangeries, épiceries, marchés et
-    producteurs d'OSM disparaissent là où l'agent a écrit des fiches. Les supermarchés, à part, ne changent pas.
+    La règle des restaurants pour les fiches de la table commerces : boulangeries, épiceries, marchés et producteurs
+    d'OSM disparaissent là où l'agent des commerces a écrit des fiches. Les cafés et les supermarchés, qui ont leur onglet
+    (commerce_selection_service.OWN_TAB), suivent la même règle avec leurs seules fiches : une commune où les commerces
+    sont passés sans les supermarchés garde ses supermarchés d'OSM.
     """
-    poi_list = keep_checked(poi_list, COMMERCE_SERVICES, lambda poi: bool(poi.get("commerce_genre")) and poi.get("commerce_categorie") != CAFE_SHEET)
-    return keep_checked(poi_list, CAFE_SERVICES, lambda poi: poi.get("commerce_categorie") == CAFE_SHEET)
+    poi_list = keep_checked(poi_list, COMMERCE_SERVICES,
+                            lambda poi: bool(poi.get("commerce_genre")) and poi.get("commerce_categorie") not in OWN_TAB)
+    for sheet, services in OWN_TAB.items():
+        poi_list = keep_checked(poi_list, services, lambda poi, sheet=sheet: poi.get("commerce_categorie") == sheet)
+    return poi_list
 
 
 def keep_checked_restaurants(poi_list: list) -> list:
@@ -155,10 +163,11 @@ def shown_verified(poi: dict, frontend_category: str, sheet: dict) -> int:
     Dans les onglets dont un agent écrit les fiches, « Vérifié » suit la preuve (service_store.set_verified) :
     un lieu d'OSM sans fiche n'a été contrôlé par personne, même si load_poi.py l'a chargé avec verifie = 1.
     Les autres onglets (eau, toilettes...) gardent la valeur de la base.
+    Partout, un service dont un doute attend une relecture s'affiche « non vérifié » (display_utils.shown_verified).
     """
     if frontend_category in SHEETS_SHOWN and not sheet["genre"]:
         return 0
-    return poi["verifie"]
+    return int(display_utils.shown_verified(poi["verifie"], poi.get("doute")))
 
 
 def _build_subtitles(categorized_poi: dict) -> dict:
@@ -226,7 +235,7 @@ def get_poi(
     ref_lon = spot_lon if spot_lon is not None else city['longitude']
     
     # Tous les POI (vérifiés et non vérifiés)
-    query = """
+    query = f"""
         SELECT
             p.id,
             p.name,
@@ -234,6 +243,7 @@ def get_poi(
             p.latitude,
             p.longitude,
             p.verifie,
+            {PENDING_DOUBT_SQL} AS doute,
             p.image_url,
             p.url,
             p.address,
@@ -304,6 +314,9 @@ def get_poi(
     }
     seen_ids = {cat: set() for cat in categorized_poi}
 
+    # Les noms portés par plusieurs lieux autour de la ville : leur lien Google Maps garde l'adresse entière (maps_url).
+    names = Counter(" ".join((poi["name"] or "").lower().split()) for poi in {poi["id"]: poi for poi in poi_list}.values())
+
     # Appelée directement (tests), la valeur par défaut est l'objet Query de FastAPI, pas None.
     day = day_date if isinstance(day_date, date) else date.today()
     for poi in poi_list:
@@ -357,7 +370,8 @@ def get_poi(
                 station_maps_url(poi.get('station_marque'), poi['address'], poi.get('station_code_postal'),
                                  poi.get('station_ville'), poi['latitude'], poi['longitude'])
                 if frontend_category == FUEL_CATEGORY else maps_url(
-                    poi['name'], poi['address'], poi['latitude'], poi['longitude'], generic=is_generic_name(poi['name']))),
+                    poi['name'], poi['address'], poi['latitude'], poi['longitude'], generic=is_generic_name(poi['name']),
+                    several=names[" ".join((poi['name'] or "").lower().split())] > 1)),
             "statut_saison": poi['statut_saison'],
             "saison_label": season_label(poi['statut_saison'], poi['mois_ouverture']),
             "mois_ouverture": poi['mois_ouverture'],

@@ -49,6 +49,7 @@ Le nom ne le montre pas : Laer-Mor était le nom des Boucaniers, Sainte-Barbe l'
 suffit pas : l'Hostellerie et le Bistrot 1954 partagent la leur et sont deux tables. Elle reste une condition :
 deux adresses différentes ne sont jamais fusionnées, quitte à garder un doublon plutôt que perdre un lieu.
 """
+import copy
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -71,7 +72,6 @@ PROOF_PAGE_TYPES = ["site", "office_tourisme", "guide", "presse", "facebook", "i
 # Une grande ville, par zones autour de ses spots : le registre de Brest (733 lignes actives, 145 Ko) ne tenait pas
 # dans la commande, et 15 lieux pour toute la ville auraient été pris au hasard. Le 6 novembre 2026, ses 44 spots
 # font 10 zones de 1,5 km ; trois comptent 178 à 270 restaurants au registre, d'où les 40 lignes les plus proches du spot.
-ZONE_FROM = 100      # au-delà de 100 lignes actives au registre, la commune est cherchée par zones
 ZONE_KM = 1.5
 ZONE_LINES = 40
 PROOF_BATCH = 5
@@ -160,27 +160,36 @@ def unique_pages(pages: list) -> list:
     return list(by_url.values())
 
 
+def _same_among(name: str, rows: list) -> dict | None:
+    """Le premier lieu de la liste qui porte ce nom (service_store.same_name), ou None."""
+    return next((row for row in rows if service_store.same_name(row["nom"], name)), None)
+
+
 def merge_answers(category, *answers: dict) -> dict:
     """
     Les recherches, sans doublon : à nom égal, la première fiche est gardée, avec les pages de toutes. Un lieu retenu par
     une recherche et dit fermé par une autre porte "dit_ferme" pour que l'analyste tranche. Seule une fermeture compte :
     la recherche d'été écarte aussi les lieux ouverts toute l'année, qui restent de bonnes adresses.
     """
-    closed = {category.place_key(row["nom"]): row for answer in answers for row in answer["ecartes"] if row["ferme"]}
-    places = {}
+    closed = [row for answer in answers for row in answer["ecartes"] if row["ferme"]]
+    places = []
     for row in (row for answer in answers for row in answer[category.key]):
-        key = category.place_key(row["nom"])
-        place = places.setdefault(key, {**row, "pages_vues": [], **({"dit_ferme": closed[key]} if key in closed else {})})
+        place = _same_among(row["nom"], places)
+        if place is None:
+            said_closed = _same_among(row["nom"], closed)
+            place = {**row, "pages_vues": [], **({"dit_ferme": said_closed} if said_closed else {})}
+            places.append(place)
         place["pages_vues"] += found_pages(row)
-    return {category.key: list(places.values()), "ecartes": [row for answer in answers for row in answer["ecartes"]]}
+    return {category.key: places, "ecartes": [row for answer in answers for row in answer["ecartes"]]}
 
 
 def merge_zones(category, answers: list) -> dict:
     """Un lieu vu depuis deux zones voisines n'est gardé qu'une fois, avec la fiche de la première."""
-    places = {}
+    places = []
     for row in (row for answer in answers for row in answer[category.key]):
-        places.setdefault(category.place_key(row["nom"]), row)
-    return {category.key: list(places.values()), "ecartes": [row for answer in answers for row in answer["ecartes"]]}
+        if _same_among(row["nom"], places) is None:
+            places.append(row)
+    return {category.key: places, "ecartes": [row for answer in answers for row in answer["ecartes"]]}
 
 
 def clean_name(name: str) -> str:
@@ -233,8 +242,9 @@ def build_message(city: dict, register: dict | None, zone: dict | None = None) -
     return f"{message}\nREGISTRE : {json.dumps(register, ensure_ascii=False)}" if register else message
 
 
-def is_big_city(register: dict | None) -> bool:
-    return len((register or {}).get("actifs", [])) > ZONE_FROM
+def is_big_city(category, register: dict | None) -> bool:
+    """Trop de lignes actives au registre pour une seule recherche (ServiceCategory.zone_from) : la commune est cherchée par zones."""
+    return len((register or {}).get("actifs", [])) > category.zone_from
 
 
 def commune_zones(city: dict, spots: list) -> list:
@@ -315,27 +325,42 @@ def search_zone(category, city: dict, register: dict | None, zone: dict | None, 
         row["pages"] = control_row(category, row, name)
     trace["controle"] = [{"nom": row["nom"], "pages": row["pages"]} for row in answer[category.key]]
     rows = answer[category.key] = analyze_commune(category, city, answer[category.key], seen, trace)
-    # L'alerte de l'analyste se vérifie dans le registre entier (service_store.alert_contradicted).
-    service_store.clear_contradicted_alerts(category, rows, register, name)
-    # Les preuves et la date « nouveau » se lisent dans le registre entier : un lieu peut y être inscrit hors de sa zone.
-    missing = []
-    for row in rows:
-        if has_accepted_page(category, row, name) or category.register_proves(row, register):
-            continue
-        reason = category.review_before_proof(row, register, name)
-        if reason:
-            row["a_relire"] = reason
-        else:
-            missing.append(row)
+    missing = rows_to_prove(category, rows, register, name)
     for row, proof in zip(missing, find_proofs(category, city, missing, trace)):
         add_proofs(category, row, proof, name)
     for row in rows:
         row |= control_details(category, row, name)
+    note_register_facts(category, rows, register, name)
+    return answer
+
+
+def rows_to_prove(category, rows: list, register: dict | None, commune: str) -> list:
+    """
+    Les lieux dont il faut chercher une preuve : ni page acceptée, ni registre qui suffit, ni relecture déjà décidée par
+    la règle de la catégorie (review_before_proof), qui est alors notée sur le lieu.
+    Tout se lit dans le registre entier : un lieu peut y être inscrit hors de sa zone, et l'alerte de l'analyste s'y
+    vérifie (service_store.alert_contradicted).
+    """
+    service_store.clear_contradicted_alerts(category, rows, register, commune)
+    missing = []
+    for row in rows:
+        if has_accepted_page(category, row, commune) or category.register_proves(row, register):
+            continue
+        reason = category.review_before_proof(row, register, commune)
+        if reason:
+            row["a_relire"] = reason
+        else:
+            missing.append(row)
+    return missing
+
+
+def note_register_facts(category, rows: list, register: dict | None, commune: str) -> None:
+    """Les preuves cherchées : la date « nouveau » lue au registre, et la relecture que la catégorie demande encore."""
+    for row in rows:
         row |= category.register_facts(row, register)
-        reason = category.review_after_proof(row, register, name)
+        reason = category.review_after_proof(row, register, commune)
         if reason and not row.get("a_relire"):
             row["a_relire"] = reason
-    return answer
 
 
 def search_commune(category, city: dict) -> dict:
@@ -349,7 +374,7 @@ def search_commune(category, city: dict) -> dict:
         register = api_registre.load_register(city, category.register_activities)
         trace = {"commune": name, "passage": passage_courant(), "version": category.prompt_version, "registre": register}
         try:
-            if not is_big_city(register):
+            if not is_big_city(category, register):
                 answer = search_zone(category, city, register, None, trace)
             else:
                 zones = commune_zones(city, service_store.commune_spots(name))
@@ -365,6 +390,45 @@ def search_commune(category, city: dict) -> dict:
         finally:
             # Même si une étape échoue : ce qui a déjà été payé reste lisible.
             category.logger.info(f"[{category.key}] {name} : réponses gardées dans {write_trace(category, city, trace)}")
+
+
+# --- Rejouer les règles sur ce qui a déjà été payé ---
+
+def latest_traces(category) -> dict:
+    """
+    {nom du passage : son fichier le plus récent qui est allé au bout}, lus dans le dossier de la catégorie. Le nom est
+    celui que le fichier porte : la commune, ou la ville pour un passage d'avant le 8 novembre 2026.
+    """
+    traces = {}
+    for path in sorted(category.trace_dir.glob("*.json"), key=lambda path: path.stem.rsplit("_", 2)[-2:]):
+        trace = json.loads(path.read_text())
+        if trace.get("final") is not None:
+            traces[trace["commune"]] = trace
+    return traces
+
+
+def replay_rules(category, trace: dict) -> dict:
+    """
+    Les lieux d'un fichier, avec les règles d'aujourd'hui : preuve du registre, date « nouveau », relectures. Aucun agent
+    n'est appelé : les réponses, les pages contrôlées et le registre sont ceux du fichier. Après une règle corrigée, on
+    voit ainsi ce qu'elle change sur toutes les communes déjà payées, au lieu d'écrire un script pour chaque correction
+    (reclassement_commerces_registre, relecture_commerces_registre, les 7 et 8 novembre 2026).
+    Une relecture décidée par une règle est recalculée ; celle d'une preuve restée sans réponse à temps est gardée.
+    Un lieu sans page que le registre ne prouve plus, et dont la preuve n'a jamais été cherchée (le fichier garde le nom
+    de chaque lieu envoyé à la preuve), demanderait un appel payant : il est rendu à part (« preuve_a_chercher ») et n'est
+    pas enregistré, ce qui est en base à son nom ne change pas.
+    """
+    name, register = trace["commune"], trace.get("registre")
+    rows = copy.deepcopy(trace["final"])
+    for row in rows:
+        if row.get("a_relire") != PROOF_TIMED_OUT:
+            row.pop("a_relire", None)
+    searched = {proof["nom"] for part in trace.get("zones") or [trace] for proof in part.get("preuves", [])}
+    missing = [row for row in rows_to_prove(category, [row for row in rows if not row.get("a_relire")], register, name)
+               if row["nom"] not in searched]
+    rows = [row for row in rows if not any(row is one for one in missing)]
+    note_register_facts(category, rows, register, name)
+    return {category.key: rows, "ecartes": [], "preuve_a_chercher": [row["nom"] for row in missing]}
 
 
 # --- L'analyste : fermeture, doublon, lieu inutile au voyageur, détails ---

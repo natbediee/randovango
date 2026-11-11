@@ -2,7 +2,7 @@
 from agents.find_commerces import COMMERCES
 from agents.find_restaurants import RESTAURANTS
 from services import service_store
-from services.service_store import find_known
+from services.service_store import find_known, is_verified, same_name
 
 PLOUDALMEZEAU = {"id": 1, "name": "Ploudalmézeau", "latitude": 48.5439, "longitude": -4.655}
 GALION_SPOT = (48.5413, -4.65673)
@@ -80,6 +80,66 @@ def test_every_tab_of_the_chain_is_searched():
     assert not {"toilets", "museum", "fuel", "drinking_water"} & set(service_store.KNOWN_SERVICES)
 
 
+# --- Une seule règle pour le nom, quelle que soit la catégorie ---
+
+def test_the_word_saying_what_a_place_is_does_not_make_two_names():
+    """« Boulangerie Le Gall » est « Le Gall », « Mercure Bar » est « Café Mercure » : le mot du lieu ne fait pas deux noms."""
+    assert same_name("Boulangerie Le Gall", "Le Gall") and same_name("La Crêperie Riboul", "Riboul")
+    assert same_name("Mercure Bar", "Café Mercure") and same_name("Bar Crêperie La Grotte", "LA GROTTE")
+    assert same_name("Café du Marché", "Le Café du Marché")
+
+
+def test_two_different_words_make_two_places():
+    """Un marché et une épicerie du même village, un café et une crêperie du même port, sont deux services."""
+    assert not same_name("Marché de Plougonvelin", "Épicerie de Plougonvelin")
+    assert not same_name("Le Café du Port", "Crêperie du Port")
+    assert not same_name("Boulangerie du Kreisker", "Café du Kreisker")
+
+
+def test_a_restaurant_is_found_under_its_short_name():
+    """« Crêperie Riboul » retrouve le service « Riboul » d'OSM, comme « Boulangerie Laot » retrouvait « Laot »."""
+    osm = _poi("Riboul", "3 rue de la Mer, 29217 Plougonvelin", (48.3400, -4.7200))
+    row = {"nom": "Crêperie Riboul", "adresse": "5 rue de la Mer, 29217 Plougonvelin"}
+    assert find_known(row, (48.3402, -4.7200), PLOUDALMEZEAU, [osm]) == osm
+
+
+def test_a_bar_and_a_creperie_side_by_side_stay_two():
+    """À 40 m l'un de l'autre, « Bar du Port » et « Crêperie du Port » restent deux services ; deux « du Port » sans mot contraire, un seul."""
+    bar = _poi("Bar du Port", "Quai du Port, 29120 Combrit", (47.8730, -4.1210))
+    assert find_known({"nom": "Crêperie du Port", "adresse": "Rue du Bac, 29120 Combrit"}, (47.8733, -4.1210), PLOUDALMEZEAU, [bar]) is None
+    assert find_known({"nom": "Le Port", "adresse": "Rue du Bac, 29120 Combrit"}, (47.8733, -4.1210), PLOUDALMEZEAU, [bar]) == bar
+
+
+# --- Une seule règle pour le badge et pour l'envoi en supervision ---
+
+def test_the_badge_rule_is_the_same_for_every_category():
+    """« Vérifié » : une page acceptée, ou le registre au nom du lieu et une page qui le nomme, même un annuaire (La Meule de Pierre)."""
+    directory = {"url": "https://annuaire.fr/x", "type_page": "agregateur", "verdict": "ok"}
+    assert is_verified({"pages": []}, [SITE])
+    assert is_verified({"registre_depuis": "2024-01-18", "pages": [directory]}, [])
+    assert not is_verified({"registre_depuis": "2024-01-18", "pages": []}, [])
+    assert not is_verified({"pages": [directory]}, [])
+
+
+def test_a_restaurant_sent_to_review_leaves_the_display_like_a_shop(monkeypatch):
+    """Un restaurant renvoyé en relecture perd sa fiche jusqu'à la décision, comme un commerce : avant, il restait affiché sans signal."""
+    signals = []
+    monkeypatch.setattr(service_store, "save_signal", lambda cursor, poi_id, source, kind, detail: signals.append((poi_id, source, detail["raison"])))
+    base = _Base()
+    assert service_store.send_to_review(RESTAURANTS, base, 32340, "registre : enseigne fermée", {})
+    assert base.wrote("DELETE FROM restaurants WHERE poi_id") == [(32340,)]
+    assert signals == [(32340, "agent_restaurants", "registre : enseigne fermée")]
+
+
+def test_a_restaurant_validated_by_a_human_keeps_its_sheet(monkeypatch):
+    """Un restaurant qu'un humain a validé garde sa fiche, et rien n'est signalé : sa décision prime."""
+    monkeypatch.setattr(service_store, "save_signal", lambda *args: 1 / 0)
+    monkeypatch.setattr(service_store, "validated_by_human", lambda cursor, poi_id: True)
+    base = _Base()
+    assert not service_store.send_to_review(RESTAURANTS, base, 32489, "registre : débit de boissons", {})
+    assert not base.wrote("DELETE")
+
+
 # --- Le Galion, dans les deux ordres : un seul service à la fin ---
 
 class _Base:
@@ -87,7 +147,7 @@ class _Base:
     lastrowid = 99
 
     def __init__(self, waiting=False):
-        self.queries, self.waiting, self.last = [], waiting, ""
+        self.queries, self.waiting, self.last, self.ended = [], waiting, "", []
 
     def cursor(self):
         return self
@@ -106,27 +166,27 @@ class _Base:
         pass
 
     def commit(self):
-        pass
+        self.ended.append("commit")
 
     def rollback(self):
-        pass
+        self.ended.append("rollback")
 
     def wrote(self, start):
         return [params for sql, params in self.queries if sql.startswith(start)]
 
 
-def _save(monkeypatch, category, row, known=(), sheets=(), waiting=False):
+def _save(monkeypatch, category, row, known=(), sheets=(), waiting=False, trial=False):
     """Enregistre un lieu de Ploudalmézeau. Rend la base, les lieux créés et les services ajoutés à un lieu existant."""
     base, created, linked = _Base(waiting), [], []
     monkeypatch.setattr(service_store.MySQLUtils, "connect", staticmethod(lambda: base))
     monkeypatch.setattr(service_store.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
     monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, source: 1)
     monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: list(known))
-    monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, table: list(sheets))
+    monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, table, kinds=(): [] if kinds else list(sheets))
     monkeypatch.setattr(service_store, "_position", lambda city, address: GALION_SPOT)
     monkeypatch.setattr(service_store, "create_poi", lambda category_, cursor, row_, position, city, source, masked: created.append(row_["nom"]) or 99)
     monkeypatch.setattr(service_store, "insert_service_and_link", lambda cursor, poi_id, service: linked.append((poi_id, service)))
-    summary = service_store.save_commune(category, PLOUDALMEZEAU, {category.key: [row]}, 1, "modele")
+    summary = service_store.save_commune(category, PLOUDALMEZEAU, {category.key: [row]}, 1, "modele", trial=trial)
     return summary, base, created, linked
 
 
@@ -180,3 +240,93 @@ def test_a_place_masked_by_a_human_is_not_taken_over(monkeypatch):
     summary, base, created, linked = _save(monkeypatch, RESTAURANTS, RESTAURANT, known=[removed])
     assert created == [] and linked == [] and summary["fiches"] == 0
     assert not base.wrote("REPLACE INTO") and not base.wrote("UPDATE poi SET")
+
+
+# --- À l'essai, le bilan est calculé et rien n'est gardé ---
+
+def test_a_trial_gives_the_summary_and_cancels_every_write(monkeypatch):
+    """À l'essai, l'enregistrement d'une commune dit ce qu'il écrirait (une fiche) puis annule tout ; sans essai, il valide."""
+    summary, base, created, _ = _save(monkeypatch, RESTAURANTS, RESTAURANT, trial=True)
+    assert summary["fiches"] == 1 and created == ["Le Galion"] and base.ended == ["rollback"]
+    _, base, _, _ = _save(monkeypatch, RESTAURANTS, RESTAURANT)
+    assert base.ended == ["commit"]
+
+
+def test_a_short_name_must_be_the_whole_name_of_the_known_place():
+    """« Marché de Carantec », cherché sous son nom court « Carantec », ne retrouve pas « Carantec Pizza » à 58 m."""
+    pizza = _poi("Carantec Pizza", "Rue Albert Louppe, 29660 Carantec", GALION_SPOT)
+    market = {"nom": "Marché de Carantec", "adresse": "Place de la Libération, 29660 Carantec"}
+    assert find_known(market, GALION_SPOT, PLOUDALMEZEAU, [pizza]) is None
+
+
+# --- Les supermarchés : une enseigne présente à plusieurs adresses ---
+
+LIDL = {"nom": "Lidl", "genre": "supermarché", "categorie": "supermarche", "adresse": "12 rue de Brest, 29830 Ploudalmézeau",
+        "pages": [{"url": "https://www.lidl.fr/s/ploudalmezeau", "type_page": "site", "verdict": "ok"}]}
+
+
+def test_a_supermarket_is_found_by_its_name_only_close_by(monkeypatch):
+    """Le Lidl d'OSM à 150 m de l'adresse trouvée est enrichi de sa fiche ; un autre Lidl à 600 m ne l'est pas, un supermarché est créé."""
+    from agents.find_supermarches import SUPERMARCHES
+    near = _poi("Lidl", None, (GALION_SPOT[0] + 0.00135, GALION_SPOT[1]), poi_id=1059)
+    far = _poi("Lidl", None, (GALION_SPOT[0] + 0.0054, GALION_SPOT[1]), poi_id=2087)
+    summary, base, created, linked = _save(monkeypatch, SUPERMARCHES, LIDL, known=[far, near])
+    assert created == [] and linked == [(1059, "supermarket")] and summary["fiches"] == 1
+    [params] = base.wrote("REPLACE INTO commerces")
+    assert params[0] == 1059 and "supermarche" in params
+    _, _, created, linked = _save(monkeypatch, SUPERMARCHES, LIDL, known=[far])
+    assert created == ["Lidl"] and linked == []
+
+
+def test_a_grocery_with_a_supermarket_sheet_keeps_it(monkeypatch):
+    """Le Biocoop rangé « épicerie » par les commerces a déjà sa fiche supermarché : il n'est pas enregistré une seconde fois."""
+    biocoop = {"nom": "Biocoop", "genre": "épicerie bio", "categorie": "epicerie", "adresse": GALION_ADDRESS, "pages": [SITE]}
+    supermarket = _poi("Biocoop", GALION_ADDRESS, GALION_SPOT, poi_id=1306)
+    base, created = _Base(), []
+    monkeypatch.setattr(service_store.MySQLUtils, "connect", staticmethod(lambda: base))
+    monkeypatch.setattr(service_store.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
+    monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, source: 1)
+    monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: [supermarket])
+    monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, table, kinds=(): [supermarket] if kinds == ("supermarche",) else [])
+    monkeypatch.setattr(service_store, "_position", lambda city, address: GALION_SPOT)
+    summary = service_store.save_commune(COMMERCES, PLOUDALMEZEAU, {"commerces": [biocoop]}, 4, "modele")
+    assert summary["deja_supermarche"] == 1 and summary["fiches"] == 0 and not base.wrote("REPLACE INTO")
+
+
+def test_a_place_left_without_position_is_found_again_once_placed():
+    """Le service masqué « position introuvable » est repris quand son adresse est enfin placée, au lieu d'être créé une seconde fois ; le même nom dans une autre commune ne l'est pas."""
+    waiting = _poi("Ferme de Kerguelen", "Kerguelen, 29830 Ploudalmézeau", (None, None), poi_id=48211, masked=1)
+    row = {"nom": "Ferme de Kerguelen", "adresse": "Lieu-dit Kerguelen, 29830 Ploudalmézeau"}
+    assert find_known(row, GALION_SPOT, PLOUDALMEZEAU, [waiting]) == waiting
+    assert find_known({**row, "adresse": "Kerguelen, 29840 Porspoder"}, GALION_SPOT, PLOUDALMEZEAU, [waiting]) is None
+
+
+def test_the_known_services_include_those_left_without_position(monkeypatch):
+    """Les services déjà en base sont lus autour de la commune, et ceux restés sans position avec la ville où un passage les a créés."""
+    base = _Base()
+    base.description = [("id",)]
+    service_store.known_services(base, PLOUDALMEZEAU, ("restaurant", "cafe"))
+    [(sql, params)] = base.queries
+    assert "p.latitude IS NULL AND EXISTS (SELECT 1 FROM histo_poi" in sql and params[-2:] == (PLOUDALMEZEAU["id"], None)
+
+
+def test_a_place_without_position_or_postcode_is_found_by_its_town():
+    """La Table de Pierre Bourée, restée sans adresse ni position à Gevrey-Chambertin, est reprise par le passage suivant au lieu d'être créée une seconde fois."""
+    waiting = _poi("La Table de Pierre Bourée", None, (None, None), poi_id=32475, masked=1)
+    assert find_known({"nom": "La Table de Pierre Bourée", "adresse": None}, None, PLOUDALMEZEAU, [waiting]) == waiting
+
+
+def test_a_known_place_still_without_position_stays_in_review(monkeypatch):
+    """Un service retrouvé en base mais toujours sans position reste « position introuvable » : il n'est pas affiché sans pouvoir être placé sur la carte."""
+    waiting = _poi("Le Galion", GALION_ADDRESS, (None, None), poi_id=47844, masked=1)
+    flagged = []
+    monkeypatch.setattr(service_store, "flag", lambda category, cursor, row, position, city, known, source, reason, detail, link=None: flagged.append(reason))
+    base, _ = _Base(waiting=True), None
+    monkeypatch.setattr(service_store.MySQLUtils, "connect", staticmethod(lambda: base))
+    monkeypatch.setattr(service_store.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
+    monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, source: 1)
+    monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: [waiting])
+    monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, table, kinds=(): [])
+    monkeypatch.setattr(service_store, "_position", lambda city, address: None)
+    summary = service_store.save_commune(RESTAURANTS, PLOUDALMEZEAU, {"restaurants": [RESTAURANT]}, 1, "modele")
+    assert flagged == [service_store.NO_POSITION] and summary["a_confirmer"] == 1 and summary["fiches"] == 0

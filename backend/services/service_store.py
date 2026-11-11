@@ -30,7 +30,8 @@ from etl.load.load_poi_checks import save_signal
 from services.pepite_service import is_generic, name_key
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
-from utils.geo_utils import city_commune, geocode_address_ban, geocode_locality_ban, get_bounding_box, haversine_distance_km
+from utils.geo_utils import (city_commune, geocode_address_ban, geocode_locality_ban, geocode_sure_address_ban, geocode_way_ban,
+                             get_bounding_box, haversine_distance_km)
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
 MAX_KM = 15                 # au-delà, l'adresse géocodée n'est pas celle de la commune cherchée
@@ -43,6 +44,7 @@ HUMAN_LINK_DECISIONS = ("valider_lien", "valider_lien_nom", "refuser_lien", "aut
 # restaurant pour un agent et café pour l'autre, parce que chacun ne regardait que ses propres services.
 KNOWN_TABS = ("restauration", "cafe", "commerce", "supermarche")
 KNOWN_SERVICES = tuple(service for service, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab in KNOWN_TABS)
+NO_POSITION = "position introuvable"    # la raison d'une relecture quand l'adresse n'a pas pu être placée (review_reason)
 SAME_NAME_KM = 1            # un nom, actuel ou ancien, ne retrouve un lieu connu qu'à cette distance (find_in)
 COMMUNE_KM = 5              # sans code postal à comparer, un lieu est dans la commune à cette distance de son centre
 MAX_ARTICLE_MONTHS = 18     # un article ancien ne prouve pas que le lieu existe encore
@@ -50,6 +52,13 @@ FRENCH_MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet
                  "septembre", "octobre", "novembre", "décembre")
 COMMON_STREET_WORDS = {"rue", "route", "boulevard", "bd", "avenue", "av", "place", "quai", "chemin", "impasse", "allee", "lieudit", "lieu", "dit",
                        "ld", "de", "du", "des", "la", "le", "les", "l", "d"}
+ARTICLES = ("l", "la", "le", "les", "d", "de", "du", "des")
+# Les mots qui disent ce qu'est un lieu, pas lequel, rangés par famille : deux mots de la même famille ne se contredisent
+# pas (« bar » et « café »), deux mots de familles différentes désignent deux lieux (« marché » et « épicerie »).
+PLACE_KINDS = {"creperie": "table", "restaurant": "table", "cafe": "cafe", "bar": "cafe",
+               "boulangerie": "boulangerie", "patisserie": "boulangerie", "epicerie": "epicerie", "superette": "epicerie",
+               "marche": "marche", "ferme": "ferme", "fromagerie": "fromagerie", "boucherie": "boucherie",
+               "poissonnerie": "poissonnerie", "cave": "cave"}
 _MONTH_RANGE = re.compile(rf"({'|'.join(FRENCH_MONTHS)})\s+à\s+({'|'.join(FRENCH_MONTHS)})", re.I)
 
 
@@ -84,12 +93,54 @@ def compact_name(name: str) -> str:
 
 
 def place_key(name: str) -> str:
-    """« La Crêperie Riboul » et « Riboul », « Spiaggia Restaurant » et « Spiaggia » sont le même lieu d'un passage à l'autre."""
-    words = [word for word in name_key(name).split() if word not in ("creperie", "restaurant")]
-    # « La Crêperie du Château d'Eau » au registre est « Le Château d'Eau » des recherches (Ploudalmézeau, 7 novembre 2026).
-    while words and words[0] in ("l", "la", "le", "les", "d", "de", "du", "des"):
+    """
+    Le nom sans le mot qui dit ce qu'est le lieu, ni l'article en tête : « La Crêperie Riboul » et « Riboul », « Boulangerie
+    Le Gall » et « Le Gall », « La Crêperie du Château d'Eau » du registre et « Le Château d'Eau » des recherches
+    (Ploudalmézeau, 7 novembre 2026). À comparer avec same_name, jamais seule : « Marché de Plougonvelin » et « Épicerie de
+    Plougonvelin » ont la même clé.
+    """
+    def without_articles(words: list) -> list:
+        while words and words[0] in ARTICLES:
+            words = words[1:]
+        return words
+
+    words = name_key(name).split()
+    # « Le Café du Marché » n'est fait que de ces mots : ils restent, sinon il ne resterait rien.
+    return "".join(without_articles([word for word in words if word not in PLACE_KINDS]) or without_articles(words))
+
+
+def place_kinds(name: str) -> set:
+    """Ce que le nom dit du lieu : {"cafe"} pour « Bar du Port », rien pour « Le Galion »."""
+    return {PLACE_KINDS[word] for word in name_key(name).split() if word in PLACE_KINDS}
+
+
+def same_name(first: str, second: str) -> bool:
+    """
+    Les deux noms désignent-ils le même lieu ? Oui s'il reste le même nom une fois retiré le mot qui dit ce qu'est le lieu,
+    et si ces mots ne se contredisent pas : « Boulangerie Le Gall » et « Le Gall », « Mercure Bar » et « Café Mercure ».
+    Non pour « Marché de Plougonvelin » et « Épicerie de Plougonvelin », ni pour « Café du Port » et « Crêperie du Port ».
+
+    Une seule règle pour toutes les catégories (11 novembre 2026). Avant, chacune avait sa liste de mots : les commerces
+    réunissaient un marché et une épicerie du même village, et l'un des deux était perdu (29 commerces sur 136 communes) ;
+    « Bar Crêperie La Grotte » ne retrouvait pas « LA GROTTE » au registre.
+    """
+    kinds, other_kinds = place_kinds(first), place_kinds(second)
+    return place_key(first) == place_key(second) and (not kinds or not other_kinds or bool(kinds & other_kinds))
+
+
+def short_name(name: str) -> str | None:
+    """
+    Le nom sans le mot du lieu en tête : « Boulangerie Laot » -> « Laot », pour retrouver le service « Laot » d'OSM
+    (pilote du 7 novembre 2026 : un nouveau service avait été créé, au 15 au lieu du 16 rue Pen ar Bed). None si le
+    nom ne commence pas par un tel mot, ou s'il ne reste qu'un mot trop court pour reconnaître un lieu.
+    """
+    words = name.split()
+    dropped = 0
+    while words and (name_key(words[0]) in PLACE_KINDS or name_key(words[0]) in ARTICLES):
         words.pop(0)
-    return "".join(words) or compact_name(name)
+        dropped += 1
+    rest = " ".join(words)
+    return rest if dropped and len(compact_name(rest)) >= 4 else None
 
 
 def street_words(address: str | None) -> list:
@@ -202,28 +253,39 @@ def _rows(cursor) -> list:
 
 
 def known_services(cursor, city: dict, services: tuple) -> list:
-    """Les lieux de ces services déjà en base autour de la commune, pour réutiliser leur ligne."""
+    """
+    Les lieux de ces services déjà en base autour de la commune, pour réutiliser leur ligne. Un lieu resté sans position
+    (masqué, « position introuvable ») n'est autour de rien : il est rendu avec la commune de la ville où un passage l'a
+    créé (le Marché de Morgat, créé depuis Tal ar Groas, se retrouve depuis Crozon). Sans lui, le passage suivant ne le
+    retrouvait pas et en aurait créé un second, le premier restant à relire pour toujours (11 novembre 2026 : 79 services
+    sans position en attente, aucun n'avait encore été recréé).
+    """
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], MAX_KM)
     marks = ", ".join(["%s"] * len(services))
     cursor.execute(f"""
         SELECT DISTINCT p.id, p.name, p.address, p.latitude, p.longitude, p.url, p.masque
         FROM poi p JOIN poi_service ps ON ps.poi_id = p.id JOIN services s ON s.id = ps.service_id
-        WHERE s.category IN ({marks}) AND p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s
-    """, (*services, min_lat, max_lat, min_lon, max_lon))
+        WHERE s.category IN ({marks}) AND (
+            (p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s)
+            OR (p.latitude IS NULL AND EXISTS (SELECT 1 FROM histo_poi h JOIN cities c ON c.id = h.city_id
+                                               WHERE h.poi_id = p.id AND (c.id = %s OR c.insee = %s))))
+    """, (*services, min_lat, max_lat, min_lon, max_lon, city["id"], city.get("insee")))
     return _rows(cursor)
 
 
-def known_sheets(cursor, city: dict, table: str) -> list:
+def known_sheets(cursor, city: dict, table: str, kinds: tuple = ()) -> list:
     """
-    Les lieux qui ont une fiche dans cette table autour de la commune. Un café qui a déjà une fiche restaurant n'est pas
-    enregistré : il s'affiche en restauration (ServiceCategory.shown_elsewhere, souhait de l'utilisatrice, 7 novembre 2026).
+    Les lieux qui ont une fiche dans cette table autour de la commune, de ces catégories seulement s'il y en a. Un café
+    qui a déjà une fiche restaurant n'est pas enregistré : il s'affiche en restauration (ServiceCategory.shown_elsewhere,
+    souhait de l'utilisatrice, 7 novembre 2026). De même une épicerie qui a déjà sa fiche supermarché.
     """
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], MAX_KM)
+    of_kinds = f"AND sheet.categorie IN ({', '.join(['%s'] * len(kinds))})" if kinds else ""
     cursor.execute(f"""
         SELECT p.id, p.name, p.address, p.latitude, p.longitude, p.url, p.masque
         FROM poi p JOIN {table} sheet ON sheet.poi_id = p.id
-        WHERE p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s
-    """, (min_lat, max_lat, min_lon, max_lon))
+        WHERE p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s {of_kinds}
+    """, (min_lat, max_lat, min_lon, max_lon, *kinds))
     return _rows(cursor)
 
 
@@ -234,11 +296,29 @@ def _position(city: dict, address: str | None) -> tuple | None:
     """
     if not address:
         return None
-    for geocode in (geocode_address_ban, geocode_locality_ban):
-        found = geocode(address, city["latitude"], city["longitude"])
+    attempts = [(geocode_address_ban, address), (geocode_locality_ban, address)]
+    # Deux essais de plus (11 novembre 2026, sur les 79 lieux « position introuvable ») : sans le lieu-dit glissé au
+    # milieu de l'adresse, puis en acceptant une rue que la Base Adresse range en lieu-dit.
+    if without_locality(address):
+        attempts.append((geocode_sure_address_ban, without_locality(address)))
+    attempts.append((geocode_way_ban, address))
+    for geocode, text in attempts:
+        found = geocode(text, city["latitude"], city["longitude"])
         if found and haversine_distance_km(city["latitude"], city["longitude"], *found) <= MAX_KM:
             return found
     return None
+
+
+def without_locality(address: str) -> str | None:
+    """
+    L'adresse sans ce qui est glissé entre la rue et la commune : « 10 route de Crozon, Tal ar Groas, 29160 Crozon » ->
+    « 10 route de Crozon, 29160 Crozon ». Avec le lieu-dit, la Base Adresse répond « Tal-Ar-Groas » et le numéro est
+    perdu ; sans lui, elle trouve le numéro (score 0,96). None si l'adresse n'a pas cette forme.
+    """
+    parts = [part.strip() for part in address.split(",")]
+    if len(parts) < 3 or not re.search(r"\b\d{5}\b", parts[-1]):
+        return None
+    return f"{parts[0]}, {parts[-1]}"
 
 
 def _name_rank(name: str, other: str) -> int | None:
@@ -259,15 +339,21 @@ def _name_rank(name: str, other: str) -> int | None:
 
 
 def _in_commune(poi: dict, row: dict, city: dict) -> bool:
-    """Le lieu déjà en base est-il dans la commune du lieu trouvé ? Par le code postal, sinon par la distance au centre."""
+    """
+    Le lieu déjà en base est-il dans la commune du lieu trouvé ? Par le code postal, sinon par la distance au centre.
+    Un lieu resté sans position n'est parmi les candidats que par la ville où un passage l'a créé (known_services) : sans
+    code postal à comparer, c'est elle qui le dit (La Table de Pierre Bourée, sans adresse, à Gevrey-Chambertin).
+    """
     postcodes = [re.search(r"\b\d{5}\b", address or "") for address in (poi.get("address"), row.get("adresse"))]
     if all(postcodes):
         return postcodes[0].group(0) == postcodes[1].group(0)
-    return poi["latitude"] is not None and haversine_distance_km(city["latitude"], city["longitude"],
-                                                                 poi["latitude"], poi["longitude"]) <= COMMUNE_KM
+    if poi["latitude"] is None:
+        return True
+    return haversine_distance_km(city["latitude"], city["longitude"], poi["latitude"], poi["longitude"]) <= COMMUNE_KM
 
 
-def find_in(row: dict, position: tuple | None, city: dict, candidates: list) -> dict | None:
+def find_in(row: dict, position: tuple | None, city: dict, candidates: list, other_names: bool = True,
+            within_km: float = SAME_NAME_KM) -> dict | None:
     """
     Le lieu déjà en base, parmi ces candidats : par son nom, puis par son ancien nom (Mary Stuart, devenu La Petite Folie).
 
@@ -276,21 +362,30 @@ def find_in(row: dict, position: tuple | None, city: dict, candidates: list) -> 
     ainsi été rattaché à celui de Ploudalmézeau, à 10 km, et la Boulangerie des Abers de Porspoder à celle de Portsall.
     Un nom ne retrouve donc un lieu que :
         - à la même adresse (numéro et rue), où qu'on l'ait placé : Le Commerce de Tréméoc, géocodé à 1,8 km de sa ligne ;
-        - ou à moins de SAME_NAME_KM de la position trouvée, le plus proche d'abord : l'adresse géocodée et le point
-          d'OSM ne tombent pas au même endroit (Cléder : 0,51 km pour le même lieu) ;
-        - ou, quand l'adresse n'a pas pu être placée (« Bourg de Lampaul »), s'il est le seul à ce nom dans la commune.
+        - ou à moins de within_km de la position trouvée (SAME_NAME_KM, moins pour une enseigne présente à plusieurs
+          adresses : ServiceCategory.same_name_km), le plus proche d'abord : l'adresse géocodée et le point d'OSM ne
+          tombent pas au même endroit (Cléder : 0,51 km pour le même lieu) ;
+        - ou, quand l'adresse n'a pas pu être placée (« Bourg de Lampaul »), s'il est le seul à ce nom dans la commune ;
+        - ou, quand c'est le lieu en base qui est resté sans position, à ce nom dans la même commune : l'adresse placée
+          aujourd'hui est celle du lieu qui attendait une relecture « position introuvable ».
     L'ancien nom ne vaut qu'avec une position : « Le Triskell », ancien nom du Neuf à Ploudalmézeau, désignait aussi un
     restaurant à 10 km, et Le Neuf a été perdu (7 novembre 2026).
+    Sans résultat, le même lieu sous un autre nom est cherché (_same_place).
+    Sans other_names, seul le nom exact compte : ni nom contenu dans un autre, ni autre nom au même endroit. C'est le cas
+    du nom court, qui a perdu son mot distinctif : « Marché de Carantec », devenu « Carantec », retrouvait « Carantec
+    Pizza », et « Crêperie de Saint-Thé » l'Auberge Saint-Thégonnec (mesure du 11 novembre 2026 sur les services en base).
     """
     for name in (row["nom"], row.get("ancien_nom")):
         if not name:
             continue
-        named = [(rank, poi) for poi in candidates if (rank := _name_rank(name, poi["name"])) is not None]
+        named = [(rank, poi) for poi in candidates
+                 if (rank := _name_rank(name, poi["name"])) is not None and (other_names or rank == 0)]
         at_address = [(rank, 0, poi) for rank, poi in named if same_address(row.get("adresse"), poi.get("address"))]
         if position:
             near = [(rank, haversine_distance_km(*position, poi["latitude"], poi["longitude"]), poi)
                     for rank, poi in named if poi["latitude"] is not None]
-            found = at_address + [match for match in near if match[1] <= SAME_NAME_KM]
+            unplaced = [(rank, 0, poi) for rank, poi in named if poi["latitude"] is None and _in_commune(poi, row, city)]
+            found = at_address + [match for match in near if match[1] <= within_km] + unplaced
         elif name == row["nom"]:
             in_commune = [(rank, 0, poi) for rank, poi in named if _in_commune(poi, row, city)]
             found = at_address or (in_commune if len(in_commune) == 1 else [])
@@ -298,17 +393,22 @@ def find_in(row: dict, position: tuple | None, city: dict, candidates: list) -> 
             found = at_address
         if found:
             return min(found, key=lambda match: match[:2])[2]
-    return _same_place(row, position, candidates)
+    return _same_place(row, position, candidates) if other_names else None
 
 
-def find_known(row: dict, position: tuple | None, city: dict, known: list) -> dict | None:
+def find_known(row: dict, position: tuple | None, city: dict, known: list, within_km: float = SAME_NAME_KM) -> dict | None:
     """
-    Le lieu déjà en base, un lieu visible avant un lieu masqué : deux jumeaux d'OSM dont la règle des doublons a masqué
-    l'un (poi_duplicates_service.py) feraient sinon écarter le lieu. Sans lieu visible, le lieu masqué est rendu : un
-    masquage humain prime.
+    Le lieu déjà en base, sous son nom puis sous son nom court (« Laot » pour « Boulangerie Laot »), un lieu visible avant
+    un lieu masqué : deux jumeaux d'OSM dont la règle des doublons a masqué l'un (poi_duplicates_service.py) feraient sinon
+    écarter le lieu. Sans lieu visible, le lieu masqué est rendu : un masquage humain prime.
     """
+    short = short_name(row["nom"])
     for candidates in ([poi for poi in known if not poi["masque"]], known):
-        poi = find_in(row, position, city, candidates)
+        poi = find_in(row, position, city, candidates, within_km=within_km)
+        if not poi and short:
+            # Le nom court doit être le nom même du lieu en base : il a perdu le mot qui distingue un bar d'une crêperie.
+            poi = find_in({**row, "nom": short, "ancien_nom": None}, position, city, candidates, other_names=False,
+                          within_km=within_km)
         if poi:
             return poi
     return None
@@ -321,13 +421,15 @@ def _same_place(row: dict, position: tuple | None, known: list) -> dict | None:
     Il faut le nom ET le lieu : l'Hostellerie et le Bistrot 1954 partagent une adresse et sont deux tables.
         - même adresse (numéro et rue), et l'un des deux noms contient l'autre ;
         - sans numéro (« Saint-Roch »), le même nom et la même position à SAME_PLACE_KM près.
+    Les mots qui disent ce qu'est le lieu ne doivent pas se contredire (same_name) : un bar et une crêperie « du Port »
+    restent deux lieux, même à 40 m l'un de l'autre.
     """
-    key = place_key(row["nom"])
+    key, kinds = place_key(row["nom"]), place_kinds(row["nom"])
     if len(key) < 4:
         return None
     for poi in known:
-        other = place_key(poi["name"])
-        if len(other) < 4:
+        other, other_kinds = place_key(poi["name"]), place_kinds(poi["name"])
+        if len(other) < 4 or (kinds and other_kinds and not kinds & other_kinds):
             continue
         if (key in other or other in key) and same_address(row.get("adresse"), poi.get("address")):
             return poi
@@ -427,10 +529,21 @@ def _save_season(cursor, poi_id: int, row: dict) -> None:
                    ("confirmee" if months else "probable", json.dumps(months) if months else None, poi_id))
 
 
+def is_verified(row: dict, accepted: list) -> bool:
+    """
+    Le badge « Vérifié », le même pour toutes les catégories : une page acceptée par le code nomme le lieu, ou deux sources
+    indépendantes le disent, le registre à son nom (registre_depuis) et une page qui cite ce nom, même un annuaire
+    (8 novembre 2026, La Meule de Pierre : registre et deux annuaires, sans badge).
+    Avant le 11 novembre 2026, la règle était écrite deux fois, et les restaurants n'avaient pas la seconde moitié.
+    """
+    named = any(page.get("verdict") in AUTO_VERDICTS for page in row.get("pages") or [])
+    return bool(accepted) or (bool(row.get("registre_depuis")) and named)
+
+
 def set_verified(cursor, poi_id: int, verified: bool) -> None:
     """
-    Le badge « Vérifié » suit la preuve (7 novembre 2026) : une page acceptée par le code nomme le lieu, ou un humain l'a
-    validé. Avant, il disait seulement d'où venait la ligne : 1 pour tout POI d'OSM (load_poi.py), 0 pour ceux de l'agent.
+    Le badge « Vérifié » suit la preuve (7 novembre 2026, is_verified), ou la validation d'un humain. Avant, il disait
+    seulement d'où venait la ligne : 1 pour tout POI d'OSM (load_poi.py), 0 pour ceux de l'agent.
     Un lieu gardé par le registre seul reste « Non vérifié » : le registre montre une activité, pas le nom (Leonetti).
     """
     cursor.execute("UPDATE poi SET verifie = %s WHERE id = %s", (int(verified), poi_id))
@@ -485,7 +598,7 @@ def alert_contradicted(row: dict, register: dict | None) -> bool:
     """
     if not row.get("alerte_registre") or is_liquidated(row):
         return False
-    return any(line.get("nom") and place_key(line["nom"]) == place_key(row["nom"])
+    return any(line.get("nom") and same_name(line["nom"], row["nom"])
                and same_address(row.get("adresse"), line.get("adresse"))
                for line in (register or {}).get("actifs", []))
 
@@ -509,7 +622,7 @@ def review_reason(row: dict, located) -> str | None:
         return row["a_relire"]
     if row.get("alerte_registre"):
         return f"registre : {row['alerte_registre']}"
-    return None if located else "position introuvable"
+    return None if located else NO_POSITION
 
 
 # --- L'écriture d'un lieu, de sa fiche et de son signal ---
@@ -558,17 +671,12 @@ def save_validated_sheet(category, cursor, poi_id: int, sheet: dict) -> None:
 def send_to_review(category, cursor, poi_id: int, reason: str, detail: dict) -> bool:
     """
     Le lieu attend une relecture (signal a_confirmer, avec la fiche préparée dans detail). Renvoie True s'il est signalé.
-    S'il avait déjà une fiche, deux comportements selon la catégorie (ServiceCategory.review_keeps_sheet) :
-        - elle reste affichée, et rien n'est signalé (restaurants) ;
-        - elle est retirée : il ne s'affiche plus jusqu'à la décision (7 novembre 2026, Leonetti-Degavre restait visible).
-          Valider la réécrit. Un lieu déjà validé par un humain garde sa fiche, et rien n'est signalé (commerces).
+    S'il avait déjà une fiche, elle est retirée : il ne s'affiche plus jusqu'à la décision (7 novembre 2026,
+    Leonetti-Degavre restait visible). Valider la réécrit. Un lieu déjà validé par un humain garde sa fiche, et rien
+    n'est signalé.
+    La même règle pour toutes les catégories (11 novembre 2026) : avant, un restaurant à relire gardait sa fiche et
+    restait affiché, sans signal.
     """
-    if category.review_keeps_sheet:
-        cursor.execute(f"SELECT 1 FROM {category.sheet_table} WHERE poi_id = %s", (poi_id,))
-        if cursor.fetchone():
-            return False
-        save_signal(cursor, poi_id, category.source, "a_confirmer", {"raison": reason, **detail})
-        return True
     if validated_by_human(cursor, poi_id):
         return False
     cursor.execute(f"DELETE FROM {category.sheet_table} WHERE poi_id = %s", (poi_id,))
@@ -586,7 +694,7 @@ def flag(category, cursor, row: dict, position: tuple | None, city: dict, known:
     À confirmer : sur la ligne du lieu s'il est connu, sinon sur une nouvelle ligne masquée, avec la page acceptée
     (link) : confirmer le lieu l'affiche avec son lien (8 novembre 2026, A Fleur d'Eau s'affichait sans son site).
     """
-    poi = category.find_known(row, position, city, known)
+    poi = find_known(row, position, city, known, category.same_name_km)
     if poi and poi["masque"]:
         return
     poi_id = poi["id"] if poi else create_poi(category, cursor, {**row, "lien": link}, position, city, source_id, masked=True)
@@ -613,10 +721,13 @@ def flag_possible_duplicates(category, cursor, rows: list, saved: dict) -> int:
     return flagged
 
 
-def save_commune(category, city: dict, answer: dict, version: int, model: str) -> dict:
-    """Enregistre une commune en une transaction. Renvoie le nombre de fiches, de lieux à relire et de lieux écartés."""
+def save_commune(category, city: dict, answer: dict, version: int, model: str, trial: bool = False) -> dict:
+    """
+    Enregistre une commune en une transaction. Renvoie le nombre de fiches, de lieux à relire et de lieux écartés.
+    À l'essai (trial), tout est calculé puis annulé : le bilan dit ce qui serait écrit, la base ne change pas.
+    """
     summary = {"fiches": 0, "a_confirmer": 0, "sans_page": 0, "liquidation": 0,
-               **{count: 0 for _, count, _ in category.shown_elsewhere.values()}}
+               **{count: 0 for _, _, count, _ in category.shown_elsewhere.values()}}
     sheets, saved = set(), {}
     label = f"[{category.key}] {city['name']}"
     connection = MySQLUtils.connect()
@@ -624,15 +735,16 @@ def save_commune(category, city: dict, answer: dict, version: int, model: str) -
         cursor = connection.cursor()
         source_id = get_or_create_source(cursor, category.source)
         known = known_services(cursor, city, KNOWN_SERVICES)
-        elsewhere = {kind: known_sheets(cursor, city, table) for kind, (table, _, _) in category.shown_elsewhere.items()}
+        elsewhere = {kind: known_sheets(cursor, city, table, kinds)
+                     for kind, (table, kinds, _, _) in category.shown_elsewhere.items()}
         for row in answer[category.key]:
             position = _position(city, row.get("adresse"))
             if row.get("categorie") in elsewhere and find_known(row, position, city, elsewhere[row["categorie"]]):
-                _, count, why = category.shown_elsewhere[row["categorie"]]
+                _, _, count, why = category.shown_elsewhere[row["categorie"]]
                 category.logger.info(f"{label} : {row['nom']} écarté, {why}")
                 summary[count] += 1
                 continue
-            poi = category.find_known(row, position, city, known)
+            poi = find_known(row, position, city, known, category.same_name_km)
             # Une ligne masquée par un humain ou une décision reste à l'écart ; celle que l'agent a masquée en attendant
             # la relecture se reprend (8 novembre 2026 : A Fleur d'Eau et Episervice restaient bloqués).
             if poi and poi["masque"] and not waiting_for_review(cursor, poi["id"]):
@@ -646,7 +758,8 @@ def save_commune(category, city: dict, answer: dict, version: int, model: str) -
                 category.logger.info(f"{label} : {row['nom']} écarté, ni registre ni page acceptée")
                 summary["sans_page"] += 1
                 continue
-            reason = review_reason(row, position or poi)
+            # Placé : par son adresse, ou par la position du lieu déjà en base. Un lieu connu resté sans position ne l'est pas.
+            reason = review_reason(row, position or (poi and poi["latitude"] is not None))
             if reason:
                 flag(category, cursor, row, position, city, known, source_id, reason,
                      {"indice": row.get("pourquoi"), "page": row.get("lien"),
@@ -666,7 +779,7 @@ def save_commune(category, city: dict, answer: dict, version: int, model: str) -
             _save_season(cursor, poi_id, row)
             save_sheet(category, cursor, poi_id, row, version, model)
             _save_proofs(cursor, poi_id, row["pages"])
-            set_verified(cursor, poi_id, category.is_verified(row, accepted))
+            set_verified(cursor, poi_id, is_verified(row, accepted))
             # Le lieu a maintenant sa fiche : il n'attend plus de relecture.
             cursor.execute("DELETE FROM poi_signals WHERE poi_id = %s AND source = %s AND signal_type = 'a_confirmer'",
                            (poi_id, category.source))
@@ -675,12 +788,15 @@ def save_commune(category, city: dict, answer: dict, version: int, model: str) -
         summary["fiches"] = len(sheets)
         if category.duplicate_signal:
             summary["doublons_possibles"] = flag_possible_duplicates(category, cursor, answer[category.key], saved)
-        connection.commit()
+        if trial:
+            connection.rollback()
+        else:
+            connection.commit()
         cursor.close()
     except Exception:
         connection.rollback()
         raise
     finally:
         MySQLUtils.disconnect(connection)
-    category.logger.info(f"{label} : {summary}")
+    category.logger.info(f"{label} : {'essai, rien écrit : ' if trial else ''}{summary}")
     return summary

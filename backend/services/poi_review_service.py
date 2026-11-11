@@ -566,6 +566,27 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
         INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
         VALUES (%s, %s, %s, %s, %s, NOW(), %s)
     """, (POI, poi_id, action, (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
+    if action == "autre_maps":
+        confirm_located(cursor, poi_id, fields, decided_by)
+
+
+def confirm_located(cursor, poi_id: int, fields: dict, decided_by: str) -> bool:
+    """
+    Un humain vient de donner au lieu un lien Google Maps qui porte sa position (fields). Si le lieu n'attendait une
+    relecture que pour sa « position introuvable », il est confirmé du même geste, sous le nom de cet humain : la position
+    était le seul doute, et pour l'utilisatrice le lien Google Maps est la référence qu'un lieu existe (11 novembre 2026 :
+    4 lieux avaient reçu leur lien et attendaient encore un second clic). Annulable comme toute décision.
+    """
+    if "latitude" not in fields:
+        return False
+    cursor.execute("""SELECT id, detail FROM poi_signals WHERE poi_id = %s AND signal_type = 'a_confirmer'
+                      AND statut = 'a_relire'""", (poi_id,))
+    signals = list(cursor.fetchall())
+    if not signals or any(_detail(signal).get("raison") != service_store.NO_POSITION
+                          or not (_detail(signal).get("fiche") or {}).get("genre") for signal in signals):
+        return False
+    decide_one(cursor, "confirmer", poi_id, "valider_pepite", "position donnée par le lien Google Maps", decided_by, None)
+    return True
 
 
 def decide(tab: str, poi_ids: list, action: str, note: str, decided_by: str, months: list | None = None,

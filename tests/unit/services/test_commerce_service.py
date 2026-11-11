@@ -2,7 +2,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agents import find_commerces
 from agents.find_commerces import COMMERCES
 from agents.find_restaurants import RESTAURANTS
 from services import service_store
@@ -32,7 +31,7 @@ def _save(monkeypatch, row, known=()):
     monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, name: 1)
     monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: list(known))
     monkeypatch.setattr(service_store, "_position", lambda city, address: (48.3, -4.7))
-    monkeypatch.setattr(service_store, "find_known", lambda row, position, city, known: known[0] if known else None)
+    monkeypatch.setattr(service_store, "find_known", lambda row, position, city, known, within_km=1: known[0] if known else None)
     monkeypatch.setattr(service_store, "flag", lambda category, cursor, row, position, city, known, source, reason, detail, link=None:
                         calls["flag"].append((reason, detail)))
     monkeypatch.setattr(service_store, "create_poi", lambda category, cursor, row, position, city, source, masked:
@@ -149,11 +148,11 @@ def test_a_shop_validated_by_a_human_is_verified():
 
 def test_the_short_name_finds_the_osm_line():
     """« Boulangerie Laot » retrouve le service « Laot » d'OSM par son nom court."""
-    assert find_commerces.short_name("Boulangerie Laot") == "Laot"
-    assert find_commerces.short_name("Boulangerie de la Plage") == "Plage"
-    assert find_commerces.short_name("Laot") is None and find_commerces.short_name("Café Ty") is None
+    assert service_store.short_name("Boulangerie Laot") == "Laot"
+    assert service_store.short_name("Boulangerie de la Plage") == "Plage"
+    assert service_store.short_name("Laot") is None and service_store.short_name("Café Ty") is None
     laot = {"id": 92, "name": "Laot", "address": "16 Rue Pen ar Bed, 29217 Plougonvelin", "latitude": 48.34, "longitude": -4.72, "masque": 0}
-    found = find_commerces.find_known({"nom": "Boulangerie Laot", "adresse": "15 rue Pen ar Bed"}, (48.34, -4.72), CITY, [laot])
+    found = service_store.find_known({"nom": "Boulangerie Laot", "adresse": "15 rue Pen ar Bed"}, (48.34, -4.72), CITY, [laot])
     assert found == laot
 
 
@@ -161,7 +160,7 @@ def test_a_cafe_with_a_restaurant_sheet_is_not_saved(monkeypatch):
     """Un café qui a déjà une fiche restaurant n'est pas enregistré."""
     _save(monkeypatch, {"nom": "Le Neuf", "categorie": "cafe", "pages": [TOWN_HALL]})
     table = {"id": 5, "name": "Le Neuf", "address": "1 rue", "latitude": 48.3, "longitude": -4.7, "masque": 0}
-    monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, sheet_table: [table])
+    monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, sheet_table, kinds=(): [] if kinds else [table])
     summary = service_store.save_commune(COMMERCES, CITY, {"commerces": [{"nom": "Le Neuf", "categorie": "cafe", "pages": [TOWN_HALL]}]}, 2, "modele")
     assert summary["deja_restaurant"] == 1 and summary["fiches"] == 0
 
@@ -206,8 +205,8 @@ def test_a_visible_twin_wins_over_a_masked_one():
     masked = {"id": 1, "name": "Boulangerie Lemaire", "address": "1 rue", "latitude": 48.40, "longitude": -4.00, "masque": 1}
     visible = {**masked, "id": 2, "latitude": 48.40001, "masque": 0}
     row = {"nom": "Boulangerie Lemaire", "adresse": "1 rue"}
-    assert find_commerces.find_known(row, (48.40, -4.00), CITY, [masked, visible])["id"] == 2
-    assert find_commerces.find_known(row, (48.40, -4.00), CITY, [masked])["id"] == 1
+    assert service_store.find_known(row, (48.40, -4.00), CITY, [masked, visible])["id"] == 2
+    assert service_store.find_known(row, (48.40, -4.00), CITY, [masked])["id"] == 1
 
 
 def test_the_register_and_a_page_naming_the_shop_make_it_verified(monkeypatch):
@@ -267,7 +266,7 @@ def test_a_place_to_confirm_keeps_its_accepted_page(monkeypatch):
     monkeypatch.setattr(service_store.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
     monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, name: 1)
     monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: [])
-    monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, sheet_table: [])
+    monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, sheet_table, kinds=(): [])
     monkeypatch.setattr(service_store, "_position", lambda city, address: None)
     monkeypatch.setattr(service_store, "send_to_review", lambda category, cursor, poi_id, reason, detail: True)
     monkeypatch.setattr(service_store, "create_poi", lambda category, cursor, row, position, city, source, masked: linked.append((row["lien"], masked)) or 9)

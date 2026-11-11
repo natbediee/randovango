@@ -31,7 +31,7 @@ from urllib.parse import urlparse
 
 from agents.find_service_links import commune_of, control_page, read_page
 from services import poi_review_service as review
-from services.commerce_selection_service import CAFE, CAFE_SERVICES, COMMERCE_SERVICES
+from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB
 from utils.db_utils import MySQLUtils
 from utils.logger_util import LoggerUtil
 
@@ -127,10 +127,13 @@ def postcode_of(address: str | None) -> str | None:
 
 
 # Les chaînes d'agents, comme à l'étape 4 (step4.keep_checked) : leurs services, et les fiches qui les prouvent.
+# Les fiches de la table commerces qui ont leur onglet (cafés, supermarchés) font chacune une chaîne, avec leurs seules fiches.
+SHOP_SHEETS = "SELECT p.id, p.address FROM poi p JOIN commerces c ON c.poi_id = p.id WHERE c.categorie"
+OWN_TAB_SHEETS = ", ".join(f"'{sheet}'" for sheet in OWN_TAB)
 CHAINS = (
     ((RESTAURANT,), "SELECT p.id, p.address FROM poi p JOIN restaurants r ON r.poi_id = p.id"),
-    (COMMERCE_SERVICES, f"SELECT p.id, p.address FROM poi p JOIN commerces c ON c.poi_id = p.id WHERE c.categorie <> '{CAFE}'"),
-    (CAFE_SERVICES, f"SELECT p.id, p.address FROM poi p JOIN commerces c ON c.poi_id = p.id WHERE c.categorie = '{CAFE}'"),
+    (COMMERCE_SERVICES, f"{SHOP_SHEETS} NOT IN ({OWN_TAB_SHEETS})"),
+    *((services, f"{SHOP_SHEETS} = '{sheet}'") for sheet, services in OWN_TAB.items()),
 )
 
 

@@ -58,6 +58,10 @@ AGENTS = {
     "find_commerces": AgentConfig(RAPIDE, "medium", 900, web=True),
     "analyze_commerces": AgentConfig(RAPIDE, "medium", 900, web=True),
     "prove_commerces": AgentConfig(RAPIDE, "medium", 300, web=True),
+    # Supermarchés (11 novembre 2026) : les réglages des commerces, à revoir après le pilote. Aucun passage lancé.
+    "find_supermarches": AgentConfig(RAPIDE, "medium", 900, web=True),
+    "analyze_supermarches": AgentConfig(RAPIDE, "medium", 900, web=True),
+    "prove_supermarches": AgentConfig(RAPIDE, "medium", 300, web=True),
     # Opus plutôt que Sonnet : comparaison sur 10 spots (rapport/comparaison_modeles.md).
     "harmonize_spots": AgentConfig(QUALITE, "low", 180),
     "dedupe_spots": AgentConfig(QUALITE, "low", 180),

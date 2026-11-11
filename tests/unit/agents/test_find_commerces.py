@@ -3,7 +3,8 @@ import json
 import pytest
 
 from agents import find_commerces, find_service_links, service_chain
-from agents.find_commerces import COMMERCES, in_register, place_key, registered_since
+from agents.find_commerces import COMMERCES, in_register, registered_since
+from services.service_store import same_name
 
 
 def merge_answers(*answers):
@@ -36,8 +37,21 @@ def _answer(shops=(), closed=()):
 
 def test_the_shop_word_does_not_make_two_places():
     """« Boulangerie Le Gall » et « Le Gall » sont le même commerce."""
-    assert place_key("Boulangerie Le Gall") == place_key("Le Gall")
-    assert place_key("Marché de Plougonvelin") == place_key("Plougonvelin")
+    assert same_name("Boulangerie Le Gall", "Le Gall")
+    assert same_name("Marché de Plougonvelin", "Plougonvelin")
+
+
+def test_two_shops_of_the_same_village_stay_two():
+    """« Marché de Plougonvelin » et « L'épicerie de Plougonvelin » restent deux commerces : avant, l'un des deux était perdu."""
+    merged = merge_answers(_answer(["Marché de Plougonvelin", "L'épicerie de Plougonvelin"]), _answer(["Épicerie de Plougonvelin"]))
+    assert [row["nom"] for row in merged["commerces"]] == ["Marché de Plougonvelin", "L'épicerie de Plougonvelin"]
+    assert len(merged["commerces"][1]["pages_vues"]) == 4
+
+
+def test_a_register_line_without_the_shop_words_names_the_cafe():
+    """« Bar Crêperie La Grotte » (Huelgoat) est au registre sous « LA GROTTE », débit de boissons."""
+    register = {"actifs": [{"nom": "LA GROTTE", "adresse": "27 RUE DES CENDRES 29690 HUELGOAT", "activite": "56.30Z"}]}
+    assert in_register({"nom": "Bar Crêperie La Grotte", "categorie": "cafe"}, register)
 
 
 def test_merge_keeps_each_shop_once_with_the_pages_of_every_search():
@@ -248,3 +262,62 @@ def test_a_hamlet_is_searched_as_its_commune(monkeypatch, tmp_path):
     service_chain.search_commune(COMMERCES, {**CITY, "name": "Trézien", "commune": "Plouarzel"})
     assert agent.messages and all(message.startswith("COMMUNE : Plouarzel") for message in agent.messages)
     assert _trace(tmp_path)["commune"] == "Plouarzel"
+
+
+def test_a_register_line_with_a_longer_name_at_the_same_address_proves_the_shop():
+    """« Naima » est prouvé par NAIMA SUPERMARKET au même numéro (Brest) ; un autre nom à l'adresse, ou le même à une autre, ne prouve rien."""
+    register = {"actifs": [{"nom": "NAIMA SUPERMARKET", "adresse": "12 PLACE NAPOLEON III 29200 BREST", "activite": "47.11B"},
+                           {"nom": "LA BOUCHERIE DU COIN", "adresse": "1 RUE ROBESPIERRE 29200 BREST", "activite": "47.22Z"}]}
+    naima = {"nom": "Naima", "categorie": "epicerie", "genre": "épicerie", "adresse": "12 place Napoléon III, 29200 Brest", "pages": []}
+    assert find_commerces.register_is_proof(naima, register)
+    assert not find_commerces.register_is_proof({**naima, "adresse": "3 rue de Siam, 29200 Brest"}, register)
+    rouihem = {"nom": "Rouihem", "categorie": "artisan", "genre": "boucherie", "adresse": "1 rue Robespierre, 29200 Brest", "pages": []}
+    assert not find_commerces.register_is_proof(rouihem, register)
+    assert find_commerces.register_only_reason(naima, register, "Brest") is None
+
+
+# --- Rejouer les règles d'aujourd'hui sur un fichier déjà payé ---
+
+BREST_REGISTER = {"actifs": [{"nom": "NAIMA SUPERMARKET", "adresse": "12 PLACE NAPOLEON III 29200 BREST", "activite": "47.11B"}]}
+NAIMA = {"nom": "Naima", "categorie": "epicerie", "genre": "épicerie", "adresse": "12 place Napoléon III, 29200 Brest", "pages": []}
+
+
+def _replay(*rows, searched=()):
+    trace = {"commune": "Brest", "version": 2, "registre": BREST_REGISTER, "final": list(rows),
+             "preuves": [{"nom": name, "preuve_url": None} for name in searched]}
+    answer = service_chain.replay_rules(COMMERCES, trace)
+    return {row["nom"]: row.get("a_relire") for row in answer["commerces"]}, answer["preuve_a_chercher"]
+
+
+def test_a_replay_takes_out_of_review_what_a_new_rule_proves():
+    """Rejoué, « Naima » envoyé en relecture « registre seul » n'y part plus : NAIMA SUPERMARKET au même numéro le prouve (Brest)."""
+    reviews, missing = _replay({**NAIMA, "a_relire": find_commerces.REGISTER_ONLY + " : NAIMA SUPERMARKET"})
+    assert reviews == {"Naima": None} and missing == []
+
+
+def test_a_replay_keeps_a_proof_that_timed_out():
+    """Rejouée, une preuve restée sans réponse à temps reste à relire : aucune règle ne peut la trancher."""
+    reviews, _ = _replay({**NAIMA, "nom": "Ty Bio", "adresse": None, "a_relire": service_chain.PROOF_TIMED_OUT})
+    assert reviews == {"Ty Bio": service_chain.PROOF_TIMED_OUT}
+
+
+def test_a_replay_sets_aside_a_place_that_would_need_a_paid_proof_search():
+    """Rejoué, un commerce sans page que le registre ne prouve pas demanderait un appel payant : il est rendu à part, pas enregistré."""
+    reviews, missing = _replay({**NAIMA}, {**NAIMA, "nom": "Ty Bio", "adresse": "3 rue de Siam, 29200 Brest"})
+    assert list(reviews) == ["Naima"] and missing == ["Ty Bio"]
+
+
+def test_a_replay_does_not_ask_again_for_a_proof_already_searched():
+    """Rejoué, un commerce dont la preuve a déjà été cherchée sans succès lors du passage n'est pas mis à part : il suit les règles d'aujourd'hui."""
+    reviews, missing = _replay({**NAIMA, "nom": "Ty Bio", "adresse": "3 rue de Siam, 29200 Brest"}, searched=["Ty Bio"])
+    assert list(reviews) == ["Ty Bio"] and missing == []
+
+
+def test_the_latest_complete_file_of_a_commune_is_replayed(monkeypatch, tmp_path):
+    """Le rejeu prend, par commune, le fichier le plus récent allé au bout : un passage interrompu (sans « final ») est ignoré."""
+    monkeypatch.setenv("RANDOVANGO_LOG_DIR", str(tmp_path))
+    COMMERCES.trace_dir.mkdir(parents=True)
+    for stamp, trace in (("20261107_200145", {"final": [{"nom": "ancien"}]}), ("20261108_101500", {"final": [{"nom": "récent"}]}),
+                         ("20261109_090000", {"recherches": []})):
+        (COMMERCES.trace_dir / f"Le_Conquet_{stamp}.json").write_text(json.dumps({"commune": "Le Conquet", "version": 2, **trace}))
+    assert service_chain.latest_traces(COMMERCES)["Le Conquet"]["final"] == [{"nom": "récent"}]

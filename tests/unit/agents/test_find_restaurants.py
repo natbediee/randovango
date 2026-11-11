@@ -128,6 +128,12 @@ def test_a_street_without_number_or_a_hotel_shows_no_restaurant():
     assert not find_restaurants.in_register({"nom": "Autre", "adresse": None}, None)
 
 
+def test_a_cafe_and_a_creperie_of_the_same_port_stay_two():
+    """« Le Café du Port » et « Crêperie du Port » (Sainte-Marine) sont deux tables ; « Bzzzt » et « Bzzzt Café », une seule."""
+    merged = merge_answers(_answer(["Le Café du Port", "Bzzzt"]), _answer(["Crêperie du Port", "Bzzzt Café"]))
+    assert _names(merged) == ["Le Café du Port", "Bzzzt", "Crêperie du Port"]
+
+
 def test_a_place_only_said_closed_is_not_retained():
     """Un lieu qu'une recherche dit seulement fermé n'entre pas dans la liste."""
     assert _names(merge_answers(_answer(["Spiaggia"]), _answer(closed=["La Marina"]))) == ["Spiaggia"]
@@ -342,7 +348,7 @@ def test_a_big_city_is_searched_zone_by_zone_and_keeps_each_place_once(monkeypat
     """Une grande ville est cherchée zone par zone, chaque recherche ne lit que les lignes de sa zone, et un restaurant vu de deux zones n'est gardé qu'une fois."""
     agent = _ZoneAgent()
     _chain(monkeypatch, tmp_path, agent, registered="NOUS")
-    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(service_chain.ZONE_FROM)]],
+    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
            "enseignes_fermees": [], "radies": []}
     monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes: big)
     monkeypatch.setattr(service_store, "commune_spots", lambda name: [
@@ -436,7 +442,7 @@ def test_the_steps_of_a_big_city_name_their_zone(monkeypatch, tmp_path):
     """Dans une grande ville, l'étape de chaque appel nomme sa zone."""
     agent = _TracedAgent()
     _chain(monkeypatch, tmp_path, agent, registered="NOUS")
-    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(service_chain.ZONE_FROM)]],
+    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
            "enseignes_fermees": [], "radies": []}
     monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes: big)
     monkeypatch.setattr(service_store, "commune_spots", lambda name: [
