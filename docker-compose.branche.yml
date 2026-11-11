@@ -1,0 +1,41 @@
+# Un backend de test pour une branche, branché sur les bases communes (MySQL, Mongo) du projet principal.
+# Chaque chantier a son worktree ; ce fichier y lance le backend de la branche, à côté du backend principal,
+# sans toucher aux conteneurs de docker-compose.yml. Voir « Tester une branche » dans le README.
+#
+#   BRANCHE=carburants PORT=8001 docker compose -f docker-compose.branche.yml up -d
+#   BRANCHE=carburants docker compose -f docker-compose.branche.yml down     # arrête ce conteneur seulement
+#
+# Toujours avec -f : sans lui, docker compose lirait docker-compose.yml, dont les noms de conteneurs
+# (fastapi_backend, db_randovango...) sont ceux du projet principal.
+name: randovango-${BRANCHE:?indiquer la branche, par exemple BRANCHE=carburants}
+
+services:
+  backend_branche:
+    container_name: fastapi_backend_${BRANCHE}
+    # L'image déjà construite du backend principal : rien n'est reconstruit, le code vient du volume ci-dessous.
+    image: randovango-backend
+    init: true
+    environment:
+      # Autre chose que « dev » : main.py ne lance pas db_init au démarrage. Les tables de la branche
+      # sont créées à la main, au moment choisi (docker exec ... python db_init/db_randovango.py).
+      ENV: branche
+    volumes:
+      - ./backend:/usr/src/app
+      # Un seul .env pour tout le projet : celui du dossier principal, rangé à côté (~/Dev/randovango).
+      - ../randovango/.env:/usr/src/.env:ro
+      # Dossiers propres au worktree : les journaux et la base SQLite des comptes ne se mêlent pas à ceux du principal.
+      - ./storage:/usr/src/storage
+      - ./logs:/usr/src/logs
+      - ./data:/usr/src/data
+    ports:
+      # Le backend principal garde le 8000.
+      - "127.0.0.1:${PORT:-8001}:8000"
+    networks:
+      - randovango
+    # Pas de « restart: always » : arrêté, il ne revient pas tout seul au redémarrage de Docker.
+
+networks:
+  # Le réseau du projet principal, où MySQL s'appelle db_randovango et Mongo mongo_randovango (voir .env).
+  randovango:
+    external: true
+    name: randovango_randovango
