@@ -41,7 +41,7 @@ from datetime import date
 
 from agents.find_service_links import check_links_of, citation_found
 from agents.llm_config import make_llm_service
-from agents.llm_service import LLMTimeout
+from agents.llm_service import LLMTimeout, mesure_objet
 from agents.pepite_common import EXCLUDED_SITES_PROMPT, is_excluded_site
 from services import restaurant_service
 from utils.geo_utils import city_commune
@@ -208,7 +208,8 @@ def analyze_commune(city: dict, restaurants: list, register: dict | None = None,
     if register:
         message += f"\nREGISTRE : {json.dumps(register, ensure_ascii=False)}"
     service = make_llm_service("analyze_restaurants")
-    answer = service.complete_json(SYSTEM_PROMPT, message, SCHEMA)
+    with mesure_objet("commune", city.get("id")):
+        answer = service.complete_json(SYSTEM_PROMPT, message, SCHEMA)
     fill_addresses(restaurants, answer)
     kept, closed, duplicates = apply_analysis(restaurants, answer)
     no_table = [row["nom"] for row in kept if row["pas_un_restaurant"]]
@@ -227,7 +228,8 @@ def _ask_proofs(city: dict, batch: list) -> list:
     places = [{"numero": number, "nom": row["nom"], "adresse": row.get("adresse"), "genre": row.get("genre")}
               for number, row in enumerate(batch, 1)]
     service = make_llm_service("prove_restaurants")
-    answer = service.complete_json(PROOF_PROMPT, f"COMMUNE : {city_commune(city)}\nLIEUX : {json.dumps(places, ensure_ascii=False)}", PROOF_SCHEMA)
+    with mesure_objet("commune", city.get("id")):
+        answer = service.complete_json(PROOF_PROMPT, f"COMMUNE : {city_commune(city)}\nLIEUX : {json.dumps(places, ensure_ascii=False)}", PROOF_SCHEMA)
     by_number = {place["numero"]: place for place in answer["lieux"]}
     run = service.last_run
     logger.info(f"[restaurants] {city['name']} (preuves) : {[row['nom'] for row in batch]},"

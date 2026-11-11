@@ -64,6 +64,7 @@ import threading
 import unicodedata
 from datetime import date, datetime, timedelta
 
+from agents.llm_service import mesure_objet
 from services.map_service import fetch_hike_trace
 from utils.db_utils import MySQLUtils
 from utils.display_utils import (HIKE_START_H, pepite_news_text, pepite_section, pepite_day_texts, pepite_display, pepite_nothing_texts, spot_name_label,
@@ -820,11 +821,13 @@ def _search_places(cursor, city: dict) -> str:
     if _places_covered(cursor, city):
         return "couverte"
     zone = _city_context(cursor, city)
-    if search_and_store(cursor, zone, "lieux") is None:
-        return "echec"
-    # Puis la position exacte des lieux trouvés que le code n'a pas su recaler.
-    # Un échec ici n'empêche pas la ville d'être faite : relocate_missing reprendra.
-    relocate_zone(cursor, zone)
+    # Les appels de discover_places et locate_pepites sont mesurés au nom de cette commune (llm_calls).
+    with mesure_objet("commune", city["id"]):
+        if search_and_store(cursor, zone, "lieux") is None:
+            return "echec"
+        # Puis la position exacte des lieux trouvés que le code n'a pas su recaler.
+        # Un échec ici n'empêche pas la ville d'être faite : relocate_missing reprendra.
+        relocate_zone(cursor, zone)
     return "faite"
 
 

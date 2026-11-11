@@ -13,3 +13,20 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def llm_calls(monkeypatch):
+    """
+    Aucun test n'écrit dans llm_calls : chaque mesure d'appel d'agent est gardée dans
+    cette liste, que les tests peuvent relire. La vraie écriture est testée à part
+    (tests/unit/agents/test_llm_calls.py).
+    """
+    from agents import llm_service
+
+    recorded = []
+    monkeypatch.setattr(llm_service, "record_call", recorded.append)
+    return recorded

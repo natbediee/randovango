@@ -523,6 +523,35 @@ def init_database():
                 INDEX idx_decisions_objet (objet_type, objet_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
+            # 19. llm_calls : une ligne par appel d'agent (agents/llm_service.py), réussi ou non.
+            # cost_usd est le prix équivalent API ; objet_type vaut commune, spot ou plan, comme objet_id
+            # renvoie à cities, spots ou trip_plans (sans clé étrangère : une mesure ne bloque aucune suppression).
+            """
+            CREATE TABLE IF NOT EXISTS llm_calls (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                called_at DATETIME NOT NULL,
+                agent VARCHAR(50),
+                engine VARCHAR(20) NOT NULL,
+                model VARCHAR(100) NOT NULL,
+                effort VARCHAR(10),
+                duration_ms INT,
+                input_tokens INT,
+                output_tokens INT,
+                cache_read_tokens INT,
+                cache_write_tokens INT,
+                web_searches INT,
+                cost_usd DECIMAL(10,4),
+                turns INT,
+                tools JSON,
+                status VARCHAR(10) NOT NULL,
+                error VARCHAR(255),
+                objet_type VARCHAR(20),
+                objet_id INT,
+                INDEX idx_llm_calls_date (called_at),
+                INDEX idx_llm_calls_agent (agent),
+                INDEX idx_llm_calls_objet (objet_type, objet_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
         ]
         ("- Création des tables :")
         user_cnx = MySQLUtils.connect()

@@ -46,7 +46,7 @@ import json
 from datetime import date
 
 from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, engine, make_llm_service
-from agents.llm_service import LLMUnavailable
+from agents.llm_service import LLMUnavailable, mesure_objet
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
@@ -312,7 +312,8 @@ def harmonize_one(service, spot: dict) -> dict:
     `service` est soit un LLMService (API), soit un ClaudeCodeLLMService
     (abonnement) : les deux ont la même méthode `complete_json`.
     """
-    return service.complete_json(SYSTEM_PROMPT, build_user_message(spot), SPOT_SCHEMA)
+    with mesure_objet("spot", spot.get("id")):
+        return service.complete_json(SYSTEM_PROMPT, build_user_message(spot), SPOT_SCHEMA)
 
 
 # =============================================================================

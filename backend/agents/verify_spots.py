@@ -41,7 +41,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from agents.llm_config import make_llm_service
-from agents.llm_service import LLMUnavailable
+from agents.llm_service import LLMUnavailable, mesure_objet
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, spot_name_label
 from utils.logger_util import LoggerUtil
@@ -406,7 +406,8 @@ def run(limit: int = None, spot_ids: list = None, only_new: bool = False) -> Non
         for number, spot in enumerate(spots):
             read_recent_reviews(driver, wait, spot, first_page=number == 0)
             try:
-                payload = service.complete_json(SYSTEM_PROMPT, build_user_message(spot), VERIFY_SCHEMA)
+                with mesure_objet("spot", spot.get("id")):
+                    payload = service.complete_json(SYSTEM_PROMPT, build_user_message(spot), VERIFY_SCHEMA)
             except (LLMUnavailable, json.JSONDecodeError) as error:
                 counts["erreur"] += 1
                 logger.warning(f"[verify] #{spot['id']} non vérifié, retenté au prochain lancement : {error}")

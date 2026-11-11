@@ -32,7 +32,7 @@ import argparse
 import json
 
 from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, make_llm_service
-from agents.llm_service import LLMUnavailable
+from agents.llm_service import LLMUnavailable, mesure_objet
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
@@ -270,9 +270,10 @@ def arbitrate(service, candidates: list) -> list:
         )
 
         try:
-            verdict = service.complete_json(
-                SYSTEM_PROMPT, build_user_prompt(first, second, distance), VERDICT_SCHEMA
-            )
+            with mesure_objet("spot", first.get("id")):
+                verdict = service.complete_json(
+                    SYSTEM_PROMPT, build_user_prompt(first, second, distance), VERDICT_SCHEMA
+                )
         except (LLMUnavailable, json.JSONDecodeError) as error:
             logger.warning(f"[dedupe] {pair_label} -> NON ARBITRÉE : {error}")
             continue

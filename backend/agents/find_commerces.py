@@ -36,6 +36,7 @@ from agents.find_restaurants import (PAGE_TYPES, YEAR_SEARCHES, ZONE_KM, ZONE_LI
                                      commune_zones, control_row, found_pages, is_big_city)
 from agents.find_service_links import AUTO_VERDICTS
 from agents.llm_config import make_llm_service, model_of
+from agents.llm_service import mesure_objet
 from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from etl.extract import api_registre
 from services import commerce_service, restaurant_service
@@ -287,7 +288,8 @@ def register_only_reason(row: dict, register: dict | None, commune: str) -> str 
 
 def _ask(city: dict, label: str, prompt: str, message: str) -> dict:
     service = make_llm_service("find_commerces")
-    answer = service.complete_json(prompt, message, SCHEMA)
+    with mesure_objet("commune", city.get("id")):
+        answer = service.complete_json(prompt, message, SCHEMA)
     for rows in answer.values():
         for row in rows:
             row["nom"] = clean_name(row["nom"])

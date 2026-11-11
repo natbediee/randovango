@@ -22,6 +22,7 @@ jour déjà planifié (le spot doit être choisi) :
 """
 import argparse
 
+from agents.llm_service import mesure_objet
 from agents.pepite_common import COMMON_RULES, known_ideas_lines, pepite_schema, run_search, search_header
 from services import pepite_service
 
@@ -87,8 +88,9 @@ def search_agenda(day: dict, known_names: list) -> tuple:
     version du prompt). Lève LLMUnavailable si l'agent n'a pas pu répondre.
     """
     label = f"agenda {day.get('spot_name') or day.get('city_name')} du {day['day_date']} au {day['trip_end']}"
-    ideas, model = run_search(label, SYSTEM_PROMPT, build_user_message(day, known_names),
-                              pepite_schema(CATEGORIES, MAX_PROPOSALS), agent="find_pepites")
+    with mesure_objet("plan", day.get("plan_id")):
+        ideas, model = run_search(label, SYSTEM_PROMPT, build_user_message(day, known_names),
+                                  pepite_schema(CATEGORIES, MAX_PROPOSALS), agent="find_pepites")
     return ideas, model, AGENDA_PROMPT_VERSION
 
 
