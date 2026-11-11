@@ -48,7 +48,6 @@ class ServiceCategory:
     sheet_fields: tuple         # les champs gardés dans un signal à confirmer, pour écrire la fiche si un humain valide
     human_sheet_fields: tuple   # ceux qu'un humain peut corriger : un nouveau passage les laisse tels quels
     detail_column: tuple        # (champ propre à cette fiche, longueur en base)
-    known_services: tuple       # les services où chercher la ligne d'un lieu déjà en base
     new_service: Callable       # (lieu) -> le service donné à un lieu créé
     find_known: Callable        # (lieu, position, ville, lieux connus) -> la ligne du lieu déjà en base, ou None
     is_verified: Callable       # (lieu, pages acceptées) -> a-t-il le badge « Vérifié » ?
@@ -62,6 +61,7 @@ class ServiceCategory:
     review_after_proof: Callable = no_review    # (lieu, registre, commune) -> raison d'une relecture, les preuves cherchées
     review_keeps_sheet: bool = False            # un lieu à relire qui a déjà une fiche la garde-t-il, sans signal ?
     shown_elsewhere: dict = field(default_factory=dict)     # {catégorie : (table d'une autre chaîne, compteur du bilan, raison)}
+    takes_over: dict = field(default_factory=dict)          # {table d'une autre chaîne : catégories dont la fiche est remplacée}
     duplicate_signal: str | None = None         # le signal des doublons vus par l'analyste et refusés par le code
 
     @property

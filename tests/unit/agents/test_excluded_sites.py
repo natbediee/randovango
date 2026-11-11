@@ -20,6 +20,7 @@ from agents.pepite_common import EXCLUDED_SITES_PROMPT, is_excluded_site
     "www.TripAdvisor.com/x",
 ])
 def test_excluded_sites_are_recognised(url):
+    """Les sites exclus (TripAdvisor, Michelin, Google Maps, Pages Jaunes…) sont reconnus à leur domaine."""
     assert is_excluded_site(url)
 
 
@@ -31,6 +32,7 @@ def test_excluded_sites_are_recognised(url):
     "https://www.example.fr/tripadvisor",
 ])
 def test_other_sites_are_not_excluded(url):
+    """Un office de tourisme, le site du lieu ou un nom qui ressemble à celui d'un site exclu ne sont pas exclus."""
     assert not is_excluded_site(url)
 
 
@@ -39,6 +41,7 @@ def _no_network(*args, **kwargs):
 
 
 def test_code_never_opens_an_excluded_site(monkeypatch):
+    """Le code n'ouvre jamais un site exclu : ni pour lire la page, ni pour tester le lien, ni pour chercher une citation."""
     monkeypatch.setattr(find_service_links.requests, "get", _no_network)
     monkeypatch.setattr(pepite_common.requests, "get", _no_network)
     url = "https://www.tripadvisor.fr/x"
@@ -48,6 +51,7 @@ def test_code_never_opens_an_excluded_site(monkeypatch):
 
 
 def test_excluded_link_is_refused_as_proof(monkeypatch):
+    """Un lien vers un site exclu est refusé comme preuve, sans être ouvert, et n'est jamais le lien gardé."""
     monkeypatch.setattr(find_service_links.requests, "get", _no_network)
     place = {"name": "Riboul", "commune": "Plougonvelin", "cp": "29217", "telephone": None}
     row = {"liens": [{"url": "https://guide.michelin.com/x", "type_page": "guide"}]}
@@ -57,6 +61,7 @@ def test_excluded_link_is_refused_as_proof(monkeypatch):
 
 
 def test_every_restaurant_prompt_names_the_excluded_sites():
+    """Les consignes des trois agents des restaurants, et celles des liens, nomment toutes les sites exclus."""
     for prompt in (find_restaurants.SYSTEM_PROMPT, find_restaurants.SEASON_PROMPT, find_restaurants.ANALYSIS_PROMPT,
                    find_restaurants.PROOF_PROMPT, find_service_links.SYSTEM_PROMPT):
         assert EXCLUDED_SITES_PROMPT in prompt

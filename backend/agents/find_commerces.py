@@ -54,8 +54,7 @@ from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from agents.service_category import ServiceCategory
 from agents.service_chain import MAX_PLACES, YEAR_SEARCHES
 from services import service_store
-from services.commerce_selection_service import (CAFE, CAFE_SERVICES, COMMERCE_SERVICES, MARKET, PRODUCER, SHOP_CATEGORIES,
-                                                 SHOP_SERVICES)
+from services.commerce_selection_service import CAFE, MARKET, PRODUCER, SHOP_CATEGORIES, SHOP_SERVICES
 from services.pepite_service import name_key
 from services.service_store import same_address
 
@@ -82,8 +81,6 @@ REGISTER_ONLY = "registre seul : aucune page ne cite ce nom"
 # des bouchers, poissonniers et fromagers.
 FARM_WORDS = ("ferme", "producteur", "productrice", "maraîch", "maraich", "exploitation", "élevage", "eleveur", "éleveur",
               "verger", "potager", "cueillette")
-# Les services OSM de l'onglet « commerce » : on y cherche la ligne d'un commerce déjà connu. Pas les supermarchés.
-KNOWN_SERVICES = COMMERCE_SERVICES + CAFE_SERVICES
 SHOP_WORDS = ("boulangerie", "patisserie", "epicerie", "superette", "marche", "ferme", "fromagerie", "boucherie",
               "poissonnerie", "cave", "cafe", "bar")
 
@@ -251,16 +248,14 @@ def short_name(name: str) -> str | None:
 
 def find_known(row: dict, position: tuple | None, city: dict, known: list) -> dict | None:
     """
-    La ligne du lieu sous son nom, sinon sous son nom court (« Laot » pour « Boulangerie Laot »). Une ligne visible passe
-    avant une ligne masquée : deux jumeaux d'OSM dont la règle des doublons a masqué l'un (poi_duplicates_service.py)
-    feraient sinon écarter le commerce. Sans ligne visible, la ligne masquée est rendue : un masquage humain prime.
+    Le lieu déjà en base sous son nom, sinon sous son nom court (« Laot » pour « Boulangerie Laot »), un lieu visible avant
+    un lieu masqué (service_store.find_known).
     """
-    visible = [poi for poi in known if not poi["masque"]]
-    for candidates in (visible, known):
-        poi = service_store.find_known(row, position, city, candidates)
-        short = short_name(row["nom"])
+    short = short_name(row["nom"])
+    for candidates in ([poi for poi in known if not poi["masque"]], known):
+        poi = service_store.find_in(row, position, city, candidates)
         if not poi and short:
-            poi = service_store.find_known({**row, "nom": short, "ancien_nom": None}, position, city, candidates)
+            poi = service_store.find_in({**row, "nom": short, "ancien_nom": None}, position, city, candidates)
         if poi:
             return poi
     return None
@@ -409,7 +404,6 @@ COMMERCES = ServiceCategory(
     sheet_fields=("genre", "pourquoi", "jours", "ancien_nom", "categorie", "registre_depuis"),
     human_sheet_fields=("genre", "pourquoi", "jours", "categorie"),
     detail_column=("jours", 150),
-    known_services=KNOWN_SERVICES,
     new_service=new_service,
     find_known=find_known,
     is_verified=is_verified,

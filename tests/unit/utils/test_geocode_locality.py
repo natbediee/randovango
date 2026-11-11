@@ -18,6 +18,7 @@ def _feature(kind, score, longitude=-4.7207, latitude=48.3521):
 
 
 def test_a_hamlet_is_found_without_the_word_lieu_dit(monkeypatch):
+    """Un lieu-dit est cherché sans le mot « Lieu-dit », qui fait chuter le score de la Base Adresse (Le Lannou, à Plougonvelin)."""
     asked = []
     monkeypatch.setattr(geo_utils.requests, "get", lambda url, params, timeout: asked.append(params) or _Response([_feature("locality", 0.95)]))
     assert geo_utils.geocode_locality_ban("Lieu-dit Le Lannou, 29217 Plougonvelin") == (48.3521, -4.7207)
@@ -25,11 +26,13 @@ def test_a_hamlet_is_found_without_the_word_lieu_dit(monkeypatch):
 
 
 def test_a_weak_hamlet_is_refused(monkeypatch):
+    """Un lieu-dit reconnu avec un score trop faible est refusé (Kerhor, à Pluguffan)."""
     monkeypatch.setattr(geo_utils.requests, "get", lambda url, params, timeout: _Response([_feature("locality", 0.6)]))
     assert geo_utils.geocode_locality_ban("Kerhor, 29700 Pluguffan") is None
 
 
 def test_the_place_takes_the_hamlet_when_the_street_is_unknown(monkeypatch):
+    """Sans rue reconnue, le service prend la position de son lieu-dit (Le Lannou, à Plougonvelin), sauf s'il est loin de la commune."""
     monkeypatch.setattr(service_store, "geocode_address_ban", lambda address, latitude, longitude: None)
     monkeypatch.setattr(service_store, "geocode_locality_ban", lambda address, latitude, longitude: (48.3521, -4.7207))
     city = {"latitude": 48.3378, "longitude": -4.70183}

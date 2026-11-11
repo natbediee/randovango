@@ -90,7 +90,7 @@ BAR_ACTIVITY = "56.30"
 # Ploudalmézeau, une pépite selon les avis lus le 7 novembre 2026) : le code de bar ne prouve pas qu'on y mange.
 MEAL_WORDS = ("brasserie", "restaurant", "creperie", "pizzeria")
 BAR_SAID_RESTAURANT = "registre : débit de boissons, dit servir des repas par les recherches"
-SERVICE = "restaurant"                 # le service des lieux où chercher un restaurant déjà connu, et celui d'un lieu créé
+SERVICE = "restaurant"                 # le service d'un restaurant créé, ou ajouté au lieu déjà en base
 
 SYSTEM_PROMPT = f"""Tu cherches pour les voyageurs de Randovango, une application de randonnée en van,
 les restaurants qu'un habitant conseillerait à un ami de passage dans une commune.
@@ -293,9 +293,11 @@ RESTAURANTS = ServiceCategory(
     sheet_fields=("genre", "pourquoi", "distinction", "ancien_nom", "categorie", "registre_depuis"),
     human_sheet_fields=("genre", "pourquoi", "distinction", "categorie"),
     detail_column=("distinction", 100),
-    known_services=(SERVICE,),
     new_service=new_service,
     find_known=service_store.find_known,
     is_verified=is_verified,
     review_keeps_sheet=True,                    # un restaurant à relire qui a déjà une fiche la garde, sans signal
+    # Un café où l'on mange s'affiche en restauration : sa fiche de café s'en va quand celle du restaurant arrive. C'est la
+    # même règle que COMMERCES.shown_elsewhere, quand les commerces sont passés les premiers.
+    takes_over={"commerces": ("cafe",)},
 )

@@ -106,11 +106,6 @@ def test_validating_a_shop_without_a_prepared_sheet_is_refused():
         service_store.save_validated_sheet(COMMERCES, MagicMock(), 1, None)
 
 
-def test_supermarkets_are_not_known_shops():
-    """Les supermarchés ne font pas partie des services où l'on cherche un commerce déjà connu."""
-    assert "supermarket" not in COMMERCES.known_services and "bakery" in COMMERCES.known_services
-
-
 def test_validating_a_shop_to_confirm_writes_its_sheet_in_the_commerces_table(monkeypatch):
     """Dans la supervision, confirmer un commerce écrit sa fiche avec le réglage des commerces."""
     from services import poi_review_service as review

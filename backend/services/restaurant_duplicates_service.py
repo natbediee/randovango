@@ -1,6 +1,6 @@
 """
 Le rattrapage des doublons de restaurants déjà en base : la règle que service_store.py applique à l'enregistrement
-(find_known), rejouée sur les pépites visibles. Elle teste la règle sur les vraies données, comme le fera le code.
+(find_in), rejouée sur les pépites visibles. Elle teste la règle sur les vraies données, comme le fera le code.
 
     même lieu : la règle le reconnaît (même adresse et un nom qui contient l'autre, ou même nom à 50 m sans numéro).
                 Le plus récent est masqué sous le nom RULE_AUTHOR, l'autre reste. Annulable dans la supervision ;
@@ -43,7 +43,7 @@ def verdict(first: dict, second: dict) -> tuple | None:
     """(verdict, raison) pour deux pépites proches, ou None si ce sont deux voisins."""
     position = (second["latitude"], second["longitude"])
     city = {"latitude": second["latitude"], "longitude": second["longitude"]}
-    if service_store.find_known({"nom": second["name"], "adresse": second["address"]}, position, city, [first]):
+    if service_store.find_in({"nom": second["name"], "adresse": second["address"]}, position, city, [first]):
         return SAME_PLACE, "même lieu selon la règle"
     if same_address(first["address"], second["address"]):
         return DOUBT, "même adresse, autre nom"

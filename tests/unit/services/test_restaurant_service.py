@@ -289,10 +289,11 @@ def test_an_old_name_finds_a_known_place_only_at_the_address():
     assert service_store.find_known(row, None, PLOUDALMEZEAU, [TRISKELL]) is None
 
 
-def test_the_current_name_still_finds_a_place_away_from_the_address():
-    """Le nom actuel retrouve le service même loin de l'adresse."""
+def test_the_same_name_far_away_is_another_place():
+    """Le même nom à 11 km désigne un autre restaurant ; à quelques mètres, c'est le même."""
     row = {"nom": "Le Triskell", "ancien_nom": None}
-    assert service_store.find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
+    assert service_store.find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) is None
+    assert service_store.find_known(row, (48.4659, -4.7598), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
 
 
 def _known(name, address, latitude=48.27, longitude=-4.49):
