@@ -47,21 +47,25 @@ TOWN_HALL = {"url": "https://www.plougonvelin.fr/marche", "type_page": "mairie",
 
 
 def test_a_market_proved_by_its_town_hall_makes_a_sheet(monkeypatch):
+    """Un marché prouvé par la page de sa mairie a sa fiche, avec cette page comme lien."""
     summary, calls = _save(monkeypatch, {"nom": "Marché de Plougonvelin", "categorie": "marche", "pages": [TOWN_HALL]})
     assert summary["fiches"] == 1 and calls["created"] == ["https://www.plougonvelin.fr/marche"] and calls["connection"].committed
 
 
 def test_a_bakery_is_not_proved_by_the_town_hall(monkeypatch):
+    """Une boulangerie n'est pas prouvée par la page de la mairie."""
     summary, calls = _save(monkeypatch, {"nom": "Le Gall", "categorie": "boulangerie", "pages": [TOWN_HALL]})
     assert summary["sans_page"] == 1 and calls["sheet"] == []
 
 
 def test_the_register_is_enough_to_keep_a_shop_without_a_page(monkeypatch):
+    """Le registre suffit à garder un commerce sans page, alors sans lien."""
     summary, calls = _save(monkeypatch, {"nom": "Le Gall", "categorie": "boulangerie", "au_registre": True, "pages": []})
     assert summary["fiches"] == 1 and calls["created"] == [None]
 
 
 def test_a_place_to_confirm_keeps_the_sheet_prepared_by_the_agent(monkeypatch):
+    """Un commerce à confirmer garde, dans son signal, la fiche préparée par l'agent."""
     row = {"nom": "Ferme de Kerlouan", "genre": "vente à la ferme", "categorie": "producteur", "jours": None,
            "a_relire": "preuve : l'agent n'a pas répondu à temps", "pages": []}
     summary, calls = _save(monkeypatch, row)
@@ -70,12 +74,14 @@ def test_a_place_to_confirm_keeps_the_sheet_prepared_by_the_agent(monkeypatch):
 
 
 def test_a_liquidation_removes_the_shop_without_review(monkeypatch):
+    """Une liquidation judiciaire écarte le commerce sans relecture."""
     summary, calls = _save(monkeypatch, {"nom": "Le Gall", "au_registre": True, "pages": [],
                                          "alerte_registre": "Ouverture d'une liquidation judiciaire"})
     assert summary["liquidation"] == 1 and calls["flag"] == [] and calls["sheet"] == []
 
 
 def test_a_new_shop_takes_the_osm_service_of_its_category(monkeypatch):
+    """Un commerce créé par l'agent prend le service OSM de sa sous-catégorie."""
     linked = []
     monkeypatch.setattr(service_store, "insert_histo_poi", lambda cursor, poi_id, city: None)
     monkeypatch.setattr(service_store, "insert_service_and_link", lambda cursor, poi_id, service: linked.append(service))
@@ -86,6 +92,7 @@ def test_a_new_shop_takes_the_osm_service_of_its_category(monkeypatch):
 
 
 def test_the_sheet_goes_to_the_commerces_table():
+    """La fiche d'un commerce validé s'écrit dans la table commerces, avec les jours du marché."""
     cursor = MagicMock()
     service_store.save_validated_sheet(COMMERCES, cursor, 7, {"genre": "marché", "jours": "jeudi matin", "categorie": "marche",
                                                       "prompt_version": 1, "model": "modele"})
@@ -94,15 +101,18 @@ def test_the_sheet_goes_to_the_commerces_table():
 
 
 def test_validating_a_shop_without_a_prepared_sheet_is_refused():
+    """Valider un commerce sans fiche préparée est refusé."""
     with pytest.raises(ValueError):
         service_store.save_validated_sheet(COMMERCES, MagicMock(), 1, None)
 
 
 def test_supermarkets_are_not_known_shops():
+    """Les supermarchés ne font pas partie des services où l'on cherche un commerce déjà connu."""
     assert "supermarket" not in COMMERCES.known_services and "bakery" in COMMERCES.known_services
 
 
 def test_validating_a_shop_to_confirm_writes_its_sheet_in_the_commerces_table(monkeypatch):
+    """Dans la supervision, confirmer un commerce écrit sa fiche avec le réglage des commerces."""
     from services import poi_review_service as review
     written = []
     monkeypatch.setattr(service_store, "save_validated_sheet", lambda category, cursor, poi_id, sheet: written.append((category.sheet_table, poi_id)))
@@ -116,6 +126,7 @@ def test_validating_a_shop_to_confirm_writes_its_sheet_in_the_commerces_table(mo
 
 
 def test_the_register_is_read_with_the_codes_asked_for(monkeypatch):
+    """Le registre est lu avec les codes d'activité demandés, sinon avec ceux de la restauration."""
     from etl.extract import api_registre
     asked = []
     monkeypatch.setattr(api_registre, "_get", lambda url, params: asked.append(params["activite_principale"]) or {"total_pages": 1, "results": []})
@@ -125,6 +136,7 @@ def test_the_register_is_read_with_the_codes_asked_for(monkeypatch):
 
 
 def test_the_badge_follows_the_proof(monkeypatch):
+    """Le badge « Vérifié » suit la preuve : oui avec une page acceptée, non avec le registre seul."""
     marks = []
     monkeypatch.setattr(service_store, "set_verified", lambda cursor, poi_id, verified: marks.append(verified))
     _save(monkeypatch, {"nom": "Marché de Plougonvelin", "categorie": "marche", "pages": [TOWN_HALL]})
@@ -134,12 +146,14 @@ def test_the_badge_follows_the_proof(monkeypatch):
 
 
 def test_a_shop_validated_by_a_human_is_verified():
+    """Un commerce validé par un humain est « Vérifié »."""
     cursor = MagicMock()
     service_store.save_validated_sheet(COMMERCES, cursor, 7, {"genre": "boulangerie", "prompt_version": 1, "model": "modele"})
     assert cursor.execute.call_args_list[-1][0] == ("UPDATE poi SET verifie = %s WHERE id = %s", (1, 7))
 
 
 def test_the_short_name_finds_the_osm_line():
+    """« Boulangerie Laot » retrouve le service « Laot » d'OSM par son nom court."""
     assert find_commerces.short_name("Boulangerie Laot") == "Laot"
     assert find_commerces.short_name("Boulangerie de la Plage") == "Plage"
     assert find_commerces.short_name("Laot") is None and find_commerces.short_name("Café Ty") is None
@@ -149,6 +163,7 @@ def test_the_short_name_finds_the_osm_line():
 
 
 def test_a_cafe_with_a_restaurant_sheet_is_not_saved(monkeypatch):
+    """Un café qui a déjà une fiche restaurant n'est pas enregistré."""
     _save(monkeypatch, {"nom": "Le Neuf", "categorie": "cafe", "pages": [TOWN_HALL]})
     table = {"id": 5, "name": "Le Neuf", "address": "1 rue", "latitude": 48.3, "longitude": -4.7, "masque": 0}
     monkeypatch.setattr(service_store, "known_sheets", lambda cursor, city, sheet_table: [table])
@@ -157,6 +172,7 @@ def test_a_cafe_with_a_restaurant_sheet_is_not_saved(monkeypatch):
 
 
 def test_a_sheet_sent_back_to_review_leaves_the_display(monkeypatch):
+    """Un commerce renvoyé en relecture perd sa fiche jusqu'à la décision."""
     signals = []
     monkeypatch.setattr(service_store, "save_signal", lambda cursor, poi_id, source, kind, detail: signals.append((poi_id, detail["raison"])))
     cursor = MagicMock()
@@ -167,6 +183,7 @@ def test_a_sheet_sent_back_to_review_leaves_the_display(monkeypatch):
 
 
 def test_a_place_validated_by_a_human_keeps_its_sheet(monkeypatch):
+    """Un commerce déjà validé par un humain garde sa fiche et n'est pas signalé."""
     monkeypatch.setattr(service_store, "save_signal", lambda *args: pytest.fail("pas de signal"))
     cursor = MagicMock()
     cursor.fetchone.return_value = (1,)
@@ -175,6 +192,7 @@ def test_a_place_validated_by_a_human_keeps_its_sheet(monkeypatch):
 
 
 def test_a_possible_duplicate_goes_to_the_duplicates_queue(monkeypatch):
+    """Un doublon vu par l'analyste à une autre adresse arrive dans la file « Doublons » de la supervision."""
     signals = []
     monkeypatch.setattr(service_store, "save_signal", lambda cursor, poi_id, source, kind, detail: signals.append((poi_id, kind, detail)))
     rows = [{"nom": "Fumaisons d'Iroise"}, {"nom": "Fumaison d'Iroise", "doublon_possible": {"nom": "Fumaisons d'Iroise", "adresse": "Rue W"}}]
@@ -189,6 +207,7 @@ def test_a_possible_duplicate_goes_to_the_duplicates_queue(monkeypatch):
 
 
 def test_a_visible_twin_wins_over_a_masked_one():
+    """Entre deux jumeaux, le service visible est choisi avant le service masqué."""
     masked = {"id": 1, "name": "Boulangerie Lemaire", "address": "1 rue", "latitude": 48.40, "longitude": -4.00, "masque": 1}
     visible = {**masked, "id": 2, "latitude": 48.40001, "masque": 0}
     row = {"nom": "Boulangerie Lemaire", "adresse": "1 rue"}
@@ -197,6 +216,7 @@ def test_a_visible_twin_wins_over_a_masked_one():
 
 
 def test_the_register_and_a_page_naming_the_shop_make_it_verified(monkeypatch):
+    """Le registre au nom du commerce et une page qui le nomme, même un annuaire, donnent le badge « Vérifié »."""
     marks = []
     monkeypatch.setattr(service_store, "set_verified", lambda cursor, poi_id, verified: marks.append(verified))
     directory = {"url": "https://www.myboulange.fr/la-meule-de-pierre", "type_page": "agregateur", "verdict": "ok"}
@@ -207,6 +227,7 @@ def test_the_register_and_a_page_naming_the_shop_make_it_verified(monkeypatch):
 
 
 def test_a_text_corrected_by_a_human_survives_a_new_pass(monkeypatch):
+    """Un texte corrigé par un humain dans la supervision survit à un nouveau passage."""
     monkeypatch.setattr(service_store, "human_fields", lambda cursor, poi_id: {"pourquoi", "url"})
     cursor = MagicMock()
     cursor.fetchone.return_value = ("Le texte corrigé dans la supervision",)
@@ -216,6 +237,7 @@ def test_a_text_corrected_by_a_human_survives_a_new_pass(monkeypatch):
 
 
 def test_a_new_pass_leaves_the_place_fields_a_human_corrected(monkeypatch):
+    """Un nouveau passage ne touche ni à l'adresse, ni à la position, ni à la saison qu'un humain a corrigées."""
     monkeypatch.setattr(service_store, "human_fields", lambda cursor, poi_id: {"address", "maps_url", "saison"})
     monkeypatch.setattr(service_store, "_decided_by_human", lambda cursor, poi_id, decisions: False)
     cursor = MagicMock()
@@ -230,6 +252,7 @@ def test_a_new_pass_leaves_the_place_fields_a_human_corrected(monkeypatch):
 
 
 def test_an_alert_contradicted_by_an_active_line_at_the_same_name_and_address_is_cleared():
+    """Une alerte contredite par une ligne active au même nom et à la même adresse est effacée ; une liquidation ne l'est jamais."""
     register = {"actifs": [{"nom": "A FLEUR D'EAU", "adresse": "25 QUAI DU GRAND PORT 29100 DOUARNENEZ", "activite": "56.10A",
                             "actif_depuis": "2025-05-15"}]}
     row = {"nom": "A Fleur d'Eau", "adresse": "25 quai du Grand Port, 29100 Douarnenez",
@@ -242,6 +265,7 @@ def test_an_alert_contradicted_by_an_active_line_at_the_same_name_and_address_is
 
 
 def test_a_place_to_confirm_keeps_its_accepted_page(monkeypatch):
+    """Un commerce à confirmer est créé masqué, avec sa page acceptée comme lien."""
     linked = []
     calls = {"connection": _Connection()}
     monkeypatch.setattr(service_store.MySQLUtils, "connect", staticmethod(lambda: calls["connection"]))

@@ -35,17 +35,20 @@ def _answer(shops=(), closed=()):
 
 
 def test_the_shop_word_does_not_make_two_places():
+    """« Boulangerie Le Gall » et « Le Gall » sont le même commerce."""
     assert place_key("Boulangerie Le Gall") == place_key("Le Gall")
     assert place_key("Marché de Plougonvelin") == place_key("Plougonvelin")
 
 
 def test_merge_keeps_each_shop_once_with_the_pages_of_every_search():
+    """Un commerce trouvé par deux recherches est gardé une fois, avec les pages des deux."""
     merged = merge_answers(_answer(["Boulangerie Le Gall"]), _answer(["Le Gall", "Ty Krampouezh"]))
     assert [row["nom"] for row in merged["commerces"]] == ["Boulangerie Le Gall", "Ty Krampouezh"]
     assert len(merged["commerces"][0]["pages_vues"]) == 4
 
 
 def test_a_shop_said_closed_by_another_search_goes_to_the_analyst():
+    """Un commerce retenu par une recherche et dit fermé par une autre est signalé à l'analyste."""
     merged = merge_answers(_answer(["Le Gall"]), _answer(closed=["Boulangerie Le Gall"]))
     assert merged["commerces"][0]["dit_ferme"]["nom"] == "Boulangerie Le Gall"
 
@@ -56,21 +59,25 @@ REGISTER = {"actifs": [{"nom": "LE GALL", "adresse": "3 RUE DE LA MER 29217 PLOU
 
 
 def test_the_register_shows_a_shop_by_name_or_address():
+    """Le registre montre un commerce par son nom ou par son adresse."""
     assert in_register({"nom": "Boulangerie Le Gall", "categorie": "boulangerie"}, REGISTER)
     assert in_register({"nom": "Autre nom", "adresse": "3 rue de la Mer", "categorie": "boulangerie"}, REGISTER)
     assert not in_register({"nom": "Ty Krampouezh", "categorie": "epicerie"}, REGISTER)
 
 
 def test_a_market_is_never_in_the_register():
+    """Un marché n'est jamais prouvé ni daté par le registre."""
     market = {"nom": "Marché de Plougonvelin", "categorie": "marche"}
     assert not in_register(market, REGISTER) and registered_since(market, REGISTER) is None
 
 
 def test_the_register_date_goes_by_name():
+    """La date du registre se lit au nom du commerce."""
     assert registered_since({"nom": "Le Gall", "categorie": "boulangerie"}, REGISTER) == "2025-12-01"
 
 
 def test_a_zone_reads_only_the_nearest_lines_of_the_register():
+    """Dans une zone, l'agent ne lit que les lignes proches du repère, sans leur position."""
     register = {"actifs": [{"nom": "Près", "position": [48.30, -4.70]}, {"nom": "Loin", "position": [48.50, -4.70]},
                            {"nom": "Sans position"}]}
     zone = {"latitude": 48.30, "longitude": -4.70, "repere": "le port"}
@@ -79,6 +86,7 @@ def test_a_zone_reads_only_the_nearest_lines_of_the_register():
 
 
 def test_a_town_hall_page_proves_a_market_but_not_a_bakery():
+    """La page de la mairie prouve un marché, pas une boulangerie."""
     page = {"url": "https://www.plougonvelin.fr/marche", "type_page": "mairie", "verdict": "ok"}
     assert has_accepted_page({"categorie": "marche", "pages": [page]}, "Plougonvelin")
     assert not has_accepted_page({"categorie": "boulangerie", "pages": [page]}, "Plougonvelin")
@@ -124,6 +132,7 @@ def _chain(monkeypatch, tmp_path, agent, registered="AUTRE LIEU"):
 
 
 def test_the_chain_proves_a_market_by_its_town_hall_and_looks_for_the_missing_proof(monkeypatch, tmp_path):
+    """La chaîne entière : le marché est prouvé par sa mairie avec ses jours, la boulangerie part chercher une preuve, le grossiste sort, et le registre est lu avec les codes des commerces."""
     activities = _chain(monkeypatch, tmp_path, _Agent())
     answer = service_chain.search_commune(COMMERCES, CITY)
     by_name = {row["nom"]: row for row in answer["commerces"]}
@@ -136,6 +145,7 @@ def test_the_chain_proves_a_market_by_its_town_hall_and_looks_for_the_missing_pr
 
 
 def test_a_shop_in_the_register_needs_no_proof_search(monkeypatch, tmp_path):
+    """Un commerce au registre à son nom n'est pas envoyé à l'agent de preuve."""
     _chain(monkeypatch, tmp_path, _Agent(), registered="LE GALL")
     answer = service_chain.search_commune(COMMERCES, CITY)
     assert {row["nom"]: row["au_registre"] for row in answer["commerces"]} == {"Le Gall": True, "Marché de Plougonvelin": False}
@@ -143,6 +153,7 @@ def test_a_shop_in_the_register_needs_no_proof_search(monkeypatch, tmp_path):
 
 
 def test_what_was_paid_stays_readable_when_a_step_fails(monkeypatch, tmp_path):
+    """Si l'analyse échoue, la trace garde les cinq recherches déjà payées et la version des consignes."""
     _chain(monkeypatch, tmp_path, _Agent(fail_on_analysis=True))
     with pytest.raises(RuntimeError):
         service_chain.search_commune(COMMERCES, CITY)
@@ -151,6 +162,7 @@ def test_what_was_paid_stays_readable_when_a_step_fails(monkeypatch, tmp_path):
 
 
 def test_a_bar_line_proves_a_cafe_but_not_a_bakery():
+    """Une ligne de débit de boissons prouve un café, pas une boulangerie, et une ligne de boulangerie ne prouve pas un café."""
     register = {"actifs": [{"nom": "LE PORT", "adresse": "1 QUAI DU PORT", "activite": "56.30Z", "actif_depuis": "2020-01-01"}]}
     assert in_register({"nom": "Le Port", "categorie": "cafe"}, register)
     assert not in_register({"nom": "Le Port", "categorie": "boulangerie"}, register)
@@ -158,6 +170,7 @@ def test_a_bar_line_proves_a_cafe_but_not_a_bakery():
 
 
 def test_a_place_held_by_the_register_alone_waits_for_a_review():
+    """Un commerce que seul le registre tient par son adresse attend une relecture, sauf si une page cite son nom."""
     register = {"actifs": [{"nom": "SRB (SERVICE DE REMPLACEMENT BOUCHER )", "adresse": "4 B RUE SAINT MATHIEU 29217 PLOUGONVELIN",
                             "activite": "47.22Z", "actif_depuis": "2026-02-01"}]}
     row = {"nom": "Boucherie Leonetti-Degavre", "categorie": "producteur", "adresse": "4 B rue Saint-Mathieu, 29217 Plougonvelin",
@@ -169,11 +182,13 @@ def test_a_place_held_by_the_register_alone_waits_for_a_review():
 
 
 def test_the_cafe_search_is_the_only_one_asked_for_cafes():
+    """Seule la recherche des cafés cherche les cafés, et le registre est lu avec le code des débits de boissons."""
     assert "Pas de café ni de bar" in find_commerces.SYSTEM_PROMPT and "Pas de café ni de bar" in find_commerces.SEASON_PROMPT
     assert "Pas de café ni de bar" not in find_commerces.CAFE_PROMPT and "56.30Z" in find_commerces.REGISTER_ACTIVITIES
 
 
 def test_a_shop_at_its_name_in_the_register_is_proved_without_a_page():
+    """Une boutique inscrite au registre à son nom est prouvée sans page, mais pas une ferme."""
     register = {"actifs": [{"nom": "MADEMOISELLE TOMATES", "adresse": "580 ROUTE DE ROLEA 29217 PLOUGONVELIN",
                             "activite": "47.21Z", "actif_depuis": "2024-03-15"},
                            {"nom": "LE PAINSEUM", "adresse": "AVENUE DE LA GARE 29000 QUIMPER", "activite": "10.71C",
@@ -189,6 +204,7 @@ def test_a_shop_at_its_name_in_the_register_is_proved_without_a_page():
 
 
 def test_a_farm_in_the_register_still_gets_a_proof_search(monkeypatch, tmp_path):
+    """Une ferme au registre part quand même chercher une preuve, et elle est gardée si une page la cite."""
     _chain(monkeypatch, tmp_path, _Agent(), registered="LE GALL")
     monkeypatch.setattr(find_commerces, "is_farm", lambda row: row["nom"] == "Le Gall")
     answer = service_chain.search_commune(COMMERCES, CITY)
@@ -199,6 +215,7 @@ def test_a_farm_in_the_register_still_gets_a_proof_search(monkeypatch, tmp_path)
 
 
 def test_a_farm_without_a_page_naming_it_is_not_held_by_the_register():
+    """Le genre dit si un producteur est une ferme, et une page morte ne la nomme pas."""
     farm = {"nom": "Mademoiselle Tomates", "categorie": "producteur", "genre": "vente à la ferme",
             "pages": [{"url": "https://emploi.fr/x", "type_page": "agregateur", "verdict": "lien_mort"}]}
     assert find_commerces.is_farm(farm) and not find_commerces.has_named_page(farm)
@@ -206,6 +223,7 @@ def test_a_farm_without_a_page_naming_it_is_not_held_by_the_register():
 
 
 def test_a_chain_at_several_addresses_must_be_registered_at_the_place_address():
+    """Une enseigne inscrite à plusieurs adresses n'est prouvée qu'à l'adresse du commerce."""
     register = {"actifs": [{"nom": "CARREFOUR EXPRESS", "adresse": "27 RUE EDOUARD CORBIERE 29200 BREST", "activite": "47.11B"},
                            {"nom": "CARREFOUR EXPRESS", "adresse": "14 RUE MARECHAL FRANCHET D'ESPEREY 29200 BREST", "activite": "47.11C"}]}
     shop = {"nom": "Carrefour Express", "categorie": "epicerie", "genre": "supérette", "pages": []}

@@ -29,7 +29,7 @@ import json
 from collections import Counter
 import re
 
-from agents.find_commerces import COMMERCES
+from agents import find_services
 from agents.find_restaurants import RESTAURANTS
 from services import service_store
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
@@ -130,7 +130,7 @@ def tab_categories(service: str) -> tuple:
 
 # Valider un lieu à confirmer écrit la fiche que son agent avait préparée, dans la table de sa catégorie : celle de la
 # source du signal (« agent_restaurants », « agent_commerces »).
-CATEGORIES = {category.source: category for category in (RESTAURANTS, COMMERCES)}
+CATEGORIES = {category.source: category for category in find_services.CATEGORIES}
 # Les seules colonnes qu'une décision peut changer, et donc remettre.
 APPLIED_COLUMNS = ("url", "name", "masque", "ferme_moment", "statut_saison", "mois_ouverture", "maps_url", "latitude", "longitude",
                    "address", "description")

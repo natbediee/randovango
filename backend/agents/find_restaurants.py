@@ -55,13 +55,11 @@ Le registre et les pages ne le disent pas : c'est à l'analyste de le lire. Un h
 sort aussi (Hôtel Vent d'Iroise, 5 novembre 2026).
 
 UTILISATION (dans le conteneur backend, depuis /usr/src/app) :
-    python -m agents.find_restaurants --ville Plougonvelin
-    python -m agents.find_restaurants --ville Plougonvelin --essai      # rien en base, le fichier seul
+    python -m agents.find_services --ville Plougonvelin --categorie restaurants
+    python -m agents.find_services --ville Plougonvelin --categorie restaurants --essai      # rien en base, le fichier seul
 """
-import sys
 from datetime import date
 
-from agents import service_chain
 from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from agents.service_category import ServiceCategory
 from agents.service_chain import MAX_PLACES, YEAR_SEARCHES
@@ -301,7 +299,3 @@ RESTAURANTS = ServiceCategory(
     is_verified=is_verified,
     review_keeps_sheet=True,                    # un restaurant à relire qui a déjà une fiche la garde, sans signal
 )
-
-
-if __name__ == "__main__":
-    service_chain.main(RESTAURANTS, sys.modules[__name__].__doc__)

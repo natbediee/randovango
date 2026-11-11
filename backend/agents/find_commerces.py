@@ -43,10 +43,9 @@ Les réglages repris des restaurants (nombre de recherches, MAX_PLACES, zones) s
 quelques communes, analysé avec l'utilisatrice, avant tout passage complet.
 
 UTILISATION (dans le conteneur backend, depuis /usr/src/app) :
-    python -m agents.find_commerces --ville Plougonvelin
-    python -m agents.find_commerces --ville Plougonvelin --essai      # rien en base, le fichier seul
+    python -m agents.find_services --ville Plougonvelin --categorie commerces
+    python -m agents.find_services --ville Plougonvelin --categorie commerces --essai      # rien en base, le fichier seul
 """
-import sys
 from datetime import date
 
 from agents import service_chain
@@ -417,7 +416,3 @@ COMMERCES = ServiceCategory(
     shown_elsewhere={CAFE: ("restaurants", "deja_restaurant", "déjà une fiche restaurant")},
     duplicate_signal="doublon_commerce",
 )
-
-
-if __name__ == "__main__":
-    service_chain.main(COMMERCES, sys.modules[__name__].__doc__)

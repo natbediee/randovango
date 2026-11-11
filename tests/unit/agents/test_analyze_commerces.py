@@ -13,23 +13,27 @@ def control_details(row, commune):
 
 
 def test_the_market_days_must_be_in_the_sentence():
+    """Les jours d'un marché doivent être dans la phrase citée."""
     assert value_in_citation("jours", "mardi et samedi matin", "Marché le mardi et le samedi matin, place de l'église.")
     assert not value_in_citation("jours", "jeudi matin", "Marché tous les mardis matin.")
     assert not value_in_citation("jours", "le matin", "Marché le matin.")
 
 
 def test_the_season_months_must_be_in_the_sentence():
+    """Les mois de la saison doivent être dans la phrase citée."""
     assert value_in_citation("saison", "juin à septembre", "Ouvert de juin à septembre.")
     assert not value_in_citation("saison", "juin à septembre", "Ouvert l'été.")
 
 
 def test_a_place_not_open_to_passers_by_is_marked():
+    """Un commerce fermé aux passants est marqué par l'analyste."""
     shops = [{"nom": "Le Gall"}, {"nom": "Grossiste"}]
     kept, closed, duplicates = apply_analysis(shops, {"lieux": [{"numero": 1}, {"numero": 2, "pas_un_commerce": True}]})
     assert [row["pas_un_commerce"] for row in kept] == [False, True] and closed == duplicates == []
 
 
 def test_market_days_are_kept_only_for_a_market(monkeypatch):
+    """Les jours ne sont gardés que pour un marché."""
     monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
     page = {"url": "https://legall.fr", "type_page": "site", "verdict": "ok"}
     detail = {"champ": "jours", "valeur": "jeudi", "citation": "Ouvert le jeudi", "page": "https://legall.fr", "type_page": "site"}
@@ -39,6 +43,7 @@ def test_market_days_are_kept_only_for_a_market(monkeypatch):
 
 
 def test_a_proof_without_answer_in_time_sends_the_place_to_review(monkeypatch):
+    """Des preuves restées sans réponse à temps envoient chaque commerce en relecture."""
     def too_long(category, city, batch):
         raise LLMTimeout("délai")
     monkeypatch.setattr(service_chain, "ask_proofs", too_long)
@@ -47,6 +52,7 @@ def test_a_proof_without_answer_in_time_sends_the_place_to_review(monkeypatch):
 
 
 def test_a_duplicate_at_another_address_is_kept_but_sent_to_review():
+    """Un doublon à une autre adresse est gardé, mais noté pour la file « Doublons » de la supervision."""
     shops = [{"nom": "Fumaisons d'Iroise", "adresse": "Rue Winston Churchill"}, {"nom": "Fumaison d'Iroise", "adresse": "Port du Conquet"}]
     answer = {"lieux": [{"numero": 1}, {"numero": 2, "doublon_de": 1, "doublon_raison": "le stand du port de l'atelier"}]}
     kept, closed, duplicates = apply_analysis(shops, answer)

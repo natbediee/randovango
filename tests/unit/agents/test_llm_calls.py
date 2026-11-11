@@ -5,9 +5,11 @@ from types import SimpleNamespace
 import pytest
 
 from agents import llm_service
-from agents.llm_service import (ClaudeCodeLLMService, LLMService, LLMUnavailable, mesure_objet,
-                                object_of_label)
-from services.llm_calls_service import QUERIES, cost_report
+from concurrent.futures import ThreadPoolExecutor
+
+from agents.llm_service import (ClaudeCodeLLMService, LLMService, LLMUnavailable, etape_courante, map_in_context,
+                                mesure_etape, mesure_objet, mesure_passage, new_passage_id, object_of_label, passage_courant)
+from services.llm_calls_service import QUERIES, cost_report, passage_calls
 
 # La vraie fonction d'écriture, prise avant que conftest ne la remplace dans chaque test.
 real_record_call = llm_service.record_call
@@ -27,6 +29,7 @@ def api_service(stop_reason="end_turn", text='{"ok": true}'):
 
 
 def test_a_successful_api_call_is_recorded_with_its_object(llm_calls) -> None:
+    """Un appel réussi par l'API laisse une ligne avec ses mesures et l'objet traité."""
     with mesure_objet("spot", 42):
         assert api_service().complete_json("sys", "user", SCHEMA) == {"ok": True}
 
@@ -42,19 +45,44 @@ def test_a_successful_api_call_is_recorded_with_its_object(llm_calls) -> None:
 
 @pytest.mark.parametrize("stop_reason, status", [("refusal", "refus"), ("max_tokens", "coupe")])
 def test_a_refused_or_truncated_api_call_is_recorded_then_raised(llm_calls, stop_reason, status) -> None:
+    """Un appel refusé ou coupé est enregistré avec son statut, puis l'erreur remonte."""
     with pytest.raises(LLMUnavailable):
         api_service(stop_reason).complete_json("sys", "user", SCHEMA)
     assert llm_calls[0]["status"] == status
 
 
 def test_the_object_is_forgotten_after_the_block(llm_calls) -> None:
+    """L'objet annoncé est oublié à la sortie du bloc."""
     with mesure_objet("commune", 7):
         pass
     api_service().complete_json("sys", "user", SCHEMA)
     assert (llm_calls[0]["objet_type"], llm_calls[0]["objet_id"]) == (None, None)
 
 
+def test_a_call_is_recorded_with_its_passage_and_its_step(llm_calls) -> None:
+    """Un appel porte le passage et l'étape annoncés, les étapes s'emboîtent, et tout est oublié à la sortie du bloc."""
+    passage = new_passage_id()
+    with mesure_passage(passage), mesure_etape("zone 3 / 10, "), mesure_etape("année 2"):
+        api_service().complete_json("sys", "user", SCHEMA)
+    api_service().complete_json("sys", "user", SCHEMA)
+    assert len(passage) == 32 and int(passage, 16) >= 0
+    assert (llm_calls[0]["passage_id"], llm_calls[0]["etape"]) == (passage, "zone 3 / 10, année 2")
+    assert (llm_calls[1]["passage_id"], llm_calls[1]["etape"]) == (None, None)
+
+
+def test_a_thread_keeps_the_passage_and_the_step_of_its_launcher() -> None:
+    """Sans map_in_context, un fil d'un ThreadPoolExecutor démarre sans passage : ses appels seraient perdus pour le suivi."""
+    def seen(search):
+        with mesure_etape(search):
+            return passage_courant(), etape_courante()
+
+    with mesure_passage("abc"), mesure_etape("zone 1 / 2, "), ThreadPoolExecutor(max_workers=2) as pool:
+        assert list(pool.map(seen, ["année 1"])) == [(None, "année 1")]
+        assert map_in_context(pool, seen, ["année 1", "été"]) == [("abc", "zone 1 / 2, année 1"), ("abc", "zone 1 / 2, été")]
+
+
 def test_each_batch_answer_is_recorded_with_its_label_as_object(llm_calls) -> None:
+    """Chaque réponse d'un lot laisse une ligne, avec l'objet tiré de son étiquette."""
     ok = SimpleNamespace(type="succeeded", message=SimpleNamespace(
         content=[SimpleNamespace(type="text", text='{"ok": true}')], stop_reason="end_turn", usage=None))
     items = [SimpleNamespace(custom_id="spot-12", result=ok),
@@ -69,6 +97,7 @@ def test_each_batch_answer_is_recorded_with_its_label_as_object(llm_calls) -> No
 
 
 def test_object_of_label() -> None:
+    """Une étiquette de lot donne le type et l'identifiant de son objet."""
     assert object_of_label("spot-12") == ("spot", 12)
     assert object_of_label("lot") == (None, None)
 
@@ -96,6 +125,7 @@ def result_line(**fields):
 
 
 def test_a_successful_cli_call_is_recorded_with_its_measures(monkeypatch, llm_calls) -> None:
+    """Un appel réussi par le programme claude laisse une ligne avec ses mesures."""
     service = cli_service(monkeypatch, stdout=result_line())
     with mesure_objet("commune", 3):
         service.complete_json("sys", "user", SCHEMA)
@@ -110,6 +140,7 @@ def test_a_successful_cli_call_is_recorded_with_its_measures(monkeypatch, llm_ca
 
 
 def test_a_cli_timeout_is_recorded_as_delai(monkeypatch, llm_calls) -> None:
+    """Un délai dépassé est enregistré avec le statut « delai »."""
     service = cli_service(monkeypatch, raises=subprocess.TimeoutExpired("claude", 1))
     with pytest.raises(llm_service.LLMTimeout):
         service.complete_json("sys", "user", SCHEMA)
@@ -119,6 +150,7 @@ def test_a_cli_timeout_is_recorded_as_delai(monkeypatch, llm_calls) -> None:
 
 def test_an_unusable_cli_answer_keeps_its_cost(monkeypatch, llm_calls) -> None:
     # Un appel raté a consommé : son coût reste dans la mesure.
+    """Une réponse inutilisable garde son coût : un appel raté a consommé."""
     service = cli_service(monkeypatch, stdout=result_line(is_error=True, result="quota"))
     with pytest.raises(LLMUnavailable):
         service.complete_json("sys", "user", SCHEMA)
@@ -128,6 +160,7 @@ def test_an_unusable_cli_answer_keeps_its_cost(monkeypatch, llm_calls) -> None:
 # --- Écriture en base -----------------------------------------------------------
 
 def test_a_broken_database_never_breaks_the_call(monkeypatch) -> None:
+    """Une base en panne ne fait jamais échouer l'appel."""
     def broken():
         raise RuntimeError("MySQL injoignable")
 
@@ -137,6 +170,7 @@ def test_a_broken_database_never_breaks_the_call(monkeypatch) -> None:
 
 
 def test_record_call_inserts_every_column(monkeypatch) -> None:
+    """L'écriture remplit toutes les colonnes de llm_calls."""
     executed = []
 
     class Cursor:
@@ -159,6 +193,7 @@ def test_record_call_inserts_every_column(monkeypatch) -> None:
 # --- Bilans ---------------------------------------------------------------------
 
 def test_cost_report_names_the_columns() -> None:
+    """Un bilan rend ses lignes avec le nom de chaque colonne."""
     class Cursor:
         description = [("agent",), ("appels",), ("cout_usd",)]
 
@@ -173,7 +208,25 @@ def test_cost_report_names_the_columns() -> None:
     assert "GROUP BY l.agent" in cursor.sql
 
 
-def test_cost_report_covers_the_four_reports() -> None:
-    assert set(QUERIES) == {"agent", "jour", "voyage", "commune"}
+def test_cost_report_covers_the_five_reports() -> None:
+    """Les cinq bilans existent, et un bilan inconnu est refusé."""
+    assert set(QUERIES) == {"agent", "jour", "voyage", "commune", "passage"}
     with pytest.raises(ValueError):
         cost_report(None, "mois")
+
+
+def test_the_calls_of_a_passage_are_read_in_order() -> None:
+    """Les appels d'un passage sont rendus dans l'ordre, pour ce seul passage."""
+    class Cursor:
+        description = [("called_at",), ("agent",), ("etape",)]
+
+        def execute(self, sql, params):
+            self.sql, self.params = sql, params
+
+        def fetchall(self):
+            return [("2026-11-11 10:00", "find_restaurants", "année 1"), ("2026-11-11 10:03", "analyze_restaurants", "analyse")]
+
+    cursor = Cursor()
+    calls = passage_calls(cursor, "abc")
+    assert [call["etape"] for call in calls] == ["année 1", "analyse"] and cursor.params == ("abc",)
+    assert "ORDER BY l.called_at" in cursor.sql

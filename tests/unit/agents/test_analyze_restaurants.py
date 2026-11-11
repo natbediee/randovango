@@ -29,29 +29,34 @@ def _answer(*places):
 
 
 def test_details_go_to_the_right_place():
+    """Les détails de l'analyste vont au restaurant qui porte leur numéro."""
     kept, closed, _ = apply_analysis([{"nom": "A"}, {"nom": "B"}], _answer((2, {"details": [{"champ": "budget"}]})))
     assert [(row["nom"], row["details"]) for row in kept] == [("A", []), ("B", [{"champ": "budget"}])]
     assert closed == []
 
 
 def test_a_proved_closure_removes_the_place(monkeypatch):
+    """Une fermeture dont la phrase est retrouvée sur la page retire le restaurant."""
     monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
     kept, closed, _ = apply_analysis([{"nom": "A"}], _answer((1, {"ferme": True, "ferme_citation": "A a fermé", "ferme_page": "https://x.fr"})))
     assert kept == [] and closed == ["A"]
 
 
 def test_a_closure_on_an_unreadable_page_removes_the_place(monkeypatch):
+    """Une fermeture citée sur une page que le code ne peut pas lire retire quand même le restaurant."""
     monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: None)
     kept, closed, _ = apply_analysis([{"nom": "A"}], _answer((1, {"ferme": True, "ferme_citation": "A a fermé", "ferme_page": "https://x.fr"})))
     assert kept == [] and closed == ["A"]
 
 
 def test_a_closure_without_a_page_does_not_remove_the_place():
+    """Une fermeture sans page ne retire pas le restaurant."""
     kept, closed, _ = apply_analysis([{"nom": "A"}], _answer((1, {"ferme": True, "ferme_citation": "Registre : fermé"})))
     assert [row["nom"] for row in kept] == ["A"] and closed == []
 
 
 def test_a_registry_alert_stays_on_the_place():
+    """L'alerte du registre lue par l'analyste reste sur le restaurant."""
     kept, _, _ = apply_analysis([{"nom": "A"}], _answer((1, {"alerte_registre": "liquidation judiciaire"})))
     assert kept[0]["alerte_registre"] == "liquidation judiciaire"
 
@@ -72,6 +77,7 @@ def _found(name):
 
 
 def test_a_place_without_a_table_is_removed(monkeypatch):
+    """Un lieu sans table pour les voyageurs est retiré."""
     service = _Service(_answer((1, {"pas_un_restaurant": True}), (2, {})))
     monkeypatch.setattr(service_chain, "make_llm_service", lambda name: service)
     kept = analyze_commune({"name": "X"}, [_found("La Vinotière"), _found("La Ria")])
@@ -79,6 +85,7 @@ def test_a_place_without_a_table_is_removed(monkeypatch):
 
 
 def test_the_register_reaches_the_analyst_and_the_address_comes_back(monkeypatch):
+    """Le registre est envoyé à l'analyste, et l'adresse qu'il vérifie revient sur le restaurant."""
     service = _Service(_answer((1, {"adresse": "1 quai"})))
     monkeypatch.setattr(service_chain, "make_llm_service", lambda name: service)
     kept = analyze_commune({"name": "X"}, [_found("A")], {"actifs": [{"nom": "CAFE KONK"}]})
@@ -86,6 +93,7 @@ def test_the_register_reaches_the_analyst_and_the_address_comes_back(monkeypatch
 
 
 def test_proofs_go_by_small_batches_and_keep_the_order(monkeypatch):
+    """Les preuves sont demandées par lots de cinq, et reviennent dans l'ordre des restaurants."""
     def answer(message):
         count = message.count('"numero"')
         return {"lieux": [{"numero": number, "preuve_url": f"https://x.fr/{number}"} for number in range(1, count + 1)]}
@@ -99,17 +107,20 @@ def test_proofs_go_by_small_batches_and_keep_the_order(monkeypatch):
 
 
 def test_no_proof_to_find_makes_no_call(monkeypatch):
+    """Sans restaurant à prouver, aucun appel n'est fait."""
     monkeypatch.setattr(service_chain, "make_llm_service", lambda name: 1 / 0)
     assert find_proofs({"name": "X"}, []) == []
 
 
 def test_a_closure_absent_from_the_page_is_ignored(monkeypatch):
+    """Une fermeture dont la phrase est absente de la page lue est ignorée."""
     monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: False)
     kept, closed, _ = apply_analysis([{"nom": "A"}], _answer((1, {"ferme": True, "ferme_citation": "A a fermé", "ferme_page": "https://x.fr"})))
     assert [row["nom"] for row in kept] == ["A"] and closed == []
 
 
 def test_a_duplicate_gives_way_at_the_same_address():
+    """Un doublon signalé par l'analyste est retiré s'il est à la même adresse que le restaurant gardé."""
     rows = [{"nom": "Crêperie Laer-Mor", "adresse": "3 rue Poncelin, 29217 Le Conquet"},
             {"nom": "Crêperie Les Boucaniers", "adresse": "3 Rue Poncelin, 29217 Le Conquet"}]
     kept, _, duplicates = apply_analysis(rows, _answer((1, {"doublon_de": 2})))
@@ -117,33 +128,39 @@ def test_a_duplicate_gives_way_at_the_same_address():
 
 
 def test_two_tables_sharing_an_address_stay():
+    """Deux tables à la même adresse restent deux, si l'analyste ne dit rien."""
     rows = [{"nom": "Hostellerie", "adresse": "7 place Saint-Tanguy"}, {"nom": "Bistrot 1954", "adresse": "7 place Saint-Tanguy"}]
     assert len(apply_analysis(rows, _answer())[0]) == 2
 
 
 def test_a_duplicate_at_another_address_is_refused():
+    """Un doublon à une autre adresse est refusé par le code."""
     rows = [{"nom": "A", "adresse": "1 quai"}, {"nom": "B", "adresse": "2 quai"}]
     kept, _, duplicates = apply_analysis(rows, _answer((1, {"doublon_de": 2})))
     assert len(kept) == 2 and duplicates == []
 
 
 def test_a_duplicate_without_address_is_refused():
+    """Un doublon sans adresse est refusé par le code."""
     rows = [{"nom": "A", "adresse": None}, {"nom": "B", "adresse": None}]
     assert len(apply_analysis(rows, _answer((1, {"doublon_de": 2})))[0]) == 2
 
 
 def test_an_impossible_duplicate_number_is_refused():
+    """Un doublon qui se désigne lui-même, ou qui désigne un numéro absent, est refusé."""
     rows = [{"nom": "A", "adresse": "1 quai"}]
     assert len(apply_analysis(rows, _answer((1, {"doublon_de": 1})))[0]) == 1
     assert len(apply_analysis(rows, _answer((1, {"doublon_de": 9})))[0]) == 1
 
 
 def test_two_places_pointing_at_each_other_both_stay():
+    """Deux restaurants qui se désignent l'un l'autre comme doublon restent tous les deux."""
     rows = [{"nom": "A", "adresse": "1 quai"}, {"nom": "B", "adresse": "1 quai"}]
     assert len(apply_analysis(rows, _answer((1, {"doublon_de": 2}), (2, {"doublon_de": 1})))[0]) == 2
 
 
 def test_a_disputed_closure_reaches_the_analyst(monkeypatch):
+    """Une fermeture contestée par les recherches est transmise à l'analyste avec sa raison et sa page."""
     sent = {}
 
     class Service:
@@ -161,6 +178,7 @@ def test_a_disputed_closure_reaches_the_analyst(monkeypatch):
 
 
 def test_the_citation_must_hold_the_value():
+    """La phrase citée doit contenir les mois de la saison ou le nom de la distinction."""
     assert value_in_citation("saison", "avril à septembre", "Ouvert d'avril à septembre")
     assert not value_in_citation("saison", "mars à novembre", "Ouvert de mars à octobre")
     assert value_in_citation("saison", None, "Ouvert seulement l'été")
@@ -182,6 +200,7 @@ def _detail(field, value, citation, page="https://keringar.fr"):
 
 
 def test_a_detail_whose_citation_is_absent_from_the_page_is_dropped(monkeypatch):
+    """Un détail dont la phrase est absente de la page n'est pas gardé."""
     monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: False)
     checked = control_details(_row(_detail("saison", "mars à novembre", "Ouvert de mars à novembre")), "Le Conquet")
     assert "budget" not in checked and "jours_fermeture" not in checked
@@ -189,11 +208,13 @@ def test_a_detail_whose_citation_is_absent_from_the_page_is_dropped(monkeypatch)
 
 
 def test_an_unreadable_page_proves_nothing(monkeypatch):
+    """Un détail cité sur une page illisible n'est pas gardé."""
     monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: None)
     assert control_details(_row(_detail("distinction", "Bib Gourmand", "Un Bib Gourmand")), "Le Conquet")["distinction"] is None
 
 
 def test_a_found_detail_is_kept_with_its_proof(monkeypatch):
+    """Un détail retrouvé est gardé avec sa preuve, et seulement le premier par champ."""
     monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
     star = _detail("distinction", "Étoile Michelin", "Une étoile au guide Michelin")
     checked = control_details(_row(star, _detail("distinction", "Bib Gourmand", "Un Bib Gourmand")), "Le Conquet")
@@ -202,17 +223,20 @@ def test_a_found_detail_is_kept_with_its_proof(monkeypatch):
 
 
 def test_a_detail_on_a_refused_page_is_dropped(monkeypatch):
+    """Un détail lu sur une page que le code refuse n'est pas gardé."""
     monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
     monkeypatch.setattr(service_chain, "check_links_of", lambda row, place: [{"url": "https://autre.fr", "type_page": "site", "verdict": "nom_absent"}])
     assert control_details(_row(_detail("distinction", "Bib Gourmand", "Un Bib Gourmand", "https://autre.fr")), "Le Conquet")["distinction"] is None
 
 
 def test_the_analyst_reads_every_page_found_except_the_excluded_sites():
+    """L'analyste reçoit chaque page trouvée une fois, sans les sites exclus."""
     row = {"pages": [{"url": "https://guide.michelin.com/x"}, {"url": "https://iroise-bretagne.bzh/x"}, {"url": "https://iroise-bretagne.bzh/x"}]}
     assert service_chain.pages_to_read(row) == ["https://iroise-bretagne.bzh/x"]
 
 
 def test_a_batch_too_long_is_asked_again_place_by_place(monkeypatch):
+    """Un lot de preuves trop long est redemandé lieu par lieu ; celui qui est encore trop long part en relecture."""
     def answer(message):
         if message.count('"numero"') > 1:
             raise LLMTimeout("trop long")
@@ -230,6 +254,7 @@ def test_a_batch_too_long_is_asked_again_place_by_place(monkeypatch):
 
 
 def test_a_quota_limit_is_not_taken_for_a_batch_too_long(monkeypatch):
+    """Une limite de quota n'est pas prise pour un lot trop long : elle remonte sans nouvel essai."""
     def answer(message):
         raise LLMUnavailable("You've hit your session limit")
 
@@ -241,6 +266,7 @@ def test_a_quota_limit_is_not_taken_for_a_batch_too_long(monkeypatch):
 
 
 def test_proofs_have_their_own_shorter_delay(monkeypatch):
+    """La preuve a son propre agent, avec un délai plus court que celui de l'analyse."""
     names = []
     monkeypatch.setattr(service_chain, "make_llm_service", lambda name: names.append(name) or _Service({"lieux": []}))
     find_proofs({"name": "X"}, [{"nom": "A"}])

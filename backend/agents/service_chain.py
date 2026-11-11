@@ -11,6 +11,12 @@ LA CHAÎNE, POUR UNE COMMUNE OU POUR UNE ZONE D'UNE GRANDE VILLE (search_zone)
     4. seuls les lieux que ni une page ni le registre ne prouvent partent chercher une preuve, par petits lots ;
     5. le code contrôle les détails, puis lit la preuve et la date « nouveau » dans le registre entier.
 Chaque étape est gardée dans un fichier JSON (write_trace) : la relire ne coûte aucun appel.
+Le lancement, pour toutes les catégories d'une commune, est dans find_services.py.
+
+UN PASSAGE SE RELIT DE BOUT EN BOUT
+Chaque appel d'agent porte l'identifiant du passage et son étape (« zone 3 / 10, année 2 », « analyse », « preuves, lot 2 »)
+jusque dans la table llm_calls (llm_service.mesure_passage, mesure_etape). Le fichier JSON porte le même identifiant.
+On voit ainsi, en base, qui a cherché quoi, ce qui a été refait, et où naît le doute (llm_calls_service.passage_calls).
 Pourquoi plusieurs recherches, pourquoi la preuve vient après, pourquoi rien n'est jeté : voir find_restaurants.py, où ces
 choix sont nés.
 
@@ -43,7 +49,6 @@ Le nom ne le montre pas : Laer-Mor était le nom des Boucaniers, Sainte-Barbe l'
 suffit pas : l'Hostellerie et le Bistrot 1954 partagent la leur et sont deux tables. Elle reste une condition :
 deux adresses différentes ne sont jamais fusionnées, quitte à garder un doublon plutôt que perdre un lieu.
 """
-import argparse
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -51,8 +56,9 @@ from datetime import datetime
 from pathlib import Path
 
 from agents.find_service_links import check_links_of, citation_found
-from agents.llm_config import make_llm_service, model_of
-from agents.llm_service import LLMTimeout, mesure_objet
+from agents.llm_config import make_llm_service
+from agents.llm_service import (LLMTimeout, etape_courante, map_in_context, mesure_etape, mesure_objet, mesure_passage,
+                                new_passage_id, passage_courant)
 from agents.pepite_common import is_excluded_site
 from etl.extract import api_registre
 from services import service_store
@@ -271,16 +277,17 @@ def _cost(run: dict) -> str:
     return f"{(run.get('duration_ms') or 0) / 1000:.0f} s, {run.get('cost_usd') or 0:.2f} $ en équivalent API"
 
 
-def ask(category, city: dict, label: str, prompt: str, message: str) -> dict:
-    """Une recherche : les lieux retenus et les écartés, sous leur nom seul."""
+def ask(category, city: dict, search: str, prompt: str, message: str) -> dict:
+    """Une recherche (« année 2 », « été ») : les lieux retenus et les écartés, sous leur nom seul."""
     service = make_llm_service(category.find_agent)
-    with mesure_objet("commune", city.get("id")):
+    with mesure_objet("commune", city.get("id")), mesure_etape(search):
+        label = etape_courante()        # avec la zone, dans une grande ville : « zone 3 / 10, année 2 »
         answer = service.complete_json(prompt, message, search_schema(category))
     for rows in answer.values():
         for row in rows:
             row["nom"] = clean_name(row["nom"])
     category.logger.info(f"[{category.key}] {city['name']} ({label}) : retenus {[row['nom'] for row in answer[category.key]]},"
-                      f" fermés {[row['nom'] for row in answer['ecartes'] if row['ferme']]}, {_cost(service.last_run)}")
+                         f" fermés {[row['nom'] for row in answer['ecartes'] if row['ferme']]}, {_cost(service.last_run)}")
     return answer
 
 
@@ -292,14 +299,13 @@ def write_trace(category, city: dict, trace: dict) -> Path:
     return path
 
 
-def search_zone(category, city: dict, register: dict | None, zone: dict | None, trace: dict, label: str = "") -> dict:
+def search_zone(category, city: dict, register: dict | None, zone: dict | None, trace: dict) -> dict:
     """Les recherches d'une commune ou d'une de ses zones, en même temps, puis le contrôle et l'analyse."""
     name = city_commune(city)
     seen = register_for_agent(category, register, zone)
     message = build_message(city, seen, zone)
-    searches = [(f"{label}{search}", prompt) for search, prompt in category.searches]
-    with ThreadPoolExecutor(max_workers=len(searches)) as pool:
-        answers = list(pool.map(lambda search: ask(category, city, search[0], search[1], message), searches))
+    with ThreadPoolExecutor(max_workers=len(category.searches)) as pool:
+        answers = map_in_context(pool, lambda search: ask(category, city, search[0], search[1], message), category.searches)
     trace["recherches"] = answers
     answer = merge_answers(category, *answers)
     disputed = [row["nom"] for row in answer[category.key] if row.get("dit_ferme")]
@@ -333,51 +339,32 @@ def search_zone(category, city: dict, register: dict | None, zone: dict | None, 
 
 
 def search_commune(category, city: dict) -> dict:
-    """La commune entière, ou zone par zone pour une grande ville. Lève LLMUnavailable si l'agent n'a pas pu répondre."""
+    """
+    La commune entière, ou zone par zone pour une grande ville. Lève LLMUnavailable si l'agent n'a pas pu répondre.
+    Tous les appels portent l'identifiant du passage en cours (find_services.run_passage), ou un nouveau si la commune
+    est cherchée seule.
+    """
     name = city_commune(city)
-    register = api_registre.load_register(city, category.register_activities)
-    trace = {"commune": name, "version": category.prompt_version, "registre": register}
-    try:
-        if not is_big_city(register):
-            answer = search_zone(category, city, register, None, trace)
-        else:
-            zones = commune_zones(city, service_store.commune_spots(name))
-            category.logger.info(f"[{category.key}] {name} : {len(zones)} zones de {ZONE_KM} km autour des spots")
-            trace["zones"] = [{"zone": zone} for zone in zones]
-            answer = merge_zones(category, [search_zone(category, city, register, zone, zone_trace, f"zone {number} / {len(zones)}, ")
-                                         for number, (zone, zone_trace) in enumerate(zip(zones, trace["zones"]), start=1)])
-        trace["final"] = answer[category.key]
-        return answer
-    finally:
-        # Même si une étape échoue : ce qui a déjà été payé reste lisible.
-        category.logger.info(f"[{category.key}] {name} : réponses gardées dans {write_trace(category, city, trace)}")
-
-
-def main(category, description: str):
-    """Le lancement d'une catégorie : python -m agents.find_restaurants --ville Plougonvelin [--essai]."""
-    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--ville", required=True, action="append", help="Commune de la table cities (répétable)")
-    parser.add_argument("--essai", action="store_true", help="N'écrit rien en base : les réponses restent dans le fichier")
-    args = parser.parse_args()
-    searched = set()
-    for name in args.ville:
-        city = service_store.load_city(name)
-        if not city:
-            category.logger.error(f"[{category.key}] {name} : commune inconnue")
-            continue
-        if city["name"] != name:
-            category.logger.info(f"[{category.key}] {name} : cherchée comme {city_commune(city)}, depuis la ville {city['name']}")
-        # Une commune n'est cherchée qu'une fois : --ville Morgat --ville Le Fret ne paie qu'une recherche de Crozon.
-        if service_store.commune_key(city) in searched:
-            category.logger.info(f"[{category.key}] {name} : {city_commune(city)} déjà cherchée")
-            continue
-        searched.add(service_store.commune_key(city))
-        answer = search_commune(category, city)
-        if args.essai:
-            print(json.dumps({"ville": name, "lieux": [row["nom"] for row in answer[category.key]]}, ensure_ascii=False))
-            continue
-        summary = service_store.save_commune(category, city, answer, category.prompt_version, model_of(category.find_agent))
-        print(json.dumps({"ville": name, **summary}, ensure_ascii=False))
+    with mesure_passage(passage_courant() or new_passage_id()):
+        register = api_registre.load_register(city, category.register_activities)
+        trace = {"commune": name, "passage": passage_courant(), "version": category.prompt_version, "registre": register}
+        try:
+            if not is_big_city(register):
+                answer = search_zone(category, city, register, None, trace)
+            else:
+                zones = commune_zones(city, service_store.commune_spots(name))
+                category.logger.info(f"[{category.key}] {name} : {len(zones)} zones de {ZONE_KM} km autour des spots")
+                trace["zones"] = [{"zone": zone} for zone in zones]
+                answers = []
+                for number, (zone, zone_trace) in enumerate(zip(zones, trace["zones"]), start=1):
+                    with mesure_etape(f"zone {number} / {len(zones)}, "):
+                        answers.append(search_zone(category, city, register, zone, zone_trace))
+                answer = merge_zones(category, answers)
+            trace["final"] = answer[category.key]
+            return answer
+        finally:
+            # Même si une étape échoue : ce qui a déjà été payé reste lisible.
+            category.logger.info(f"[{category.key}] {name} : réponses gardées dans {write_trace(category, city, trace)}")
 
 
 # --- L'analyste : fermeture, doublon, lieu inutile au voyageur, détails ---
@@ -449,7 +436,7 @@ def analyze_commune(category, city: dict, rows: list, register: dict | None = No
     if register:
         message += f"\nREGISTRE : {json.dumps(register, ensure_ascii=False)}"
     service = make_llm_service(category.analyze_agent)
-    with mesure_objet("commune", city.get("id")):
+    with mesure_objet("commune", city.get("id")), mesure_etape("analyse"):
         answer = service.complete_json(category.analysis_prompt, message, analysis_schema(category))
     fill_addresses(rows, answer)
     kept, closed, duplicates = apply_analysis(category, rows, answer)
@@ -484,8 +471,9 @@ def proofs_of_batch(category, city: dict, batch: list) -> list:
             category.logger.info(f"[{category.key}] {city['name']} (preuves) : {batch[0]['nom']} sans réponse à temps, à relire")
             return [{"a_relire": PROOF_TIMED_OUT}]
         category.logger.info(f"[{category.key}] {city['name']} (preuves) : lot trop long, relancé lieu par lieu")
-        with ThreadPoolExecutor(max_workers=len(batch)) as pool:
-            return [proof for answer in pool.map(lambda row: proofs_of_batch(category, city, [row]), batch) for proof in answer]
+        with ThreadPoolExecutor(max_workers=len(batch)) as pool, mesure_etape(", lieu par lieu"):
+            answers = map_in_context(pool, lambda row: proofs_of_batch(category, city, [row]), batch)
+        return [proof for answer in answers for proof in answer]
 
 
 def find_proofs(category, city: dict, rows: list, trace: dict | None = None) -> list:
@@ -493,8 +481,14 @@ def find_proofs(category, city: dict, rows: list, trace: dict | None = None) -> 
     batches = [rows[start:start + PROOF_BATCH] for start in range(0, len(rows), PROOF_BATCH)]
     if not batches:
         return []
+
+    def one_batch(numbered: tuple) -> list:
+        number, batch = numbered
+        with mesure_etape(f"preuves, lot {number}"):
+            return proofs_of_batch(category, city, batch)
+
     with ThreadPoolExecutor(max_workers=len(batches)) as pool:
-        proofs = [proof for answer in pool.map(lambda batch: proofs_of_batch(category, city, batch), batches) for proof in answer]
+        proofs = [proof for answer in map_in_context(pool, one_batch, enumerate(batches, 1)) for proof in answer]
     if trace is not None:
         trace["preuves"] = [{"nom": row["nom"], **proof} for row, proof in zip(rows, proofs)]
     return proofs
