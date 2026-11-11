@@ -16,12 +16,19 @@ Ce fichier propose DEUX façons d'appeler Claude. Elles ont la même méthode
 Dans les deux cas, on donne à Claude un "schéma JSON" : la description exacte
 du JSON qu'on attend en retour. Claude est obligé de le respecter, donc on
 reçoit toujours un JSON propre, directement utilisable.
+
+Chaque appel, réussi ou non, laisse une ligne dans la table llm_calls (voir record_call) :
+durée, tokens, coût, statut, et l'objet traité quand l'agent l'a annoncé avec mesure_objet.
 """
+import contextvars
 import json
 import os
 import shutil
 import subprocess
 import tempfile
+import time
+from contextlib import contextmanager
+from datetime import datetime
 
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
@@ -49,15 +56,133 @@ class LLMTimeout(LLMUnavailable):
     """Claude n'a pas répondu dans le délai : l'appelant peut réessayer autrement, une limite de quota reste un LLMUnavailable."""
 
 
+class LLMRefused(LLMUnavailable):
+    """Claude a refusé de répondre."""
+
+
+class LLMTruncated(LLMUnavailable):
+    """La réponse a été coupée avant la fin (MAX_TOKENS atteint)."""
+
+
+# --- Mesure de chaque appel ----------------------------------------------------
+
+ENGINE_API = "api"
+ENGINE_API_BATCH = "api-batch"
+ENGINE_CLAUDE_CODE = "claude-code"
+
+# Statuts d'un appel dans llm_calls.
+REUSSI, REFUS, COUPE, DELAI, ERREUR = "reussi", "refus", "coupe", "delai", "erreur"
+
+# L'objet traité par l'appel en cours : (type, id), par exemple ("commune", 12).
+# Une ContextVar est une variable propre à chaque fil d'exécution : deux agents lancés
+# en parallèle (find_restaurants interroge plusieurs zones à la fois) ne se mélangent pas.
+_current_object = contextvars.ContextVar("llm_object", default=(None, None))
+
+CALL_COLUMNS = ("called_at", "agent", "engine", "model", "effort", "duration_ms",
+                "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens",
+                "web_searches", "cost_usd", "turns", "tools", "status", "error", "objet_type", "objet_id")
+INSERT_CALL = (f"INSERT INTO llm_calls ({', '.join(CALL_COLUMNS)}) "
+               f"VALUES ({', '.join(['%s'] * len(CALL_COLUMNS))})")
+
+
+@contextmanager
+def mesure_objet(objet_type: str, objet_id: int):
+    """
+    Annonce l'objet traité par les appels faits à l'intérieur du bloc :
+
+        with mesure_objet("commune", city["id"]):
+            service.complete_json(...)
+
+    objet_type vaut "commune" (cities.id), "spot" (spots.id) ou "plan" (trip_plans.id).
+    """
+    token = _current_object.set((objet_type, objet_id))
+    try:
+        yield
+    finally:
+        _current_object.reset(token)
+
+
+def call_status(error: Exception | None) -> str:
+    """Le statut d'un appel d'après l'erreur levée (None : réussi)."""
+    if error is None:
+        return REUSSI
+    if isinstance(error, LLMRefused):
+        return REFUS
+    if isinstance(error, LLMTruncated):
+        return COUPE
+    if isinstance(error, LLMTimeout):
+        return DELAI
+    return ERREUR
+
+
+def _field(source, name: str):
+    """Lit un champ d'un dict (sortie de la CLI) ou d'un objet (réponse du SDK)."""
+    if source is None:
+        return None
+    if isinstance(source, dict):
+        return source.get(name)
+    return getattr(source, name, None)
+
+
+def usage_measures(usage) -> dict:
+    """Les tokens et recherches web d'un bloc "usage" : mêmes noms dans l'API et dans la CLI."""
+    return {
+        "input_tokens": _field(usage, "input_tokens"),
+        "output_tokens": _field(usage, "output_tokens"),
+        "cache_read_tokens": _field(usage, "cache_read_input_tokens"),
+        "cache_write_tokens": _field(usage, "cache_creation_input_tokens"),
+        "web_searches": _field(_field(usage, "server_tool_use"), "web_search_requests"),
+    }
+
+
+def build_call_row(agent: str | None, engine: str, model: str, effort: str | None, run: dict,
+                   error: Exception | None, called_at: datetime, objet: tuple | None = None) -> dict:
+    """La ligne de llm_calls d'un appel. `objet` force l'objet (lots) ; sinon, celui de mesure_objet."""
+    objet_type, objet_id = objet or _current_object.get()
+    tools = run.get("tools")
+    return {
+        "called_at": called_at, "agent": agent, "engine": engine, "model": model, "effort": effort,
+        "duration_ms": run.get("duration_ms"),
+        **{name: run.get(name) for name in ("input_tokens", "output_tokens", "cache_read_tokens",
+                                             "cache_write_tokens", "web_searches", "cost_usd", "turns")},
+        "tools": json.dumps(tools) if tools is not None else None,
+        "status": call_status(error),
+        "error": str(error)[:255] if error is not None else None,
+        "objet_type": objet_type, "objet_id": objet_id,
+    }
+
+
+def record_call(row: dict) -> None:
+    """
+    Écrit la mesure d'un appel dans llm_calls. Ne lève jamais d'exception : une base
+    absente ou en panne ne doit pas faire échouer l'appel, seulement laisser un avertissement.
+    """
+    try:
+        from utils.db_utils import MySQLUtils  # importé ici : le service reste utilisable sans MySQL
+        connection = MySQLUtils.connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(INSERT_CALL, tuple(row.get(column) for column in CALL_COLUMNS))
+            connection.commit()
+            cursor.close()
+        finally:
+            MySQLUtils.disconnect(connection)
+    except Exception as error:
+        logger.warning(f"[llm] mesure de l'appel non enregistrée ({row.get('agent')}) : {error}")
+
+
 # --- 1. Appel via l'API Anthropic ---------------------------------------------
 
 class LLMService:
     """Appelle Claude via l'API Anthropic (clé ANTHROPIC_API_KEY dans le .env)."""
 
-    def __init__(self, model: str, api_key: str = None):
+    def __init__(self, model: str, api_key: str = None, agent: str = None):
         self.model = model
         self.api_key = api_key
+        self.agent = agent  # nom de l'agent, noté dans llm_calls
         self.client = None  # créé seulement au premier appel (voir _get_client)
+        # Mesures du dernier appel (durée, tokens). Le coût de l'API viendra avec #131.
+        self.last_run = {}
 
     def _get_client(self):
         """
@@ -113,9 +238,9 @@ class LLMService:
         mieux vaut ne rien écrire en base qu'écrire un résultat incomplet.
         """
         if response.stop_reason == "refusal":
-            raise LLMUnavailable("Claude a refusé de répondre.")
+            raise LLMRefused("Claude a refusé de répondre.")
         if response.stop_reason == "max_tokens":
-            raise LLMUnavailable("Réponse coupée (MAX_TOKENS atteint).")
+            raise LLMTruncated("Réponse coupée (MAX_TOKENS atteint).")
 
         # La réponse est une liste de blocs ; on prend le premier bloc de texte.
         for block in response.content:
@@ -128,8 +253,19 @@ class LLMService:
     def complete_json(self, system: str, user: str, schema: dict) -> dict:
         """Envoie une requête à Claude et renvoie sa réponse sous forme de dict Python."""
         client = self._get_client()
-        response = client.messages.create(**self._build_params(system, user, schema))
-        return self._read_json(response)
+        called_at, started = datetime.now(), time.monotonic()
+        response, error = None, None
+        try:
+            response = client.messages.create(**self._build_params(system, user, schema))
+            return self._read_json(response)
+        except Exception as raised:
+            error = raised
+            raise
+        finally:
+            # finally : exécuté que l'appel réussisse ou lève une erreur.
+            self.last_run = {"duration_ms": round((time.monotonic() - started) * 1000),
+                             **usage_measures(_field(response, "usage"))}
+            record_call(build_call_row(self.agent, ENGINE_API, self.model, EFFORT, self.last_run, error, called_at))
 
     # Appels groupés (Batch API)
     # On envoie toutes les requêtes d'un coup, Anthropic les traite en arrière-plan
@@ -168,16 +304,30 @@ class LLMService:
         """
         results = {}
         for item in self._get_client().messages.batches.results(batch_id):
+            message, error = None, None
             if item.result.type != "succeeded":
                 logger.warning(f"[llm] {item.custom_id} : échec ({item.result.type})")
-                continue
-            try:
-                results[item.custom_id] = self._read_json(item.result.message)
-            except (LLMUnavailable, json.JSONDecodeError) as error:
-                logger.warning(f"[llm] {item.custom_id} : réponse inutilisable ({error})")
+                error = LLMUnavailable(f"lot : {item.result.type}")
+            else:
+                message = item.result.message
+                try:
+                    results[item.custom_id] = self._read_json(message)
+                except (LLMUnavailable, json.JSONDecodeError) as raised:
+                    logger.warning(f"[llm] {item.custom_id} : réponse inutilisable ({raised})")
+                    error = raised
+            # Une ligne par réponse du lot ; l'objet vient de l'étiquette ("spot-12").
+            record_call(build_call_row(self.agent, ENGINE_API_BATCH, self.model, EFFORT,
+                                       usage_measures(_field(message, "usage")), error, datetime.now(),
+                                       objet=object_of_label(item.custom_id)))
 
         logger.info(f"[llm] Lot {batch_id} : {len(results)} réponse(s) exploitable(s)")
         return results
+
+
+def object_of_label(custom_id: str) -> tuple:
+    """("spot", 12) pour l'étiquette "spot-12" ; (None, None) si elle n'a pas cette forme."""
+    kind, _, number = (custom_id or "").rpartition("-")
+    return (kind, int(number)) if kind and number.isdigit() else (None, None)
 
 
 # --- 2. Appel via le programme `claude` (abonnement) -------------------------
@@ -198,8 +348,9 @@ class ClaudeCodeLLMService:
     """
 
     def __init__(self, model: str, effort: str = EFFORT, timeout: int = 180,
-                 tools: list = None, mcp_servers: dict = None, mcp_tools: list = None):
+                 tools: list = None, mcp_servers: dict = None, mcp_tools: list = None, agent: str = None):
         self.model = model
+        self.agent = agent  # nom de l'agent, noté dans llm_calls
         self.effort = effort
         self.timeout = timeout  # temps maximum d'attente d'une réponse, en secondes
         # Outils intégrés à Claude Code autorisés, par exemple ["WebSearch", "WebFetch"]
@@ -253,6 +404,21 @@ class ClaudeCodeLLMService:
             # appel d'outil, impossible en mode non interactif.
             command += ["--allowedTools", ",".join(allowed)]
 
+        # 4 à 6 : l'appel lui-même, mesuré dans llm_calls quoi qu'il arrive.
+        called_at, started = datetime.now(), time.monotonic()
+        self.last_run, error = {}, None
+        try:
+            return self._run(command, user)
+        except Exception as raised:
+            error = raised
+            raise
+        finally:
+            self.last_run.setdefault("duration_ms", round((time.monotonic() - started) * 1000))
+            record_call(build_call_row(self.agent, ENGINE_CLAUDE_CODE, self.model, self.effort,
+                                       self.last_run, error, called_at))
+
+    def _run(self, command: list, user: str) -> dict:
+        """Lance la commande, remplit self.last_run et renvoie la réponse (étapes 4 à 6)."""
         # 4. Lancer la commande et attendre la fin. On la lance depuis le dossier
         #    temporaire pour qu'elle ne voie pas les fichiers du projet.
         try:
@@ -287,16 +453,18 @@ class ClaudeCodeLLMService:
             message = (process.stderr or process.stdout).strip()[:300]
             raise LLMUnavailable(f"claude -p a échoué (code {process.returncode}) : {message}")
 
-        if answer.get("is_error") or answer.get("structured_output") is None:
-            raise LLMUnavailable(f"claude -p : réponse inutilisable ({str(answer.get('result'))[:300]})")
-
-        # 6. Garder quelques mesures de l'appel. "total_cost_usd" est le prix
-        #    qu'aurait coûté l'appel via l'API : avec l'abonnement, rien n'est facturé.
+        # 6. Garder quelques mesures de l'appel, avant de juger la réponse : un appel
+        #    raté a aussi consommé. "total_cost_usd" est le prix qu'aurait coûté l'appel
+        #    via l'API : avec l'abonnement, rien n'est facturé.
         self.last_run = {
             "models": list(answer.get("modelUsage", {}).keys()),
             "duration_ms": answer.get("duration_ms"),
             "cost_usd": answer.get("total_cost_usd"),
             "turns": answer.get("num_turns"),
             "tools": tools_used,
+            **usage_measures(answer.get("usage")),
         }
+
+        if answer.get("is_error") or answer.get("structured_output") is None:
+            raise LLMUnavailable(f"claude -p : réponse inutilisable ({str(answer.get('result'))[:300]})")
         return answer["structured_output"]

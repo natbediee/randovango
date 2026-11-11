@@ -29,7 +29,7 @@ import re
 from datetime import date
 
 from agents.llm_config import make_llm_service
-from agents.llm_service import LLMUnavailable
+from agents.llm_service import LLMUnavailable, mesure_objet
 from services.supervision_service import OPENING_OBJECT
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
@@ -178,7 +178,8 @@ def run(limit: int = None, spot_ids: list = None, service=None) -> None:
         logger.info(f"[ouvertures] {len(spots)} spot(s) à lire")
         for spot in spots:
             try:
-                payload = read_opening(service, spot["opening_period"], spot["description"])
+                with mesure_objet("spot", spot.get("id")):
+                    payload = read_opening(service, spot["opening_period"], spot["description"])
             except (LLMUnavailable, json.JSONDecodeError) as error:
                 logger.warning(f"[ouvertures] Spot {spot['id']} ignoré : {error}")
                 failures_in_a_row += 1

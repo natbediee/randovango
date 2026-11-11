@@ -100,7 +100,7 @@ def make_llm_service(agent: str, chosen_engine: str = None, model: str = None,
     if chosen_engine == ENGINE_API:
         if config.web or mcp_servers:
             raise LLMConfigError(f"{agent} a besoin d'outils que le moteur api n'a pas encore : utiliser claude-code")
-        return LLMService(model=model)
+        return LLMService(model=model, agent=agent)
     return ClaudeCodeLLMService(model=model, effort=config.effort, timeout=config.timeout,
                                 tools=WEB_TOOLS if config.web else None,
-                                mcp_servers=mcp_servers, mcp_tools=mcp_tools)
+                                mcp_servers=mcp_servers, mcp_tools=mcp_tools, agent=agent)

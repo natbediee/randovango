@@ -19,6 +19,7 @@ UN AGENT APPELÉ À LA DEMANDE, à la préparation d'une journée (choix du spot
 C'est services/pepite_service.py qui l'appelle (_top_up) et applique son choix.
 """
 from agents import llm_config
+from agents.llm_service import mesure_objet
 from services.pepite_service import DAY_START_H
 from utils.display_utils import FR_WEEKDAYS, PEPITE_MOMENTS, pepite_display
 from utils.logger_util import LoggerUtil
@@ -183,7 +184,8 @@ def choose_pepites(day: dict, candidates: list, count: int, already: list = (), 
     service = make_llm_service()
     try:
         message = build_user_message(day, candidates, count, list(already), list(program))
-        answer = service.complete_json(SYSTEM_PROMPT, message, choose_schema(candidate_ids, count))
+        with mesure_objet("plan", day.get("plan_id")):
+            answer = service.complete_json(SYSTEM_PROMPT, message, choose_schema(candidate_ids, count))
     except Exception as error:   # le choix est un plus : son échec ne doit rien bloquer
         logger.warning(f"[pépites] choix du {day['day_date']} impossible, classement par le code : {error}")
         return None

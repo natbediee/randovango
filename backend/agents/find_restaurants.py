@@ -59,6 +59,7 @@ from pathlib import Path
 from agents import analyze_restaurants
 from agents.find_service_links import check_links_of, citation_found
 from agents.llm_config import make_llm_service, model_of
+from agents.llm_service import mesure_objet
 from agents.pepite_common import EXCLUDED_SITES_PROMPT
 from etl.extract import api_registre
 from services import restaurant_service
@@ -235,7 +236,8 @@ def control_row(row: dict, commune: str) -> list:
 
 def _ask(city: dict, label: str, prompt: str, message: str) -> dict:
     service = make_llm_service("find_restaurants")
-    answer = service.complete_json(prompt, message, SCHEMA)
+    with mesure_objet("commune", city.get("id")):
+        answer = service.complete_json(prompt, message, SCHEMA)
     for rows in answer.values():
         for row in rows:
             row["nom"] = clean_name(row["nom"])
