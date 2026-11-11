@@ -16,7 +16,7 @@ import argparse
 from datetime import datetime
 
 from etl.extract.api_carburants import download_state_file, extract_osm_fuel
-from etl.load.load_carburants import known_stations, load_stations
+from etl.load.load_carburants import known_stations, load_stations, mark_prices_read
 from etl.transform.transform_carburants import (keep_near, link_to_osm, osm_station, parse_state_file,
                                                 station_rows)
 from utils.db_utils import get_all_city_ids
@@ -73,7 +73,10 @@ def run_city_etl(city: str, dry_run: bool = False, stations: list | None = None)
 
 
 def refresh_prices(dry_run: bool = False) -> int | None:
-    """Les prix et l'état des stations déjà en base, sans redemander OSM."""
+    """
+    Les prix et l'état des stations déjà en base, sans redemander OSM. Lancé une fois par jour au début d'un voyage
+    (api/routers/step1.py) ; la date du passage réussi est notée dans sources.lu_le. None si le fichier manque.
+    """
     stations = _read_state_file()
     if stations is None:
         return None
@@ -95,7 +98,9 @@ def refresh_prices(dry_run: bool = False) -> int | None:
     if dry_run:
         print(f"{len(rows)} stations seraient mises à jour, {missing} absentes du fichier")
         return len(rows)
-    return load_stations(rows, None)
+    loaded = load_stations(rows, None)
+    mark_prices_read(read_at)
+    return loaded
 
 
 def _print_report(city: str, rows: list, osm_only: list) -> None:

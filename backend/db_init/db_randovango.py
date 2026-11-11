@@ -132,10 +132,13 @@ def init_database():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 2. table sources
+            # lu_le : la dernière lecture complète d'une source nationale. Pour prix-carburants, le dernier rafraîchissement
+            # des prix de toutes les stations (etl_carburants.refresh_prices) ; vide pour les autres sources.
             """
             CREATE TABLE IF NOT EXISTS sources (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NOT NULL
+                name VARCHAR(255) NOT NULL,
+                lu_le DATETIME
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 3. table services

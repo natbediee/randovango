@@ -4,7 +4,9 @@ db_init/db_randovango.py.
 
 Une station est un poi de la source « prix-carburants » (original_id = identifiant de l'État), lié au service « fuel » :
 l'étape 4 la range donc dans l'onglet gasoil sans rien changer. Son nom et sa position sont remis à jour à chaque
-passage, depuis OSM ; une correction humaine passe par la table decisions et n'est jamais écrasée ici.
+passage, depuis OSM, sauf ce qu'un humain a corrigé dans /supervision (table decisions, non annulée) : ce champ-là n'est
+plus jamais réécrit ici. Cas du 11 novembre 2026 : le Carrefour Contact de Plouguerneau, renommé à la main, serait
+redevenu « Station-service » au rafraîchissement suivant des prix.
 
 Les prix d'une station sont remplacés en bloc : la table garde exactement ce que dit le dernier fichier.
 """
@@ -22,19 +24,48 @@ STATION_COLUMNS = ("pdv_id", "osm_element", "lien_osm", "marque", "adresse_etat"
                    "latitude_etat", "longitude_etat", "route", "automate_24_24", "horaires", "services",
                    "fermeture_type", "fermeture_debut", "fermeture_fin", "lu_le")
 JSON_COLUMNS = ("horaires", "services")
+POI_COLUMNS = ("name", "latitude", "longitude", "address")
 
 
-def _upsert_poi(cursor, source_id: int, pdv_id: str, poi: dict) -> int:
+def human_fields(cursor, source_id: int) -> dict:
+    """
+    {poi_id: colonnes de poi corrigées par une décision non annulée} pour les stations de l'État. Une décision garde
+    les valeurs d'avant dans detail.avant (poi_review_service) : ce sont les colonnes qu'elle a changées.
+    """
     cursor.execute(
         """
-        INSERT INTO poi (original_id, name, latitude, longitude, address, source_id, verifie)
-        VALUES (%s, %s, %s, %s, %s, %s, 1)
-        ON DUPLICATE KEY UPDATE name = VALUES(name), latitude = VALUES(latitude), longitude = VALUES(longitude),
-                                address = VALUES(address)
+        SELECT d.objet_id, d.detail FROM decisions d JOIN poi p ON p.id = d.objet_id
+        WHERE d.objet_type = 'poi' AND d.annulee_at IS NULL AND p.source_id = %s
         """,
-        (pdv_id, poi["name"], poi["latitude"], poi["longitude"], poi["address"], source_id))
+        (source_id,))
+    fields = {}
+    for poi_id, detail in cursor.fetchall():
+        try:
+            before = (json.loads(detail) if isinstance(detail, (str, bytes)) else detail or {}).get("avant") or {}
+        except (ValueError, AttributeError):
+            continue
+        fields.setdefault(poi_id, set()).update(column for column in before if column in POI_COLUMNS)
+    return fields
+
+
+def _upsert_poi(cursor, source_id: int, pdv_id: str, poi: dict, protected: dict) -> int:
+    """Crée le poi d'une station, ou remet à jour ses colonnes, sauf celles qu'un humain a corrigées (protected)."""
     cursor.execute("SELECT id FROM poi WHERE original_id = %s AND source_id = %s", (pdv_id, source_id))
-    return cursor.fetchone()[0]
+    found = cursor.fetchone()
+    if found is None:
+        cursor.execute(
+            """
+            INSERT INTO poi (original_id, name, latitude, longitude, address, source_id, verifie)
+            VALUES (%s, %s, %s, %s, %s, %s, 1)
+            """,
+            (pdv_id, poi["name"], poi["latitude"], poi["longitude"], poi["address"], source_id))
+        return cursor.lastrowid
+    poi_id = found[0]
+    columns = [column for column in POI_COLUMNS if column not in protected.get(poi_id, set())]
+    if columns:
+        cursor.execute(f"UPDATE poi SET {', '.join(f'{c} = %s' for c in columns)} WHERE id = %s",
+                       (*(poi[c] for c in columns), poi_id))
+    return poi_id
 
 
 def _upsert_station(cursor, poi_id: int, station: dict) -> None:
@@ -68,8 +99,9 @@ def load_stations(rows: list, city_name: str | None) -> int:
     cursor = cnx.cursor()
     try:
         source_id = get_or_create_source(cursor, SOURCE_NAME)
+        protected = human_fields(cursor, source_id)
         for row in rows:
-            poi_id = _upsert_poi(cursor, source_id, row["station"]["pdv_id"], row["poi"])
+            poi_id = _upsert_poi(cursor, source_id, row["station"]["pdv_id"], row["poi"], protected)
             insert_service_and_link(cursor, poi_id, FUEL_SERVICE)
             if city_name:
                 insert_histo_poi(cursor, poi_id, city_name)
@@ -84,6 +116,32 @@ def load_stations(rows: list, city_name: str | None) -> int:
         MySQLUtils.disconnect(cnx)
     logger.info(f"[Load] : {len(rows)} stations chargées{f' pour {city_name}' if city_name else ''}")
     return len(rows)
+
+
+def mark_prices_read(read_at) -> None:
+    """Note la date du rafraîchissement national des prix (sources.lu_le), lue par GET /api/step1/cities."""
+    cnx = MySQLUtils.connect()
+    cursor = cnx.cursor()
+    try:
+        source_id = get_or_create_source(cursor, SOURCE_NAME)
+        cursor.execute("UPDATE sources SET lu_le = %s WHERE id = %s", (read_at, source_id))
+        cnx.commit()
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(cnx)
+
+
+def prices_read_at():
+    """La date du dernier rafraîchissement national des prix, ou None s'il n'a jamais eu lieu."""
+    cnx = MySQLUtils.connect()
+    cursor = cnx.cursor()
+    try:
+        cursor.execute("SELECT lu_le FROM sources WHERE name = %s", (SOURCE_NAME,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(cnx)
 
 
 def known_stations() -> dict:
