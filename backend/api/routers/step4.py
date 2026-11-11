@@ -152,7 +152,7 @@ def is_generic_name(name: str | None) -> bool:
 
 def shown_verified(poi: dict, frontend_category: str, sheet: dict) -> int:
     """
-    Dans les onglets dont un agent écrit les fiches, « Vérifié » suit la preuve (restaurant_service.set_verified) :
+    Dans les onglets dont un agent écrit les fiches, « Vérifié » suit la preuve (service_store.set_verified) :
     un lieu d'OSM sans fiche n'a été contrôlé par personne, même si load_poi.py l'a chargé avec verifie = 1.
     Les autres onglets (eau, toilettes...) gardent la valeur de la base.
     """
@@ -349,7 +349,7 @@ def get_poi(
             "jours_fermeture": poi['jours_fermeture'],
             "distinction": poi['distinction'],
             "categorie": sheet['categorie'],
-            # Le jour d'un marché (agents/analyze_commerces.py), lu sur une page acceptée.
+            # Le jour d'un marché (l'analyste des commerces, agents/find_commerces.py), lu sur une page acceptée.
             "jours": poi.get('jours'),
             "nouveau": is_new(sheet['registre_depuis']),
             # Le lien Google Maps saisi par un admin dans /supervision passe avant celui que le code fabrique.

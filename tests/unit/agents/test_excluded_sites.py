@@ -1,7 +1,7 @@
 """Les sites exclus ne sont jamais ouverts par le code, quoi que l'agent réponde."""
 import pytest
 
-from agents import analyze_restaurants, find_restaurants, find_service_links, pepite_common
+from agents import find_restaurants, find_service_links, pepite_common
 from agents.pepite_common import EXCLUDED_SITES_PROMPT, is_excluded_site
 
 
@@ -57,6 +57,6 @@ def test_excluded_link_is_refused_as_proof(monkeypatch):
 
 
 def test_every_restaurant_prompt_names_the_excluded_sites():
-    for prompt in (find_restaurants.SYSTEM_PROMPT, find_restaurants.SEASON_PROMPT, analyze_restaurants.SYSTEM_PROMPT,
-                   analyze_restaurants.PROOF_PROMPT, find_service_links.SYSTEM_PROMPT):
+    for prompt in (find_restaurants.SYSTEM_PROMPT, find_restaurants.SEASON_PROMPT, find_restaurants.ANALYSIS_PROMPT,
+                   find_restaurants.PROOF_PROMPT, find_service_links.SYSTEM_PROMPT):
         assert EXCLUDED_SITES_PROMPT in prompt

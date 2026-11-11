@@ -1,16 +1,23 @@
 """
-Enregistre ce que l'agent find_restaurants.py a trouvé.
+L'enregistrement des services trouvés par les agents (agents/service_chain.py) : une seule façon d'écrire une commune en
+base, réglée par catégorie (agents/service_category.py). Une règle corrigée ici l'est pour toutes les catégories.
 
-    fiche    : le registre ou une page acceptée montre un restaurant à l'adresse, et on a une position. Le lieu s'affiche à l'étape 4 ;
-    à relire : un tel lieu, mais sans position ou avec une enseigne fermée au registre, en signal a_confirmer, masqué s'il est nouveau ;
-               de même, avec ou sans page, un lieu que l'agent n'a pas pu trancher (row["a_relire"]) : preuve sans réponse
-               à temps, ou bar au registre dit servir des repas ;
-    écarté   : ni registre ni page acceptée, ou une liquidation judiciaire. Rien n'est écrit en base, il ne reste que dans le fichier de l'agent.
+CE QUE DEVIENT CHAQUE LIEU D'UNE RÉPONSE (save_commune)
+    fiche    : le registre ou une page acceptée le montre, et on a une position. Il s'affiche à l'étape 4 ;
+    à relire : un tel lieu, mais sans position, avec une alerte du registre, ou que l'agent n'a pas pu trancher
+               (row["a_relire"] : preuve sans réponse à temps, bar au registre dit servir des repas, registre seul) :
+               signal a_confirmer, sur une ligne masquée s'il est nouveau. Le signal garde la fiche préparée : la valider
+               dans /supervision l'enregistre (save_validated_sheet) ;
+    écarté   : ni registre ni page acceptée, ou une liquidation judiciaire. Rien n'est écrit en base, il ne reste que
+               dans le fichier de l'agent.
 
-Un restaurant est un POI : on réutilise la ligne d'un lieu déjà connu (même nom, ou ancien nom),
-sinon on en crée une. Un lieu déjà masqué (Le Pêcheur, signalé fermé) est ignoré : il ne revient pas
-dans la relecture et le code ne le démasque jamais, une décision humaine prime.
+Un service est un POI : on réutilise la ligne d'un lieu déjà connu (même nom, ou ancien nom), sinon on en crée une.
+Un lieu déjà masqué (Le Pêcheur, signalé fermé) est ignoré : il ne revient pas dans la relecture et le code ne le
+démasque jamais, une décision humaine prime.
 Rejouable : la fiche et les preuves d'un lieu sont remplacées, les signaux mis à jour.
+
+Ce fichier porte aussi ce que les deux bouts de la chaîne partagent : la clé d'un nom, la comparaison de deux adresses,
+la règle d'une page acceptée, et le choix de la ville d'où chercher une commune.
 """
 import json
 import re
@@ -22,20 +29,13 @@ from etl.load.load_poi_checks import save_signal
 from services.pepite_service import is_generic, match_poi, name_key
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
-from utils.geo_utils import city_commune, geocode_address_ban, get_bounding_box, haversine_distance_km
-from utils.geo_utils import geocode_address_ban, geocode_locality_ban, get_bounding_box, haversine_distance_km
-from utils.logger_util import LoggerUtil
+from utils.geo_utils import city_commune, geocode_address_ban, geocode_locality_ban, get_bounding_box, haversine_distance_km
 
-logger = LoggerUtil.get_logger("agent_restaurants")
-
-SOURCE = "agent_restaurants"
-SERVICE_CATEGORY = "restaurant"
 MAX_KM = 15                 # au-delà, l'adresse géocodée n'est pas celle de la commune cherchée
 SAME_PLACE_KM = 0.05        # même nom, sans numéro de rue : à moins de 50 m, c'est le même lieu
 RULE_AUTHOR = "règle automatique"   # les décisions de la règle (poi_triage_service.py) ne bloquent pas l'agent
 HUMAN_NAME_DECISIONS = ("renommer", "autre_nom", "valider_lien_nom")
 HUMAN_LINK_DECISIONS = ("valider_lien", "valider_lien_nom", "refuser_lien", "autre_lien", "retirer_lien", "garder_lien")
-SHEET_FIELDS = ("genre", "pourquoi", "distinction", "ancien_nom", "categorie", "registre_depuis")
 OLD_NAME_KM = 1             # un ancien nom ne retrouve un lieu connu qu'à cette distance de l'adresse (Cléder : 0,51 km pour le même lieu)
 MAX_ARTICLE_MONTHS = 18     # un article ancien ne prouve pas que le lieu existe encore
 FRENCH_MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
@@ -44,6 +44,8 @@ COMMON_STREET_WORDS = {"rue", "route", "boulevard", "bd", "avenue", "av", "place
                        "ld", "de", "du", "des", "la", "le", "les", "l", "d"}
 _MONTH_RANGE = re.compile(rf"({'|'.join(FRENCH_MONTHS)})\s+à\s+({'|'.join(FRENCH_MONTHS)})", re.I)
 
+
+# --- Les noms, les adresses et les pages ---
 
 def commune_of_address(address: str | None, default: str) -> tuple:
     """(commune, code postal) de l'adresse, sinon la commune cherchée."""
@@ -122,11 +124,6 @@ def page_accepted(page: dict, today: date = None, commune: str = "") -> bool:
     return bool(published) and (today.year - published.year) * 12 + today.month - published.month <= MAX_ARTICLE_MONTHS
 
 
-def _rows(cursor) -> list:
-    columns = [column[0] for column in cursor.description]
-    return [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-
 # UNE COMMUNE, UNE RECHERCHE (8 novembre 2026). Plusieurs villes de l'appli sont dans la même commune : Crozon, Morgat,
 # Le Fret et Tal ar Groas sont toutes en Crozon (29042). Les agents restaurants et commerces cherchent une commune : ils
 # la cherchent une fois, depuis la ville qui porte son nom si l'appli l'a (Crozon), sinon depuis la première ville.
@@ -189,14 +186,36 @@ def commune_spots(name: str) -> list:
     return [row for row in rows if row["city_label"] == name or in_commune.search(row["address"] or "")]
 
 
-def _known_restaurants(cursor, city: dict) -> list:
-    """Les restaurants déjà en base autour de la commune, pour réutiliser leur ligne."""
+# --- Les lieux déjà en base ---
+
+def _rows(cursor) -> list:
+    columns = [column[0] for column in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def known_services(cursor, city: dict, services: tuple) -> list:
+    """Les lieux de ces services déjà en base autour de la commune, pour réutiliser leur ligne."""
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], MAX_KM)
-    cursor.execute("""
-        SELECT p.id, p.name, p.address, p.latitude, p.longitude, p.url, p.masque
+    marks = ", ".join(["%s"] * len(services))
+    cursor.execute(f"""
+        SELECT DISTINCT p.id, p.name, p.address, p.latitude, p.longitude, p.url, p.masque
         FROM poi p JOIN poi_service ps ON ps.poi_id = p.id JOIN services s ON s.id = ps.service_id
-        WHERE s.category = %s AND p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s
-    """, (SERVICE_CATEGORY, min_lat, max_lat, min_lon, max_lon))
+        WHERE s.category IN ({marks}) AND p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s
+    """, (*services, min_lat, max_lat, min_lon, max_lon))
+    return _rows(cursor)
+
+
+def known_sheets(cursor, city: dict, table: str) -> list:
+    """
+    Les lieux qui ont une fiche dans cette table autour de la commune. Un café qui a déjà une fiche restaurant n'est pas
+    enregistré : il s'affiche en restauration (ServiceCategory.shown_elsewhere, souhait de l'utilisatrice, 7 novembre 2026).
+    """
+    min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], MAX_KM)
+    cursor.execute(f"""
+        SELECT p.id, p.name, p.address, p.latitude, p.longitude, p.url, p.masque
+        FROM poi p JOIN {table} sheet ON sheet.poi_id = p.id
+        WHERE p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s
+    """, (min_lat, max_lat, min_lon, max_lon))
     return _rows(cursor)
 
 
@@ -214,7 +233,7 @@ def _position(city: dict, address: str | None) -> tuple | None:
     return None
 
 
-def _find_known(row: dict, position: tuple | None, city: dict, known: list) -> dict | None:
+def find_known(row: dict, position: tuple | None, city: dict, known: list) -> dict | None:
     """
     La ligne du lieu : son nom d'abord, son ancien nom ensuite (Mary Stuart, devenu La Petite Folie). L'ancien nom ne
     vaut qu'à l'adresse même : « Le Triskell », ancien nom du Neuf à Ploudalmézeau, désignait aussi un restaurant à
@@ -262,17 +281,7 @@ def _same_place(row: dict, position: tuple | None, known: list) -> dict | None:
     return None
 
 
-def _create_poi(cursor, row: dict, position: tuple | None, city: dict, source_id: int, masked: bool) -> int:
-    latitude, longitude = position or (None, None)
-    cursor.execute(
-        "INSERT INTO poi (name, latitude, longitude, url, address, source_id, verifie, masque)"
-        " VALUES (%s, %s, %s, %s, %s, %s, 0, %s)",
-        (row["nom"], latitude, longitude, row.get("lien"), row.get("adresse"), source_id, int(masked)))
-    poi_id = cursor.lastrowid
-    insert_histo_poi(cursor, poi_id, city["name"])
-    insert_service_and_link(cursor, poi_id, SERVICE_CATEGORY)
-    return poi_id
-
+# --- Ce qu'un humain a décidé prime ---
 
 def _decided_by_human(cursor, poi_id: int, decisions: tuple) -> bool:
     """Un humain a tranché ce point du lieu dans la supervision (poi_review_service.py) : sa décision prime sur l'agent."""
@@ -371,28 +380,16 @@ def set_verified(cursor, poi_id: int, verified: bool) -> None:
     cursor.execute("UPDATE poi SET verifie = %s WHERE id = %s", (int(verified), poi_id))
 
 
-def sheet_of(row: dict, version: int, model: str) -> dict:
-    """Ce qu'il faut pour écrire la fiche plus tard, si un humain valide le lieu à confirmer (poi_review_service.py)."""
-    return {**{field: row.get(field) for field in SHEET_FIELDS}, "prompt_version": version, "model": model}
-
-
-def save_validated_sheet(cursor, poi_id: int, sheet: dict) -> None:
-    """La fiche d'un lieu à confirmer qu'un humain a validé : celle que l'agent avait préparée."""
-    if not sheet or not sheet.get("genre"):
-        raise ValueError("Ce lieu n'a pas de fiche préparée par l'agent : il faut le relancer")
-    _save_sheet(cursor, poi_id, sheet, sheet.get("prompt_version"), sheet.get("model"))
-    set_verified(cursor, poi_id, True)
-
-
-def _save_sheet(cursor, poi_id: int, row: dict, version: int, model: str) -> None:
-    row = keep_human_sheet(cursor, "restaurants", poi_id, row, ("genre", "pourquoi", "distinction", "categorie"))
+def validated_by_human(cursor, poi_id: int) -> bool:
+    """Un humain a validé ce lieu dans /supervision (valider_pepite) : sa décision prime sur un nouveau passage."""
     cursor.execute("""
-        REPLACE INTO restaurants (poi_id, genre, pourquoi, distinction, ancien_nom, categorie, registre_depuis,
-                                  prompt_version, model, trouve_le)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (poi_id, row["genre"][:100], row.get("pourquoi"), (row.get("distinction") or "")[:100] or None,
-          row.get("ancien_nom"), row.get("categorie"), row.get("registre_depuis"), version, model, datetime.now()))
+        SELECT 1 FROM decisions WHERE objet_type = 'poi' AND objet_id = %s AND annulee_at IS NULL
+        AND decision = 'valider_pepite' AND decided_by <> %s LIMIT 1
+    """, (poi_id, RULE_AUTHOR))
+    return cursor.fetchone() is not None
 
+
+# --- Les preuves, le lien et les alertes du registre ---
 
 def _save_proofs(cursor, poi_id: int, pages: list) -> None:
     cursor.execute("DELETE FROM poi_preuves WHERE poi_id = %s", (poi_id,))
@@ -408,7 +405,7 @@ def _save_proofs(cursor, poi_id: int, pages: list) -> None:
 
 
 def waiting_for_review(cursor, poi_id: int, source: str) -> bool:
-    """La ligne attend la relecture de cet agent : c'est lui qui l'a masquée (_flag), pas un humain."""
+    """La ligne attend la relecture de cet agent : c'est lui qui l'a masquée (flag), pas un humain."""
     cursor.execute("""SELECT 1 FROM poi_signals WHERE poi_id = %s AND source = %s AND signal_type = 'a_confirmer'
                       AND statut = 'a_relire' LIMIT 1""", (poi_id, source))
     return cursor.fetchone() is not None
@@ -434,27 +431,12 @@ def alert_contradicted(row: dict, register: dict | None) -> bool:
                for line in (register or {}).get("actifs", []))
 
 
-def clear_contradicted_alerts(rows: list, register: dict | None, commune: str, label: str) -> None:
+def clear_contradicted_alerts(category, rows: list, register: dict | None, commune: str) -> None:
     for row in rows:
         if alert_contradicted(row, register):
-            logger.info(f"[{label}] {commune} : alerte de {row['nom']} effacée, le registre a un établissement actif"
-                        f" à ce nom et à cette adresse ({row['alerte_registre']})")
+            category.logger.info(f"[{category.key}] {commune} : alerte de {row['nom']} effacée, le registre a un établissement"
+                                 f" actif à ce nom et à cette adresse ({row['alerte_registre']})")
             row["alerte_registre"] = None
-
-
-def _flag(cursor, row: dict, position: tuple | None, city: dict, known: list, source_id: int, reason: str, detail: dict,
-          link: str | None = None) -> None:
-    """
-    À confirmer : sur la ligne du lieu s'il est connu, sinon sur une nouvelle ligne masquée, avec la page acceptée
-    (link) : confirmer le lieu l'affiche avec son lien (8 novembre 2026, A Fleur d'Eau s'affichait sans son site).
-    """
-    poi = _find_known(row, position, city, known)
-    if poi and poi["masque"]:
-        return
-    poi_id = poi["id"] if poi else _create_poi(cursor, {**row, "lien": link}, position, city, source_id, masked=True)
-    cursor.execute("SELECT 1 FROM restaurants WHERE poi_id = %s", (poi_id,))
-    if not cursor.fetchone():
-        save_signal(cursor, poi_id, SOURCE, "a_confirmer", {"raison": reason, "adresse": row.get("adresse"), **detail})
 
 
 def is_liquidated(row: dict) -> bool:
@@ -471,54 +453,163 @@ def review_reason(row: dict, located) -> str | None:
     return None if located else "position introuvable"
 
 
-def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
+# --- L'écriture d'un lieu, de sa fiche et de son signal ---
+
+def create_poi(category, cursor, row: dict, position: tuple | None, city: dict, source_id: int, masked: bool) -> int:
+    latitude, longitude = position or (None, None)
+    cursor.execute(
+        "INSERT INTO poi (name, latitude, longitude, url, address, source_id, verifie, masque)"
+        " VALUES (%s, %s, %s, %s, %s, %s, 0, %s)",
+        (row["nom"], latitude, longitude, row.get("lien"), row.get("adresse"), source_id, int(masked)))
+    poi_id = cursor.lastrowid
+    insert_histo_poi(cursor, poi_id, city["name"])
+    insert_service_and_link(cursor, poi_id, category.new_service(row))
+    return poi_id
+
+
+def sheet_of(category, row: dict, version: int, model: str) -> dict:
+    """Ce qu'il faut pour écrire la fiche plus tard, si un humain valide le lieu à confirmer (poi_review_service.py)."""
+    return {**{field: row.get(field) for field in category.sheet_fields}, "prompt_version": version, "model": model}
+
+
+def save_sheet(category, cursor, poi_id: int, row: dict, version: int, model: str) -> None:
+    """La fiche du lieu, dans la table de sa catégorie. Un champ corrigé par un humain garde sa valeur (keep_human_sheet)."""
+    row = keep_human_sheet(cursor, category.sheet_table, poi_id, row, category.human_sheet_fields)
+    detail, length = category.detail_column
+    cursor.execute(f"""
+        REPLACE INTO {category.sheet_table} (poi_id, genre, pourquoi, {detail}, ancien_nom, categorie, registre_depuis,
+                                             prompt_version, model, trouve_le)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (poi_id, row["genre"][:100], row.get("pourquoi"), (row.get(detail) or "")[:length] or None,
+          row.get("ancien_nom"), row.get("categorie"), row.get("registre_depuis"), version, model, datetime.now()))
+
+
+def save_validated_sheet(category, cursor, poi_id: int, sheet: dict) -> None:
+    """La fiche d'un lieu à confirmer qu'un humain a validé : celle que l'agent avait préparée."""
+    if not sheet or not sheet.get("genre"):
+        raise ValueError("Ce lieu n'a pas de fiche préparée par l'agent : il faut le relancer")
+    save_sheet(category, cursor, poi_id, sheet, sheet.get("prompt_version"), sheet.get("model"))
+    set_verified(cursor, poi_id, True)
+
+
+def send_to_review(category, cursor, poi_id: int, reason: str, detail: dict) -> bool:
+    """
+    Le lieu attend une relecture (signal a_confirmer, avec la fiche préparée dans detail). Renvoie True s'il est signalé.
+    S'il avait déjà une fiche, deux comportements selon la catégorie (ServiceCategory.review_keeps_sheet) :
+        - elle reste affichée, et rien n'est signalé (restaurants) ;
+        - elle est retirée : il ne s'affiche plus jusqu'à la décision (7 novembre 2026, Leonetti-Degavre restait visible).
+          Valider la réécrit. Un lieu déjà validé par un humain garde sa fiche, et rien n'est signalé (commerces).
+    """
+    if category.review_keeps_sheet:
+        cursor.execute(f"SELECT 1 FROM {category.sheet_table} WHERE poi_id = %s", (poi_id,))
+        if cursor.fetchone():
+            return False
+        save_signal(cursor, poi_id, category.source, "a_confirmer", {"raison": reason, **detail})
+        return True
+    if validated_by_human(cursor, poi_id):
+        return False
+    cursor.execute(f"DELETE FROM {category.sheet_table} WHERE poi_id = %s", (poi_id,))
+    set_verified(cursor, poi_id, False)
+    save_signal(cursor, poi_id, category.source, "a_confirmer", {"raison": reason, **detail})
+    # Un signal déjà relu revient dans la file : c'est un nouveau doute, d'un nouveau passage.
+    cursor.execute("""UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL
+                      WHERE poi_id = %s AND source = %s AND signal_type = 'a_confirmer'""", (poi_id, category.source))
+    return True
+
+
+def flag(category, cursor, row: dict, position: tuple | None, city: dict, known: list, source_id: int, reason: str, detail: dict,
+         link: str | None = None) -> None:
+    """
+    À confirmer : sur la ligne du lieu s'il est connu, sinon sur une nouvelle ligne masquée, avec la page acceptée
+    (link) : confirmer le lieu l'affiche avec son lien (8 novembre 2026, A Fleur d'Eau s'affichait sans son site).
+    """
+    poi = category.find_known(row, position, city, known)
+    if poi and poi["masque"]:
+        return
+    poi_id = poi["id"] if poi else create_poi(category, cursor, {**row, "lien": link}, position, city, source_id, masked=True)
+    send_to_review(category, cursor, poi_id, reason, {"adresse": row.get("adresse"), **detail})
+
+
+def flag_possible_duplicates(category, cursor, rows: list, saved: dict) -> int:
+    """
+    Les doublons que l'analyste voit et que le code refuse, faute de même adresse : un signal (doublon_commerce) sur le
+    lieu, à trancher dans la file « Doublons » de /supervision (fusionner masque celui-ci, l'autre reste).
+    """
+    flagged = 0
+    for row in rows:
+        other = row.get("doublon_possible")
+        if not other or row["nom"] not in saved or other["nom"] not in saved:
+            continue
+        here, there = saved[row["nom"]], saved[other["nom"]]
+        distance = (round(haversine_distance_km(here["latitude"], here["longitude"], there["latitude"], there["longitude"]) * 1000)
+                    if None not in (here["latitude"], there["latitude"]) else None)
+        save_signal(cursor, here["id"], category.source, category.duplicate_signal, {
+            "raison": f"doublon vu par l'analyste à une autre adresse{' : ' + other['raison'] if other.get('raison') else ''}",
+            "autre_id": there["id"], "autre_nom": other["nom"], "autre_adresse": other.get("adresse"), "distance_m": distance})
+        flagged += 1
+    return flagged
+
+
+def save_commune(category, city: dict, answer: dict, version: int, model: str) -> dict:
     """Enregistre une commune en une transaction. Renvoie le nombre de fiches, de lieux à relire et de lieux écartés."""
-    summary = {"fiches": 0, "a_confirmer": 0, "sans_page": 0, "liquidation": 0}
-    sheets = set()
+    summary = {"fiches": 0, "a_confirmer": 0, "sans_page": 0, "liquidation": 0,
+               **{count: 0 for _, count, _ in category.shown_elsewhere.values()}}
+    sheets, saved = set(), {}
+    label = f"[{category.key}] {city['name']}"
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor()
-        source_id = get_or_create_source(cursor, SOURCE)
-        known = _known_restaurants(cursor, city)
-        for row in answer["restaurants"]:
+        source_id = get_or_create_source(cursor, category.source)
+        known = known_services(cursor, city, category.known_services)
+        elsewhere = {kind: known_sheets(cursor, city, table) for kind, (table, _, _) in category.shown_elsewhere.items()}
+        for row in answer[category.key]:
             position = _position(city, row.get("adresse"))
-            poi = _find_known(row, position, city, known)
+            if row.get("categorie") in elsewhere and find_known(row, position, city, elsewhere[row["categorie"]]):
+                _, count, why = category.shown_elsewhere[row["categorie"]]
+                category.logger.info(f"{label} : {row['nom']} écarté, {why}")
+                summary[count] += 1
+                continue
+            poi = category.find_known(row, position, city, known)
             # Une ligne masquée par un humain ou une décision reste à l'écart ; celle que l'agent a masquée en attendant
             # la relecture se reprend (8 novembre 2026 : A Fleur d'Eau et Episervice restaient bloqués).
-            if poi and poi["masque"] and not waiting_for_review(cursor, poi["id"], SOURCE):
+            if poi and poi["masque"] and not waiting_for_review(cursor, poi["id"], category.source):
                 continue
             if is_liquidated(row):
-                logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, {row['alerte_registre']}")
+                category.logger.info(f"{label} : {row['nom']} écarté, {row['alerte_registre']}")
                 summary["liquidation"] += 1
                 continue
-            accepted = [page for page in row["pages"] if page_accepted(page, commune=city_commune(city))]
+            accepted = [page for page in row["pages"] if category.accepts(page, row, city_commune(city))]
             if not accepted and not row.get("au_registre") and not row.get("a_relire"):
-                logger.info(f"[restaurants] {city['name']} : {row['nom']} écarté, ni registre ni page acceptée")
+                category.logger.info(f"{label} : {row['nom']} écarté, ni registre ni page acceptée")
                 summary["sans_page"] += 1
                 continue
             reason = review_reason(row, position or poi)
             if reason:
-                _flag(cursor, row, position, city, known, source_id, reason,
-                      {"indice": row.get("pourquoi"), "page": row.get("lien"),
-                       "verdicts": [page.get("verdict") for page in row["pages"]], "fiche": sheet_of(row, version, model)},
-                      link=best_link(accepted))
+                flag(category, cursor, row, position, city, known, source_id, reason,
+                     {"indice": row.get("pourquoi"), "page": row.get("lien"),
+                      "verdicts": [page.get("verdict") for page in row["pages"]], "fiche": sheet_of(category, row, version, model)},
+                     link=best_link(accepted))
                 summary["a_confirmer"] += 1
                 continue
+            # Le lien gardé est toujours une page acceptée, son site si on l'a, et rien sinon.
             row = {**row, "lien": best_link(accepted)}
             if poi:
                 _update_poi(cursor, poi, row, position)
                 poi_id = poi["id"]
             else:
-                poi_id = _create_poi(cursor, row, position, city, source_id, masked=False)
+                poi_id = create_poi(category, cursor, row, position, city, source_id, masked=False)
             _save_season(cursor, poi_id, row)
-            _save_sheet(cursor, poi_id, row, version, model)
+            save_sheet(category, cursor, poi_id, row, version, model)
             _save_proofs(cursor, poi_id, row["pages"])
-            set_verified(cursor, poi_id, bool(accepted))
+            set_verified(cursor, poi_id, category.is_verified(row, accepted))
             # Le lieu a maintenant sa fiche : il n'attend plus de relecture.
             cursor.execute("DELETE FROM poi_signals WHERE poi_id = %s AND source = %s AND signal_type = 'a_confirmer'",
-                           (poi_id, SOURCE))
+                           (poi_id, category.source))
             sheets.add(poi_id)
+            saved[row["nom"]] = {"id": poi_id, "latitude": (position or (None, None))[0], "longitude": (position or (None, None))[1]}
         summary["fiches"] = len(sheets)
+        if category.duplicate_signal:
+            summary["doublons_possibles"] = flag_possible_duplicates(category, cursor, answer[category.key], saved)
         connection.commit()
         cursor.close()
     except Exception:
@@ -526,5 +617,5 @@ def save_commune(city: dict, answer: dict, version: int, model: str) -> dict:
         raise
     finally:
         MySQLUtils.disconnect(connection)
-    logger.info(f"[restaurants] {city['name']} : {summary}")
+    category.logger.info(f"{label} : {summary}")
     return summary

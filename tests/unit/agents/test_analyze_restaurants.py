@@ -1,8 +1,25 @@
 import pytest
 
-from agents import analyze_restaurants, llm_config
+from agents import llm_config, service_chain
+from agents.find_restaurants import RESTAURANTS
 from agents.llm_service import LLMTimeout, LLMUnavailable
-from agents.analyze_restaurants import apply_analysis, control_details, value_in_citation
+from agents.service_chain import value_in_citation
+
+
+def apply_analysis(rows, answer):
+    return service_chain.apply_analysis(RESTAURANTS, rows, answer)
+
+
+def control_details(row, commune):
+    return service_chain.control_details(RESTAURANTS, row, commune)
+
+
+def analyze_commune(city, rows, register=None):
+    return service_chain.analyze_commune(RESTAURANTS, city, rows, register)
+
+
+def find_proofs(city, rows):
+    return service_chain.find_proofs(RESTAURANTS, city, rows)
 
 
 def _answer(*places):
@@ -18,13 +35,13 @@ def test_details_go_to_the_right_place():
 
 
 def test_a_proved_closure_removes_the_place(monkeypatch):
-    monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: True)
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
     kept, closed, _ = apply_analysis([{"nom": "A"}], _answer((1, {"ferme": True, "ferme_citation": "A a fermé", "ferme_page": "https://x.fr"})))
     assert kept == [] and closed == ["A"]
 
 
 def test_a_closure_on_an_unreadable_page_removes_the_place(monkeypatch):
-    monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: None)
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: None)
     kept, closed, _ = apply_analysis([{"nom": "A"}], _answer((1, {"ferme": True, "ferme_citation": "A a fermé", "ferme_page": "https://x.fr"})))
     assert kept == [] and closed == ["A"]
 
@@ -56,15 +73,15 @@ def _found(name):
 
 def test_a_place_without_a_table_is_removed(monkeypatch):
     service = _Service(_answer((1, {"pas_un_restaurant": True}), (2, {})))
-    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: service)
-    kept = analyze_restaurants.analyze_commune({"name": "X"}, [_found("La Vinotière"), _found("La Ria")])
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: service)
+    kept = analyze_commune({"name": "X"}, [_found("La Vinotière"), _found("La Ria")])
     assert [row["nom"] for row in kept] == ["La Ria"]
 
 
 def test_the_register_reaches_the_analyst_and_the_address_comes_back(monkeypatch):
     service = _Service(_answer((1, {"adresse": "1 quai"})))
-    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: service)
-    kept = analyze_restaurants.analyze_commune({"name": "X"}, [_found("A")], {"actifs": [{"nom": "CAFE KONK"}]})
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: service)
+    kept = analyze_commune({"name": "X"}, [_found("A")], {"actifs": [{"nom": "CAFE KONK"}]})
     assert "CAFE KONK" in service.messages[0] and kept[0]["adresse"] == "1 quai"
 
 
@@ -74,20 +91,20 @@ def test_proofs_go_by_small_batches_and_keep_the_order(monkeypatch):
         return {"lieux": [{"numero": number, "preuve_url": f"https://x.fr/{number}"} for number in range(1, count + 1)]}
 
     service = _Service(answer)
-    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: service)
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: service)
     rows = [{"nom": f"Lieu {number}"} for number in range(7)]
-    proofs = analyze_restaurants.find_proofs({"name": "X"}, rows)
+    proofs = find_proofs({"name": "X"}, rows)
     assert len(service.messages) == 2
     assert [proof["preuve_url"] for proof in proofs] == [f"https://x.fr/{n}" for n in (1, 2, 3, 4, 5, 1, 2)]
 
 
 def test_no_proof_to_find_makes_no_call(monkeypatch):
-    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: 1 / 0)
-    assert analyze_restaurants.find_proofs({"name": "X"}, []) == []
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: 1 / 0)
+    assert find_proofs({"name": "X"}, []) == []
 
 
 def test_a_closure_absent_from_the_page_is_ignored(monkeypatch):
-    monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: False)
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: False)
     kept, closed, _ = apply_analysis([{"nom": "A"}], _answer((1, {"ferme": True, "ferme_citation": "A a fermé", "ferme_page": "https://x.fr"})))
     assert [row["nom"] for row in kept] == ["A"] and closed == []
 
@@ -136,10 +153,10 @@ def test_a_disputed_closure_reaches_the_analyst(monkeypatch):
             sent["message"] = message
             return _answer()
 
-    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: Service())
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: Service())
     row = {"nom": "A", "adresse": "1 quai", "lien": "https://a.fr", "preuve_url": "https://a.fr",
            "dit_ferme": {"nom": "A", "raison": "société liquidée", "ferme": True, "page": "https://annuaire.fr"}}
-    assert [place["nom"] for place in analyze_restaurants.analyze_commune({"name": "X"}, [row])] == ["A"]
+    assert [place["nom"] for place in analyze_commune({"name": "X"}, [row])] == ["A"]
     assert "société liquidée" in sent["message"] and "https://annuaire.fr" in sent["message"]
 
 
@@ -165,19 +182,19 @@ def _detail(field, value, citation, page="https://keringar.fr"):
 
 
 def test_a_detail_whose_citation_is_absent_from_the_page_is_dropped(monkeypatch):
-    monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: False)
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: False)
     checked = control_details(_row(_detail("saison", "mars à novembre", "Ouvert de mars à novembre")), "Le Conquet")
     assert "budget" not in checked and "jours_fermeture" not in checked
     assert not checked["saisonnier"] and checked["mois_ouverture"] is None and len(checked["pages"]) == 1
 
 
 def test_an_unreadable_page_proves_nothing(monkeypatch):
-    monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: None)
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: None)
     assert control_details(_row(_detail("distinction", "Bib Gourmand", "Un Bib Gourmand")), "Le Conquet")["distinction"] is None
 
 
 def test_a_found_detail_is_kept_with_its_proof(monkeypatch):
-    monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: True)
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
     star = _detail("distinction", "Étoile Michelin", "Une étoile au guide Michelin")
     checked = control_details(_row(star, _detail("distinction", "Bib Gourmand", "Un Bib Gourmand")), "Le Conquet")
     assert checked["distinction"] == "Étoile Michelin"
@@ -185,14 +202,14 @@ def test_a_found_detail_is_kept_with_its_proof(monkeypatch):
 
 
 def test_a_detail_on_a_refused_page_is_dropped(monkeypatch):
-    monkeypatch.setattr(analyze_restaurants, "citation_found", lambda citation, url: True)
-    monkeypatch.setattr(analyze_restaurants, "check_links_of", lambda row, place: [{"url": "https://autre.fr", "type_page": "site", "verdict": "nom_absent"}])
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
+    monkeypatch.setattr(service_chain, "check_links_of", lambda row, place: [{"url": "https://autre.fr", "type_page": "site", "verdict": "nom_absent"}])
     assert control_details(_row(_detail("distinction", "Bib Gourmand", "Un Bib Gourmand", "https://autre.fr")), "Le Conquet")["distinction"] is None
 
 
 def test_the_analyst_reads_every_page_found_except_the_excluded_sites():
     row = {"pages": [{"url": "https://guide.michelin.com/x"}, {"url": "https://iroise-bretagne.bzh/x"}, {"url": "https://iroise-bretagne.bzh/x"}]}
-    assert analyze_restaurants.pages_to_read(row) == ["https://iroise-bretagne.bzh/x"]
+    assert service_chain.pages_to_read(row) == ["https://iroise-bretagne.bzh/x"]
 
 
 def test_a_batch_too_long_is_asked_again_place_by_place(monkeypatch):
@@ -204,12 +221,12 @@ def test_a_batch_too_long_is_asked_again_place_by_place(monkeypatch):
         return {"lieux": [{"numero": 1, "preuve_url": "https://x.fr"}]}
 
     service = _Service(answer)
-    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: service)
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: service)
     rows = [{"nom": name} for name in ("Le Kraken", "Le Galion", "Le Caïman")]
-    proofs = analyze_restaurants.find_proofs({"name": "Ploudalmézeau"}, rows)
+    proofs = find_proofs({"name": "Ploudalmézeau"}, rows)
     assert len(service.messages) == 4
     assert proofs[0]["preuve_url"] == proofs[2]["preuve_url"] == "https://x.fr"
-    assert proofs[1] == {"a_relire": analyze_restaurants.PROOF_TIMED_OUT}
+    assert proofs[1] == {"a_relire": service_chain.PROOF_TIMED_OUT}
 
 
 def test_a_quota_limit_is_not_taken_for_a_batch_too_long(monkeypatch):
@@ -217,15 +234,15 @@ def test_a_quota_limit_is_not_taken_for_a_batch_too_long(monkeypatch):
         raise LLMUnavailable("You've hit your session limit")
 
     service = _Service(answer)
-    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: service)
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: service)
     with pytest.raises(LLMUnavailable):
-        analyze_restaurants.find_proofs({"name": "X"}, [{"nom": "A"}, {"nom": "B"}])
+        find_proofs({"name": "X"}, [{"nom": "A"}, {"nom": "B"}])
     assert len(service.messages) == 1
 
 
 def test_proofs_have_their_own_shorter_delay(monkeypatch):
     names = []
-    monkeypatch.setattr(analyze_restaurants, "make_llm_service", lambda name: names.append(name) or _Service({"lieux": []}))
-    analyze_restaurants.find_proofs({"name": "X"}, [{"nom": "A"}])
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: names.append(name) or _Service({"lieux": []}))
+    find_proofs({"name": "X"}, [{"nom": "A"}])
     assert names == ["prove_restaurants"]
     assert llm_config.AGENTS["prove_restaurants"].timeout < llm_config.AGENTS["analyze_restaurants"].timeout

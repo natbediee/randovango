@@ -8,8 +8,8 @@ QUATRE FILES, parce que les décisions ne se prennent pas pareil :
                  plus. Les sources sont montrées ensemble, car elles se contredisent souvent ;
     saison     : valider les mois d'ouverture, ou « saisonnier probable » sans mois ;
     morts      : retirer un lien qui ne répond plus ;
-    confirmer  : un restaurant ou un commerce que son agent n'a pas pu trancher (restaurant_service.py,
-                 commerce_service.py, signal a_confirmer). Valider
+    confirmer  : un restaurant ou un commerce que son agent n'a pas pu trancher (service_store.py,
+                 signal a_confirmer). Valider
                  écrit la fiche qu'il avait préparée et l'affiche ; retirer le laisse masqué ;
     doublons   : deux restaurants proches que la règle n'a pas su trancher (restaurant_duplicates_service.py), ou deux
                  lieux de même nom, quel que soit le service (poi_duplicates_service.py, signal doublon_service).
@@ -29,7 +29,9 @@ import json
 from collections import Counter
 import re
 
-from services import commerce_service, restaurant_service
+from agents.find_commerces import COMMERCES
+from agents.find_restaurants import RESTAURANTS
+from services import service_store
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -126,9 +128,9 @@ def tab_categories(service: str) -> tuple:
     return tuple(category for category, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab == service)
 
 
-# Valider un lieu à confirmer écrit la fiche que son agent avait préparée, dans sa table (source du signal).
-SHEET_WRITERS = {restaurant_service.SOURCE: restaurant_service.save_validated_sheet,
-                 commerce_service.SOURCE: commerce_service.save_validated_sheet}
+# Valider un lieu à confirmer écrit la fiche que son agent avait préparée, dans la table de sa catégorie : celle de la
+# source du signal (« agent_restaurants », « agent_commerces »).
+CATEGORIES = {category.source: category for category in (RESTAURANTS, COMMERCES)}
 # Les seules colonnes qu'une décision peut changer, et donc remettre.
 APPLIED_COLUMNS = ("url", "name", "masque", "ferme_moment", "statut_saison", "mois_ouverture", "maps_url", "latitude", "longitude",
                    "address", "description")
@@ -546,8 +548,8 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     if action == "valider_pepite":
         # La fiche reste si la décision est annulée : le lieu redevient masqué, l'étape 4 ne le montre plus.
         # La fiche va dans la table de l'agent qui l'a préparée : restaurants ou commerces.
-        sheet_writer = SHEET_WRITERS.get(signals[0].get("source"), restaurant_service.save_validated_sheet)
-        sheet_writer(cursor, poi_id, _detail(signals[0]).get("fiche"))
+        category = CATEGORIES.get(signals[0].get("source"), RESTAURANTS)
+        service_store.save_validated_sheet(category, cursor, poi_id, _detail(signals[0]).get("fiche"))
     # Ajouter un lien depuis une autre file ne tranche pas ce qu'elle demande (le nom, la fermeture) : le signal reste.
     signal_ids = [] if SIDE_ACTIONS.get(action, tab) != tab else [signal["id"] for signal in signals]
     if action == "retirer":

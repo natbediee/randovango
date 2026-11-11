@@ -153,7 +153,7 @@ def _chains(cursor) -> tuple:
 
 def _clear_unproved_badges(cursor, chains: list, categories: dict) -> int:
     """
-    « Vérifié » suit la preuve dans les onglets des agents (restaurant_service.set_verified) : une ligne d'OSM sans
+    « Vérifié » suit la preuve dans les onglets des agents (service_store.set_verified) : une ligne d'OSM sans
     fiche n'a été contrôlée par personne, même chargée avec verifie = 1 (load_poi.py). L'étape 4 le cachait déjà
     (step4.shown_verified) ; la supervision lit la base, elle montrait « Vérifié » (8 novembre 2026, « Au jardin »).
     """

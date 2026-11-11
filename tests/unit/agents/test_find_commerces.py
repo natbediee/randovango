@@ -2,9 +2,25 @@ import json
 
 import pytest
 
-from agents import find_commerces, find_service_links
-from agents.find_commerces import (has_accepted_page, in_register, merge_answers, register_for_agent, registered_since)
-from services.commerce_service import place_key
+from agents import find_commerces, find_service_links, service_chain
+from agents.find_commerces import COMMERCES, in_register, place_key, registered_since
+
+
+def merge_answers(*answers):
+    return service_chain.merge_answers(COMMERCES, *answers)
+
+
+def register_for_agent(register, zone=None):
+    return service_chain.register_for_agent(COMMERCES, register, zone)
+
+
+def has_accepted_page(row, commune):
+    return service_chain.has_accepted_page(COMMERCES, row, commune)
+
+
+def _trace(tmp_path):
+    """Le fichier JSON du passage : dans le dossier de la catégorie, sous le dossier des journaux."""
+    return json.loads(next((tmp_path / COMMERCES.source).iterdir()).read_text())
 
 
 def _found(name, url, categorie="boulangerie"):
@@ -97,10 +113,9 @@ CITY = {"name": "Plougonvelin", "department": "Finistère", "latitude": 48.3, "l
 
 def _chain(monkeypatch, tmp_path, agent, registered="AUTRE LIEU"):
     activities = []
-    monkeypatch.setattr(find_commerces, "TRACE_DIR", tmp_path)
-    monkeypatch.setattr(find_commerces, "make_llm_service", lambda name: agent)
-    monkeypatch.setattr(find_commerces.analyze_commerces, "make_llm_service", lambda name: agent)
-    monkeypatch.setattr(find_commerces.api_registre, "load_register",
+    monkeypatch.setenv("RANDOVANGO_LOG_DIR", str(tmp_path))
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: agent)
+    monkeypatch.setattr(service_chain.api_registre, "load_register",
                         lambda city, codes: activities.append(codes) or {"actifs": [{"nom": registered, "activite": "10.71C"}]})
     monkeypatch.setattr(find_service_links, "read_page", lambda url: {
         "statut": 200, "final": url, "texte": "le gall marche de plougonvelin le marche a lieu le jeudi matin sur la place "
@@ -110,28 +125,28 @@ def _chain(monkeypatch, tmp_path, agent, registered="AUTRE LIEU"):
 
 def test_the_chain_proves_a_market_by_its_town_hall_and_looks_for_the_missing_proof(monkeypatch, tmp_path):
     activities = _chain(monkeypatch, tmp_path, _Agent())
-    answer = find_commerces.search_commune(CITY)
+    answer = service_chain.search_commune(COMMERCES, CITY)
     by_name = {row["nom"]: row for row in answer["commerces"]}
     assert set(by_name) == {"Le Gall", "Marché de Plougonvelin"}
     assert by_name["Marché de Plougonvelin"]["jours"] == "jeudi matin"
     assert by_name["Le Gall"]["adresse"] == "3 rue de la Mer"
-    trace = json.loads(next(tmp_path.iterdir()).read_text())
+    trace = _trace(tmp_path)
     assert [row["nom"] for row in trace["preuves"]] == ["Le Gall"]
     assert activities == [find_commerces.REGISTER_ACTIVITIES] and "47.11D" not in activities[0]
 
 
 def test_a_shop_in_the_register_needs_no_proof_search(monkeypatch, tmp_path):
     _chain(monkeypatch, tmp_path, _Agent(), registered="LE GALL")
-    answer = find_commerces.search_commune(CITY)
+    answer = service_chain.search_commune(COMMERCES, CITY)
     assert {row["nom"]: row["au_registre"] for row in answer["commerces"]} == {"Le Gall": True, "Marché de Plougonvelin": False}
-    assert "preuves" not in json.loads(next(tmp_path.iterdir()).read_text())
+    assert "preuves" not in _trace(tmp_path)
 
 
 def test_what_was_paid_stays_readable_when_a_step_fails(monkeypatch, tmp_path):
     _chain(monkeypatch, tmp_path, _Agent(fail_on_analysis=True))
     with pytest.raises(RuntimeError):
-        find_commerces.search_commune(CITY)
-    trace = json.loads(next(tmp_path.iterdir()).read_text())
+        service_chain.search_commune(COMMERCES, CITY)
+    trace = _trace(tmp_path)
     assert len(trace["recherches"]) == 5 and trace["version"] == find_commerces.COMMERCES_PROMPT_VERSION
 
 
@@ -176,9 +191,9 @@ def test_a_shop_at_its_name_in_the_register_is_proved_without_a_page():
 def test_a_farm_in_the_register_still_gets_a_proof_search(monkeypatch, tmp_path):
     _chain(monkeypatch, tmp_path, _Agent(), registered="LE GALL")
     monkeypatch.setattr(find_commerces, "is_farm", lambda row: row["nom"] == "Le Gall")
-    answer = find_commerces.search_commune(CITY)
+    answer = service_chain.search_commune(COMMERCES, CITY)
     gall = next(row for row in answer["commerces"] if row["nom"] == "Le Gall")
-    assert [row["nom"] for row in json.loads(next(tmp_path.iterdir()).read_text())["preuves"]] == ["Le Gall"]
+    assert [row["nom"] for row in _trace(tmp_path)["preuves"]] == ["Le Gall"]
     # La page trouvée cite la ferme : elle est gardée, sans relecture.
     assert gall["au_registre"] is True and not gall.get("a_relire")
 
@@ -212,6 +227,6 @@ def test_a_hamlet_is_searched_as_its_commune(monkeypatch, tmp_path):
     """Trézien est en Plouarzel : les agents, le contrôle des pages et la trace cherchent la commune officielle."""
     agent = _RecordingAgent()
     _chain(monkeypatch, tmp_path, agent)
-    find_commerces.search_commune({**CITY, "name": "Trézien", "commune": "Plouarzel"})
+    service_chain.search_commune(COMMERCES, {**CITY, "name": "Trézien", "commune": "Plouarzel"})
     assert agent.messages and all(message.startswith("COMMUNE : Plouarzel") for message in agent.messages)
-    assert json.loads(next(tmp_path.iterdir()).read_text())["commune"] == "Plouarzel"
+    assert _trace(tmp_path)["commune"] == "Plouarzel"

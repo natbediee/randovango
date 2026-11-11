@@ -1,10 +1,12 @@
+from dataclasses import replace
 from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
 
-from services import restaurant_service
-from services.restaurant_service import commune_of_address, compact_name, is_town_hall, page_accepted, page_date, parse_months, review_reason
+from agents.find_restaurants import RESTAURANTS
+from services import service_store
+from services.service_store import commune_of_address, compact_name, is_town_hall, page_accepted, page_date, parse_months, review_reason
 
 
 def test_spaces_do_not_make_two_places():
@@ -37,16 +39,16 @@ def test_a_registry_alert_sends_the_place_to_review_even_with_a_page():
 
 def test_a_place_without_an_accepted_page_is_not_kept(monkeypatch):
     connection = MagicMock()
-    monkeypatch.setattr(restaurant_service.MySQLUtils, "connect", lambda: connection)
-    monkeypatch.setattr(restaurant_service.MySQLUtils, "disconnect", lambda *args: None)
-    monkeypatch.setattr(restaurant_service, "get_or_create_source", lambda cursor, name: 8)
-    monkeypatch.setattr(restaurant_service, "_known_restaurants", lambda cursor, city: [])
-    monkeypatch.setattr(restaurant_service, "_position", lambda city, address: (48.3, -4.7))
-    monkeypatch.setattr(restaurant_service, "_create_poi", MagicMock(side_effect=AssertionError("ligne créée")))
-    monkeypatch.setattr(restaurant_service, "save_signal", MagicMock(side_effect=AssertionError("signal créé")))
+    monkeypatch.setattr(service_store.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(service_store.MySQLUtils, "disconnect", lambda *args: None)
+    monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, name: 8)
+    monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: [])
+    monkeypatch.setattr(service_store, "_position", lambda city, address: (48.3, -4.7))
+    monkeypatch.setattr(service_store, "create_poi", MagicMock(side_effect=AssertionError("ligne créée")))
+    monkeypatch.setattr(service_store, "save_signal", MagicMock(side_effect=AssertionError("signal créé")))
     row = {"nom": "Le Nom Seul", "adresse": None, "alerte_registre": None,
            "pages": [{"url": "https://tripadvisor.fr/x", "type_page": "agregateur", "verdict": "site_exclu"}]}
-    summary = restaurant_service.save_commune({"name": "Plougonvelin"}, {"restaurants": [row]}, 8, "modele")
+    summary = service_store.save_commune(RESTAURANTS, {"name": "Plougonvelin"}, {"restaurants": [row]}, 8, "modele")
     assert summary == {"fiches": 0, "a_confirmer": 0, "sans_page": 1, "liquidation": 0}
     connection.commit.assert_called_once()
 
@@ -112,7 +114,7 @@ class _SeasonCursor:
         return (1,) if self.decided else None
 
     def fetchall(self):
-        return []      # aucune correction humaine (restaurant_service.human_fields)
+        return []      # aucune correction humaine (service_store.human_fields)
 
     def close(self):
         pass
@@ -120,19 +122,19 @@ class _SeasonCursor:
 
 def test_the_agent_season_is_saved():
     cursor = _SeasonCursor(decided=False)
-    restaurant_service._save_season(cursor, 1, {"saisonnier": True, "mois_ouverture": "avril à septembre"})
+    service_store._save_season(cursor, 1, {"saisonnier": True, "mois_ouverture": "avril à septembre"})
     assert cursor.updates == [("confirmee", "[3, 4, 5, 6, 7, 8]", 1)]
 
 
 def test_a_human_season_decision_prevails_over_the_agent():
     cursor = _SeasonCursor(decided=True)
-    restaurant_service._save_season(cursor, 1, {"saisonnier": True, "mois_ouverture": "mars à novembre"})
+    service_store._save_season(cursor, 1, {"saisonnier": True, "mois_ouverture": "mars à novembre"})
     assert cursor.updates == []
 
 
 def test_a_season_no_longer_proved_is_cleared():
     cursor = _SeasonCursor(decided=False)
-    restaurant_service._save_season(cursor, 1, {"saisonnier": False})
+    service_store._save_season(cursor, 1, {"saisonnier": False})
     assert cursor.updates == [(1,)]
 
 
@@ -155,17 +157,18 @@ CITY = {"id": 1, "name": "Plougonvelin", "latitude": 48.3, "longitude": -4.7}
 
 def _save(monkeypatch, row, known=()):
     calls = {"flag": [], "sheet": [], "connection": _Connection()}
-    monkeypatch.setattr(restaurant_service.MySQLUtils, "connect", staticmethod(lambda: calls["connection"]))
-    monkeypatch.setattr(restaurant_service.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
-    monkeypatch.setattr(restaurant_service, "get_or_create_source", lambda cursor, name: 1)
-    monkeypatch.setattr(restaurant_service, "_known_restaurants", lambda cursor, city: list(known))
-    monkeypatch.setattr(restaurant_service, "_position", lambda city, address: (48.3, -4.7))
-    monkeypatch.setattr(restaurant_service, "_find_known", lambda row, position, city, known: known[0] if known else None)
-    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail, link=None: calls["flag"].append(reason))
-    monkeypatch.setattr(restaurant_service, "_create_poi", lambda cursor, row, position, city, source, masked: 99)
-    monkeypatch.setattr(restaurant_service, "_save_sheet", lambda cursor, poi_id, row, version, model: calls["sheet"].append(poi_id))
-    monkeypatch.setattr(restaurant_service, "_save_proofs", lambda cursor, poi_id, pages: None)
-    return restaurant_service.save_commune(CITY, {"restaurants": [row]}, 7, "modele"), calls
+    monkeypatch.setattr(service_store.MySQLUtils, "connect", staticmethod(lambda: calls["connection"]))
+    monkeypatch.setattr(service_store.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
+    monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, name: 1)
+    monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: list(known))
+    monkeypatch.setattr(service_store, "_position", lambda city, address: (48.3, -4.7))
+    monkeypatch.setattr(service_store, "flag", lambda category, cursor, row, position, city, known, source, reason, detail, link=None: calls["flag"].append(reason))
+    monkeypatch.setattr(service_store, "create_poi", lambda category, cursor, row, position, city, source, masked: 99)
+    monkeypatch.setattr(service_store, "save_sheet", lambda category, cursor, poi_id, row, version, model: calls["sheet"].append(poi_id))
+    monkeypatch.setattr(service_store, "_save_proofs", lambda cursor, poi_id, pages: None)
+    # Un réglage de test : le lieu connu est le premier de la liste, sans passer par les règles de nom.
+    category = replace(RESTAURANTS, find_known=lambda row, position, city, known: known[0] if known else None)
+    return service_store.save_commune(category, CITY, {"restaurants": [row]}, 7, "modele"), calls
 
 
 PAGE = {"url": "https://riboul.fr", "type_page": "site", "verdict": "ok"}
@@ -180,8 +183,8 @@ def test_the_link_shown_is_the_own_site_when_there_is_one(monkeypatch):
     row = {"nom": "Riboul", "pages": [{"url": "https://iroise-bretagne.bzh/riboul", "type_page": "office_tourisme", "verdict": "ok"}, PAGE]}
     _save(monkeypatch, row)
     created = []
-    monkeypatch.setattr(restaurant_service, "_create_poi", lambda cursor, row, position, city, source, masked: created.append(row["lien"]) or 99)
-    restaurant_service.save_commune(CITY, {"restaurants": [row]}, 9, "modele")
+    monkeypatch.setattr(service_store, "create_poi", lambda category, cursor, row, position, city, source, masked: created.append(row["lien"]) or 99)
+    service_store.save_commune(RESTAURANTS, CITY, {"restaurants": [row]}, 9, "modele")
     assert created == ["https://riboul.fr"]
 
 
@@ -189,8 +192,8 @@ def test_the_register_is_enough_to_keep_a_place_without_a_page(monkeypatch):
     created = []
     row = {"nom": "Café Konk", "au_registre": True, "pages": [{"url": "https://www.facebook.com/x", "type_page": "facebook", "verdict": "a_valider_social"}]}
     _save(monkeypatch, row)
-    monkeypatch.setattr(restaurant_service, "_create_poi", lambda cursor, row, position, city, source, masked: created.append(row["lien"]) or 99)
-    summary = restaurant_service.save_commune(CITY, {"restaurants": [row]}, 9, "modele")
+    monkeypatch.setattr(service_store, "create_poi", lambda category, cursor, row, position, city, source, masked: created.append(row["lien"]) or 99)
+    summary = service_store.save_commune(RESTAURANTS, CITY, {"restaurants": [row]}, 9, "modele")
     assert summary["fiches"] == 1 and created == [None]
 
 
@@ -202,7 +205,7 @@ def test_a_liquidation_removes_the_place_without_review(monkeypatch):
 def test_an_old_link_stays_when_no_page_was_accepted():
     cursor = MagicMock()
     cursor.fetchone.return_value = None
-    restaurant_service._update_poi(cursor, {"id": 5, "name": "A", "url": "https://a.fr"}, {"lien": None, "adresse": "1 place"}, None)
+    service_store._update_poi(cursor, {"id": 5, "name": "A", "url": "https://a.fr"}, {"lien": None, "adresse": "1 place"}, None)
     assert "url" not in cursor.execute.call_args[0][0]
 
 
@@ -210,7 +213,7 @@ def test_an_old_facebook_link_gives_way_to_the_accepted_page():
     cursor = MagicMock()
     cursor.fetchone.return_value = None
     poi = {"id": 5, "name": "La Ria", "url": "https://www.facebook.com/laria29/"}
-    restaurant_service._update_poi(cursor, poi, {"lien": "https://www.iroise-bretagne.bzh/restaurant/la-ria/", "adresse": "1 place"}, None)
+    service_store._update_poi(cursor, poi, {"lien": "https://www.iroise-bretagne.bzh/restaurant/la-ria/", "adresse": "1 place"}, None)
     assert "https://www.iroise-bretagne.bzh/restaurant/la-ria/" in cursor.execute.call_args[0][1]
 
 
@@ -229,14 +232,14 @@ def test_a_failure_writes_nothing(monkeypatch):
     def broken(*args):
         raise RuntimeError("erreur")
 
-    monkeypatch.setattr(restaurant_service, "_position", broken)
+    monkeypatch.setattr(service_store, "_position", broken)
     connection = _Connection()
-    monkeypatch.setattr(restaurant_service.MySQLUtils, "connect", staticmethod(lambda: connection))
-    monkeypatch.setattr(restaurant_service.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
-    monkeypatch.setattr(restaurant_service, "get_or_create_source", lambda cursor, name: 1)
-    monkeypatch.setattr(restaurant_service, "_known_restaurants", lambda cursor, city: [])
+    monkeypatch.setattr(service_store.MySQLUtils, "connect", staticmethod(lambda: connection))
+    monkeypatch.setattr(service_store.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
+    monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, name: 1)
+    monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: [])
     with pytest.raises(RuntimeError):
-        restaurant_service.save_commune(CITY, {"restaurants": [{"nom": "X", "adresse": "1 quai", "pages": []}]}, 7, "modele")
+        service_store.save_commune(RESTAURANTS, CITY, {"restaurants": [{"nom": "X", "adresse": "1 quai", "pages": []}]}, 7, "modele")
     assert connection.rolled_back and not connection.committed
 
 
@@ -252,14 +255,14 @@ PLOUDALMEZEAU = {"name": "Ploudalmézeau", "latitude": 48.5439, "longitude": -4.
 
 def test_an_old_name_finds_a_known_place_only_at_the_address():
     row = {"nom": "Le Neuf", "ancien_nom": "Le Triskell"}
-    assert restaurant_service._find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) is None
-    assert restaurant_service._find_known(row, (48.4659, -4.7598), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
-    assert restaurant_service._find_known(row, None, PLOUDALMEZEAU, [TRISKELL]) is None
+    assert service_store.find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) is None
+    assert service_store.find_known(row, (48.4659, -4.7598), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
+    assert service_store.find_known(row, None, PLOUDALMEZEAU, [TRISKELL]) is None
 
 
 def test_the_current_name_still_finds_a_place_away_from_the_address():
     row = {"nom": "Le Triskell", "ancien_nom": None}
-    assert restaurant_service._find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
+    assert service_store.find_known(row, (48.54071, -4.657928), PLOUDALMEZEAU, [TRISKELL]) == TRISKELL
 
 
 def _known(name, address, latitude=48.27, longitude=-4.49):
@@ -269,23 +272,23 @@ def _known(name, address, latitude=48.27, longitude=-4.49):
 def test_the_same_table_under_a_longer_name_is_found_at_the_same_address():
     racines = _known("Racines", "82 Boulevard de la France Libre, 29160 Crozon")
     row = {"nom": "Restaurant Racines", "adresse": "82 boulevard de la France Libre, 29160 Crozon"}
-    assert restaurant_service._find_known(row, (48.0, -4.0), CITY, [racines]) == racines
+    assert service_store.find_known(row, (48.0, -4.0), CITY, [racines]) == racines
     chaumine = _known("Crêperie La Chaumine", "4 Square de l'Abéric, 29830 Ploudalmézeau")
     row = {"nom": "La Chaumine Biligou", "adresse": "4 square de l'Aberic, 29830 Ploudalmézeau"}
-    assert restaurant_service._find_known(row, (48.0, -4.0), CITY, [chaumine]) == chaumine
+    assert service_store.find_known(row, (48.0, -4.0), CITY, [chaumine]) == chaumine
 
 
 def test_two_tables_sharing_an_address_stay_two():
     hostellerie = _known("L'Hostellerie", "1 place de la Mairie, 29217 Le Conquet")
     row = {"nom": "Bistrot 1954", "adresse": "1 place de la Mairie, 29217 Le Conquet"}
-    assert restaurant_service._find_known(row, (48.0, -4.0), CITY, [hostellerie]) is None
+    assert service_store.find_known(row, (48.0, -4.0), CITY, [hostellerie]) is None
 
 
 def test_a_place_without_street_number_is_found_by_its_name_and_position():
     chateau = _known("La Crêperie du Château d'Eau", "Saint-Roch, 29830 Ploudalmézeau", 48.5300, -4.6600)
     row = {"nom": "Crêperie Le Château d'Eau", "adresse": "Saint-Roch, 29830 Ploudalmézeau"}
-    assert restaurant_service._find_known(row, (48.5300, -4.6600), CITY, [chateau]) == chateau
-    assert restaurant_service._find_known(row, (48.5400, -4.6600), CITY, [chateau]) is None
+    assert service_store.find_known(row, (48.5300, -4.6600), CITY, [chateau]) == chateau
+    assert service_store.find_known(row, (48.5400, -4.6600), CITY, [chateau]) is None
 
 
 def test_the_measured_duplicates_are_found():
@@ -296,42 +299,42 @@ def test_the_measured_duplicates_are_found():
              ("1930 Conleau", "Le 1930", "3 Allée des Frères Cadoret, 56000 Vannes")]
     for first, second, address in pairs:
         poi = _known(first, address)
-        assert restaurant_service._find_known({"nom": second, "adresse": address}, (48.0, -4.0), CITY, [poi]) == poi, second
+        assert service_store.find_known({"nom": second, "adresse": address}, (48.0, -4.0), CITY, [poi]) == poi, second
 
 
 def test_a_place_to_confirm_keeps_the_sheet_prepared_by_the_agent(monkeypatch):
     details = []
-    monkeypatch.setattr(restaurant_service, "_flag", lambda cursor, row, position, city, known, source, reason, detail, link=None: details.append(detail))
+    monkeypatch.setattr(service_store, "flag", lambda category, cursor, row, position, city, known, source, reason, detail, link=None: details.append(detail))
     _save_one = {"nom": "Le Neuf", "genre": "bar-tabac brasserie", "categorie": "brasserie", "pourquoi": "Le bistrot du bourg.",
                  "a_relire": "registre : débit de boissons, dit servir des repas par les recherches", "pages": []}
     calls = {"connection": _Connection()}
-    monkeypatch.setattr(restaurant_service.MySQLUtils, "connect", staticmethod(lambda: calls["connection"]))
-    monkeypatch.setattr(restaurant_service.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
-    monkeypatch.setattr(restaurant_service, "get_or_create_source", lambda cursor, name: 1)
-    monkeypatch.setattr(restaurant_service, "_known_restaurants", lambda cursor, city: [])
-    monkeypatch.setattr(restaurant_service, "_position", lambda city, address: (48.3, -4.7))
-    restaurant_service.save_commune(CITY, {"restaurants": [_save_one]}, 12, "modele")
+    monkeypatch.setattr(service_store.MySQLUtils, "connect", staticmethod(lambda: calls["connection"]))
+    monkeypatch.setattr(service_store.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
+    monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, name: 1)
+    monkeypatch.setattr(service_store, "known_services", lambda cursor, city, services: [])
+    monkeypatch.setattr(service_store, "_position", lambda city, address: (48.3, -4.7))
+    service_store.save_commune(RESTAURANTS, CITY, {"restaurants": [_save_one]}, 12, "modele")
     assert details[0]["fiche"]["genre"] == "bar-tabac brasserie" and details[0]["fiche"]["prompt_version"] == 12
 
 
 def test_validating_a_place_without_a_prepared_sheet_is_refused():
     with pytest.raises(ValueError):
-        restaurant_service.save_validated_sheet(MagicMock(), 1, None)
+        service_store.save_validated_sheet(RESTAURANTS, MagicMock(), 1, None)
 
 
 def test_a_link_decided_by_a_human_is_never_replaced_by_the_agent():
     cursor = MagicMock()
     cursor.fetchone.return_value = (1,)
-    restaurant_service._update_poi(cursor, {"id": 5, "name": "Le Neuf", "url": "https://leneuf.fr"},
+    service_store._update_poi(cursor, {"id": 5, "name": "Le Neuf", "url": "https://leneuf.fr"},
                                    {"lien": "https://iroise-bretagne.bzh/le-neuf", "adresse": "9 rue de Brest"}, None)
     assert "url" not in cursor.execute.call_args[0][0]
-    assert restaurant_service.RULE_AUTHOR in cursor.execute.call_args_list[0][0][1]
+    assert service_store.RULE_AUTHOR in cursor.execute.call_args_list[0][0][1]
 
 
 def test_a_name_decided_by_a_human_is_never_replaced_by_the_agent():
     cursor = MagicMock()
     cursor.fetchone.side_effect = [None, (1,)]
-    restaurant_service._update_poi(cursor, {"id": 5, "name": "Le Triskell", "url": None},
+    service_store._update_poi(cursor, {"id": 5, "name": "Le Triskell", "url": None},
                                    {"lien": "https://leneuf.fr", "nom": "Le Neuf", "ancien_nom": "Le Triskell", "adresse": "9 rue de Brest"}, None)
     assert "name" not in cursor.execute.call_args[0][0] and "url" in cursor.execute.call_args[0][0]
 
@@ -344,13 +347,13 @@ CROZON_CITIES = [{"id": 15, "name": "Tal ar Groas", "commune": "Crozon", "insee"
 
 
 def test_a_commune_is_searched_from_the_city_bearing_its_name():
-    assert [city["id"] for city in restaurant_service.one_city_per_commune(CROZON_CITIES)] == [57, 26, 99]
+    assert [city["id"] for city in service_store.one_city_per_commune(CROZON_CITIES)] == [57, 26, 99]
 
 
 @pytest.mark.parametrize("asked, searched", [("Le Fret", "Crozon"), ("Crozon", "Crozon"), ("Trézien", "Trézien"),
                                              ("Plouarzel", "Trézien"), ("Nouvelle", "Nouvelle"),
                                              ("Inconnue", None)])
 def test_a_hamlet_is_searched_from_the_city_of_its_commune(monkeypatch, asked, searched):
-    monkeypatch.setattr(restaurant_service, "load_cities", lambda: CROZON_CITIES)
-    city = restaurant_service.load_city(asked)
+    monkeypatch.setattr(service_store, "load_cities", lambda: CROZON_CITIES)
+    city = service_store.load_city(asked)
     assert (city["name"] if city else None) == searched

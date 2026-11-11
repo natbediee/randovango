@@ -1,4 +1,4 @@
-from services import restaurant_service
+from services import service_store
 from utils import geo_utils
 
 
@@ -30,9 +30,9 @@ def test_a_weak_hamlet_is_refused(monkeypatch):
 
 
 def test_the_place_takes_the_hamlet_when_the_street_is_unknown(monkeypatch):
-    monkeypatch.setattr(restaurant_service, "geocode_address_ban", lambda address, latitude, longitude: None)
-    monkeypatch.setattr(restaurant_service, "geocode_locality_ban", lambda address, latitude, longitude: (48.3521, -4.7207))
+    monkeypatch.setattr(service_store, "geocode_address_ban", lambda address, latitude, longitude: None)
+    monkeypatch.setattr(service_store, "geocode_locality_ban", lambda address, latitude, longitude: (48.3521, -4.7207))
     city = {"latitude": 48.3378, "longitude": -4.70183}
-    assert restaurant_service._position(city, "Lieu-dit Le Lannou, 29217 Plougonvelin") == (48.3521, -4.7207)
-    monkeypatch.setattr(restaurant_service, "geocode_locality_ban", lambda address, latitude, longitude: (43.2, 5.4))
-    assert restaurant_service._position(city, "Le Lannou") is None
+    assert service_store._position(city, "Lieu-dit Le Lannou, 29217 Plougonvelin") == (48.3521, -4.7207)
+    monkeypatch.setattr(service_store, "geocode_locality_ban", lambda address, latitude, longitude: (43.2, 5.4))
+    assert service_store._position(city, "Le Lannou") is None

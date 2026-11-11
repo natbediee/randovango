@@ -41,7 +41,7 @@ from etl.load.load_poi_checks import save_signal
 from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
 from services import poi_review_service as review
 from services.pepite_service import is_generic, name_key
-from services.restaurant_service import place_key, street_words
+from services.service_store import place_key, street_words
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil

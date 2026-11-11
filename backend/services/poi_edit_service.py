@@ -12,13 +12,13 @@ pouvoir les remettre.
 LES MÊMES CORRECTIONS QUE LA RELECTURE, et le même code : applied_fields, typed_name, typed_link, typed_maps_link.
 Chaque correction est une décision (objet_type = 'poi', detail.file = 'modifier') qui garde les valeurs d'avant :
 poi_review_service.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
-pas un nom ou un lien corrigé ici (restaurant_service._decided_by_human).
+pas un nom ou un lien corrigé ici (service_store._decided_by_human).
 """
 import json
 import re
 import unicodedata
 
-from services import commerce_service, poi_review_service as review, restaurant_service
+from services import poi_review_service as review, service_store
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
 from utils.db_utils import MySQLUtils
@@ -257,7 +257,7 @@ def decide(poi_id: int, action: str, note: str, decided_by: str, months: list | 
 # On la corrige là, et « Confirmer et afficher le lieu » écrit la fiche corrigée.
 
 SHEET_DECISION = "modifier_fiche"
-SOURCE_TABLES = {restaurant_service.SOURCE: "restaurants", commerce_service.SOURCE: "commerces"}
+SOURCE_TABLES = {source: category.sheet_table for source, category in review.CATEGORIES.items()}
 TABLE_LABELS = {"restaurants": TABLE_CATEGORY_LABELS, "commerces": SHOP_CATEGORY_LABELS}
 TEXT_LIMITS = {"address": 255, "texte": 1000, "genre": 100, "distinction": 100, "jours": 150}
 SEASONS = (None, PROBABLE_SEASON, CONFIRMED_SEASON)
@@ -267,8 +267,8 @@ DOUBT_FIELDS = {"liens": ["url"], "fermetures": ["name"], "saison": ["saison"], 
 # Corriger dans une file le champ qu'elle met en doute la tranche, comme « Renommer ainsi » et « Mettre ce lien ».
 CLOSING_FIELDS = {"fermetures": ("name", "valide"), "liens": ("url", "rejete"), "saison": ("saison", "valide")}
 # Les champs qu'une ancienne décision de la relecture a tranchés (human_fields).
-LEGACY_FIELDS = {**{action: "name" for action in restaurant_service.HUMAN_NAME_DECISIONS},
-                 **{action: "url" for action in restaurant_service.HUMAN_LINK_DECISIONS if action != "valider_lien_nom"},
+LEGACY_FIELDS = {**{action: "name" for action in service_store.HUMAN_NAME_DECISIONS},
+                 **{action: "url" for action in service_store.HUMAN_LINK_DECISIONS if action != "valider_lien_nom"},
                  "valider_lien_nom": "name", "valider_saison": "saison", "pas_saisonnier": "saison", "autre_maps": "maps_url"}
 POI_SHEET_COLUMNS = ("name", "address", "url", "maps_url", "description", "statut_saison", "mois_ouverture", "verifie")
 
