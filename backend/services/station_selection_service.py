@@ -9,6 +9,11 @@ fiche Google de la station elle-même.
 Sans marque, la même recherche ouvre une liste de stations des environs, dont la première est ailleurs (Carrefour de
 Saint-Renan pour la station de Locmaria-Plouzané) : on donne alors la position, comme maps_url pour un nom générique.
 Une station reliée à la main en supervision a sa marque, et retrouve le lien par la recherche.
+
+LA FICHE DE SUPERVISION D'UNE STATION (station_view, carte #180) : la carte de l'étape 4 (pastilles, phrase des dates,
+24h/24, lien Google), et ce que dit l'État (identifiant, adresse, dernière déclaration, lien avec OSM), pour juger une
+station douteuse (etl/transform/transform_carburants.py). Les mêmes fonctions que l'étape 4 : l'admin voit ce que voit
+le voyageur.
 """
 import json
 from datetime import date, datetime
@@ -17,6 +22,19 @@ from urllib.parse import quote_plus
 from services.restaurant_selection_service import MAPS_SEARCH_URL
 
 FUEL_SEARCH_WORD = "station-service"
+MOTORWAY = "A"              # le champ « pop » du fichier de l'État : A = réseau autoroutier, R = route
+OSM_URL = "https://www.openstreetmap.org/"
+# Ce que la base dit d'une station, pour sa fiche de supervision (poi_edit_service._station_views).
+STATION_VIEW_SQL = """
+    SELECT sc.poi_id, sc.pdv_id, sc.marque, sc.adresse_etat, sc.code_postal, sc.ville_etat, sc.route, sc.automate_24_24,
+           sc.osm_element, sc.lien_osm, sc.lu_le, p.address, p.latitude, p.longitude, p.name,
+           (SELECT JSON_ARRAYAGG(JSON_OBJECT('carburant', pc.carburant, 'prix', pc.prix, 'releve_le', pc.releve_le,
+                                             'rupture_type', pc.rupture_type))
+            FROM prix_carburants pc WHERE pc.poi_id = sc.poi_id) AS prix,
+           (SELECT GREATEST(COALESCE(MAX(pc.releve_le), '1000-01-01'), COALESCE(MAX(pc.rupture_debut), '1000-01-01'))
+            FROM prix_carburants pc WHERE pc.poi_id = sc.poi_id) AS dernieres_nouvelles
+    FROM stations_carburant sc JOIN poi p ON p.id = sc.poi_id
+"""
 
 # LES PRIX (maquette validée le 8 novembre 2026)
 # Une pastille par carburant vendu, dans cet ordre : le gazole d'abord, c'est celui des vans. Le nom du fichier de l'État
@@ -114,3 +132,28 @@ def station_maps_url(brand: str | None, address: str | None, postcode: str | Non
     place = address or " ".join(part for part in (postcode, (town or "").title()) if part)
     words = [FUEL_SEARCH_WORD, brand, place]
     return MAPS_SEARCH_URL + quote_plus(" ".join(word.strip() for word in words if word and word.strip()))
+
+
+def is_motorway(route: str | None) -> bool:
+    """Une station du réseau autoroutier (fichier de l'État : pop = A)."""
+    return route == MOTORWAY
+
+
+def station_view(row: dict, today: date) -> dict:
+    """La fiche de supervision d'une station : la carte de l'étape 4 et ce que dit l'État, prête à afficher."""
+    badges = price_badges(row.get("prix"), today)
+    news = _day(row.get("dernieres_nouvelles"))
+    news = news if news and news.year > 1000 else None
+    osm = row.get("osm_element")
+    return {
+        "poi_id": row["poi_id"], "nom": row.get("name") or "", "pdv_id": row["pdv_id"], "marque": row.get("marque") or "",
+        "prix": badges, "prix_resume": prices_summary(badges, row.get("lu_le")),
+        "automate_24_24": row.get("automate_24_24") == 1, "autoroute": is_motorway(row.get("route")),
+        "adresse_etat": " ".join(part for part in (row.get("adresse_etat"), row.get("code_postal"),
+                                                    (row.get("ville_etat") or "").title()) if part),
+        "derniere_declaration": news.strftime("%d/%m/%Y") if news else None,
+        "jours_sans_nouvelles": (today - news).days if news else None,
+        "osm_element": osm, "osm_url": OSM_URL + osm if osm else None, "lien_osm": row.get("lien_osm"),
+        "maps_url": station_maps_url(row.get("marque"), row.get("address"), row.get("code_postal"), row.get("ville_etat"),
+                                     row.get("latitude"), row.get("longitude")),
+    }

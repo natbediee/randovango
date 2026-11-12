@@ -14,11 +14,19 @@
       <button type="button" class="btn btn--outline" id="modeSpots" aria-pressed="false">Spots</button>
     </div>
     <div class="services-filters">
-      <label class="label">Ville
-        <select id="filterCity"><option value="">Choisir une ville</option></select>
+      {# Une ville de l'étape 1, cherchée comme à l'étape 1 (step1_city.js) : la liste des villes devenait trop longue.
+         filterCity garde l'identifiant de la ville choisie, que la page envoie à l'API. Un service se range par la
+         commune de son adresse : les communes qui ne sont pas des villes de l'étape 1 sont proposées aussi. #}
+      <label class="label search-wrap">Ville
+        <input type="search" id="filterCitySearch" maxlength="80" placeholder="Ville ou code postal…" autocomplete="off"
+               style="min-height:44px; padding:0 10px; border:1px solid var(--card-border); border-radius:10px; background:var(--white); color:var(--ink); font:inherit; font-size:14px;">
+        <input type="hidden" id="filterCity" value="">
+        {# Ou une commune des adresses qui n'est pas une ville de l'étape 1 (Guilvinec) : son nom, envoyé à l'API. #}
+        <input type="hidden" id="filterTown" value="">
+        <div id="filterCitySuggestions" class="city-suggestions" style="display:none;"></div>
       </label>
       {# Les onglets de l'étape 4, puis le type précis : seulement pour les services. #}
-      <label class="label" id="filterServiceLabel">Type de lieu
+      <label class="label" id="filterServiceLabel">Catégorie
         <select id="filterService"><option value="">Tous</option></select>
       </label>
       <label class="label" id="filterTypeLabel" style="display:none;">Sous-catégorie

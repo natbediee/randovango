@@ -3,6 +3,8 @@
 // À gauche, ce que voit le voyageur à l'étape 4 ; à droite, tout ce qui se corrige. L'aperçu suit la saisie.
 // La page n'envoie que les champs changés (ficheChanges) : l'API les contrôle et les enregistre en une décision
 // annulable (services/poi_edit_service.py, decide_sheet).
+// Une station-service a sa fiche à elle (view.station, station_selection_service.station_view) : la carte de l'étape 4
+// avec ses prix, ce que dit l'État, et seulement le nom, l'adresse et le lien Google Maps à corriger.
 
 const FICHE_MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 const FICHE_FRENCH_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre',
@@ -37,11 +39,60 @@ function ficheSafeLink(url) {
 
 function ficheMapsLink(values) {
     if (ficheSafeLink(values.maps_url)) return ficheSafeLink(values.maps_url);
+    // Une station : le lien construit avec sa marque, celui de l'étape 4 (station_selection_service.station_maps_url).
+    if (values.station && ficheSafeLink(values.station.maps_url)) return ficheSafeLink(values.station.maps_url);
     return values.position ? `https://www.google.com/maps/search/?api=1&query=${values.position[0]},${values.position[1]}` : null;
+}
+
+// Les pastilles de prix d'une station, comme à l'étape 4 (step4_services.js, fuelPricesHtml) : une date en ocre au-delà
+// de 7 jours, une rupture en pointillés.
+function ficheStationPrices(station) {
+    if (!station.prix.length) return '<p class="fiche-preview__line muted">Aucun prix déclaré.</p>';
+    const badges = station.prix.map(badge => `
+        <span class="fuel-price${badge.ancien ? ' fuel-price--old' : ''}${badge.rupture ? ' fuel-price--out' : ''}">
+            <span>${escapeHtml(badge.label)}</span>
+            ${badge.rupture ? '<span>en rupture</span>' : `<b>${badge.prix.toFixed(3).replace('.', ',')} €</b>`}
+            ${badge.ancien ? `<span class="fuel-price__date">${escapeHtml(badge.date_label)}</span>` : ''}
+        </span>`).join('');
+    return `<div class="fuel-prices">${badges}</div>` +
+        (station.prix_resume ? `<p class="fuel-prices__summary">${escapeHtml(station.prix_resume)}</p>` : '');
+}
+
+// Ce que dit l'État d'une station : de quoi juger une station douteuse (etl/transform/transform_carburants.py).
+function ficheStationState(station) {
+    const osm = ficheSafeLink(station.osm_url);
+    const silence = station.jours_sans_nouvelles === null ? 'jamais'
+        : `${station.derniere_declaration} (il y a ${station.jours_sans_nouvelles} jour${station.jours_sans_nouvelles > 1 ? 's' : ''})`;
+    return `
+        <div class="fiche-station">
+            <p class="fiche__caption"><span>Ce que dit l'État</span></p>
+            <p class="fiche-preview__line">Identifiant ${escapeHtml(station.pdv_id)} · ${escapeHtml(station.adresse_etat || 'sans adresse')}</p>
+            <p class="fiche-preview__line">Dernière déclaration : ${escapeHtml(silence)}</p>
+            <p class="fiche-preview__line">${osm ? `Station OSM : <a href="${osm}" target="_blank" rel="noopener">${escapeHtml(station.osm_element)} ↗</a>`
+                : 'Aucune station OSM reliée : le voyageur voit « Station-service », sans marque.'}</p>
+        </div>`;
+}
+
+// L'aperçu d'une station : sa carte à l'étape 4.
+function ficheStationPreview(values) {
+    const station = values.station;
+    const maps = ficheMapsLink(values);
+    return `
+        <div class="spot-tags">
+            <span class="spot-type">Station-service</span>
+            ${station.automate_24_24 ? '<span class="status-badge fuel-open">24h/24</span>' : ''}
+            ${station.autoroute ? '<span class="status-badge fuel-open">Autoroute</span>' : ''}
+            ${values.masque ? '<span class="status-badge services-tag--red">Masquée : le voyageur ne la voit pas</span>' : ''}
+        </div>
+        <h4>${escapeHtml(values.nom || 'Sans nom')}</h4>
+        ${values.adresse ? `<p class="fiche-preview__line"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(values.adresse)}</p>` : ''}
+        ${ficheStationPrices(station)}
+        ${maps ? `<a class="btn btn--outline btn--sm" href="${maps}" target="_blank" rel="noopener">Voir sur Google Maps ↗</a>` : ''}`;
 }
 
 // L'aperçu : la carte de l'étape 4 (step4_services.js, renderCategory), avec les valeurs de la saisie.
 function fichePreview(values) {
+    if (values.station) return ficheStationPreview(values);
     const type = values.fiche.categories[values.categorie] || values.type_label;
     const season = ficheSeasonLabel(values.statut_saison, values.months);
     const site = ficheSafeLink(values.url);
@@ -87,12 +138,13 @@ function ficheHtml(view, key, doubt = [], collapsible = false) {
                 </p>
                 <div class="fiche-preview${collapsible ? ' fiche-preview--clickable' : ''}" data-preview
                      ${collapsible ? `onclick="ficheOpenFromPreview(event, '${key}')" title="Cliquer pour modifier la fiche"` : ''}>${fichePreview(view)}</div>
+                ${view.station ? ficheStationState(view.station) : ''}
             </div>
             <div class="fiche__form">
                 ${ficheInput(key, 'name', 'Nom', view.nom, doubt, 'maxlength="150"')}
-                <label class="label${doubt.includes('texte') ? ' fiche-doubt' : ''}">${textLabel}
+                ${has('texte') ? `<label class="label${doubt.includes('texte') ? ' fiche-doubt' : ''}">${textLabel}
                     <textarea data-field="texte" rows="3" maxlength="1000" oninput="ficheRefresh('${key}')">${escapeHtml(view.texte)}</textarea>
-                </label>
+                </label>` : ''}
                 ${has('categorie') ? `<div class="fiche__pair">
                     <label class="label">Type affiché
                         <select data-field="categorie" onchange="ficheRefresh('${key}')">${view.fiche.categories[view.categorie] ? ''
@@ -103,16 +155,16 @@ function ficheHtml(view, key, doubt = [], collapsible = false) {
                 </div>` : ''}
                 ${ficheInput(key, 'address', 'Adresse', view.adresse, doubt, 'maxlength="255"')}
                 <div class="fiche__pair">
-                    ${ficheInput(key, 'url', 'Lien du site', view.url, doubt, 'maxlength="490" placeholder="https://"')}
+                    ${has('url') ? ficheInput(key, 'url', 'Lien du site', view.url, doubt, 'maxlength="490" placeholder="https://"') : ''}
                     ${ficheInput(key, 'maps_url', 'Lien Google Maps', view.maps_url, doubt, 'maxlength="490" placeholder="https://maps.app.goo.gl/..."')}
                 </div>
                 ${has('distinction') ? ficheInput(key, 'distinction', 'Distinction (restaurant)', view.distinction, doubt, 'maxlength="100" placeholder="Guide Michelin"') : ''}
                 ${has('jours') ? ficheInput(key, 'jours', 'Jours (marché)', view.jours, doubt, 'maxlength="150" placeholder="Dimanche matin"') : ''}
-                <div class="label${doubt.includes('saison') ? ' fiche-doubt' : ''}">Saison
+                ${has('saison') ? `<div class="label${doubt.includes('saison') ? ' fiche-doubt' : ''}">Saison
                     <select data-field="statut_saison" onchange="ficheRefresh('${key}')">${FICHE_SEASONS.map(([code, label]) =>
                         `<option value="${code}" ${code === view.statut_saison ? 'selected' : ''}>${label}</option>`).join('')}</select>
                     <div class="services-months"><div>${chips}</div></div>
-                </div>
+                </div>` : ''}
                 <label class="label">Note (facultative)
                     <input type="text" class="fiche__note" maxlength="255" placeholder="Vu sur place le 3 novembre">
                 </label>
@@ -158,7 +210,8 @@ function ficheChanges(key) {
         .filter(field => !(field === 'categorie' && !after.categorie))
         .forEach(field => { if (!same(field, after[field], before[field])) changes[field] = after[field]; });
     const sameMonths = [...values.months].sort().join() === [...view.months].sort().join();
-    if (values.statut_saison !== (view.statut_saison || '') || !sameMonths) {
+    // Une fiche sans saison (une station) n'a rien à changer de ce côté.
+    if (view.champs.includes('saison') && (values.statut_saison !== (view.statut_saison || '') || !sameMonths)) {
         changes.statut_saison = values.statut_saison;
         changes.mois = values.months;
     }

@@ -6,7 +6,7 @@
 const TABS = { fermetures: 'Doute sur le nom', liens: 'Liens', saison: 'Saison', doublons: 'Doublons', confirmer: 'À confirmer' };
 // Les onglets de l'étape 4 (CATEGORY_META de step4_services.js), dans le même ordre, puis les services sans onglet :
 // le voyageur ne les voit jamais. Seuls les onglets qui ont des lieux à relire sont proposés.
-const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Gasoil'], ['supermarche', 'Supermarché'],
+const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Carburant'], ['supermarche', 'Supermarché'],
                       ['commerce', 'Commerce'], ['restauration', 'Restauration'], ['cafe', 'Café, bar'], ['toilettes', 'Toilettes'],
                       ['hygiene', 'Hygiène'], ['laverie', 'Laverie'], ['culture', 'Culture & Loisirs'], ['urgence', 'Urgences'],
                       ['hors_etape4', "Hors étape 4"]];
@@ -89,6 +89,19 @@ function cardLinks(card) {
             : label === 'Voir sur la carte' ? 'Google Maps' : url}</a></p>`).join('')}</div>`;
 }
 
+// Une station déclarée deux fois : l'autre station, à côté, avec ses prix (poi_edit_service.attach_sheets).
+function twinStation(card) {
+    const twin = card.station_voisine;
+    if (!twin) return '';
+    return `
+        <div class="review-card__twin">
+            <p class="fiche__caption"><span>L'autre station, à côté ${ficheId('poi', twin.poi_id)}</span></p>
+            <p><strong>${escapeHtml(twin.nom)}</strong> <span class="muted">· ${escapeHtml(twin.adresse_etat)} · identifiant ${escapeHtml(twin.pdv_id)}
+                · dernière déclaration ${escapeHtml(twin.derniere_declaration || 'jamais')}</span></p>
+            ${ficheStationPrices(twin)}
+        </div>`;
+}
+
 // La fiche d'un lieu dans une file : un lieu peut être dans deux files, la clé les sépare.
 function cardKey(card) {
     return `${card.tab}-${card.poi_id}`;
@@ -126,6 +139,7 @@ function reviewCard(card) {
                 <ul>${card.preuves.map(proof => `<li><strong>${escapeHtml(proof.source)} :</strong> ${escapeHtml(proof.texte)}</li>`).join('')}</ul>
                 ${cardLinks(card)}
             </div>
+            ${twinStation(card)}
             ${card.fiche ? ficheHtml(card.fiche, sheetKey(card), card.a_verifier || [], true) : `<h2>${escapeHtml(card.nom)}</h2><p class="muted">${escapeHtml(where(card))}</p>`}
             <p class="supervision-msg fiche-msg" role="alert" style="display:none;"></p>
             <div class="fiche-actions">
