@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import logging
@@ -209,6 +210,47 @@ def get_commune_from_coordinates(latitude, longitude, timeout=10):
         logger.warning(f"Aucune commune française pour ({latitude}, {longitude})")
         return None, None
     return rows[0]["nom"], rows[0]["code"]
+
+
+# LA COMMUNE D'UNE ADRESSE (supervision, 8 et 12 novembre 2026) : ce qui suit le code postal, « 29730 Guilvinec ».
+# Un service se range par la commune de son adresse, même quand ce n'est pas une ville de l'appli (le Carrefour de
+# Guilvinec) : c'est aussi ce qu'un voyageur donnera en signalant un service.
+ADDRESS_TOWN = re.compile(r"\b(\d{5})\s+([^,]+?)\s*$")
+
+
+def address_town(address: str | None) -> str | None:
+    """La commune d'une adresse « Quai Neuf, 29680 Roscoff » : ce qui suit le code postal."""
+    match = ADDRESS_TOWN.search(address or "")
+    return match.group(2) if match else None
+
+
+def town_key(town: str | None) -> str:
+    """« Île-de-Batz », « ile de batz » et « ILE-DE-BATZ » sont la même commune."""
+    plain = unicodedata.normalize("NFKD", town or "").encode("ascii", "ignore").decode()
+    return " ".join(re.sub(r"[-'’]", " ", plain).lower().split())
+
+
+def town_choices(addresses: list, cities: list) -> tuple:
+    """
+    Ce que la recherche de ville de la supervision propose, tiré des adresses :
+        ({city["id"]: [codes postaux]} des villes de l'appli (cities : id, name, commune facultative),
+         [{"nom": « Guilvinec », "codes": ["29730"]}] des communes qui ne sont pas des villes de l'appli, triées).
+    Les codes postaux permettent de chercher « 29730 ».
+    """
+    city_of = {town_key(name): city["id"] for city in cities for name in (city["name"], city_commune(city))}
+    city_codes, towns = {}, {}
+    for address in addresses:
+        match = ADDRESS_TOWN.search(address or "")
+        if not match:
+            continue
+        code, town = match.groups()
+        key = town_key(town)
+        if key in city_of:
+            city_codes.setdefault(city_of[key], set()).add(code)
+        else:
+            towns.setdefault(key, {"nom": town, "codes": set()})["codes"].add(code)
+    return ({city_id: sorted(codes) for city_id, codes in city_codes.items()},
+            [{"nom": town["nom"], "codes": sorted(town["codes"])} for _, town in sorted(towns.items())])
 
 
 def city_commune(city: dict) -> str:

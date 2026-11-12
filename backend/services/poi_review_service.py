@@ -10,10 +10,13 @@ QUATRE FILES, parce que les décisions ne se prennent pas pareil :
     morts      : retirer un lien qui ne répond plus ;
     confirmer  : un restaurant ou un commerce que son agent n'a pas pu trancher (restaurant_service.py,
                  commerce_service.py, signal a_confirmer). Valider
-                 écrit la fiche qu'il avait préparée et l'affiche ; retirer le laisse masqué ;
+                 écrit la fiche qu'il avait préparée et l'affiche ; retirer le laisse masqué.
+                 Aussi une station-service douteuse (etl/transform/transform_carburants.py), masquée en attendant :
+                 « Garder tel quel » la réaffiche, retirer la laisse masquée ;
     doublons   : deux restaurants proches que la règle n'a pas su trancher (restaurant_duplicates_service.py), ou deux
                  lieux de même nom, quel que soit le service (poi_duplicates_service.py, signal doublon_service).
-                 Fusionner masque celui-ci, l'autre reste ; rien n'est effacé.
+                 Fusionner masque celui-ci, l'autre reste ; rien n'est effacé. Une station figée près d'une station
+                 active (doublon_station) est déjà masquée : « Deux lieux » la réaffiche (poi_triage_service.hide_doubtful_stations l'avait masquée).
 
 PARTOUT, « Retirer le lieu » : un lieu qui n'a rien à faire là se voit dans n'importe quelle file. Il est masqué
 et sort de toutes les files.
@@ -34,6 +37,7 @@ from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from utils.db_utils import MySQLUtils
+from utils.geo_utils import address_town, town_choices, town_key
 
 POI = "poi"
 PAGE_SIZE = 50
@@ -47,11 +51,13 @@ TAB_SIGNALS = {
     "fermetures": ("fermeture_agent", "renommage_osm", "fermeture_osm", "absent_osm"),
     "saison": ("saison_agent", "saison_osm"),
     "morts": ("lien_mort",),
-    "doublons": ("doublon_restaurant", "doublon_commerce", "doublon_service"),
-    "confirmer": ("a_confirmer",),
+    "doublons": ("doublon_restaurant", "doublon_commerce", "doublon_service", "doublon_station"),
+    "confirmer": ("a_confirmer", "station_douteuse", "station_muette", "station_absente"),
 }
+# Les stations-service douteuses (etl/transform/transform_carburants.py), masquées en attendant (poi_triage_service.py).
+STATION_SIGNALS = ("station_douteuse", "station_muette", "station_absente")
 SIGNAL_TAB = {signal: tab for tab, signals in TAB_SIGNALS.items() for signal in signals}
-SOURCE_LABELS = {"osm": "OSM", "agent": "Agent", "liens": "Contrôle"}
+SOURCE_LABELS = {"osm": "OSM", "agent": "Agent", "liens": "Contrôle", "carburants_osm": "OSM", "carburants_etat": "État"}
 SIGNAL_LABELS = {
     "lien_agent": "Lien trouvé par l'agent", "lien_osm": "Lien indiqué dans OSM",
     "fermeture_agent": "Fermeture signalée", "renommage_osm": "Renommé dans OSM", "fermeture_osm": "Marqué fermé dans OSM",
@@ -59,7 +65,11 @@ SIGNAL_LABELS = {
     "doublon_restaurant": "Doublon possible",
     "doublon_commerce": "Doublon possible",
     "doublon_service": "Doublon possible",
+    "doublon_station": "Station déclarée deux fois",
     "a_confirmer": "À confirmer",
+    "station_douteuse": "Station douteuse",
+    "station_muette": "Station muette",
+    "station_absente": "Absente du fichier de l'État",
 }
 # Les décisions possibles et le sort des signaux relus. Le code n'accepte rien d'autre.
 ACTIONS = {
@@ -178,7 +188,10 @@ def proof_text(signal: dict) -> str:
         return f"{detail.get('url')} : {detail.get('raison')} (vérifié deux fois)."
     if kind == "a_confirmer":
         return f"{detail.get('raison')}" + (f" : « {detail['indice']} »." if detail.get("indice") else ".")
-    if kind in ("doublon_restaurant", "doublon_commerce", "doublon_service"):
+    if kind in STATION_SIGNALS:
+        osm = f" (« {detail['nom_osm']} », {detail['osm_element']})" if detail.get("nom_osm") else ""
+        return f"{detail.get('raison')}{osm}."
+    if kind in ("doublon_restaurant", "doublon_commerce", "doublon_service", "doublon_station"):
         distance = f"à {detail['distance_m']} m de" if detail.get("distance_m") is not None else "même lieu que"
         return f"{detail.get('raison')}, {distance} « {detail.get('autre_nom')} » ({detail.get('autre_adresse') or 'sans adresse'})."
     return ""
@@ -239,13 +252,19 @@ def _dead_link_card(signals: list) -> dict:
 
 def _duplicate_card(signals: list) -> dict:
     detail = _detail(signals[0])
-    return {"link": None, "autre_id": detail.get("autre_id"),
-            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Fusionner masque celui-ci, l'autre reste.",
+    # Une station figée est masquée dès qu'elle est repérée : « Deux lieux » doit donc la réafficher.
+    hidden = signals[0]["signal_type"] == "doublon_station"
+    return {"link": None, "autre_id": detail.get("autre_id"), "reafficher": hidden,
+            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Fusionner masque celui-ci, l'autre reste."
+                        + (" En attendant, celui-ci est masqué." if hidden else ""),
             "actions": ["fusionner", "deux_lieux"]}
 
 
 def _to_confirm_card(signals: list) -> dict:
     detail = _detail(signals[0])
+    if signals[0]["signal_type"] in STATION_SIGNALS:
+        return {"link": None, "proposal": "cette station existe-t-elle encore ? Masquée en attendant ; la garder la "
+                                          "réaffiche avec ses prix et leur date.", "actions": ["garder", "retirer"]}
     sheet = detail.get("fiche") or {}
     genre = f" ({sheet['genre']})" if sheet.get("genre") else ""
     # « valider_pepite » est un nom interne gardé pour les décisions déjà prises : ce sont des services, pas des pépites.
@@ -364,15 +383,19 @@ def applied_fields(action: str, card: dict, months: list | None, url: str | None
         return {"url": None}
     if action == "fusionner":
         return {"masque": 1}
+    if action == "deux_lieux" and card.get("reafficher"):
+        return {"masque": 0}
     if action == "valider_pepite":
         return {"masque": 0}
     return {}
 
 
-def _pending(cursor, service: str | None, city: str | None, statut: str = "a_relire", kind: str | None = None) -> tuple:
+def _pending(cursor, service: str | None, city: str | None, statut: str = "a_relire", kind: str | None = None,
+             town: str | None = None) -> tuple:
     """
     {(file, poi_id): signaux dans cet état} et les lieux concernés, à travers les filtres. service est un onglet de
-    l'étape 4 (« commerce »), kind le type précis dans cet onglet (« Boulangerie »).
+    l'étape 4 (« commerce »), kind le type précis dans cet onglet (« Boulangerie »), town une commune d'adresse qui
+    n'est pas une ville de l'appli (« Guilvinec », comme dans l'onglet « Modifier »).
     """
     filters, params = ["sg.statut = %s"], [statut]
     if city:
@@ -402,6 +425,8 @@ def _pending(cursor, service: str | None, city: str | None, statut: str = "a_rel
         onglet = step4_tab(row.get("service_category"))
         if (service and onglet != service) or (kind and precise != kind):
             continue
+        if town and town_key(address_town(row["address"])) != town_key(town):
+            continue
         groups.setdefault((tab, row["poi_id"]), []).append(row)
         pois[row["poi_id"]] = {"id": row["p_id"], "name": row["name"], "address": row["address"],
                                "url": row["url"], "maps_url": row.get("maps_url"), "service": precise, "onglet": onglet,
@@ -410,7 +435,8 @@ def _pending(cursor, service: str | None, city: str | None, statut: str = "a_rel
     return groups, pois
 
 
-def get_reviews(tab: str = "liens", service: str | None = None, city: str | None = None, kind: str | None = None) -> dict:
+def get_reviews(tab: str = "liens", service: str | None = None, city: str | None = None, kind: str | None = None,
+                town: str | None = None) -> dict:
     """
     Une file de relecture, ou toutes (ALL_TABS), ses compteurs, les filtres et les dernières décisions. service est un
     onglet de l'étape 4, kind un type précis dans cet onglet (le sous-filtre, quand l'onglet en a plusieurs).
@@ -420,13 +446,13 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        groups, pois = _pending(cursor, service, city, kind=kind)
+        groups, pois = _pending(cursor, service, city, kind=kind, town=town)
         counts = {name: 0 for name in TAB_SIGNALS}
         for name, _ in groups:
             counts[name] += 1
         counts[ALL_TABS] = sum(counts.values())
         # Le nombre de lieux par onglet, puis par type dans l'onglet choisi, dans la file et la ville choisies.
-        all_groups, all_pois = _pending(cursor, None, city) if service or kind else (groups, pois)
+        all_groups, all_pois = _pending(cursor, None, city, town=town) if service or kind else (groups, pois)
         in_tab = [poi_id for name, poi_id in all_groups if tab in (name, ALL_TABS)]
         service_counts = Counter(all_pois[poi_id]["onglet"] for poi_id in in_tab)
         type_counts = Counter(all_pois[poi_id]["service"] or "" for poi_id in in_tab
@@ -441,10 +467,18 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
         cards.sort(key=lambda card: (card["nom"] or "").lower())
 
         cursor.execute("""
-            SELECT DISTINCT c.name FROM poi_signals sg JOIN histo_poi h ON h.poi_id = sg.poi_id
+            SELECT DISTINCT c.name, c.commune FROM poi_signals sg JOIN histo_poi h ON h.poi_id = sg.poi_id
             JOIN cities c ON c.id = h.city_id WHERE sg.statut = 'a_relire' ORDER BY c.name
         """)
-        cities = [row["name"] for row in cursor.fetchall()]
+        city_rows = [{"id": row["name"], "name": row["name"], "commune": row["commune"]} for row in cursor.fetchall()]
+        # La recherche de ville, comme dans « Modifier » : les villes qui ont des lieux à relire, et les communes des
+        # adresses de ces lieux, avec leurs codes postaux.
+        cursor.execute("""
+            SELECT DISTINCT p.address FROM poi_signals sg JOIN poi p ON p.id = sg.poi_id
+            WHERE sg.statut = 'a_relire' AND p.address IS NOT NULL
+        """)
+        city_codes, towns = town_choices([row["address"] for row in cursor.fetchall()], city_rows)
+        cities = [{"name": row["name"], "codes": city_codes.get(row["name"], [])} for row in city_rows]
         cursor.execute("""
             SELECT d.id, d.decision, d.note, d.decided_by, d.decided_at, p.name FROM decisions d
             JOIN poi p ON p.id = d.objet_id
@@ -457,7 +491,7 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
         cursor.close()
         return {"tab": tab, "counts": counts, "service_counts": dict(service_counts), "type_counts": dict(type_counts),
                 "total": len(cards), "cards": cards[:PAGE_SIZE],
-                "cities": cities, "recent": recent, "audit": audit}
+                "cities": cities, "towns": towns, "recent": recent, "audit": audit}
     finally:
         MySQLUtils.disconnect(connection)
 

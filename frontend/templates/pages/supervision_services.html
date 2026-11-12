@@ -9,7 +9,7 @@
 
   <div class="services-toolbar">
     <div class="services-filters">
-      <label class="label">Type de lieu
+      <label class="label">Catégorie
         <select id="filterService"><option value="">Tous</option></select>
       </label>
       {# Le type précis dans l'onglet choisi (Boulangerie, Marché...), montré quand l'onglet en a plusieurs. #}
@@ -19,8 +19,14 @@
       <label class="label">Type de problème
         <select id="filterProblem"><option value="tous">Tous</option></select>
       </label>
-      <label class="label">Ville
-        <select id="filterCity"><option value="">Toutes</option></select>
+      {# Le même champ que l'onglet « Modifier » (supervision_ville.js) : une ville qui a des lieux à relire, une commune
+         de leurs adresses, ou un code postal. filterCity garde le nom de la ville, filterTown celui de la commune. #}
+      <label class="label search-wrap">Ville
+        <input type="search" id="filterCitySearch" maxlength="80" placeholder="Ville ou code postal…" autocomplete="off"
+               style="min-height:44px; padding:0 10px; border:1px solid var(--card-border); border-radius:10px; background:var(--white); color:var(--ink); font:inherit; font-size:14px;">
+        <input type="hidden" id="filterCity" value="">
+        <input type="hidden" id="filterTown" value="">
+        <div id="filterCitySuggestions" class="city-suggestions" style="display:none;"></div>
       </label>
     </div>
   </div>
@@ -51,5 +57,6 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision_fiche.js') }}"></script>
+<script src="{{ url_for('static', filename='js/supervision_ville.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision_services.js') }}"></script>
 {% endblock %}

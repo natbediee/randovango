@@ -244,3 +244,41 @@ def test_an_apostrophe_in_a_typed_link_is_encoded_not_refused():
     assert review.typed_maps_link(url)["latitude"] == 48.09
     with pytest.raises(ValueError):
         review.typed_link("https://a.fr/<script>")
+
+
+def test_a_doubtful_station_can_be_kept_or_removed():
+    """Une station muette arrive dans « À confirmer », masquée : Garder la réaffiche, Retirer la laisse masquée."""
+    card = review.build_card("confirmer", {"id": 48710, "name": "Carrefour"},
+                             [signal("station_muette", source="carburants_etat", raison="rien déclaré à l'État depuis le 25/09/2026")])
+    assert card["actions"][:2] == ["garder", "retirer"]
+    assert card["preuves"][0] == {"source": "État", "texte": "rien déclaré à l'État depuis le 25/09/2026."}
+    assert review.applied_fields("garder", card, None) == {"masque": 0}
+
+
+def test_a_station_declared_twice_can_be_merged_or_shown_again():
+    """Plouguerneau : la station muette, déjà masquée, se fusionne avec l'active ; « Deux lieux » la réaffiche."""
+    card = review.build_card("doublons", {"id": 48528, "name": "Carrefour Contact"},
+                             [signal("doublon_station", source="carburants_etat", raison="rien déclaré depuis le 21/09/2026",
+                                     distance_m=9, autre_id=48527, autre_nom="Carrefour Contact")])
+    assert card["signal"] == "Station déclarée deux fois" and "à 9 m de" in card["preuves"][0]["texte"]
+    assert review.applied_fields("fusionner", card, None) == {"masque": 1}
+    assert review.applied_fields("deux_lieux", card, None) == {"masque": 0}
+
+
+def test_two_places_of_an_ordinary_duplicate_change_nothing():
+    """Un doublon ordinaire n'était pas masqué : « Deux lieux » ne change rien au lieu."""
+    card = review.build_card("doublons", POI, [signal("doublon_service", source="doublons", raison="même nom", autre_nom="X")])
+    assert review.applied_fields("deux_lieux", card, None) == {}
+
+
+def test_the_review_keeps_the_places_of_the_chosen_address_town():
+    """Relecture filtrée sur Guilvinec (commune d'adresse, pas une ville de l'étape 1) : seul le Carrefour de Guilvinec reste."""
+    row = {"id": 1, "p_id": 48710, "poi_id": 48710, "source": "carburants_etat", "signal_type": "station_muette",
+           "detail": "{}", "name": "Carrefour", "address": "1 rue du moulin, 29730 GUILVINEC", "url": None,
+           "latitude": 47.8, "longitude": -4.28, "maps_url": None, "service_name": "fuel", "service_category": "fuel",
+           "table_categorie": None, "shop_categorie": None, "commune": "Plomeur"}
+    other = {**row, "id": 2, "p_id": 7, "poi_id": 7, "address": "Bourg, 29120 Plomeur"}
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [row, other]
+    groups, pois = review._pending(cursor, None, None, town="Guilvinec")
+    assert list(pois) == [48710] and list(groups) == [("confirmer", 48710)]

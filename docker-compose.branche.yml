@@ -3,7 +3,11 @@
 # sans toucher aux conteneurs de docker-compose.yml. Voir « Tester une branche » dans le README.
 #
 #   BRANCHE=carburants PORT=8001 docker compose -f docker-compose.branche.yml up -d
-#   BRANCHE=carburants docker compose -f docker-compose.branche.yml down     # arrête ce conteneur seulement
+#   BRANCHE=carburants PORT=8001 FRONT_PORT=5001 docker compose -f docker-compose.branche.yml --profile front up -d
+#   BRANCHE=carburants docker compose -f docker-compose.branche.yml --profile front down   # arrête ces conteneurs seulement
+#
+# Le front de branche (profil « front ») sert les pages et le JavaScript de la branche, sur FRONT_PORT, et appelle
+# le backend de la branche : sans lui, le navigateur montre les pages de main. On s'y connecte une fois avec son compte.
 #
 # Toujours avec -f : sans lui, docker compose lirait docker-compose.yml, dont les noms de conteneurs
 # (fastapi_backend, db_randovango...) sont ceux du projet principal.
@@ -19,6 +23,9 @@ services:
       # Autre chose que « dev » : main.py ne lance pas db_init au démarrage. Les tables de la branche
       # sont créées à la main, au moment choisi (docker exec ... python db_init/db_randovango.py).
       ENV: branche
+      # Le front de branche est sur une autre adresse : le navigateur ne laisse ses pages appeler l'API que si
+      # elle l'autorise (CORS). Cette valeur passe avant celle du .env (load_dotenv n'écrase pas).
+      ALLOWED_ORIGINS: http://localhost:${FRONT_PORT:-5001},http://127.0.0.1:${FRONT_PORT:-5001}
     volumes:
       - ./backend:/usr/src/app
       # Un seul .env pour tout le projet : celui du dossier principal, rangé à côté (~/Dev/randovango).
@@ -33,6 +40,23 @@ services:
     networks:
       - randovango
     # Pas de « restart: always » : arrêté, il ne revient pas tout seul au redémarrage de Docker.
+
+  frontend_branche:
+    profiles: ["front"]
+    container_name: flask_frontend_${BRANCHE}
+    # L'image déjà construite du front principal : le code vient du volume ci-dessous.
+    image: randovango-frontend
+    init: true
+    environment:
+      # Les pages appellent le backend de la branche, pas celui de main.
+      PUBLIC_API_BASE_URL: http://localhost:${PORT:-8001}
+    volumes:
+      - ./frontend:/usr/src/app
+      - ../randovango/.env:/usr/src/app/.env:ro
+    ports:
+      - "127.0.0.1:${FRONT_PORT:-5001}:5000"
+    networks:
+      - randovango
 
 networks:
   # Le réseau du projet principal, où MySQL s'appelle db_randovango et Mongo mongo_randovango (voir .env).
