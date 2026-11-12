@@ -1277,6 +1277,8 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   border-radius: var(--r-pill); background: var(--cream); border: 1px solid var(--card-border); color: var(--ink);
 }
 .fuel-price b { font-weight: 700; }
+/* Un carburant choisi dans le filtre : les autres prix de la station sont masqués (step4_services.js, applyFuelView). */
+.fuel-price[hidden] { display: none; }
 .fuel-price.is-chosen { background: var(--mint); border-color: var(--teal); font-weight: 700; }
 .fuel-price.is-chosen b { font-size: 13.5px; }
 .fuel-price--old { color: #7A5F1E; background: var(--warn-bg); border-color: var(--warn-bd); }
@@ -2290,6 +2292,12 @@ a.bilan-total:hover { border-color: var(--teal); }
 .services-filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .services-filters .label { display: flex; flex-direction: column; gap: 2px; }
 .services-filters select { min-height: 44px; padding: 0 10px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--white); color: var(--ink); font: inherit; font-size: 14px; }
+/* La liste native du Mac garde sa petite hauteur à côté d'un champ texte (la recherche de ville de « Modifier ») :
+   on la dessine comme les champs, avec sa propre flèche. */
+.services-filters select {
+  -webkit-appearance: none; appearance: none; padding-right: 32px;
+  background: var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2364797C' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;
+}
 .services-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--card-border); }
 .services-tab { min-height: 44px; padding: 8px 14px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
 .services-tab.is-on { border-bottom-color: var(--teal); color: var(--ink); font-weight: 700; }
@@ -2320,6 +2328,9 @@ a.bilan-total:hover { border-color: var(--teal); }
 .fiche-preview h4 { margin: 8px 0 4px; font-size: 16px; }
 .fiche-preview__text { font-size: 14px; margin: 4px 0; }
 .fiche-preview__line { font-size: 13px; color: var(--muted); margin: 2px 0; }
+/* Une station-service : ce que dit l'État, sous l'aperçu ; l'autre station d'un doublon, au-dessus de la fiche. */
+.fiche-station { margin-top: 12px; }
+.review-card__twin { border: 1px dashed var(--card-border); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
 .fiche__form { display: flex; flex-direction: column; gap: 8px; }
 .fiche__form .label { display: flex; flex-direction: column; gap: 3px; }
 .fiche__form input, .fiche__form textarea, .fiche__form select { box-sizing: border-box; width: 100%; padding: 6px 10px; font: inherit;

@@ -281,3 +281,46 @@ def test_the_search_of_a_hamlet_asks_for_its_commune_and_shows_it():
     rows = edit._search_rows(cursor, TREZIEN, "", [TREZIEN])
     assert cursor.execute.call_args[0][1][4] == "%Plouarzel"
     assert rows[0]["commune"] == "Plouarzel"
+
+
+def test_a_station_sheet_corrects_every_field_like_other_services():
+    """Une station-service se corrige comme les autres services (nom, adresse, liens, texte, saison), avec ses prix en plus."""
+    poi = {"id": 48710, "name": "Carrefour", "address": "1 rue du moulin, 29730 Guilvinec", "latitude": 47.8, "longitude": -4.2,
+           "masque": 1, "verifie": 1}
+    view = edit.sheet_view(poi, None, "fuel", station={"pdv_id": "29730006", "prix": []})
+    assert view["champs"] == ["name", "address", "url", "maps_url", "texte", "saison"]
+    assert view["station"]["pdv_id"] == "29730006"
+    assert edit.sheet_view(poi, None, "Boulangerie")["station"] is None
+
+
+def test_a_place_is_found_by_the_town_of_its_address():
+    """Cas du Carrefour de Guilvinec : Guilvinec n'est pas une ville de l'étape 1, on le trouve par la commune de son adresse."""
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [
+        {"id": 48710, "name": "Carrefour", "address": "1 rue du moulin, 29730 Guilvinec", "latitude": 47.805, "longitude": -4.28},
+        {"id": 7, "name": "Boulangerie", "address": "2 rue de Guilvinec, 29120 Plomeur", "latitude": 47.84, "longitude": -4.28}]
+    rows = edit._search_rows(cursor, None, "", [], town="GUILVINEC")
+    assert [(row["id"], row["commune"]) for row in rows] == [(48710, "Guilvinec")]
+    assert cursor.execute.call_args.args[1] == ("%GUILVINEC",)
+
+
+def test_the_towns_offered_come_with_their_postcodes():
+    """La recherche propose Guilvinec (29730), commune d'une adresse ; Plomeur, ville de l'étape 1, garde son code 29120."""
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [{"address": "1 rue du moulin, 29730 Guilvinec"}, {"address": "Bourg, 29120 PLOMEUR"},
+                                    {"address": "Quai, 29730 GUILVINEC"}, {"address": "Rue sans code"}]
+    city_codes, towns = edit.address_towns(cursor, [{"id": 81, "name": "Plomeur", "commune": "Plomeur"}])
+    assert city_codes == {81: ["29120"]}
+    assert towns == [{"nom": "Guilvinec", "codes": ["29730"]}]
+
+
+def test_a_station_declared_twice_comes_with_the_other_station(monkeypatch):
+    """Plouguerneau en supervision : la fiche de l'ancienne station arrive avec l'autre, à 9 m, et ses prix du jour."""
+    monkeypatch.setattr(edit.MySQLUtils, "connect", lambda: MagicMock())
+    monkeypatch.setattr(edit.MySQLUtils, "disconnect", lambda c: None)
+    monkeypatch.setattr(edit, "_sheet_views", lambda cursor, ids: {48528: {"station": {"pdv_id": "29880005"}}})
+    asked = []
+    monkeypatch.setattr(edit, "_station_views", lambda cursor, ids: asked.append(ids) or {48527: {"pdv_id": "29880006"}})
+    reviews = edit.attach_sheets({"cards": [{"poi_id": 48528, "tab": "doublons", "autre_id": 48527}]})
+    assert asked == [[48527]]
+    assert reviews["cards"][0]["station_voisine"] == {"pdv_id": "29880006"}

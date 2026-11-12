@@ -6,8 +6,8 @@ from datetime import date
 from fastapi import APIRouter, Query, Body
 from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB, SHOP_CATEGORY_LABELS, SHOPS_SHOWN
 from services.plan_service import insert_or_update_plan
-from services.station_selection_service import (closure_label, is_closed_for_good, price_badges, prices_summary,
-                                                station_maps_url)
+from services.station_selection_service import (closure_label, is_closed_for_good, is_motorway, price_badges,
+                                                prices_summary, station_maps_url)
 from services.restaurant_selection_service import (TABLE_CATEGORY_LABELS, TABLES_SHOWN, is_new, is_out_of_season, maps_url,
                                                    season_label)
 from etl.load.load_carburants import FUEL_SERVICE, SOURCE_NAME as FUEL_SOURCE
@@ -65,14 +65,14 @@ def keep_state_stations(poi_list: list) -> list:
 
 def station_fields(poi: dict) -> dict:
     """
-    Ce que la carte d'une station ajoute aux autres cartes : ses pastilles de prix, la phrase des dates, l'automate et
-    une fermeture temporaire. Les prix sont ceux d'aujourd'hui, pas du jour du voyage : l'ancienneté se compte donc
+    Ce que la carte d'une station ajoute aux autres cartes : ses pastilles de prix, la phrase des dates, l'automate,
+    l'étiquette Autoroute (réseau autoroutier, carte #180) et une fermeture temporaire. Les prix sont ceux d'aujourd'hui, pas du jour du voyage : l'ancienneté se compte donc
     depuis aujourd'hui.
     """
     today = date.today()
     badges = price_badges(poi.get("station_prix"), today)
     return {"prix": badges, "prix_resume": prices_summary(badges, poi.get("station_lu_le")),
-            "automate_24_24": poi.get("station_automate") == 1,
+            "automate_24_24": poi.get("station_automate") == 1, "autoroute": is_motorway(poi.get("station_route")),
             "fermeture_label": closure_label(poi.get("station_fermeture_type"), poi.get("station_fermeture_debut"),
                                              poi.get("station_fermeture_fin"), today)}
 
@@ -270,6 +270,7 @@ def get_poi(
             sc.code_postal AS station_code_postal,
             sc.ville_etat AS station_ville,
             sc.automate_24_24 AS station_automate,
+            sc.route AS station_route,
             sc.fermeture_type AS station_fermeture_type,
             sc.fermeture_debut AS station_fermeture_debut,
             sc.fermeture_fin AS station_fermeture_fin,

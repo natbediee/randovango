@@ -2,6 +2,8 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
+from etl.etl_carburants import refresh_prices
+from etl.load.load_carburants import prices_read_at
 from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -46,6 +48,65 @@ def refresh_all_cities_meteo_background():
     finally:
         with meteo_refresh_lock:
             meteo_refresh_in_progress = False
+
+# LES PRIX DES CARBURANTS DU JOUR (décision du 11 novembre 2026)
+# Au début d'un voyage, comme la météo : si les prix de toutes les stations n'ont pas encore été relus aujourd'hui,
+# refresh_prices relit le fichier national de l'État dans un fil à part (gratuit, quelques secondes, sans Overpass).
+# La page ne l'attend pas, et un échec la laisse intacte : les anciens prix restent affichés, avec leur date.
+# La date vient de sources.lu_le, pas des stations : une station absente du fichier garde sa date ancienne, et une
+# commune chargée le matin a des stations du jour sans que les autres soient relues.
+# Après un échec, on attend FUEL_RETRY_MINUTES avant de réessayer, pour ne pas relancer le téléchargement à chaque page.
+FUEL_RETRY_MINUTES = 60
+fuel_refresh_lock = threading.Lock()
+fuel_refresh_in_progress = False
+fuel_refresh_failed_at = None
+
+
+def fuel_prices_are_fresh(read_at, today: date) -> bool:
+    """Vrai si le dernier rafraîchissement national des prix date d'aujourd'hui (même horloge que l'écriture)."""
+    return read_at is not None and read_at.date() == today
+
+
+def refresh_fuel_prices_background():
+    """Rafraîchit les prix de toutes les stations en arrière-plan. Un échec est noté, jamais remonté."""
+    global fuel_refresh_in_progress, fuel_refresh_failed_at
+    failed = False
+    try:
+        logger.info("[CARBURANTS-BG] Début du rafraîchissement des prix")
+        loaded = refresh_prices()
+        if loaded is None:
+            failed = True
+            logger.error("[CARBURANTS-BG] Fichier de l'État illisible : les anciens prix restent")
+        else:
+            logger.info(f"[CARBURANTS-BG] Prix rafraîchis pour {loaded} stations")
+    except Exception as e:
+        failed = True
+        logger.error(f"[CARBURANTS-BG] Échec du rafraîchissement des prix, les anciens restent : {e}")
+    finally:
+        with fuel_refresh_lock:
+            fuel_refresh_in_progress = False
+            fuel_refresh_failed_at = datetime.now() if failed else None
+
+
+def start_fuel_prices_refresh() -> bool:
+    """Lance le rafraîchissement des prix s'il le faut. Vrai s'il est lancé. Ne lève jamais d'erreur."""
+    global fuel_refresh_in_progress
+    now = datetime.now()
+    try:
+        if fuel_prices_are_fresh(prices_read_at(), now.date()):
+            return False
+    except Exception as e:
+        logger.error(f"[CARBURANTS-BG] Date du dernier rafraîchissement illisible, rien n'est lancé : {e}")
+        return False
+    with fuel_refresh_lock:
+        if fuel_refresh_in_progress:
+            return False
+        if fuel_refresh_failed_at and now - fuel_refresh_failed_at < timedelta(minutes=FUEL_RETRY_MINUTES):
+            return False
+        fuel_refresh_in_progress = True
+    threading.Thread(target=refresh_fuel_prices_background, daemon=True).start()
+    return True
+
 
 def get_all_city_stats(cursor, cities, distance_km=5):
     """
@@ -156,6 +217,9 @@ async def get_ville_list(
             threading.Thread(target=refresh_all_cities_meteo_background, daemon=True).start()
         else:
             logger.info("Rafraîchissement météo déjà en cours en arrière-plan.")
+
+    # Les prix des carburants du jour, en arrière-plan aussi (voir start_fuel_prices_refresh).
+    start_fuel_prices_refresh()
 
     cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
     cities = cursor.fetchall()

@@ -16,14 +16,16 @@ pas un nom ou un lien corrigé ici (service_store._decided_by_human).
 """
 import json
 import re
-import unicodedata
+from datetime import date
 
 from services import poi_review_service as review, service_store
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
+from services.station_selection_service import STATION_VIEW_SQL, station_view
 from utils.db_utils import MySQLUtils
 from utils.display_utils import PENDING_DOUBT_SQL, shown_verified
-from utils.geo_utils import city_commune, get_bounding_box, haversine_distance_km
+from utils.geo_utils import (address_town, city_commune, get_bounding_box, haversine_distance_km, town_choices,
+                             town_key)
 
 EDIT_FILE = "modifier"
 ZONE_KM = 5          # le rayon par défaut de l'étape 4 (step4.py)
@@ -84,19 +86,10 @@ def _city(cursor, city_id: int | None) -> dict | None:
 # centre, passe la mer : filtrer sur Île-de-Batz montrait 215 lieux, dont 122 de Roscoff et de Santec, et 8 « Abri »
 # dont un seul sur l'île. Un lieu avec une adresse appartient à la commune de son adresse ; sans adresse, à la ville
 # de l'appli la plus proche. Seule la supervision suit cette règle : l'étape 4 garde sa zone.
-ADDRESS_TOWN = re.compile(r"\b\d{5}\s+([^,]+?)\s*$")
-
-
-def address_town(address: str | None) -> str | None:
-    """La commune d'une adresse « Quai Neuf, 29680 Roscoff » : ce qui suit le code postal."""
-    match = ADDRESS_TOWN.search(address or "")
-    return match.group(1) if match else None
-
-
-def town_key(town: str | None) -> str:
-    """« Île-de-Batz », « ile de batz » et « ILE-DE-BATZ » sont la même commune."""
-    plain = unicodedata.normalize("NFKD", town or "").encode("ascii", "ignore").decode()
-    return " ".join(re.sub(r"[-'’]", " ", plain).lower().split())
+# UNE COMMUNE QUI N'EST PAS UNE VILLE DE L'APPLI (12 novembre 2026) : le Carrefour de Guilvinec n'était rangé nulle part,
+# Guilvinec n'étant pas une ville de l'étape 1. La recherche propose donc aussi les communes des adresses
+# (address_towns) ; une telle commune ne garde que les lieux dont l'adresse la nomme. C'est l'information qu'un
+# voyageur donnera en signalant un service.
 
 
 def in_city(town: str | None, latitude, longitude, city: dict, cities: list) -> bool:
@@ -114,8 +107,18 @@ def in_city(town: str | None, latitude, longitude, city: dict, cities: list) -> 
     return nearest["id"] == city["id"]
 
 
-def _search_rows(cursor, city: dict | None, name: str, cities: list | None = None) -> list:
+def address_towns(cursor, cities: list) -> tuple:
+    """Ce que la recherche de ville propose, tiré des adresses de tous les services (geo_utils.town_choices)."""
+    cursor.execute("SELECT DISTINCT address FROM poi WHERE address IS NOT NULL")
+    return town_choices([row["address"] for row in cursor.fetchall()], cities)
+
+
+def _search_rows(cursor, city: dict | None, name: str, cities: list | None = None, town: str | None = None) -> list:
     filters, params = [], []
+    if town:
+        # La collation de MySQL ignore la casse et les accents (« PLOUDALMéZEAU ») ; town_key tranche ensuite.
+        filters.append("p.address LIKE %s")
+        params.append(f"%{town}")
     if city:
         min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], ZONE_KM)
         # Les candidats : la zone de l'étape 4, plus les adresses de la commune hors de la zone (la Pointe Saint-Mathieu,
@@ -141,6 +144,10 @@ def _search_rows(cursor, city: dict | None, name: str, cities: list | None = Non
     for row in rows:
         # La commune affichée : celle de l'adresse, pas la première des villes dont la zone contient le lieu.
         row["commune"] = address_town(row.get("address")) or (city_commune(city) if city else row.get("commune"))
+    if town:
+        rows = [row for row in rows if town_key(address_town(row.get("address"))) == town_key(town)]
+        for row in rows:
+            row["commune"] = address_town(row.get("address"))
     if not city:
         return rows
     return [row for row in rows if in_city(address_town(row.get("address")), row["latitude"], row["longitude"], city, cities)]
@@ -173,27 +180,33 @@ def _recent(cursor) -> list:
             for row in cursor.fetchall()]
 
 
-def search(city_id: int | None = None, service: str | None = None, kind: str | None = None, name: str | None = None) -> dict:
+def search(city_id: int | None = None, service: str | None = None, kind: str | None = None, name: str | None = None,
+           town: str | None = None) -> dict:
     """
-    Les lieux d'une ville, d'un onglet de l'étape 4, d'un type précis, et dont le nom contient `name`. Il faut une ville
-    ou un bout de nom : sans eux, toute la table viendrait.
+    Les lieux d'une ville, d'un onglet de l'étape 4, d'un type précis, et dont le nom contient `name`. town : une commune
+    des adresses qui n'est pas une ville de l'appli (address_towns). Il faut une ville, une commune ou un bout de nom :
+    sans eux, toute la table viendrait.
     """
+    town = " ".join((town or "").split()) or None
     name = " ".join((name or "").split())
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, latitude, longitude FROM cities ORDER BY name")
+        cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities ORDER BY name")
         all_cities = cursor.fetchall()
-        cities = [{"id": row["id"], "name": row["name"]} for row in all_cities]
+        city_codes, towns = address_towns(cursor, all_cities)
+        cities = [{"id": row["id"], "name": row["name"], "codes": city_codes.get(row["id"], [])} for row in all_cities]
         city = _city(cursor, city_id)
+        searched = bool(city or town or len(name) >= MIN_NAME_SEARCH)
         cards, service_counts, type_counts = [], {}, {}
-        if city or len(name) >= MIN_NAME_SEARCH:
-            cards, service_counts, type_counts = filter_cards(_search_rows(cursor, city, name, all_cities), service, kind)
+        if searched:
+            cards, service_counts, type_counts = filter_cards(_search_rows(cursor, city, name, all_cities, town),
+                                                              service, kind)
         recent = _recent(cursor)
         cursor.close()
-        return {"cities": cities, "cards": cards[:PAGE_SIZE], "total": len(cards), "service_counts": service_counts,
-                "type_counts": type_counts, "recent": recent, "buttons": EDIT_BUTTONS,
-                "searched": bool(city or len(name) >= MIN_NAME_SEARCH)}
+        return {"cities": cities, "towns": towns, "cards": cards[:PAGE_SIZE], "total": len(cards),
+                "service_counts": service_counts, "type_counts": type_counts, "recent": recent, "buttons": EDIT_BUTTONS,
+                "searched": searched}
     finally:
         MySQLUtils.disconnect(connection)
 
@@ -296,8 +309,11 @@ def load_sheet(cursor, poi_id: int) -> dict | None:
             "values": {column: fiche.get(column) for column in review.SHEET_COLUMNS[table]}}
 
 
-def sheet_view(poi: dict, sheet: dict | None, service_name: str | None = None) -> dict:
-    """La fiche telle que la page la montre : les valeurs du formulaire, et l'aperçu de l'étape 4."""
+def sheet_view(poi: dict, sheet: dict | None, service_name: str | None = None, station: dict | None = None) -> dict:
+    """
+    La fiche telle que la page la montre : les valeurs du formulaire, et l'aperçu de l'étape 4. Une station de l'État
+    (station, station_selection_service.station_view) a sa fiche à elle : ses prix et ce que dit l'État.
+    """
     values = (sheet or {}).get("values") or {}
     table = (sheet or {}).get("table")
     labels = TABLE_LABELS.get(table, {})
@@ -320,6 +336,7 @@ def sheet_view(poi: dict, sheet: dict | None, service_name: str | None = None) -
         "type_label": labels.get(values.get("categorie")) or service_name or "",
         "fiche": {"table": table, "origine": (sheet or {}).get("origine"), "categories": labels},
         "champs": fields,
+        "station": station,
     }
 
 
@@ -484,9 +501,20 @@ def decide_sheet(poi_id: int, changes: dict, note: str, decided_by: str, tab: st
         MySQLUtils.disconnect(connection)
 
 
+def _station_views(cursor, poi_ids: list) -> dict:
+    """{poi_id: fiche de station} des stations de l'État parmi poi_ids."""
+    if not poi_ids:
+        return {}
+    marks = ",".join(["%s"] * len(poi_ids))
+    cursor.execute(f"{STATION_VIEW_SQL} WHERE sc.poi_id IN ({marks})", tuple(poi_ids))
+    today = date.today()
+    return {row["poi_id"]: station_view(row, today) for row in cursor.fetchall()}
+
+
 def _sheet_views(cursor, poi_ids: list) -> dict:
     if not poi_ids:
         return {}
+    stations = _station_views(cursor, poi_ids)
     marks = ",".join(["%s"] * len(poi_ids))
     cursor.execute(f"""
         SELECT p.id, p.latitude, p.longitude, p.masque, {', '.join(f'p.{column}' for column in POI_SHEET_COLUMNS)},
@@ -495,7 +523,8 @@ def _sheet_views(cursor, poi_ids: list) -> dict:
                 WHERE ps.poi_id = p.id) AS service_name
         FROM poi p WHERE p.id IN ({marks})
     """, tuple(poi_ids))
-    return {row["id"]: sheet_view(row, load_sheet(cursor, row["id"]), row["service_name"]) for row in cursor.fetchall()}
+    return {row["id"]: sheet_view(row, load_sheet(cursor, row["id"]), row["service_name"], stations.get(row["id"]))
+            for row in cursor.fetchall()}
 
 
 def get_sheet(poi_id: int) -> dict:
@@ -521,12 +550,16 @@ def attach_sheets(reviews: dict) -> dict:
     try:
         cursor = connection.cursor(dictionary=True)
         views = _sheet_views(cursor, list({card["poi_id"] for card in cards}))
+        # Une station déclarée deux fois : l'autre station, à côté, avec ses prix (le Carrefour Contact de Plouguerneau).
+        twins = _station_views(cursor, list({card["autre_id"] for card in cards
+                                             if card.get("autre_id") and (views.get(card["poi_id"]) or {}).get("station")}))
         cursor.close()
     finally:
         MySQLUtils.disconnect(connection)
     for card in cards:
         card["fiche"] = views.get(card["poi_id"])
         card["a_verifier"] = DOUBT_FIELDS.get(card["tab"], [])
+        card["station_voisine"] = twins.get(card.get("autre_id"))
     return reviews
 
 

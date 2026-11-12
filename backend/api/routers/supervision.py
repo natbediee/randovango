@@ -56,16 +56,20 @@ def delete_opening_decision(decision_id: int, _admin=Depends(require_admin)):
     return supervision_service.get_reviews()
 
 
-def _service_reviews(tab: str, service: str | None = None, city: str | None = None, kind: str | None = None) -> dict:
-    """Une file de relecture, chaque lieu avec sa fiche complète (poi_edit_service.attach_sheets)."""
-    return poi_edit_service.attach_sheets(poi_review_service.get_reviews(tab, service, city, kind))
+def _service_reviews(tab: str, service: str | None = None, city: str | None = None, kind: str | None = None,
+                     town: str | None = None) -> dict:
+    """
+    Une file de relecture, chaque lieu avec sa fiche complète (poi_edit_service.attach_sheets). town (paramètre
+    « commune ») : une commune d'adresse qui n'est pas une ville de l'appli, comme dans « Modifier ».
+    """
+    return poi_edit_service.attach_sheets(poi_review_service.get_reviews(tab, service, city, kind, town))
 
 
 @router.get("/services", summary="Service checks awaiting a human decision, one queue at a time.")
 def get_service_reviews(tab: str = "liens", service: str | None = None, ville: str | None = None, type: str | None = None,
-                        _admin=Depends(require_admin)):
+                        commune: str | None = None, _admin=Depends(require_admin)):
     try:
-        return _service_reviews(tab, service or None, ville or None, type or None)
+        return _service_reviews(tab, service or None, ville or None, type or None, commune or None)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 
@@ -83,7 +87,7 @@ def post_service_decision(data: dict = Body(...), admin=Depends(require_admin)):
         raise HTTPException(status_code=422, detail=str(error))
     # La page peut montrer toutes les files (« vue ») : on la renvoie telle qu'elle était.
     return _service_reviews(data.get("vue") or data["tab"], data.get("service") or None,
-                                          data.get("ville") or None, data.get("type") or None)
+                            data.get("ville") or None, data.get("type") or None, data.get("commune") or None)
 
 
 @router.post("/services/fiche", summary="Saves a corrected sheet from a review card.")
@@ -98,7 +102,7 @@ def post_service_sheet(data: dict = Body(...), admin=Depends(require_admin)):
         poi_edit_service.decide_sheet(data["poi_id"], data.get("changes"), data.get("note") or "", admin["username"],
                                       data.get("tab"))
         return _service_reviews(data.get("vue") or data.get("tab"), data.get("service") or None,
-                                data.get("ville") or None, data.get("type") or None)
+                                data.get("ville") or None, data.get("type") or None, data.get("commune") or None)
     except ValueError as error:
         # Le motif du refus dans le journal : la page ne le montrait qu'en haut, hors de vue (8 novembre 2026).
         logger.warning("Fiche refusée (lieu %s, file %s, champs %s) : %s", data["poi_id"], data.get("tab"),
@@ -108,17 +112,18 @@ def post_service_sheet(data: dict = Body(...), admin=Depends(require_admin)):
 
 @router.post("/services/audit/{decision_id}", summary="Marks a rule decision as checked by a human.")
 def post_service_audit(decision_id: int, tab: str = "liens", service: str | None = None, ville: str | None = None,
-                       type: str | None = None, _admin=Depends(require_admin)):
+                       type: str | None = None, commune: str | None = None, _admin=Depends(require_admin)):
     poi_review_service.confirm_audit(decision_id)
-    return _service_reviews(tab, service or None, ville or None, type or None)
+    return _service_reviews(tab, service or None, ville or None, type or None, commune or None)
 
 
 @router.delete("/services/decisions/{decision_id}", summary="Cancels a service decision and restores the place.")
 def delete_service_decision(decision_id: int, tab: str = "liens", service: str | None = None,
-                            ville: str | None = None, type: str | None = None, _admin=Depends(require_admin)):
+                            ville: str | None = None, type: str | None = None, commune: str | None = None,
+                            _admin=Depends(require_admin)):
     try:
         poi_review_service.cancel_decision(decision_id)
-        return _service_reviews(tab, service or None, ville or None, type or None)
+        return _service_reviews(tab, service or None, ville or None, type or None, commune or None)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 
@@ -128,7 +133,7 @@ def delete_service_decision(decision_id: int, tab: str = "liens", service: str |
 
 def _edit_services(data: dict) -> dict:
     return poi_edit_service.search(data.get("ville"), data.get("service") or None, data.get("type") or None,
-                                   data.get("nom") or None)
+                                   data.get("nom") or None, data.get("commune") or None)
 
 
 def _edit_spots(data: dict) -> dict:
@@ -137,9 +142,10 @@ def _edit_spots(data: dict) -> dict:
 
 @router.get("/edit/services", summary="Finds any service place to correct, signal or not.")
 def get_edit_services(ville: int | None = None, service: str | None = None, type: str | None = None,
-                      nom: str | None = None, _admin=Depends(require_admin)):
+                      nom: str | None = None, commune: str | None = None, _admin=Depends(require_admin)):
+    # commune : une commune des adresses qui n'est pas une ville de l'appli (« Guilvinec »), à la place de ville.
     try:
-        return _edit_services({"ville": ville, "service": service, "type": type, "nom": nom})
+        return _edit_services({"ville": ville, "service": service, "type": type, "nom": nom, "commune": commune})
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 
@@ -147,7 +153,7 @@ def get_edit_services(ville: int | None = None, service: str | None = None, type
 @router.post("/edit/services/decisions", summary="Applies and records a correction on one place.")
 def post_edit_service(data: dict = Body(...), admin=Depends(require_admin)):
     """data = {"poi_id": 32498, "action": "autre_nom", "nom": "Cave de Keruzas", "url": None, "mois": [], "note": "",
-    "ville": 12, "service": "commerce", "type": "", "nom_recherche": "keruzas"}"""
+    "ville": 12, "commune": "", "service": "commerce", "type": "", "nom_recherche": "keruzas"}"""
     if not isinstance(data.get("poi_id"), int):
         raise HTTPException(status_code=422, detail="Lieu invalide")
     try:
@@ -181,10 +187,11 @@ def post_edit_sheet(data: dict = Body(...), admin=Depends(require_admin)):
 
 @router.delete("/edit/services/decisions/{decision_id}", summary="Cancels a correction and restores the place.")
 def delete_edit_service(decision_id: int, ville: int | None = None, service: str | None = None,
-                        type: str | None = None, nom: str | None = None, _admin=Depends(require_admin)):
+                        type: str | None = None, nom: str | None = None, commune: str | None = None,
+                        _admin=Depends(require_admin)):
     try:
         poi_review_service.cancel_decision(decision_id)
-        return _edit_services({"ville": ville, "service": service, "type": type, "nom": nom})
+        return _edit_services({"ville": ville, "service": service, "type": type, "nom": nom, "commune": commune})
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 

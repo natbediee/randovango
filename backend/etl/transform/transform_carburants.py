@@ -17,6 +17,21 @@ Deux candidates, ou une trop loin : doute, donc pas de marque. La station reste 
 
 L'ADRESSE DE L'ÉTAT N'EST PAS TOUJOURS UNE ADRESSE
 À Plouarzel, le champ adresse contient « SAS SNDL MENEZ CRENN », le nom de la société exploitante.
+
+LES STATIONS DOUTEUSES (carte #180, 11 novembre 2026)
+Des signaux (signal, détail), comme transform_osm.osm_signals : load_carburants les écrit, poi_triage_service masque
+la station tant qu'un humain ne les a pas relus, et la réaffiche quand ils n'ont plus lieu d'être.
+    station_douteuse : une station OSM porte l'identifiant de l'État, mais à plus de REF_MAX_M (le Carrefour de
+                       Locmaria-Plouzané, 29290003, à 1 096 m le 9 novembre) : l'une des deux positions est fausse ;
+    doublon_station  : une station muette (rien déclaré depuis FROZEN_DAYS jours, ni prix ni rupture) à moins de
+                       TWIN_MAX_M d'une station active. Le Carrefour Contact de Plouguerneau, déclaré deux fois :
+                       29880005 muet depuis le 21 septembre, 29880006 à 9 m, avec les prix du jour ;
+    station_muette   : une station muette sans voisine active : elle a peut-être fermé ;
+    station_absente  : une station en base que le fichier ne contient plus. Le fichier « instantané » ne porte aucune
+                       fermeture (0 balise le 11 novembre sur 9 827 stations) : une station fermée en sort.
+Une station muette reste longtemps dans le fichier : 225 jours pour la plus vieille de France le 11 novembre.
+Les dernières nouvelles d'une station comptent aussi ses ruptures : à Quimper, une station sans aucun prix déclare
+ses ruptures chaque jour, elle est vivante.
 """
 import re
 import xml.etree.ElementTree as ET
@@ -26,6 +41,8 @@ from utils.geo_utils import get_bounding_box, haversine_distance_km
 
 REF_MAX_M = 1000          # au-delà, même avec le bon identifiant, l'une des deux positions est fausse
 NEAR_MAX_M = 50
+FROZEN_DAYS = 30          # sans nouvelles depuis plus longtemps, une station est « muette »
+TWIN_MAX_M = 50           # une station muette et une active plus près que ça : sans doute la même pompe
 DEFAULT_NAME = "Station-service"
 COMPANY_FORM = re.compile(r"^(SAS|SASU|SARL|EURL|SA|SNC|SCI|SELARL)\b", re.IGNORECASE)
 
@@ -129,6 +146,56 @@ def link_to_osm(station: dict, osm_stations: list) -> tuple:
     if len(close) == 1 and not close[0]["ref"] and close[0]["postcode"] in (None, station["code_postal"]):
         return close[0], "proximite"
     return None, "aucun"
+
+
+def link_signals(station: dict, osm_stations: list) -> list:
+    """Ce que le lien avec OSM signale sur une station de l'État : le même identifiant, trop loin pour être cru."""
+    for osm in osm_stations:
+        if osm["latitude"] is not None and osm["ref"] == station["pdv_id"]:
+            distance = _distance_m(station, osm)
+            if distance > REF_MAX_M:
+                return [("station_douteuse", {
+                    "raison": f"une station OSM porte son identifiant de l'État, mais à {distance:.0f} m",
+                    "osm_element": osm["osm_element"], "nom_osm": osm["name"] or osm["brand"],
+                    "distance_m": round(distance)})]
+    return []
+
+
+def last_news(prices: list) -> datetime | None:
+    """Les dernières nouvelles d'une station : son prix déclaré ou sa rupture la plus récente."""
+    days = [price.get(key) for price in prices for key in ("releve_le", "rupture_debut") if price.get(key)]
+    return max(days) if days else None
+
+
+def file_signals(stations: list, missing: list, now: datetime) -> dict:
+    """
+    {pdv_id: [(signal, détail)]} de toutes les stations : celles du fichier (pdv_id, poi_id, name, address, position de
+    l'État, last_news) et celles de la base que le fichier ne contient plus (pdv_id). Une liste vide : rien à signaler.
+    Une station muette près d'une active est un doublon, pas une station muette.
+    """
+    def silent(station):
+        return station["last_news"] is None or (now - station["last_news"]).days > FROZEN_DAYS
+
+    signals = {station["pdv_id"]: [("station_absente", {"raison": "absente du fichier de l'État, qui ne la déclare plus"})]
+               for station in missing}
+    active = [station for station in stations if not silent(station)]
+    for station in stations:
+        signals[station["pdv_id"]] = []
+        if not silent(station):
+            continue
+        since = f"depuis le {station['last_news']:%d/%m/%Y}" if station["last_news"] else "jamais"
+        twins = sorted(((1000 * haversine_distance_km(station["latitude"], station["longitude"], other["latitude"],
+                                                      other["longitude"]), other["pdv_id"], other) for other in active),
+                       key=lambda twin: twin[:2])
+        twins = [(distance, other) for distance, _, other in twins if distance <= TWIN_MAX_M]
+        if twins:
+            distance, other = twins[0]
+            signals[station["pdv_id"]].append(("doublon_station", {
+                "raison": f"rien déclaré {since}, une station active déclare à côté", "distance_m": round(distance),
+                "autre_id": other["poi_id"], "autre_nom": other["name"], "autre_adresse": other.get("address")}))
+        else:
+            signals[station["pdv_id"]].append(("station_muette", {"raison": f"rien déclaré à l'État {since}"}))
+    return signals
 
 
 def usable_address(station: dict) -> str | None:

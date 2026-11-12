@@ -41,3 +41,12 @@ def test_a_station_card_links_to_the_station_on_google_maps(monkeypatch):
              "station_code_postal": "29217", "station_ville": "PLOUGONVELIN"}]
     result, _ = _get_poi(monkeypatch, rows)
     assert "query=station-service+Intermarch%C3%A9+Rue+du+Stade" in result["gasoil"][0]["maps_url"]
+
+
+def test_a_motorway_station_carries_the_motorway_label(monkeypatch):
+    """L'Avia de l'A31 près de Gevrey-Chambertin (route = A) porte l'étiquette Autoroute ; une station en ville, non."""
+    rows = [{**_station(1, "Avia", "prix-carburants"), "station_route": "A"},
+            {**_station(2, "Intermarché", "prix-carburants"), "station_route": "R"}]
+    result, cursor = _get_poi(monkeypatch, rows)
+    assert "sc.route AS station_route" in cursor.sql
+    assert {poi["name"]: poi["autoroute"] for poi in result["gasoil"]} == {"Avia": True, "Intermarché": False}

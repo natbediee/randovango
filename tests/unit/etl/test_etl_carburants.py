@@ -78,3 +78,159 @@ def test_prices_are_replaced_as_a_block_with_null_for_a_missing_price(monkeypatc
     assert calls[0].args == ("DELETE FROM prix_carburants WHERE poi_id = %s", (12,))
     inserted = {call.args[1][1]: call.args[1][2] for call in calls[1:]}
     assert inserted == {"E10": 1.799, "GPLc": None, "Gazole": 1.689}
+
+
+# --- Le rafraîchissement national des prix (refresh_prices) et les corrections humaines ---
+
+STORED = {"29810002": {"pdv_id": "29810002", "poi_id": 48534, "osm_element": "node/42960018", "lien_osm": "ref_osm",
+                       "marque": "Système U", "name": "Station U", "latitude": 48.433395, "longitude": -4.716160}}
+
+
+def _refresh(monkeypatch, state=True, dry_run=False):
+    loads, marks = [], []
+    monkeypatch.setattr(etl_carburants, "_read_state_file", lambda: parse_state_file(XML) if state else None)
+    monkeypatch.setattr(etl_carburants, "known_stations", lambda: STORED)
+    monkeypatch.setattr(etl_carburants, "load_stations", lambda rows, city: loads.append((rows, city)) or len(rows))
+    monkeypatch.setattr(etl_carburants, "mark_prices_read", lambda read_at: marks.append(read_at))
+    monkeypatch.setattr(etl_carburants, "load_missing_signals", lambda signals, known: None)
+    monkeypatch.setattr(etl_carburants.poi_triage_service, "hide_doubtful_stations", lambda: None)
+    return etl_carburants.refresh_prices(dry_run=dry_run), loads, marks
+
+
+def test_refresh_prices_loads_known_stations_without_a_city_and_notes_the_date(monkeypatch):
+    """Le rafraîchissement relit les prix des stations déjà en base, sans commune, garde leur lien OSM et note sa date."""
+    loaded, loads, marks = _refresh(monkeypatch)
+    assert loaded == 1
+    rows, city = loads[0]
+    assert city is None
+    assert (rows[0]["poi"]["name"], rows[0]["station"]["lien_osm"]) == ("Station U", "ref_osm")
+    assert len(marks) == 1
+
+
+def test_refresh_prices_notes_nothing_when_the_state_file_is_missing(monkeypatch):
+    """Le site de l'État muet : rien n'est chargé et la date n'est pas notée, le rafraîchissement sera retenté."""
+    loaded, loads, marks = _refresh(monkeypatch, state=False)
+    assert (loaded, loads, marks) == (None, [], [])
+
+
+def test_a_trial_refresh_notes_nothing(monkeypatch):
+    """L'essai (--prix --essai) n'écrit rien : ni prix, ni date de rafraîchissement."""
+    _, loads, marks = _refresh(monkeypatch, dry_run=True)
+    assert (loads, marks) == ([], [])
+
+
+def test_a_refresh_without_city_writes_no_city_history(monkeypatch):
+    """Le rafraîchissement (ville vide) remplace les prix sans écrire d'historique de commune (histo_poi)."""
+    rows, _ = _city_rows(monkeypatch, [STATION_U])
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (12,)
+    cursor.fetchall.return_value = []
+    cnx = MagicMock()
+    cnx.cursor.return_value = cursor
+    monkeypatch.setattr(load_carburants.MySQLUtils, "connect", lambda: cnx)
+    monkeypatch.setattr(load_carburants.MySQLUtils, "disconnect", lambda c: None)
+    monkeypatch.setattr(load_carburants, "get_or_create_source", lambda cursor, name: 3)
+    monkeypatch.setattr(load_carburants, "insert_service_and_link", lambda cursor, poi_id, service: None)
+    histories = []
+    monkeypatch.setattr(load_carburants, "insert_histo_poi", lambda cursor, poi_id, city: histories.append(city))
+    assert load_carburants.load_stations(rows, None) == 1
+    assert histories == []
+    statements = [call.args[0] for call in cursor.execute.call_args_list]
+    assert "DELETE FROM prix_carburants WHERE poi_id = %s" in statements
+    cnx.commit.assert_called_once()
+
+
+def test_a_name_corrected_by_a_human_is_never_rewritten():
+    """Cas du Carrefour Contact de Plouguerneau (11 nov. 2026) : renommé à la main, il ne redevient pas « Station-service »."""
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (48527,)
+    poi = {"name": "Station-service", "latitude": 48.607, "longitude": -4.511, "address": "1 rue saint exupery"}
+    assert load_carburants._upsert_poi(cursor, 3, "29880006", poi, {48527: {"name"}}) == 48527
+    update = cursor.execute.call_args_list[-1].args
+    assert update[0] == "UPDATE poi SET latitude = %s, longitude = %s, address = %s WHERE id = %s"
+    assert update[1] == (48.607, -4.511, "1 rue saint exupery", 48527)
+
+
+def test_a_new_station_is_created_with_all_its_fields():
+    """Une station de l'État encore inconnue est créée, vérifiée, avec le nom et la position d'OSM."""
+    cursor = MagicMock()
+    cursor.fetchone.return_value = None
+    cursor.lastrowid = 99
+    poi = {"name": "Station U", "latitude": 48.43, "longitude": -4.71, "address": None}
+    assert load_carburants._upsert_poi(cursor, 3, "29810002", poi, {}) == 99
+    assert cursor.execute.call_args_list[-1].args[0].strip().startswith("INSERT INTO poi")
+
+
+def test_human_fields_reads_the_columns_changed_by_live_decisions():
+    """Les colonnes protégées sont celles que garde detail.avant ; masque n'en fait pas partie, load ne le touche jamais."""
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [
+        (48527, '{"file": "modifier", "avant": {"name": "Station-service"}, "champs": ["name"]}'),
+        (48528, '{"file": "modifier", "avant": {"masque": 0}}'),
+        (48600, '{"avant": {"latitude": 48.1, "longitude": -4.2}}'),
+        (48601, "pas du json"),
+    ]
+    assert load_carburants.human_fields(cursor, 3) == {48527: {"name"}, 48528: set(),
+                                                     48600: {"latitude", "longitude"}}
+    assert "annulee_at IS NULL" in cursor.execute.call_args.args[0]
+
+
+# --- Les signaux des stations douteuses ---
+
+def test_signals_of_a_pass_replace_the_ones_still_to_review(monkeypatch):
+    """Une station muette devenue doublon : le nouveau signal est écrit, l'ancien encore à relire est effacé."""
+    saved = []
+    monkeypatch.setattr(load_carburants, "save_signal", lambda cursor, *args: saved.append(args))
+    cursor = MagicMock()
+    load_carburants._replace_signals(cursor, 48528, "carburants_etat", [("doublon_station", {"autre_id": 48527})], set())
+    assert saved == [(48528, "carburants_etat", "doublon_station", {"autre_id": 48527})]
+    query, params = cursor.execute.call_args.args
+    assert "statut = 'a_relire'" in query and "signal_type NOT IN (%s)" in query
+    assert params == (48528, "carburants_etat", "doublon_station")
+
+
+def test_a_station_that_speaks_again_loses_its_signals_to_review(monkeypatch):
+    """La station déclare de nouveau : ses signaux encore à relire sont effacés ; ceux qu'un humain a relus restent."""
+    monkeypatch.setattr(load_carburants, "save_signal", lambda *args: None)
+    cursor = MagicMock()
+    load_carburants._replace_signals(cursor, 48710, "carburants_etat", [], set())
+    query, params = cursor.execute.call_args.args
+    assert query == "DELETE FROM poi_signals WHERE poi_id = %s AND source = %s AND statut = 'a_relire'"
+    assert params == (48710, "carburants_etat")
+
+
+def test_a_station_removed_by_hand_is_not_sent_back_to_review(monkeypatch):
+    """L'ancienne fiche de Plouguerneau, retirée à la main le 11 nov. : aucun signal ne la renvoie en supervision."""
+    saved = []
+    monkeypatch.setattr(load_carburants, "save_signal", lambda cursor, *args: saved.append(args))
+    load_carburants._replace_signals(MagicMock(), 48528, "carburants_etat", [("doublon_station", {})], {48528})
+    assert saved == []
+
+
+def test_a_city_pass_signals_a_doubtful_link_and_hides_it(monkeypatch):
+    """Au passage par ville, le Carrefour de Locmaria (même identifiant à 1 096 m) reçoit son signal, puis le tri masque."""
+    xml = XML.replace(b'id="29810002"', b'id="29290003"')
+    far = {**STATION_U, "lat": 48.4420, "tags": {**STATION_U["tags"], "ref:FR:prix-carburants": "29290003"}}
+    monkeypatch.setattr(etl_carburants, "get_city_center", lambda city: (48.4300, -4.7200))
+    monkeypatch.setattr(etl_carburants, "extract_osm_fuel", lambda *args: [far])
+    loads, sorted_out = [], []
+    monkeypatch.setattr(etl_carburants, "load_stations", lambda rows, city: loads.append(rows) or len(rows))
+    monkeypatch.setattr(etl_carburants.poi_triage_service, "hide_doubtful_stations", lambda: sorted_out.append(1))
+    assert etl_carburants.run_city_etl("Locmaria-Plouzané", stations=parse_state_file(xml)) == 1
+    [(signal, detail)] = loads[0][0]["signaux"]
+    assert signal == "station_douteuse" and detail["distance_m"] > 1000
+    assert sorted_out == [1]
+
+
+def test_a_refresh_signals_missing_stations_then_sorts_them(monkeypatch):
+    """Le rafraîchissement signale une station de la base absente du fichier, puis le tri des stations passe."""
+    calls = []
+    stored = {**STORED, "29000099": {**STORED["29810002"], "pdv_id": "29000099", "poi_id": 48999}}
+    monkeypatch.setattr(etl_carburants, "_read_state_file", lambda: parse_state_file(XML))
+    monkeypatch.setattr(etl_carburants, "known_stations", lambda: stored)
+    monkeypatch.setattr(etl_carburants, "load_stations", lambda rows, city: len(rows))
+    monkeypatch.setattr(etl_carburants, "load_missing_signals", lambda signals, known: calls.append(signals))
+    monkeypatch.setattr(etl_carburants, "mark_prices_read", lambda read_at: None)
+    monkeypatch.setattr(etl_carburants.poi_triage_service, "hide_doubtful_stations", lambda: calls.append("tri"))
+    etl_carburants.refresh_prices()
+    assert calls[0]["29000099"][0][0] == "station_absente" and calls[1] == "tri"

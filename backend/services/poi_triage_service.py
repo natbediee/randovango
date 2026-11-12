@@ -18,6 +18,11 @@ DANS LE DOUTE ON N'AFFICHE PAS (must_hide) : une fermeture signalée masque le l
 spot proposé au retrait. « Garder tel quel » le remet. Une décision humaine prime : ses signaux ne sont plus
 relus ici, et une décision annulée n'est pas reprise par la règle.
 
+LES STATIONS-SERVICE DOUTEUSES (hide_doubtful_stations, carte #180) : une station de l'État avec un signal des
+carburants à relire (etl/transform/transform_carburants.py) est masquée. Quand ses signaux n'ont plus lieu d'être (elle
+déclare de nouveau, elle revient dans le fichier), le chargement les efface et elle est réaffichée sans relecture,
+sauf si un humain l'a retirée ou fusionnée. Appelée à la fin de chaque passage de etl/etl_carburants.py.
+
 UTILISATION (dans le conteneur backend, depuis /usr/src/app) :
     python -m services.poi_triage_service --essai   # compte, n'écrit rien
     python -m services.poi_triage_service
@@ -32,6 +37,8 @@ from urllib.parse import urlparse
 from agents.find_service_links import commune_of, control_page, read_page
 from services import poi_review_service as review
 from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB
+from etl.load.load_carburants import REMOVING_DECISIONS, SIGNALS_FROM_OSM, SIGNALS_FROM_STATE
+from etl.load.load_carburants import SOURCE_NAME as FUEL_SOURCE
 from utils.db_utils import MySQLUtils
 from utils.logger_util import LoggerUtil
 
@@ -111,6 +118,43 @@ def _control_new_osm_links(cursor, signals: list) -> None:
         detail = {**review.signal_detail(signal), "controle": verdict, "domaine_verifie": True}
         signal["detail"] = json.dumps(detail, ensure_ascii=False)
         cursor.execute("UPDATE poi_signals SET detail = %s WHERE id = %s", (signal["detail"], signal["id"]))
+
+
+def hide_doubtful_stations(trial: bool = False) -> dict:
+    """
+    Masque les stations de l'État qui ont un signal des carburants à relire ; réaffiche celles qui n'ont plus rien à
+    relire et qu'aucune décision non annulée n'a retirées ou fusionnées. Renvoie {"masquees": n, "reaffichees": n}.
+    """
+    sources = (SIGNALS_FROM_OSM, SIGNALS_FROM_STATE)
+    removing = ", ".join(["%s"] * len(REMOVING_DECISIONS))
+    connection = MySQLUtils.connect()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE poi p SET p.masque = 1
+            WHERE p.masque = 0 AND EXISTS (SELECT 1 FROM poi_signals sg WHERE sg.poi_id = p.id
+                                           AND sg.statut = 'a_relire' AND sg.source IN (%s, %s))
+        """, sources)
+        hidden = cursor.rowcount
+        cursor.execute(f"""
+            UPDATE poi p JOIN sources s ON s.id = p.source_id SET p.masque = 0
+            WHERE s.name = %s AND p.masque = 1
+              AND NOT EXISTS (SELECT 1 FROM poi_signals sg WHERE sg.poi_id = p.id AND sg.statut = 'a_relire')
+              AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.objet_type = %s AND d.objet_id = p.id
+                              AND d.annulee_at IS NULL AND d.decision IN ({removing}))
+        """, (FUEL_SOURCE, review.POI, *REMOVING_DECISIONS))
+        shown = cursor.rowcount
+        if trial:
+            connection.rollback()
+        else:
+            connection.commit()
+        cursor.close()
+    finally:
+        MySQLUtils.disconnect(connection)
+    summary = {"masquees": hidden, "reaffichees": shown}
+    if hidden or shown:
+        logger.info(f"[tri] stations douteuses{' (essai, rien écrit)' if trial else ''} : {summary}")
+    return summary
 
 
 def must_remove(signals: list) -> bool:

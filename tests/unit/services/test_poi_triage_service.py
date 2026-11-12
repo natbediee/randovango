@@ -112,3 +112,37 @@ def test_a_supermarket_without_a_sheet_where_the_supermarket_agent_went_has_no_f
     shops_only = [({"convenience"}, {10}, {"29217"}), ({"supermarket"}, set(), set())]
     assert triage.without_follow_up("liens", old, passed, {2087: {"supermarket"}})
     assert not triage.without_follow_up("liens", old, shops_only, {2087: {"supermarket"}})
+
+
+def _sort_stations(monkeypatch, trial=False):
+    from unittest.mock import MagicMock
+    connection = MagicMock()
+    cursor = connection.cursor.return_value
+    cursor.rowcount = 1
+    monkeypatch.setattr(triage.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(triage.MySQLUtils, "disconnect", lambda c: None)
+    return triage.hide_doubtful_stations(trial=trial), connection, [call.args for call in cursor.execute.call_args_list]
+
+
+def test_a_doubtful_station_is_hidden_until_someone_looks(monkeypatch):
+    """Une station avec un signal des carburants à relire est masquée : dans le doute, on ne l'affiche pas."""
+    summary, connection, (hide, _) = _sort_stations(monkeypatch)
+    assert "SET p.masque = 1" in hide[0] and "statut = 'a_relire'" in hide[0]
+    assert hide[1] == ("carburants_osm", "carburants_etat")
+    assert summary == {"masquees": 1, "reaffichees": 1}
+    connection.commit.assert_called_once()
+
+
+def test_a_station_back_to_normal_is_shown_again_unless_removed_by_hand(monkeypatch):
+    """Une station qui déclare de nouveau revient sans relecture ; une station retirée ou fusionnée à la main reste masquée."""
+    _, _, (_, show) = _sort_stations(monkeypatch)
+    assert "SET p.masque = 0" in show[0] and "NOT EXISTS (SELECT 1 FROM poi_signals" in show[0]
+    assert "d.annulee_at IS NULL" in show[0]
+    assert show[1] == ("prix-carburants", "poi", "retirer", "fusionner")
+
+
+def test_a_trial_sort_of_stations_writes_nothing(monkeypatch):
+    """L'essai compte les stations à masquer et à réafficher sans rien écrire."""
+    _, connection, _ = _sort_stations(monkeypatch, trial=True)
+    connection.rollback.assert_called_once()
+    connection.commit.assert_not_called()

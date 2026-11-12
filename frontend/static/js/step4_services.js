@@ -48,8 +48,9 @@ let activeType = null;
 // Les onglets dont les agents écrivent les fiches, avec une catégorie par lieu : le filtre par type n'y apparaît
 // que s'il y a au moins deux types à choisir.
 const TYPE_FILTER_CATEGORIES = ['commerce', 'restauration', 'cafe'];
-// L'onglet carburant a son propre filtre : par carburant vendu (le gazole par défaut, celui des vans), puis le tri par
-// prix de ce carburant ou par distance du spot. Les pastilles de prix arrivent prêtes de l'API (poi.prix).
+// L'onglet carburant a son propre filtre : par carburant vendu (le gazole par défaut, celui des vans), qui ne laisse que
+// le prix de ce carburant sur chaque station, puis le tri par prix de ce carburant ou par distance du spot (du centre de
+// la commune sans spot choisi). Les pastilles de prix arrivent prêtes de l'API (poi.prix).
 const FUEL_CATEGORY = 'gasoil';
 const DEFAULT_FUEL = 'Gazole';
 let activeFuel = DEFAULT_FUEL;      // null = « Tout »
@@ -254,6 +255,7 @@ function renderCategory(categoryId, poiList) {
                         <span class="status-badge ${poi.badge.css}">${poi.badge.text}</span>
                         ${poi.nouveau ? '<span class="status-badge top">Nouveau</span>' : ''}
                         ${poi.automate_24_24 ? '<span class="status-badge fuel-open">24h/24</span>' : ''}
+                        ${poi.autoroute ? '<span class="status-badge fuel-open">Autoroute</span>' : ''}
                         ${poi.fermeture_label ? `<span class="status-badge pending">${escapeHtml(poi.fermeture_label)}</span>` : ''}
                         ${previousPoiDay.has(poi.id) ? `<span class="status-badge planned"><i class="fas fa-check"></i> J${previousPoiDay.get(poi.id)} déjà planifié</span>` : ''}                    </div>
                     <h4>${poi.name}</h4>
@@ -514,7 +516,7 @@ function renderFuelFilter(filter) {
         <div class="fuel-filter" role="group" aria-label="Trier les stations">
             <span class="fuel-filter__label">Trier par</span>
             ${chip(fuelSort === 'prix', sortLabel, 'data-sort="prix"')}
-            ${chip(fuelSort === 'distance', 'Distance du spot', 'data-sort="distance"')}
+            ${chip(fuelSort === 'distance', stations.some(poi => poi.from_spot) ? 'Distance du spot' : 'Distance du centre', 'data-sort="distance"')}
         </div>`;
     filter.querySelectorAll('[data-fuel]').forEach(button => button.addEventListener('click', () => {
         activeFuel = button.dataset.fuel || null;
@@ -550,6 +552,8 @@ function applyFuelView() {
         const pills = [...line.querySelectorAll('.fuel-price')].sort((a, b) => a.dataset.rank - b.dataset.rank);
         pills.forEach(pill => {
             const chosen = pill.dataset.fuel === priceFuel;
+            // Un carburant choisi (Gazole...) : seul son prix reste sur la carte ; « Tout » remontre les autres.
+            pill.hidden = activeFuel !== null && !chosen;
             pill.classList.toggle('is-chosen', chosen);
             pill.classList.toggle('is-cheapest', chosen && cheapest !== null && fuelPrice(poi, priceFuel) === cheapest);
             line.appendChild(pill);

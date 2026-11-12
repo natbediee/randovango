@@ -4,7 +4,7 @@
 // Chaque correction est une décision tracée : « Corrigé récemment » permet de l'annuler.
 // La sécurité est côté API : tout ce qui est tapé y est contrôlé.
 
-const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Gasoil'], ['supermarche', 'Supermarché'],
+const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Carburant'], ['supermarche', 'Supermarché'],
                       ['commerce', 'Commerce'], ['restauration', 'Restauration'], ['cafe', 'Café, bar'], ['toilettes', 'Toilettes'],
                       ['hygiene', 'Hygiène'], ['laverie', 'Laverie'], ['culture', 'Culture & Loisirs'], ['urgence', 'Urgences'],
                       ['hors_etape4', 'Hors étape 4']];
@@ -15,6 +15,16 @@ let mode = 'services';
 let nameTimer = null;
 let openId = null;        // le lieu ou le spot dont la fiche est ouverte
 let lastData = null;
+let allCities = [];       // les villes de l'étape 1, pour la recherche de ville (supervision_ville.js)
+let allTowns = [];        // les communes des adresses qui ne sont pas des villes de l'étape 1 : {nom, codes}
+let cityField = null;
+
+// La ville choisie : l'identifiant d'une ville de l'étape 1, ou une commune d'adresse (services seulement).
+function chooseCity({ ville, commune }) {
+    document.getElementById('filterCity').value = ville;
+    document.getElementById('filterTown').value = commune;
+    load();
+}
 
 function authToken() {
     return sessionStorage.getItem('jwtToken') || localStorage.getItem('userToken');
@@ -29,6 +39,7 @@ function showMessage(text) {
 function filters() {
     const values = { ville: document.getElementById('filterCity').value, nom: document.getElementById('filterName').value.trim() };
     if (mode === 'services') {
+        values.commune = document.getElementById('filterTown').value;
         values.service = document.getElementById('filterService').value;
         values.type = document.getElementById('filterType').value;
     }
@@ -298,10 +309,8 @@ function renderCards(data) {
 
 function render(data) {
     lastData = data;
-    const citySelect = document.getElementById('filterCity');
-    const chosenCity = citySelect.value;
-    citySelect.innerHTML = '<option value="">Choisir une ville</option>' + data.cities.map(city =>
-        `<option value="${city.id}" ${String(city.id) === chosenCity ? 'selected' : ''}>${escapeHtml(city.name)}</option>`).join('');
+    allCities = data.cities;
+    allTowns = data.towns || [];
     if (mode === 'services') renderServiceFilters(data);
 
     renderCards(data);
@@ -359,6 +368,12 @@ function setMode(next) {
     document.getElementById('filterTypeLabel').style.display = 'none';
     document.getElementById('filterService').innerHTML = '<option value="">Tous</option>';
     document.getElementById('filterType').innerHTML = '<option value="">Tous</option>';
+    // Les spots n'ont pas de commune d'adresse : une commune choisie pour les services est oubliée.
+    if (mode === 'spots' && document.getElementById('filterTown').value) {
+        cityField.clear();
+        chooseCity({ ville: '', commune: '' });
+        return;
+    }
     load();
 }
 
@@ -369,7 +384,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     document.getElementById('modeServices').addEventListener('click', () => setMode('services'));
     document.getElementById('modeSpots').addEventListener('click', () => setMode('spots'));
-    document.getElementById('filterCity').addEventListener('change', load);
+    cityField = citySearch({
+        inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
+        sources: () => ({ cities: allCities, towns: mode === 'services' ? allTowns : [] }), onChoose: chooseCity,
+    });
     document.getElementById('filterService').addEventListener('change', () => {
         document.getElementById('filterType').innerHTML = '<option value="">Tous</option>';
         load();

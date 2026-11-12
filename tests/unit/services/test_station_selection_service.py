@@ -2,7 +2,7 @@
 import json
 from datetime import date, datetime
 
-from services.station_selection_service import (closure_label, is_closed_for_good, price_badges, prices_summary,
+from services.station_selection_service import (closure_label, is_closed_for_good, is_motorway, station_view, price_badges, prices_summary,
                                                 station_maps_url)
 
 
@@ -70,3 +70,39 @@ def test_closures():
     assert closure_label("T", datetime(2026, 11, 1), None, TODAY) == "Fermée en ce moment"
     assert closure_label("T", datetime(2026, 11, 20), None, TODAY) is None
     assert closure_label(None, None, None, TODAY) is None
+
+
+# --- La fiche de supervision d'une station (station_view, carte #180) ---
+
+GUILVINEC = {"poi_id": 48710, "pdv_id": "29730006", "name": "Carrefour", "marque": "Carrefour", "adresse_etat": "1 rue du moulin",
+             "code_postal": "29730", "ville_etat": "Guilvinec", "route": "R", "automate_24_24": None,
+             "osm_element": "node/6179234430", "lien_osm": "ref_osm", "lu_le": datetime(2026, 11, 11, 21, 21),
+             "address": "1 rue du moulin, 29730 Guilvinec", "latitude": 47.805, "longitude": -4.28059,
+             "prix": json.dumps([{"carburant": "Gazole", "prix": 2.426, "releve_le": "2026-09-25 07:00:00.000000",
+                                  "rupture_type": None},
+                                 {"carburant": "SP98", "prix": None, "releve_le": None, "rupture_type": "temporaire"}]),
+             "dernieres_nouvelles": datetime(2026, 9, 25, 7, 0)}
+
+
+def test_the_review_sheet_of_a_station_says_what_the_state_says():
+    """Le Carrefour de Guilvinec en supervision : ses prix en ocre, sa dernière déclaration, sa station OSM et le lien Google."""
+    view = station_view(GUILVINEC, date(2026, 11, 12))
+    assert view["derniere_declaration"] == "25/09/2026" and view["jours_sans_nouvelles"] == 48
+    assert view["adresse_etat"] == "1 rue du moulin 29730 Guilvinec"
+    assert view["osm_url"] == "https://www.openstreetmap.org/node/6179234430"
+    assert [(badge["label"], badge["ancien"], badge["rupture"]) for badge in view["prix"]] == [
+        ("Gazole", True, False), ("SP98", False, True)]
+    assert "station-service+Carrefour" in view["maps_url"]
+    assert view["autoroute"] is False
+
+
+def test_a_station_never_heard_of_has_no_last_declaration():
+    """Une station sans aucun prix ni rupture : pas de date de dernière déclaration, et la fiche le dit."""
+    view = station_view({**GUILVINEC, "prix": None, "dernieres_nouvelles": "1000-01-01 00:00:00"}, date(2026, 11, 12))
+    assert (view["derniere_declaration"], view["jours_sans_nouvelles"], view["prix"]) == (None, None, [])
+
+
+def test_a_motorway_station_is_marked():
+    """Une station du réseau autoroutier (pop = A dans le fichier de l'État) porte l'étiquette Autoroute."""
+    assert station_view({**GUILVINEC, "route": "A"}, date(2026, 11, 12))["autoroute"] is True
+    assert is_motorway("A") and not is_motorway("R") and not is_motorway(None)
