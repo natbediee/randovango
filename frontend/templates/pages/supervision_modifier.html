@@ -14,9 +14,9 @@
       <button type="button" class="btn btn--outline" id="modeSpots" aria-pressed="false">Spots</button>
     </div>
     <div class="services-filters">
-      {# Une ville de l'étape 1, cherchée comme à l'étape 1 (step1_city.js) : la liste des villes devenait trop longue.
-         filterCity garde l'identifiant de la ville choisie, que la page envoie à l'API. Un service se range par la
-         commune de son adresse : les communes qui ne sont pas des villes de l'étape 1 sont proposées aussi. #}
+      {# Une ville, une commune ou un code postal, cherchés comme à l'étape 1 (supervision_ville.js) : la liste des villes
+         devenait trop longue. filterCity garde l'identifiant de la ville choisie, que la page envoie à l'API. Un service
+         se range par la commune de son adresse : les communes qui ne sont pas des villes de l'étape 1 sont proposées aussi. #}
       <label class="label search-wrap">Ville
         <input type="search" id="filterCitySearch" maxlength="80" placeholder="Ville ou code postal…" autocomplete="off"
                style="min-height:44px; padding:0 10px; border:1px solid var(--card-border); border-radius:10px; background:var(--white); color:var(--ink); font:inherit; font-size:14px;">
@@ -55,5 +55,6 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision_fiche.js') }}"></script>
+<script src="{{ url_for('static', filename='js/supervision_ville.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision_modifier.js') }}"></script>
 {% endblock %}

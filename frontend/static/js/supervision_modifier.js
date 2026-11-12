@@ -15,41 +15,14 @@ let mode = 'services';
 let nameTimer = null;
 let openId = null;        // le lieu ou le spot dont la fiche est ouverte
 let lastData = null;
-let allCities = [];       // les villes de l'étape 1, pour la recherche de ville
+let allCities = [];       // les villes de l'étape 1, pour la recherche de ville (supervision_ville.js)
 let allTowns = [];        // les communes des adresses qui ne sont pas des villes de l'étape 1 : {nom, codes}
+let cityField = null;
 
-// La recherche de ville, comme à l'étape 1 (step1_city.js) : deux lettres, puis au plus 8 propositions. Les services
-// proposent aussi les communes de leurs adresses (poi_edit_service.address_towns) : un lieu se range par son adresse.
-function suggestCities() {
-    const box = document.getElementById('filterCitySuggestions');
-    const typed = document.getElementById('filterCitySearch').value.trim().toLowerCase();
-    if (!typed) {
-        // Le champ vidé : plus de ville choisie.
-        box.style.display = 'none';
-        if (document.getElementById('filterCity').value || document.getElementById('filterTown').value) chooseCity('', '');
-        return;
-    }
-    if (typed.length < 2) { box.style.display = 'none'; return; }   // deux lettres, ou deux chiffres
-    // Un nom, ou le début d'un code postal (« 29730 », « 297 ») : les codes viennent des adresses des services.
-    const byCode = /^\d+$/.test(typed);
-    const fits = (name, codes) => byCode ? (codes || []).some(code => code.startsWith(typed)) : name.toLowerCase().includes(typed);
-    const codesText = codes => codes && codes.length ? ` <small class="muted">${escapeHtml(codes.join(', '))}</small>` : '';
-    const cities = allCities.filter(city => fits(city.name, city.codes)).map(city => [city.name,
-        `<div class="city-suggestion-item" data-id="${city.id}" data-name="${escapeHtml(city.name)}">${escapeHtml(city.name)}${codesText(city.codes)}</div>`]);
-    const towns = (mode === 'services' ? allTowns : []).filter(town => fits(town.nom, town.codes)).map(town => [town.nom,
-        `<div class="city-suggestion-item" data-town="${escapeHtml(town.nom)}">${escapeHtml(town.nom)}${codesText(town.codes)}</div>`]);
-    // Les villes et les communes ensemble, dans l'ordre alphabétique, sans distinction pour l'admin.
-    const matches = [...cities, ...towns].sort((a, b) => a[0].localeCompare(b[0])).slice(0, 8).map(([, html]) => html);
-    box.innerHTML = matches.length ? matches.join('')
-        : '<div class="city-suggestion-item muted">Aucune ville ni commune ne correspond.</div>';
-    box.style.display = 'block';
-}
-
-function chooseCity(id, name, town = '') {
-    document.getElementById('filterCity').value = id;
-    document.getElementById('filterTown').value = town;
-    document.getElementById('filterCitySearch').value = name;
-    document.getElementById('filterCitySuggestions').style.display = 'none';
+// La ville choisie : l'identifiant d'une ville de l'étape 1, ou une commune d'adresse (services seulement).
+function chooseCity({ ville, commune }) {
+    document.getElementById('filterCity').value = ville;
+    document.getElementById('filterTown').value = commune;
     load();
 }
 
@@ -397,7 +370,8 @@ function setMode(next) {
     document.getElementById('filterType').innerHTML = '<option value="">Tous</option>';
     // Les spots n'ont pas de commune d'adresse : une commune choisie pour les services est oubliée.
     if (mode === 'spots' && document.getElementById('filterTown').value) {
-        chooseCity('', '');
+        cityField.clear();
+        chooseCity({ ville: '', commune: '' });
         return;
     }
     load();
@@ -410,17 +384,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     document.getElementById('modeServices').addEventListener('click', () => setMode('services'));
     document.getElementById('modeSpots').addEventListener('click', () => setMode('spots'));
-    document.getElementById('filterCitySearch').addEventListener('input', suggestCities);
-    document.getElementById('filterCitySuggestions').addEventListener('click', event => {
-        const item = event.target.closest('.city-suggestion-item[data-id], .city-suggestion-item[data-town]');
-        if (!item) return;
-        if (item.dataset.id) chooseCity(item.dataset.id, item.dataset.name);
-        else chooseCity('', item.dataset.town, item.dataset.town);
-    });
-    document.addEventListener('click', event => {
-        if (!event.target.closest('#filterCitySearch') && !event.target.closest('#filterCitySuggestions')) {
-            document.getElementById('filterCitySuggestions').style.display = 'none';
-        }
+    cityField = citySearch({
+        inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
+        sources: () => ({ cities: allCities, towns: mode === 'services' ? allTowns : [] }), onChoose: chooseCity,
     });
     document.getElementById('filterService').addEventListener('change', () => {
         document.getElementById('filterType').innerHTML = '<option value="">Tous</option>';

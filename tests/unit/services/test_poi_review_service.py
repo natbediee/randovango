@@ -269,3 +269,16 @@ def test_two_places_of_an_ordinary_duplicate_change_nothing():
     """Un doublon ordinaire n'était pas masqué : « Deux lieux » ne change rien au lieu."""
     card = review.build_card("doublons", POI, [signal("doublon_service", source="doublons", raison="même nom", autre_nom="X")])
     assert review.applied_fields("deux_lieux", card, None) == {}
+
+
+def test_the_review_keeps_the_places_of_the_chosen_address_town():
+    """Relecture filtrée sur Guilvinec (commune d'adresse, pas une ville de l'étape 1) : seul le Carrefour de Guilvinec reste."""
+    row = {"id": 1, "p_id": 48710, "poi_id": 48710, "source": "carburants_etat", "signal_type": "station_muette",
+           "detail": "{}", "name": "Carrefour", "address": "1 rue du moulin, 29730 GUILVINEC", "url": None,
+           "latitude": 47.8, "longitude": -4.28, "maps_url": None, "service_name": "fuel", "service_category": "fuel",
+           "table_categorie": None, "shop_categorie": None, "commune": "Plomeur"}
+    other = {**row, "id": 2, "p_id": 7, "poi_id": 7, "address": "Bourg, 29120 Plomeur"}
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [row, other]
+    groups, pois = review._pending(cursor, None, None, town="Guilvinec")
+    assert list(pois) == [48710] and list(groups) == [("confirmer", 48710)]

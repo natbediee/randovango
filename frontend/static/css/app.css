@@ -1277,6 +1277,8 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   border-radius: var(--r-pill); background: var(--cream); border: 1px solid var(--card-border); color: var(--ink);
 }
 .fuel-price b { font-weight: 700; }
+/* Un carburant choisi dans le filtre : les autres prix de la station sont masqués (step4_services.js, applyFuelView). */
+.fuel-price[hidden] { display: none; }
 .fuel-price.is-chosen { background: var(--mint); border-color: var(--teal); font-weight: 700; }
 .fuel-price.is-chosen b { font-size: 13.5px; }
 .fuel-price--old { color: #7A5F1E; background: var(--warn-bg); border-color: var(--warn-bd); }

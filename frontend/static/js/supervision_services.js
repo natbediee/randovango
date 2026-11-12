@@ -30,7 +30,17 @@ function showMessage(text) {
 
 function filters() {
     return { service: document.getElementById('filterService').value, type: document.getElementById('filterType').value,
-             ville: document.getElementById('filterCity').value };
+             ville: document.getElementById('filterCity').value, commune: document.getElementById('filterTown').value };
+}
+
+// La recherche de ville (supervision_ville.js) : les villes qui ont des lieux à relire, et les communes de leurs adresses.
+let allCities = [];
+let allTowns = [];
+
+function chooseCity({ ville, commune }) {
+    document.getElementById('filterCity').value = ville;
+    document.getElementById('filterTown').value = commune;
+    load();
 }
 
 function filterQuery() {
@@ -204,10 +214,8 @@ function render(data) {
     document.getElementById('filterProblem').innerHTML = [['tous', 'Tous'], ...Object.entries(TABS)].map(([tab, label]) =>
         `<option value="${tab}" ${tab === currentTab ? 'selected' : ''}>${label} (${data.counts[tab]})</option>`).join('');
 
-    const citySelect = document.getElementById('filterCity');
-    const chosenCity = citySelect.value;
-    citySelect.innerHTML = '<option value="">Toutes</option>' + data.cities.map(city =>
-        `<option ${city === chosenCity ? 'selected' : ''}>${escapeHtml(city)}</option>`).join('');
+    allCities = data.cities;
+    allTowns = data.towns || [];
 
     // Un lien à la fois : chaque fiche a son bouton Valider (le lot « à valider d'un coup » est retiré, 7 novembre 2026).
     document.getElementById('cardsList').innerHTML = data.cards.map(reviewCard).join('');
@@ -355,7 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
         load();
     });
     document.getElementById('filterType').addEventListener('change', load);
-    document.getElementById('filterCity').addEventListener('change', load);
+    citySearch({ inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.name,
+                 sources: () => ({ cities: allCities, towns: allTowns }), onChoose: chooseCity });
     document.getElementById('filterProblem').addEventListener('change', event => selectTab(event.target.value));
     load();
 });
