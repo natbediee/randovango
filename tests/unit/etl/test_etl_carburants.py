@@ -82,7 +82,7 @@ def test_prices_are_replaced_as_a_block_with_null_for_a_missing_price(monkeypatc
 
 # --- Le rafraîchissement national des prix (refresh_prices) et les corrections humaines ---
 
-STORED = {"29810002": {"pdv_id": "29810002", "osm_element": "node/42960018", "lien_osm": "ref_osm",
+STORED = {"29810002": {"pdv_id": "29810002", "poi_id": 48534, "osm_element": "node/42960018", "lien_osm": "ref_osm",
                        "marque": "Système U", "name": "Station U", "latitude": 48.433395, "longitude": -4.716160}}
 
 
@@ -92,6 +92,8 @@ def _refresh(monkeypatch, state=True, dry_run=False):
     monkeypatch.setattr(etl_carburants, "known_stations", lambda: STORED)
     monkeypatch.setattr(etl_carburants, "load_stations", lambda rows, city: loads.append((rows, city)) or len(rows))
     monkeypatch.setattr(etl_carburants, "mark_prices_read", lambda read_at: marks.append(read_at))
+    monkeypatch.setattr(etl_carburants, "load_missing_signals", lambda signals, known: None)
+    monkeypatch.setattr(etl_carburants.poi_triage_service, "hide_doubtful_stations", lambda: None)
     return etl_carburants.refresh_prices(dry_run=dry_run), loads, marks
 
 
@@ -171,3 +173,64 @@ def test_human_fields_reads_the_columns_changed_by_live_decisions():
     assert load_carburants.human_fields(cursor, 3) == {48527: {"name"}, 48528: set(),
                                                      48600: {"latitude", "longitude"}}
     assert "annulee_at IS NULL" in cursor.execute.call_args.args[0]
+
+
+# --- Les signaux des stations douteuses ---
+
+def test_signals_of_a_pass_replace_the_ones_still_to_review(monkeypatch):
+    """Une station muette devenue doublon : le nouveau signal est écrit, l'ancien encore à relire est effacé."""
+    saved = []
+    monkeypatch.setattr(load_carburants, "save_signal", lambda cursor, *args: saved.append(args))
+    cursor = MagicMock()
+    load_carburants._replace_signals(cursor, 48528, "carburants_etat", [("doublon_station", {"autre_id": 48527})], set())
+    assert saved == [(48528, "carburants_etat", "doublon_station", {"autre_id": 48527})]
+    query, params = cursor.execute.call_args.args
+    assert "statut = 'a_relire'" in query and "signal_type NOT IN (%s)" in query
+    assert params == (48528, "carburants_etat", "doublon_station")
+
+
+def test_a_station_that_speaks_again_loses_its_signals_to_review(monkeypatch):
+    """La station déclare de nouveau : ses signaux encore à relire sont effacés ; ceux qu'un humain a relus restent."""
+    monkeypatch.setattr(load_carburants, "save_signal", lambda *args: None)
+    cursor = MagicMock()
+    load_carburants._replace_signals(cursor, 48710, "carburants_etat", [], set())
+    query, params = cursor.execute.call_args.args
+    assert query == "DELETE FROM poi_signals WHERE poi_id = %s AND source = %s AND statut = 'a_relire'"
+    assert params == (48710, "carburants_etat")
+
+
+def test_a_station_removed_by_hand_is_not_sent_back_to_review(monkeypatch):
+    """L'ancienne fiche de Plouguerneau, retirée à la main le 11 nov. : aucun signal ne la renvoie en supervision."""
+    saved = []
+    monkeypatch.setattr(load_carburants, "save_signal", lambda cursor, *args: saved.append(args))
+    load_carburants._replace_signals(MagicMock(), 48528, "carburants_etat", [("doublon_station", {})], {48528})
+    assert saved == []
+
+
+def test_a_city_pass_signals_a_doubtful_link_and_hides_it(monkeypatch):
+    """Au passage par ville, le Carrefour de Locmaria (même identifiant à 1 096 m) reçoit son signal, puis le tri masque."""
+    xml = XML.replace(b'id="29810002"', b'id="29290003"')
+    far = {**STATION_U, "lat": 48.4420, "tags": {**STATION_U["tags"], "ref:FR:prix-carburants": "29290003"}}
+    monkeypatch.setattr(etl_carburants, "get_city_center", lambda city: (48.4300, -4.7200))
+    monkeypatch.setattr(etl_carburants, "extract_osm_fuel", lambda *args: [far])
+    loads, sorted_out = [], []
+    monkeypatch.setattr(etl_carburants, "load_stations", lambda rows, city: loads.append(rows) or len(rows))
+    monkeypatch.setattr(etl_carburants.poi_triage_service, "hide_doubtful_stations", lambda: sorted_out.append(1))
+    assert etl_carburants.run_city_etl("Locmaria-Plouzané", stations=parse_state_file(xml)) == 1
+    [(signal, detail)] = loads[0][0]["signaux"]
+    assert signal == "station_douteuse" and detail["distance_m"] > 1000
+    assert sorted_out == [1]
+
+
+def test_a_refresh_signals_missing_stations_then_sorts_them(monkeypatch):
+    """Le rafraîchissement signale une station de la base absente du fichier, puis le tri des stations passe."""
+    calls = []
+    stored = {**STORED, "29000099": {**STORED["29810002"], "pdv_id": "29000099", "poi_id": 48999}}
+    monkeypatch.setattr(etl_carburants, "_read_state_file", lambda: parse_state_file(XML))
+    monkeypatch.setattr(etl_carburants, "known_stations", lambda: stored)
+    monkeypatch.setattr(etl_carburants, "load_stations", lambda rows, city: len(rows))
+    monkeypatch.setattr(etl_carburants, "load_missing_signals", lambda signals, known: calls.append(signals))
+    monkeypatch.setattr(etl_carburants, "mark_prices_read", lambda read_at: None)
+    monkeypatch.setattr(etl_carburants.poi_triage_service, "hide_doubtful_stations", lambda: calls.append("tri"))
+    etl_carburants.refresh_prices()
+    assert calls[0]["29000099"][0][0] == "station_absente" and calls[1] == "tri"

@@ -10,10 +10,13 @@ QUATRE FILES, parce que les décisions ne se prennent pas pareil :
     morts      : retirer un lien qui ne répond plus ;
     confirmer  : un restaurant ou un commerce que son agent n'a pas pu trancher (restaurant_service.py,
                  commerce_service.py, signal a_confirmer). Valider
-                 écrit la fiche qu'il avait préparée et l'affiche ; retirer le laisse masqué ;
+                 écrit la fiche qu'il avait préparée et l'affiche ; retirer le laisse masqué.
+                 Aussi une station-service douteuse (etl/transform/transform_carburants.py), masquée en attendant :
+                 « Garder tel quel » la réaffiche, retirer la laisse masquée ;
     doublons   : deux restaurants proches que la règle n'a pas su trancher (restaurant_duplicates_service.py), ou deux
                  lieux de même nom, quel que soit le service (poi_duplicates_service.py, signal doublon_service).
-                 Fusionner masque celui-ci, l'autre reste ; rien n'est effacé.
+                 Fusionner masque celui-ci, l'autre reste ; rien n'est effacé. Une station figée près d'une station
+                 active (doublon_station) est déjà masquée : « Deux lieux » la réaffiche (poi_triage_service.hide_doubtful_stations l'avait masquée).
 
 PARTOUT, « Retirer le lieu » : un lieu qui n'a rien à faire là se voit dans n'importe quelle file. Il est masqué
 et sort de toutes les files.
@@ -47,11 +50,13 @@ TAB_SIGNALS = {
     "fermetures": ("fermeture_agent", "renommage_osm", "fermeture_osm", "absent_osm"),
     "saison": ("saison_agent", "saison_osm"),
     "morts": ("lien_mort",),
-    "doublons": ("doublon_restaurant", "doublon_commerce", "doublon_service"),
-    "confirmer": ("a_confirmer",),
+    "doublons": ("doublon_restaurant", "doublon_commerce", "doublon_service", "doublon_station"),
+    "confirmer": ("a_confirmer", "station_douteuse", "station_muette", "station_absente"),
 }
+# Les stations-service douteuses (etl/transform/transform_carburants.py), masquées en attendant (poi_triage_service.py).
+STATION_SIGNALS = ("station_douteuse", "station_muette", "station_absente")
 SIGNAL_TAB = {signal: tab for tab, signals in TAB_SIGNALS.items() for signal in signals}
-SOURCE_LABELS = {"osm": "OSM", "agent": "Agent", "liens": "Contrôle"}
+SOURCE_LABELS = {"osm": "OSM", "agent": "Agent", "liens": "Contrôle", "carburants_osm": "OSM", "carburants_etat": "État"}
 SIGNAL_LABELS = {
     "lien_agent": "Lien trouvé par l'agent", "lien_osm": "Lien indiqué dans OSM",
     "fermeture_agent": "Fermeture signalée", "renommage_osm": "Renommé dans OSM", "fermeture_osm": "Marqué fermé dans OSM",
@@ -59,7 +64,11 @@ SIGNAL_LABELS = {
     "doublon_restaurant": "Doublon possible",
     "doublon_commerce": "Doublon possible",
     "doublon_service": "Doublon possible",
+    "doublon_station": "Station déclarée deux fois",
     "a_confirmer": "À confirmer",
+    "station_douteuse": "Station douteuse",
+    "station_muette": "Station muette",
+    "station_absente": "Absente du fichier de l'État",
 }
 # Les décisions possibles et le sort des signaux relus. Le code n'accepte rien d'autre.
 ACTIONS = {
@@ -178,7 +187,10 @@ def proof_text(signal: dict) -> str:
         return f"{detail.get('url')} : {detail.get('raison')} (vérifié deux fois)."
     if kind == "a_confirmer":
         return f"{detail.get('raison')}" + (f" : « {detail['indice']} »." if detail.get("indice") else ".")
-    if kind in ("doublon_restaurant", "doublon_commerce", "doublon_service"):
+    if kind in STATION_SIGNALS:
+        osm = f" (« {detail['nom_osm']} », {detail['osm_element']})" if detail.get("nom_osm") else ""
+        return f"{detail.get('raison')}{osm}."
+    if kind in ("doublon_restaurant", "doublon_commerce", "doublon_service", "doublon_station"):
         distance = f"à {detail['distance_m']} m de" if detail.get("distance_m") is not None else "même lieu que"
         return f"{detail.get('raison')}, {distance} « {detail.get('autre_nom')} » ({detail.get('autre_adresse') or 'sans adresse'})."
     return ""
@@ -239,13 +251,19 @@ def _dead_link_card(signals: list) -> dict:
 
 def _duplicate_card(signals: list) -> dict:
     detail = _detail(signals[0])
-    return {"link": None, "autre_id": detail.get("autre_id"),
-            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Fusionner masque celui-ci, l'autre reste.",
+    # Une station figée est masquée dès qu'elle est repérée : « Deux lieux » doit donc la réafficher.
+    hidden = signals[0]["signal_type"] == "doublon_station"
+    return {"link": None, "autre_id": detail.get("autre_id"), "reafficher": hidden,
+            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Fusionner masque celui-ci, l'autre reste."
+                        + (" En attendant, celui-ci est masqué." if hidden else ""),
             "actions": ["fusionner", "deux_lieux"]}
 
 
 def _to_confirm_card(signals: list) -> dict:
     detail = _detail(signals[0])
+    if signals[0]["signal_type"] in STATION_SIGNALS:
+        return {"link": None, "proposal": "cette station existe-t-elle encore ? Masquée en attendant ; la garder la "
+                                          "réaffiche avec ses prix et leur date.", "actions": ["garder", "retirer"]}
     sheet = detail.get("fiche") or {}
     genre = f" ({sheet['genre']})" if sheet.get("genre") else ""
     # « valider_pepite » est un nom interne gardé pour les décisions déjà prises : ce sont des services, pas des pépites.
@@ -364,6 +382,8 @@ def applied_fields(action: str, card: dict, months: list | None, url: str | None
         return {"url": None}
     if action == "fusionner":
         return {"masque": 1}
+    if action == "deux_lieux" and card.get("reafficher"):
+        return {"masque": 0}
     if action == "valider_pepite":
         return {"masque": 0}
     return {}

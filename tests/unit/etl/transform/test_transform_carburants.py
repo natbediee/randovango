@@ -1,8 +1,9 @@
 """Le fichier de l'État et le lien avec OSM, sur les cas du pilote du 7 novembre 2026."""
 from datetime import datetime
 
-from etl.transform.transform_carburants import (DEFAULT_NAME, keep_near, link_to_osm, osm_station, parse_state_file,
-                                                station_rows, usable_address)
+from etl.transform.transform_carburants import (DEFAULT_NAME, file_signals, keep_near, last_news, link_signals,
+                                                link_to_osm, osm_station, parse_state_file, station_rows,
+                                                usable_address)
 
 XML = """<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
 <pdv_liste>
@@ -102,3 +103,72 @@ def test_without_osm_the_station_is_shown_at_the_state_position_under_a_generic_
     rows = station_rows(station, None, "aucun", datetime(2026, 11, 7))
     assert rows["poi"]["name"] == DEFAULT_NAME
     assert (rows["poi"]["latitude"], rows["station"]["marque"]) == (48.342, None)
+
+
+# --- Les stations douteuses (carte #180) ---
+
+def _news(pdv_id, poi_id, lat, lon, last, name="Station-service"):
+    return {"pdv_id": pdv_id, "poi_id": poi_id, "name": name, "address": None, "latitude": lat, "longitude": lon,
+            "last_news": last}
+
+
+NOW = datetime(2026, 11, 11, 21, 0)
+
+
+def test_the_same_state_id_too_far_away_makes_a_doubtful_station():
+    """Cas du Carrefour de Locmaria-Plouzané (9 nov.) : même identifiant de l'État dans OSM, mais à 1 096 m, donc douteux."""
+    station = {"pdv_id": "29290003", "latitude": 48.3654, "longitude": -4.6428, "code_postal": "29280"}
+    carrefour = _osm(1848473838, 48.3753, -4.6450, ref="29290003", name="Carrefour", brand="Carrefour")
+    assert link_to_osm(station, [carrefour]) == (None, "aucun")
+    [(signal, detail)] = link_signals(station, [carrefour])
+    assert signal == "station_douteuse" and detail["osm_element"] == "node/1848473838"
+    assert 1000 < detail["distance_m"] < 1200 and "identifiant" in detail["raison"]
+
+
+def test_a_station_linked_close_by_is_not_doubtful():
+    """Le même identifiant à 25 m (le Carrefour de Locmaria le 11 nov., position corrigée par l'État) : aucun doute."""
+    station = {"pdv_id": "29290003", "latitude": 48.36541, "longitude": -4.64276, "code_postal": "29280"}
+    assert link_signals(station, [_osm(1848473838, 48.3653, -4.64245, ref="29290003")]) == []
+
+
+def test_last_news_counts_shortages_as_well_as_prices():
+    """Une station de Quimper sans aucun prix déclare ses ruptures du jour : elle donne des nouvelles, elle est vivante."""
+    prices = [{"releve_le": None, "rupture_debut": datetime(2022, 4, 19)},
+              {"releve_le": None, "rupture_debut": datetime(2026, 11, 11, 16, 30)}]
+    assert last_news(prices) == datetime(2026, 11, 11, 16, 30)
+    assert last_news([{"releve_le": None, "rupture_debut": None}]) is None
+
+
+def test_a_silent_station_next_to_an_active_one_is_a_twin():
+    """Cas du Carrefour Contact de Plouguerneau : 29880005 muet depuis le 21 sept., 29880006 à 9 m déclare : un doublon."""
+    old = _news("29880005", 48528, 48.60694, -4.51108, datetime(2026, 9, 21, 8, 43), "Carrefour Contact")
+    new = _news("29880006", 48527, 48.607, -4.511, datetime(2026, 11, 9, 11, 13))
+    signals = file_signals([old, new], [], NOW)
+    assert signals["29880006"] == []
+    [(signal, detail)] = signals["29880005"]
+    assert signal == "doublon_station" and detail["autre_id"] == 48527 and detail["distance_m"] == 9
+    assert "21/09/2026" in detail["raison"]
+
+
+def test_a_silent_station_alone_may_have_closed():
+    """Cas du Carrefour de Guilvinec : rien déclaré depuis 47 jours et aucune station active à côté : station muette."""
+    guilvinec = _news("29730006", 48710, 47.8054, -4.2792, datetime(2026, 9, 25, 7, 0), "Carrefour")
+    assert file_signals([guilvinec], [], NOW) == {
+        "29730006": [("station_muette", {"raison": "rien déclaré à l'État depuis le 25/09/2026"})]}
+
+
+def test_a_station_heard_of_recently_is_never_doubtful():
+    """Une station qui a déclaré un prix ou une rupture dans les 30 derniers jours n'a rien à signaler."""
+    assert file_signals([_news("29217001", 1, 48.342, -4.723, datetime(2026, 10, 20))], [], NOW) == {"29217001": []}
+
+
+def test_two_silent_stations_side_by_side_are_not_twins():
+    """Deux stations muettes voisines : aucune n'a les bons prix, chacune est muette, pas un doublon de l'autre."""
+    a = _news("1", 1, 48.0, -4.0, datetime(2026, 9, 1))
+    b = _news("2", 2, 48.00005, -4.0, datetime(2026, 9, 1))
+    assert {signal for signals in file_signals([a, b], [], NOW).values() for signal, _ in signals} == {"station_muette"}
+
+
+def test_a_station_missing_from_the_state_file_is_doubtful():
+    """Le fichier de l'État n'a aucune fermeture : une station en base qui n'y est plus a peut-être fermé."""
+    assert file_signals([], [{"pdv_id": "29000099"}], NOW)["29000099"][0][0] == "station_absente"

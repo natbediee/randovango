@@ -16,9 +16,10 @@ import argparse
 from datetime import datetime
 
 from etl.extract.api_carburants import download_state_file, extract_osm_fuel
-from etl.load.load_carburants import known_stations, load_stations, mark_prices_read
-from etl.transform.transform_carburants import (keep_near, link_to_osm, osm_station, parse_state_file,
-                                                station_rows)
+from etl.load.load_carburants import known_stations, load_missing_signals, load_stations, mark_prices_read
+from etl.transform.transform_carburants import (file_signals, keep_near, last_news, link_signals, link_to_osm,
+                                                osm_station, parse_state_file, station_rows)
+from services import poi_triage_service
 from utils.db_utils import get_all_city_ids
 from utils.geo_utils import get_city_center, haversine_distance_km
 from utils.logger_util import LoggerUtil
@@ -51,7 +52,9 @@ def city_rows(city: str, stations: list) -> tuple | None:
         osm, link = link_to_osm(station, osm_stations)
         if osm:
             linked.add(osm["osm_element"])
-        rows.append(station_rows(station, osm, link, read_at))
+        row = station_rows(station, osm, link, read_at)
+        row["signaux"] = [] if osm else link_signals(station, osm_stations)
+        rows.append(row)
     osm_only = [osm for osm in osm_stations if osm["osm_element"] not in linked]
     logger.info(f"[ETL] : {city} : {len(rows)} stations de l'État, {len(osm_only)} stations OSM seules (masquées)")
     return rows, osm_only
@@ -69,7 +72,9 @@ def run_city_etl(city: str, dry_run: bool = False, stations: list | None = None)
     if dry_run:
         _print_report(city, rows, osm_only)
         return len(rows)
-    return load_stations(rows, city)
+    loaded = load_stations(rows, city)
+    poi_triage_service.hide_doubtful_stations()
+    return loaded
 
 
 def refresh_prices(dry_run: bool = False) -> int | None:
@@ -82,7 +87,7 @@ def refresh_prices(dry_run: bool = False) -> int | None:
         return None
     known = known_stations()
     read_at = datetime.now().replace(microsecond=0)
-    rows = []
+    rows, news = [], []
     for station in stations:
         stored = known.get(station["pdv_id"])
         if not stored:
@@ -91,14 +96,27 @@ def refresh_prices(dry_run: bool = False) -> int | None:
         if stored["osm_element"]:
             osm = {"osm_element": stored["osm_element"], "name": stored["name"], "brand": stored["marque"],
                    "latitude": stored["latitude"], "longitude": stored["longitude"]}
-        rows.append(station_rows(station, osm, stored["lien_osm"], read_at))
-    missing = len(known) - len(rows)
+        row = station_rows(station, osm, stored["lien_osm"], read_at)
+        rows.append(row)
+        news.append({"pdv_id": station["pdv_id"], "poi_id": stored["poi_id"], "name": stored["name"],
+                     "address": row["poi"]["address"], "latitude": station["latitude"], "longitude": station["longitude"],
+                     "last_news": last_news(row["prix"])})
+    in_file = {row["station"]["pdv_id"] for row in rows}
+    missing = [{"pdv_id": pdv_id} for pdv_id in known if pdv_id not in in_file]
     if missing:
-        logger.warning(f"[ETL] : {missing} stations en base absentes du fichier : leurs derniers prix restent, datés")
+        logger.warning(f"[ETL] : {len(missing)} stations en base absentes du fichier : envoyées en supervision")
+    signals = file_signals(news, missing, read_at)
+    for row in rows:
+        row["signaux"] = signals[row["station"]["pdv_id"]]
     if dry_run:
-        print(f"{len(rows)} stations seraient mises à jour, {missing} absentes du fichier")
+        print(f"{len(rows)} stations seraient mises à jour, {len(missing)} absentes du fichier")
+        for pdv_id, station_signals in sorted(signals.items()):
+            for signal, detail in station_signals:
+                print(f"  {signal:16} {pdv_id} {known[pdv_id]['name']} : {detail['raison']}")
         return len(rows)
     loaded = load_stations(rows, None)
+    load_missing_signals({station["pdv_id"]: signals[station["pdv_id"]] for station in missing}, known)
+    poi_triage_service.hide_doubtful_stations()
     mark_prices_read(read_at)
     return loaded
 
@@ -113,6 +131,8 @@ def _print_report(city: str, rows: list, osm_only: list) -> None:
               f"{poi['address'] or '(adresse inutilisable : ' + str(station['adresse_etat']) + ')'}")
         if station["fermeture_type"]:
             print(f"    fermeture {station['fermeture_type']} depuis {station['fermeture_debut']}")
+        for signal, detail in row.get("signaux", []):
+            print(f"    {signal}, irait en supervision : {detail['raison']}")
         for price in row["prix"]:
             if price["prix"] is not None:
                 print(f"    {price['carburant']:7} {price['prix']:.3f} €  relevé le {price['releve_le']}"
