@@ -49,15 +49,15 @@ from etl.load.load_poi_checks import save_signal
 from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
 from services import poi_review_service as review
 from services.pepite_service import is_generic, name_key
-from services.service_store import same_name, street_words
+from services.service_store import DUPLICATE_SIGNAL, DUPLICATE_SOURCE, same_name, street_words
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("poi_duplicates")
 
-SOURCE = "doublons"
-SIGNAL = "doublon_service"
+SOURCE = DUPLICATE_SOURCE
+SIGNAL = DUPLICATE_SIGNAL
 TAB = "doublons"
 RULE_AUTHOR = review.RULE_AUTHOR
 DOUBLE_M = 25

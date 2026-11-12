@@ -138,7 +138,7 @@ def _chain(monkeypatch, tmp_path, agent, registered="AUTRE LIEU"):
     monkeypatch.setenv("RANDOVANGO_LOG_DIR", str(tmp_path))
     monkeypatch.setattr(service_chain, "make_llm_service", lambda name: agent)
     monkeypatch.setattr(service_chain.api_registre, "load_register",
-                        lambda city, codes: activities.append(codes) or {"actifs": [{"nom": registered, "activite": "10.71C"}]})
+                        lambda city, codes, *zones: activities.append(codes) or {"actifs": [{"nom": registered, "activite": "10.71C"}]})
     monkeypatch.setattr(find_service_links, "read_page", lambda url: {
         "statut": 200, "final": url, "texte": "le gall marche de plougonvelin le marche a lieu le jeudi matin sur la place "
                                               + "x " * 200, "brut": ""})

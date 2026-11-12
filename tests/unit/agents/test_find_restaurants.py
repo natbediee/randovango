@@ -247,7 +247,7 @@ CITY = {"name": "Plougonvelin", "department": "Finistère", "latitude": 48.3, "l
 def _chain(monkeypatch, tmp_path, agent, registered="AUTRE LIEU"):
     monkeypatch.setenv("RANDOVANGO_LOG_DIR", str(tmp_path))
     monkeypatch.setattr(service_chain, "make_llm_service", lambda name: agent)
-    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes: {"actifs": [{"nom": registered, "activite": "56.10A"}]})
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: {"actifs": [{"nom": registered, "activite": "56.10A"}]})
     monkeypatch.setattr(find_service_links, "read_page", lambda url: {
         "statut": 200, "final": url, "texte": "nous riboul la vinotiere plougonvelin " + "x " * 200, "brut": ""})
 
@@ -350,7 +350,7 @@ def test_a_big_city_is_searched_zone_by_zone_and_keeps_each_place_once(monkeypat
     _chain(monkeypatch, tmp_path, agent, registered="NOUS")
     big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
            "enseignes_fermees": [], "radies": []}
-    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes: big)
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: big)
     monkeypatch.setattr(service_store, "commune_spots", lambda name: [
         {"latitude": 48.38, "longitude": -4.5, "address": "A"}, {"latitude": 48.42, "longitude": -4.5, "address": "C"}])
     answer = service_chain.search_commune(RESTAURANTS, CITY)
@@ -404,7 +404,7 @@ class _BarAgent(_Agent):
 def test_a_bar_said_to_serve_meals_needs_no_proof_search(monkeypatch, tmp_path):
     """Un bar dit servir des repas part en relecture sans passer par l'agent de preuve."""
     _chain(monkeypatch, tmp_path, _BarAgent())
-    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes: {"actifs": [{"nom": "NOUS", "activite": "56.30Z"}]})
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: {"actifs": [{"nom": "NOUS", "activite": "56.30Z"}]})
     answer = service_chain.search_commune(RESTAURANTS, CITY)
     by_name = {row["nom"]: row for row in answer["restaurants"]}
     assert by_name["NOUS"]["a_relire"] == find_restaurants.BAR_SAID_RESTAURANT and not by_name["NOUS"]["au_registre"]
@@ -444,10 +444,86 @@ def test_the_steps_of_a_big_city_name_their_zone(monkeypatch, tmp_path):
     _chain(monkeypatch, tmp_path, agent, registered="NOUS")
     big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
            "enseignes_fermees": [], "radies": []}
-    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes: big)
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: big)
     monkeypatch.setattr(service_store, "commune_spots", lambda name: [
         {"latitude": 48.38, "longitude": -4.5, "address": "A"}, {"latitude": 48.42, "longitude": -4.5, "address": "C"}])
     service_chain.search_commune(RESTAURANTS, CITY)
     steps = {step for _, step in agent.calls}
     assert {"zone 1 / 2, année 1", "zone 2 / 2, été", "zone 1 / 2, analyse", "zone 2 / 2, analyse"} <= steps
     assert len({passage for passage, _ in agent.calls}) == 1
+
+
+# --- Une grande ville : jamais sans registre, et un passage arrêté se reprend ---
+
+MARSEILLE = {"name": "Marseille", "insee": "13055", "department": "Bouches-du-Rhône", "latitude": 43.27, "longitude": 5.44}
+
+
+def test_a_city_with_boroughs_is_not_searched_without_its_register(monkeypatch, tmp_path):
+    """Marseille n'est pas cherchée si son registre n'a pas pu être lu : sans lui elle le serait comme un village, 34 restaurants pour toute la ville (6 novembre 2026). Aucun agent n'est appelé."""
+    agent = _ZoneAgent()
+    _chain(monkeypatch, tmp_path, agent)
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: [])
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: None)
+    with pytest.raises(service_chain.RegisterUnavailable):
+        service_chain.search_commune(RESTAURANTS, MARSEILLE)
+    assert agent.messages == []
+
+
+def test_a_small_commune_is_still_searched_without_its_register(monkeypatch, tmp_path):
+    """Une petite commune dont le registre ne répond pas est cherchée quand même, sans lui."""
+    _chain(monkeypatch, tmp_path, _Agent())
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: None)
+    assert service_chain.search_commune(RESTAURANTS, CITY)["restaurants"]
+
+
+def _two_zones(monkeypatch, tmp_path, agent):
+    """Une grande ville de deux zones, à 4 km l'une de l'autre. Rend son registre."""
+    _chain(monkeypatch, tmp_path, agent, registered="NOUS")
+    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
+           "enseignes_fermees": [], "radies": []}
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: big)
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: [
+        {"latitude": 48.38, "longitude": -4.5, "address": "A"}, {"latitude": 48.42, "longitude": -4.5, "address": "C"}])
+    return big
+
+
+def test_a_stopped_passage_resumes_without_paying_its_finished_zones_again(monkeypatch, tmp_path):
+    """Un passage arrêté après sa première zone reprend à la seconde : la zone finie est relue dans son fichier, le registre aussi, et seules les recherches de la zone restante sont payées."""
+    first = _ZoneAgent()
+    _two_zones(monkeypatch, tmp_path, first)
+    service_chain.search_commune(RESTAURANTS, CITY)
+    stopped = _trace(tmp_path)
+    del stopped["final"], stopped["zones"][1]["final"]
+    again = _ZoneAgent()
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: again)
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: pytest.fail("le registre du passage arrêté est repris"))
+    answer = service_chain.search_commune(RESTAURANTS, CITY, stopped)
+    assert [row["nom"] for row in answer["restaurants"]] == ["NOUS", "Riboul"]
+    searches = [message for message in again.messages if "ZONE" in message and "LIEUX : " not in message]
+    assert len(searches) == service_chain.YEAR_SEARCHES + 1 and len(first.messages) > len(again.messages)
+
+
+def test_only_a_passage_stopped_on_the_way_can_be_resumed(monkeypatch, tmp_path):
+    """Seul le dernier fichier d'une commune se reprend, et seulement s'il s'est arrêté en route : un passage allé au bout n'a rien à reprendre."""
+    _two_zones(monkeypatch, tmp_path, _ZoneAgent())
+    service_chain.search_commune(RESTAURANTS, CITY)
+    assert service_chain.interrupted_trace(RESTAURANTS, CITY) is None
+    path = next((tmp_path / RESTAURANTS.source).iterdir())
+    trace = json.loads(path.read_text())
+    del trace["final"]
+    path.write_text(json.dumps(trace))
+    assert service_chain.interrupted_trace(RESTAURANTS, CITY)["zones"][0]["final"] is not None
+    assert service_chain.interrupted_trace(RESTAURANTS, MARSEILLE) is None
+
+
+def test_a_city_with_boroughs_reads_its_register_around_its_zones_only(monkeypatch, tmp_path):
+    """Marseille est toujours cherchée par zones autour de ses spots, et son registre n'est demandé que pour ces zones, à 1,5 km : inutile de remonter tous les restaurants de la ville."""
+    asked = []
+    _chain(monkeypatch, tmp_path, _ZoneAgent())
+    spots = [{"latitude": 43.24, "longitude": 5.37, "address": "Avenue de la Pointe Rouge, 13008 Marseille"},
+             {"latitude": 43.36, "longitude": 5.31, "address": "Plage de l'Estaque, 13016 Marseille"}]
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: spots)
+    monkeypatch.setattr(service_chain.api_registre, "load_register",
+                        lambda city, codes, zones=(), radius_km=0: asked.append((len(zones), radius_km)) or {"actifs": [_line("NOUS", 43.24)]})
+    service_chain.search_commune(RESTAURANTS, MARSEILLE)
+    assert asked == [(2, service_chain.ZONE_KM)] and len(_trace(tmp_path)["zones"]) == 2

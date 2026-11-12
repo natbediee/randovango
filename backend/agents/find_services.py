@@ -17,6 +17,13 @@ UTILISATION (dans le conteneur backend, depuis /usr/src/app) :
     python -m agents.find_services --ville Plougonvelin --categorie restaurants
     python -m agents.find_services --ville Plougonvelin --essai      # rien en base, les fichiers seuls
 
+REPRENDRE UN PASSAGE ARRÊTÉ EN ROUTE
+Une grande ville est cherchée zone par zone, pendant des heures. Si le passage s'arrête (quota, coupure), --reprendre
+repart du fichier qu'il a laissé : son registre et ses zones finies sont repris, seules les zones restantes sont payées.
+Une catégorie qui n'a rien d'arrêté n'est pas cherchée de nouveau.
+    python -m agents.find_services --ville Marseille --categorie restaurants --essai
+    python -m agents.find_services --ville Marseille --categorie restaurants --essai --reprendre
+
 REJOUER LES RÈGLES, SANS AUCUN APPEL PAYANT
 Après une règle corrigée, --rejouer reprend le dernier fichier de chaque passage et l'enregistre avec les règles
 d'aujourd'hui (service_chain.replay_rules). Avec --essai, rien n'est écrit : le bilan dit ce qui changerait.
@@ -91,19 +98,26 @@ def single_passage():
         MySQLUtils.disconnect(connection)
 
 
-def run_passage(city: dict, categories: tuple = CATEGORIES, trial: bool = False) -> dict:
+def run_passage(city: dict, categories: tuple = CATEGORIES, trial: bool = False, resume: bool = False) -> dict:
     """
     Un passage d'une commune : chaque catégorie est cherchée puis enregistrée, sous un seul identifiant. À l'essai, rien
     n'est écrit en base. Renvoie l'identifiant et, par catégorie, le bilan de l'enregistrement ou les lieux trouvés.
     Lève LLMUnavailable si un agent n'a pas pu répondre : les catégories déjà passées restent enregistrées.
-    Lève PassageRunning si un autre lancement est en cours.
+    Lève PassageRunning si un autre lancement est en cours, et RegisterUnavailable si le registre d'une grande ville
+    n'a pas pu être lu.
+    Avec resume, seules les catégories dont le dernier passage s'est arrêté en route sont cherchées, à partir de leur
+    fichier (service_chain.interrupted_trace).
     """
     passage_id = new_passage_id()
     results = {"passage": passage_id}
     with single_passage(), mesure_passage(passage_id):
         logger.info(f"[services] {city['name']} : passage {passage_id}, {[category.key for category in categories]}")
         for category in categories:
-            answer = service_chain.search_commune(category, city)
+            stopped = service_chain.interrupted_trace(category, city) if resume else None
+            if resume and not stopped:
+                results[category.key] = {"passe": "aucun passage arrêté à reprendre"}
+                continue
+            answer = service_chain.search_commune(category, city, stopped)
             if trial:
                 results[category.key] = {"lieux": [row["nom"] for row in answer[category.key]]}
             else:
@@ -143,6 +157,7 @@ def main():
     parser.add_argument("--rejouer", action="store_true", help="Rejoue les règles sur les fichiers déjà payés, sans appeler d'agent")
     parser.add_argument("--categorie", action="append", choices=list(by_key), help="Une catégorie seulement (répétable) ; toutes par défaut")
     parser.add_argument("--essai", action="store_true", help="N'écrit rien en base : les réponses restent dans les fichiers")
+    parser.add_argument("--reprendre", action="store_true", help="Repart du fichier d'un passage arrêté en route, sans repayer ses zones finies")
     args = parser.parse_args()
     categories = tuple(by_key[key] for key in args.categorie or by_key)
     if not args.ville and not args.rejouer:
@@ -170,8 +185,8 @@ def main():
                     if city["name"] != name:
                         logger.info(f"[services] {name} : cherchée comme {city_commune(city)}, depuis la ville {city['name']}")
                     searched.add(service_store.commune_key(city))
-                    print(json.dumps({"ville": name, **run_passage(city, categories, args.essai)}, ensure_ascii=False))
-    except PassageRunning as error:
+                    print(json.dumps({"ville": name, **run_passage(city, categories, args.essai, args.reprendre)}, ensure_ascii=False))
+    except (PassageRunning, service_chain.RegisterUnavailable) as error:
         logger.error(f"[services] {error}")
         raise SystemExit(1)
 

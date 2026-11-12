@@ -48,10 +48,11 @@ def database(monkeypatch):
 
 def _passage(monkeypatch):
     """La chaîne sans agent : note la catégorie cherchée, le passage en cours, et ce qui serait enregistré."""
-    calls = {"searched": [], "saved": []}
+    calls = {"searched": [], "saved": [], "resumed": []}
 
-    def search(category, city):
+    def search(category, city, resume=None):
         calls["searched"].append((category.key, city["name"], passage_courant()))
+        calls["resumed"].append(resume)
         return {category.key: [{"nom": "Riboul"}]}
 
     monkeypatch.setattr(service_chain, "search_commune", search)
@@ -111,6 +112,30 @@ def test_every_category_of_the_chain_is_known_to_the_supervision():
     assert review.CATEGORIES == {RESTAURANTS.source: RESTAURANTS, COMMERCES.source: COMMERCES, SUPERMARCHES.source: SUPERMARCHES}
 
 
+# --- Reprendre un passage arrêté en route ---
+
+def test_a_resumed_launch_searches_only_what_was_stopped(monkeypatch):
+    """Avec --reprendre, seule la catégorie dont le passage s'est arrêté en route est cherchée, à partir de son fichier ; les autres ne sont pas repayées."""
+    calls = _passage(monkeypatch)
+    stopped = {"commune": "Plougonvelin", "zones": [{"zone": {}, "final": []}]}
+    monkeypatch.setattr(service_chain, "interrupted_trace", lambda category, city: stopped if category.key == "restaurants" else None)
+    results = find_services.run_passage(CITY, trial=True, resume=True)
+    assert [key for key, _, _ in calls["searched"]] == ["restaurants"] and calls["resumed"] == [stopped]
+    assert results["commerces"] == {"passe": "aucun passage arrêté à reprendre"}
+
+
+def test_a_big_city_without_register_stops_the_launch(monkeypatch):
+    """Si le registre d'une grande ville n'a pas pu être lu, le lancement s'arrête avec un message au lieu de payer une recherche sans zones."""
+    def unreadable(category, city, resume=None):
+        raise service_chain.RegisterUnavailable("Marseille : registre illisible")
+
+    monkeypatch.setattr(service_chain, "search_commune", unreadable)
+    monkeypatch.setattr(service_store, "load_city", lambda name: CITY)
+    monkeypatch.setattr(sys, "argv", ["find_services", "--ville", "Marseille", "--essai"])
+    with pytest.raises(SystemExit):
+        find_services.main()
+
+
 # --- Rejouer les règles sur les fichiers déjà payés ---
 
 def _replay(monkeypatch, version):
@@ -122,7 +147,7 @@ def _replay(monkeypatch, version):
     files = {category.key: {"commune": "Plougonvelin", "version": version(category), "registre": None, "final": []}
              for category in find_services.CATEGORIES}
     monkeypatch.setattr(service_chain, "latest_traces", lambda category: {"Plougonvelin": files[category.key]})
-    monkeypatch.setattr(service_chain, "search_commune", lambda category, city: pytest.fail("un rejeu ne cherche rien"))
+    monkeypatch.setattr(service_chain, "search_commune", lambda category, city, resume=None: pytest.fail("un rejeu ne cherche rien"))
     monkeypatch.setattr(service_store, "save_commune",
                         lambda category, city, answer, version, model, trial: saved.append((category.key, trial)) or {"fiches": 0})
     monkeypatch.setattr(service_store, "load_city", lambda name: CITY)
@@ -206,7 +231,7 @@ def test_a_launch_keeps_one_lock_for_all_its_communes(monkeypatch, database):
 
 def test_the_lock_is_given_back_when_a_passage_fails(monkeypatch, database):
     """Le verrou est rendu même quand le passage échoue."""
-    monkeypatch.setattr(service_chain, "search_commune", lambda category, city: 1 / 0)
+    monkeypatch.setattr(service_chain, "search_commune", lambda category, city, resume=None: 1 / 0)
     with pytest.raises(ZeroDivisionError):
         find_services.run_passage(CITY)
     assert database.queries[-1].startswith("SELECT RELEASE_LOCK") and find_services._lock_connection is None

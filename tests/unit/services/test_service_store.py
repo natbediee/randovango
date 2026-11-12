@@ -330,3 +330,52 @@ def test_a_known_place_still_without_position_stays_in_review(monkeypatch):
     monkeypatch.setattr(service_store, "_position", lambda city, address: None)
     summary = service_store.save_commune(RESTAURANTS, PLOUDALMEZEAU, {"restaurants": [RESTAURANT]}, 1, "modele")
     assert flagged == [service_store.NO_POSITION] and summary["a_confirmer"] == 1 and summary["fiches"] == 0
+
+
+# --- Un même nom ailleurs dans la commune : un doute, pas un rattachement ---
+
+CASTEL = {"nom": "Le Castel Ac'h", "genre": "restaurant de poisson", "categorie": "poisson", "adresse": "48 rue Kervenni, 29830 Ploudalmézeau",
+          "pages": [SITE]}
+
+
+def test_a_namesake_further_in_the_commune_makes_a_doubt_not_a_merge(monkeypatch):
+    """Le Castel Ac'h, trouvé à 1,7 km de son point d'OSM dans la même commune, est créé avec un doute dans la file « Doublons », posé sur le service sans fiche."""
+    osm = _poi("Le Castel Ac'h", "Kervenny, 29830 Ploudalmézeau", (GALION_SPOT[0] + 0.0153, GALION_SPOT[1]), poi_id=7983)
+    summary, base, created, _ = _save(monkeypatch, RESTAURANTS, CASTEL, known=[osm])
+    assert created == ["Le Castel Ac'h"] and summary["meme_nom_dans_la_commune"] == 1
+    [(poi_id, source, kind, detail, _)] = base.wrote("INSERT INTO poi_signals")
+    assert (poi_id, source, kind) == (7983, "doublons", "doublon_service") and '"autre_id": 99' in detail and '"distance_m": 17' in detail
+
+
+def test_a_namesake_of_another_commune_makes_no_doubt(monkeypatch):
+    """Le même nom dans une autre commune (autre code postal) reste un autre lieu : créé, sans doute."""
+    elsewhere = _poi("Le Castel Ac'h", "Kervenny, 29880 Plouguerneau", (GALION_SPOT[0] + 0.0153, GALION_SPOT[1]), poi_id=7983)
+    summary, base, created, _ = _save(monkeypatch, RESTAURANTS, CASTEL, known=[elsewhere])
+    assert created == ["Le Castel Ac'h"] and "meme_nom_dans_la_commune" not in summary and not base.wrote("INSERT INTO poi_signals")
+
+
+# --- Le jumeau masqué n'attend plus de relecture quand le service s'affiche ailleurs ---
+
+def _superseded(monkeypatch, waiting):
+    """Hippocampe vient d'être enregistré sur le service visible 850 ; 32023, masqué et sans position, porte le même nom."""
+    from services import poi_review_service
+    decided = []
+    monkeypatch.setattr(poi_review_service, "decide_one",
+                        lambda cursor, tab, poi_id, action, note, author, months: decided.append((tab, poi_id, action, author)))
+    row = {"nom": "Hippocampe", "adresse": "Lampaul, 29830 Ploudalmézeau"}
+    visible = _poi("Hippocampe", "Lampaul, 29830 Ploudalmézeau", GALION_SPOT, poi_id=850)
+    masked = _poi("Hippocampe", "Bourg de Lampaul, 29830 Ploudalmézeau", (None, None), poi_id=32023, masked=1)
+    closed = service_store.close_superseded(RESTAURANTS, _Base(waiting), row, GALION_SPOT, PLOUDALMEZEAU, [visible, masked], 850)
+    return closed, decided
+
+
+def test_the_masked_twin_stops_waiting_once_the_place_is_shown(monkeypatch):
+    """Quand la fiche va sur le service visible, son jumeau masqué en attente est classé sans suite par la règle (Hippocampe, Ouessant)."""
+    closed, decided = _superseded(monkeypatch, waiting=True)
+    assert closed and decided == [("confirmer", 32023, "sans_suite", service_store.RULE_AUTHOR)]
+
+
+def test_a_twin_masked_by_a_human_is_left_alone(monkeypatch):
+    """Un jumeau masqué par un humain, sans relecture en attente, n'est pas touché."""
+    closed, decided = _superseded(monkeypatch, waiting=False)
+    assert not closed and decided == []

@@ -44,6 +44,8 @@ HUMAN_LINK_DECISIONS = ("valider_lien", "valider_lien_nom", "refuser_lien", "aut
 # restaurant pour un agent et café pour l'autre, parce que chacun ne regardait que ses propres services.
 KNOWN_TABS = ("restauration", "cafe", "commerce", "supermarche")
 KNOWN_SERVICES = tuple(service for service, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab in KNOWN_TABS)
+# Le signal d'un doublon possible, à trancher dans la file « Doublons » de /supervision (poi_duplicates_service.py).
+DUPLICATE_SOURCE, DUPLICATE_SIGNAL = "doublons", "doublon_service"
 NO_POSITION = "position introuvable"    # la raison d'une relecture quand l'adresse n'a pas pu être placée (review_reason)
 SAME_NAME_KM = 1            # un nom, actuel ou ancien, ne retrouve un lieu connu qu'à cette distance (find_in)
 COMMUNE_KM = 5              # sans code postal à comparer, un lieu est dans la commune à cette distance de son centre
@@ -467,6 +469,12 @@ class _DictRows:
         columns = [column[0] for column in self.cursor.description]
         return [dict(zip(columns, row)) for row in rows]
 
+    def fetchone(self):
+        row = self.cursor.fetchone()
+        if row is None or isinstance(row, dict):
+            return row
+        return dict(zip([column[0] for column in self.cursor.description], row))
+
 
 def human_fields(cursor, poi_id: int) -> set:
     """
@@ -701,6 +709,57 @@ def flag(category, cursor, row: dict, position: tuple | None, city: dict, known:
     send_to_review(category, cursor, poi_id, reason, {"adresse": row.get("adresse"), **detail})
 
 
+def namesake_in_commune(row: dict, position: tuple | None, city: dict, known: list) -> dict | None:
+    """
+    Un service visible qui porte exactement ce nom dans la même commune, mais trop loin pour être repris d'office
+    (find_in) : le plus proche. Rien pour un nom passe-partout, ni quand l'adresse n'a pas pu être placée.
+    """
+    if not position:
+        return None
+    far = [poi for poi in known if not poi["masque"] and poi["latitude"] is not None
+           and _name_rank(row["nom"], poi["name"]) == 0 and _in_commune(poi, row, city)]
+    return min(far, key=lambda poi: haversine_distance_km(*position, poi["latitude"], poi["longitude"]), default=None)
+
+
+def flag_namesake(category, cursor, poi_id: int, row: dict, position: tuple, namesake: dict) -> None:
+    """
+    L'agent vient de créer un service alors qu'un autre porte son nom dans la commune, à plus de same_name_km : le même
+    lieu mal placé (Le Castel Ac'h, à 1,7 km de son point d'OSM) ou un second magasin (deux Boulangerie Louise à
+    Douarnenez) ? Le code ne tranche pas : un doute dans la file « Doublons », comme ceux de la règle des doublons.
+    Le doute est posé sur celui des deux qui n'a pas de fiche, pour que « fusionner » garde celui qui en a une.
+    """
+    distance_m = round(1000 * haversine_distance_km(*position, namesake["latitude"], namesake["longitude"]))
+    reason = "même nom dans la commune, créé par l'agent sans le rattacher"
+    cursor.execute(f"SELECT 1 FROM {category.sheet_table} WHERE poi_id = %s", (namesake["id"],))
+    if cursor.fetchone():
+        doubted, other = poi_id, {"id": namesake["id"], "name": namesake["name"], "address": namesake["address"]}
+    else:
+        doubted, other = namesake["id"], {"id": poi_id, "name": row["nom"], "address": row.get("adresse")}
+    detail = {"autre_id": other["id"], "autre_nom": other["name"], "autre_adresse": other["address"],
+              "distance_m": distance_m, "raison": reason}
+    save_signal(cursor, doubted, DUPLICATE_SOURCE, DUPLICATE_SIGNAL, {**detail, "autres": [detail]})
+    category.logger.info(f"[{category.key}] {row['nom']} : même nom que {namesake['id']} à {distance_m} m dans la commune,"
+                         " doute dans la file « Doublons »")
+
+
+def close_superseded(category, cursor, row: dict, position: tuple | None, city: dict, known: list, poi_id: int) -> bool:
+    """
+    Le service vient d'être enregistré sur poi_id, visible. Si un autre, masqué, attendait une confirmation pour ce même
+    lieu, sa relecture n'a plus d'objet : la règle la classe sans suite, sous son nom, annulable dans /supervision.
+    Le 11 novembre 2026, « Hippocampe » (Ouessant) restait à relire sous 32023 alors que le voyageur le voyait sous 850 :
+    le confirmer aurait fait un doublon.
+    """
+    masked = [poi for poi in known if poi["masque"] and poi["id"] != poi_id]
+    stale = find_in(row, position, city, masked, within_km=category.same_name_km)
+    if not stale or not waiting_for_review(cursor, stale["id"]):
+        return False
+    from services import poi_review_service        # ici pour éviter une boucle d'imports : il lit ce module au chargement
+    poi_review_service.decide_one(_DictRows(cursor), "confirmer", stale["id"], "sans_suite", f"affiché sous le service {poi_id}",
+                                  RULE_AUTHOR, None)
+    category.logger.info(f"[{category.key}] {row['nom']} : {stale['id']} n'attend plus de relecture, affiché sous {poi_id}")
+    return True
+
+
 def flag_possible_duplicates(category, cursor, rows: list, saved: dict) -> int:
     """
     Les doublons que l'analyste voit et que le code refuse, faute de même adresse : un signal (doublon_commerce) sur le
@@ -776,6 +835,10 @@ def save_commune(category, city: dict, answer: dict, version: int, model: str, t
                 insert_service_and_link(cursor, poi_id, category.new_service(row))
             else:
                 poi_id = create_poi(category, cursor, row, position, city, source_id, masked=False)
+                namesake = namesake_in_commune(row, position, city, known)
+                if namesake:
+                    flag_namesake(category, cursor, poi_id, row, position, namesake)
+                    summary["meme_nom_dans_la_commune"] = summary.get("meme_nom_dans_la_commune", 0) + 1
             _save_season(cursor, poi_id, row)
             save_sheet(category, cursor, poi_id, row, version, model)
             _save_proofs(cursor, poi_id, row["pages"])
@@ -783,6 +846,7 @@ def save_commune(category, city: dict, answer: dict, version: int, model: str, t
             # Le lieu a maintenant sa fiche : il n'attend plus de relecture.
             cursor.execute("DELETE FROM poi_signals WHERE poi_id = %s AND source = %s AND signal_type = 'a_confirmer'",
                            (poi_id, category.source))
+            close_superseded(category, cursor, row, position, city, known, poi_id)
             sheets.add(poi_id)
             saved[row["nom"]] = {"id": poi_id, "latitude": (position or (None, None))[0], "longitude": (position or (None, None))[1]}
         summary["fiches"] = len(sheets)

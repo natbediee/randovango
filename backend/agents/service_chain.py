@@ -309,6 +309,36 @@ def write_trace(category, city: dict, trace: dict) -> Path:
     return path
 
 
+class RegisterUnavailable(RuntimeError):
+    """Le registre d'une grande ville n'a pas pu être lu : la chercher sans lui la paierait pour rien."""
+
+
+def must_have_register(category, city: dict) -> bool:
+    """
+    Une grande ville ne se cherche pas sans son registre : c'est son nombre de lignes qui la découpe en zones
+    (is_big_city). Sans lui, elle serait cherchée comme une petite commune, 15 lieux pour toute la ville, au prix d'un
+    passage : Marseille, le 6 novembre 2026. Grande ville : une commune à arrondissements, ou déjà cherchée par zones.
+    """
+    if city.get("insee") in api_registre.BOROUGHS:
+        return True
+    last = latest_traces(category).get(city_commune(city))
+    return bool(last and last.get("zones"))
+
+
+def interrupted_trace(category, city: dict) -> dict | None:
+    """
+    Le fichier du dernier passage de cette commune, s'il s'est arrêté en route : cherché par zones, avec les consignes
+    d'aujourd'hui, sans résultat final. Rien si le dernier passage est allé au bout.
+    """
+    last = None
+    for path in sorted(category.trace_dir.glob("*.json"), key=lambda path: path.stem.rsplit("_", 2)[-2:]):
+        trace = json.loads(path.read_text())
+        if trace.get("commune") == city_commune(city):
+            last = trace
+    stopped = last and last.get("final") is None and last.get("zones") and last.get("version") == category.prompt_version
+    return last if stopped else None
+
+
 def search_zone(category, city: dict, register: dict | None, zone: dict | None, trace: dict) -> dict:
     """Les recherches d'une commune ou d'une de ses zones, en même temps, puis le contrôle et l'analyse."""
     name = city_commune(city)
@@ -331,6 +361,8 @@ def search_zone(category, city: dict, register: dict | None, zone: dict | None, 
     for row in rows:
         row |= control_details(category, row, name)
     note_register_facts(category, rows, register, name)
+    # La zone est finie : ses lieux restent dans le fichier, pour ne pas la repayer si le passage s'arrête plus loin.
+    trace["final"], trace["ecartes"] = answer[category.key], answer["ecartes"]
     return answer
 
 
@@ -363,25 +395,44 @@ def note_register_facts(category, rows: list, register: dict | None, commune: st
             row["a_relire"] = reason
 
 
-def search_commune(category, city: dict) -> dict:
+def search_commune(category, city: dict, resume: dict | None = None) -> dict:
     """
-    La commune entière, ou zone par zone pour une grande ville. Lève LLMUnavailable si l'agent n'a pas pu répondre.
+    La commune entière, ou zone par zone pour une grande ville. Lève LLMUnavailable si l'agent n'a pas pu répondre, et
+    RegisterUnavailable si le registre d'une grande ville n'a pas pu être lu (rien n'est alors payé).
     Tous les appels portent l'identifiant du passage en cours (find_services.run_passage), ou un nouveau si la commune
     est cherchée seule.
+
+    REPRENDRE UN PASSAGE ARRÊTÉ EN ROUTE
+    Vingt zones à la suite durent des heures : un quota épuisé ou une coupure à la quinzième perdait les quatorze
+    premières. `resume` est le fichier du passage arrêté (interrupted_trace) : son registre est repris tel quel, sans
+    le relire, et chaque zone qu'il avait finie est reprise de son fichier, sans rappeler d'agent.
     """
     name = city_commune(city)
     with mesure_passage(passage_courant() or new_passage_id()):
-        register = api_registre.load_register(city, category.register_activities)
+        # Une commune à arrondissements est toujours cherchée par zones, et son registre lu autour d'elles seulement.
+        zones = commune_zones(city, service_store.commune_spots(name)) if city.get("insee") in api_registre.BOROUGHS else None
+        register = resume["registre"] if resume else api_registre.load_register(city, category.register_activities,
+                                                                                zones or (), ZONE_KM)
+        if register is None and must_have_register(category, city):
+            raise RegisterUnavailable(f"{name} : registre illisible, une grande ville n'est pas cherchée sans lui")
         trace = {"commune": name, "passage": passage_courant(), "version": category.prompt_version, "registre": register}
+        if resume:
+            trace["reprise_de"] = resume.get("passage")
         try:
-            if not is_big_city(category, register):
+            if zones is None and not is_big_city(category, register):
                 answer = search_zone(category, city, register, None, trace)
             else:
-                zones = commune_zones(city, service_store.commune_spots(name))
+                zones = zones or commune_zones(city, service_store.commune_spots(name))
                 category.logger.info(f"[{category.key}] {name} : {len(zones)} zones de {ZONE_KM} km autour des spots")
-                trace["zones"] = [{"zone": zone} for zone in zones]
+                paid = {json.dumps(part["zone"], sort_keys=True): part for part in (resume or {}).get("zones", [])
+                        if part.get("final") is not None}
+                trace["zones"] = [paid.get(json.dumps(zone, sort_keys=True)) or {"zone": zone} for zone in zones]
                 answers = []
                 for number, (zone, zone_trace) in enumerate(zip(zones, trace["zones"]), start=1):
+                    if zone_trace.get("final") is not None:
+                        category.logger.info(f"[{category.key}] {name} : zone {number} / {len(zones)} reprise du passage arrêté")
+                        answers.append(copy.deepcopy({category.key: zone_trace["final"], "ecartes": zone_trace.get("ecartes", [])}))
+                        continue
                     with mesure_etape(f"zone {number} / {len(zones)}, "):
                         answers.append(search_zone(category, city, register, zone, zone_trace))
                 answer = merge_zones(category, answers)
