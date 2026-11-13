@@ -1,10 +1,10 @@
 import sys
 import os
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
 
+from api.cors import add_cors
 from api.routers import step1, step2, step3, step4, result, auth, etl, pepites, supervision, supervision_bilan
 from utils.logger_util import LoggerUtil
 
@@ -15,16 +15,8 @@ app = FastAPI(
     description="API du planificateurs",
 )
 
-# Configuration CORS pour autoriser les requêtes depuis le frontend
-# ALLOWED_ORIGINS = liste d'origines séparées par des virgules (ex: prod AWS via variable d'env)
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],  # Toutes les méthodes HTTP
-    allow_headers=["*"],  # Tous les headers
-)
+# Règles CORS : origines exactes (ALLOWED_ORIGINS), méthodes et en-têtes utilisés seulement (api/cors.py).
+add_cors(app)
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(step1.router, prefix="/api/step1", tags=["Step 1 Cities"])
