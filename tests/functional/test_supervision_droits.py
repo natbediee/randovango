@@ -14,6 +14,7 @@ from jose import jwt
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from api.routers import etl, supervision, supervision_bilan
+from services.authentification import AUTH_COOKIE_NAME
 
 scenarios("features/supervision_droits.feature")
 
@@ -21,6 +22,7 @@ USER = {"user_id": 7, "username": "camille"}
 
 
 def token_for(user: dict, expires_in: timedelta = timedelta(minutes=5)) -> str:
+    """Un jeton signé comme à la connexion, qui expire dans expires_in."""
     expires = datetime.now(timezone.utc) + expires_in
     return jwt.encode({**user, "exp": expires}, etl.SECRET_KEY, algorithm=etl.ALGORITHM)
 
@@ -64,17 +66,26 @@ def world(monkeypatch):
 
 @given(parsers.parse("un visiteur avec un jeton {jeton}"))
 def visitor(world, jeton):
+    """Le cookie de connexion du visiteur : absent, faux ou expiré."""
     tokens = {
         "invalide": "pas-un-jeton",
         "expiré": token_for(USER, timedelta(minutes=-1)),
     }
     if jeton in tokens:
-        world.headers = {"Authorization": f"Bearer {tokens[jeton]}"}
+        world.client.cookies.set(AUTH_COOKIE_NAME, tokens[jeton])
 
 
 @given(parsers.parse('un utilisateur connecté avec le rôle "{role}"'))
 def connected(world, role):
+    """Un compte connecté : le cookie porte un jeton valide, les rôles sont ceux de la base."""
     world.roles = [role]
+    world.client.cookies.set(AUTH_COOKIE_NAME, token_for(USER))
+
+
+@given("un admin qui envoie son jeton valide dans l'en-tête Authorization, sans cookie")
+def bearer_header(world):
+    """L'ancien envoi du jeton, par l'en-tête Authorization : il n'est plus lu (carte #24)."""
+    world.roles = ["admin"]
     world.headers = {"Authorization": f"Bearer {token_for(USER)}"}
 
 

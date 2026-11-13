@@ -26,6 +26,8 @@ services:
       # Le front de branche est sur une autre adresse : le navigateur ne laisse ses pages appeler l'API que si
       # elle l'autorise (CORS). Cette valeur passe avant celle du .env (load_dotenv n'écrase pas).
       ALLOWED_ORIGINS: http://localhost:${FRONT_PORT:-5001},http://127.0.0.1:${FRONT_PORT:-5001}
+      # Le front de branche est en HTTP : le cookie de connexion ne doit pas exiger le HTTPS (voir .env.example).
+      COOKIE_SECURE: "0"
     volumes:
       - ./backend:/usr/src/app
       # Un seul .env pour tout le projet : celui du dossier principal, rangé à côté (~/Dev/randovango).

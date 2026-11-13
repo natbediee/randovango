@@ -13,7 +13,7 @@
 let _cityBoundsPromise = null;
 function getCityBoundsOptions(padDegrees = 1.5) {
     if (!_cityBoundsPromise) {
-        _cityBoundsPromise = fetch(`${window.API_BASE}/api/step1/cities/bounds`)
+        _cityBoundsPromise = window.RVG.apiFetch('/api/step1/cities/bounds')
             .then(r => r.ok ? r.json() : null)
             .catch(() => null);
     }
@@ -90,8 +90,9 @@ function requireCity() {
 
 // Appel GET vers l'API FastAPI ; renvoie le JSON de la réponse, ou lève une
 // erreur si le serveur a répondu autre chose que 200 (à attraper par l'appelant).
+// apiFetch (common.js) joint le cookie de connexion.
 async function apiGet(path) {
-    const response = await fetch(`${window.API_BASE}${path}`);
+    const response = await window.RVG.apiFetch(path);
     if (!response.ok) throw new Error(`Erreur API ${path} (HTTP ${response.status})`);
     return response.json();
 }
@@ -101,7 +102,7 @@ async function apiGet(path) {
 // après (clic "Choisir" immédiatement suivi de "Étape suivante") ; sans cela le
 // navigateur l'interrompt et la sauvegarde du choix peut être perdue.
 function apiPut(path, body) {
-    return fetch(`${window.API_BASE}${path}`, {
+    return window.RVG.apiFetch(path, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -340,7 +341,7 @@ async function loadPreviousDaysOnMap(map, currentDay, planId, options = {}) {
     const previousPositions = [];
     if (!map || currentDay <= 1 || !planId) return { plannedHikeIds, plannedSpotIds, previousPositions };
     try {
-        const res = await fetch(`${window.API_BASE}/api/result/?plan_id=${planId}`);
+        const res = await window.RVG.apiFetch(`/api/result/?plan_id=${planId}`);
         if (!res.ok) return { plannedHikeIds, plannedSpotIds, previousPositions };
         const plan = await res.json();
         (plan.days || []).forEach(day => {

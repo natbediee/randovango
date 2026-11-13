@@ -545,7 +545,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         try {
             planButton.disabled = true;
             planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
-            const resp = await fetch(`${window.API_BASE}/api/step1/update_day_city/${planId}`, {
+            const resp = await window.RVG.apiFetch(`/api/step1/update_day_city/${planId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ day_number: currentDay, city_id: parseInt(cityId) })
@@ -578,7 +578,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         try {
             planButton.disabled = true;
             planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Changement de ville...';
-            const resp = await fetch(`${window.API_BASE}/api/step1/update_day_city/${planId}`, {
+            const resp = await window.RVG.apiFetch(`/api/step1/update_day_city/${planId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ day_number: nextDay, city_id: parseInt(cityId) })
@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         try {
             planButton.disabled = true;
             planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
-            const resp = await fetch(`${window.API_BASE}/api/step1/update_day_city/${planId}`, {
+            const resp = await window.RVG.apiFetch(`/api/step1/update_day_city/${planId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ day_number: editingDay, city_id: parseInt(cityId) })
@@ -646,14 +646,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             planButton.disabled = true;
             planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création du plan...';
 
-            // userId si connecté (défini au login par contrib.js)
+            // userId si connecté (défini au login, common.js storeSession)
             const userId = localStorage.getItem('userId') ? parseInt(localStorage.getItem('userId')) : null;
-            // Jeton invité (UUID) : uniquement pour un visiteur anonyme. Quand on est
-            // connecté, localStorage.userToken contient en fait le JWT d'auth (trop
-            // long pour la colonne user_token, et hors sujet ici) : on ne l'envoie pas.
+            // Jeton invité (UUID) : uniquement pour un visiteur anonyme. Ce n'est pas le jeton de
+            // connexion, qui reste dans le cookie httpOnly et que cette page ne voit pas.
             const userToken = userId ? null : localStorage.getItem('userToken');
 
-            const response = await fetch(`${window.API_BASE}/api/step1/create_plan`, {
+            const response = await window.RVG.apiFetch(`/api/step1/create_plan`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

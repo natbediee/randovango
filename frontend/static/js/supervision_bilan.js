@@ -4,10 +4,6 @@
 
 const CITIES_SHOWN = 12;
 f
-function authToken() {
-    return sessionStorage.getItem('jwtToken') || localStorage.getItem('userToken');
-}
-
 function showMessage(text) {
     const box = document.getElementById('supervisionMsg');
     box.textContent = text;
@@ -15,9 +11,7 @@ function showMessage(text) {
 }
 
 async function summaryFetch() {
-    const response = await fetch(`${window.API_BASE}/api/supervision/bilan`, {
-        headers: { Authorization: `Bearer ${authToken()}` },
-    });
+    const response = await window.RVG.apiFetch('/api/supervision/bilan');
     if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi.');
     if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
     if (!response.ok) throw new Error(`Erreur du serveur (HTTP ${response.status}) : bilan indisponible.`);
@@ -87,7 +81,7 @@ function render(data) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!authToken()) {
+    if (!window.RVG.isLoggedIn()) {
         window.location.href = window.APP_URLS.contributorLogin;
         return;
     }

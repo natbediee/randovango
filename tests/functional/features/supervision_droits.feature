@@ -19,6 +19,11 @@ Fonctionnalité: La supervision est réservée aux admins
       | absent   | GET     | /api/supervision/bilan         |
       | absent   | POST    | /api/supervision/edit/services/decisions |
 
+  Scénario: Le jeton n'est lu que dans le cookie de connexion
+    Étant donné un admin qui envoie son jeton valide dans l'en-tête Authorization, sans cookie
+    Quand il appelle GET /api/supervision/reviews
+    Alors la réponse est 401
+
   Plan du scénario: Un compte qui n'est pas admin est refusé partout
     Étant donné un utilisateur connecté avec le rôle "<role>"
     Quand il appelle <methode> <route>

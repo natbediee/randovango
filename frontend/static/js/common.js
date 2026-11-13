@@ -31,23 +31,46 @@
     });
   }
 
-  // ===== État de session dans le header (accueil / planificateur) =====
-  // Le header est rendu par le serveur dans l'état déconnecté (il ignore l'auth,
-  // stockée côté client). Connecté, le lien « Contributeur ? Connexion » disparaît
-  // au profit de l'avatar, dont le menu déroulant porte l'espace contributeur,
-  // la création de voyage et la déconnexion.
-  function getUsername() {
-    return localStorage.getItem('username') || sessionStorage.getItem('username');
+  // ===== Appels à l'API =====
+  // Le jeton de connexion est dans un cookie httpOnly posé par l'API (carte #24) : le JavaScript
+  // ne le voit pas et ne l'envoie pas lui-même. credentials: 'include' demande au navigateur de
+  // joindre ce cookie, y compris quand le front et l'API ne sont pas sur le même port.
+  // Tous les appels à l'API passent par ici, pour qu'aucun n'oublie le cookie.
+  function apiFetch(path, options) {
+    return fetch(window.API_BASE + path, Object.assign({}, options, { credentials: 'include' }));
   }
+
+  // ===== Session affichée =====
+  // Ce que le front garde de la connexion, pour l'affichage seulement : nom, rôles et heure de fin.
+  // Rien de secret : c'est l'API qui décide des droits, en lisant le cookie.
+  var SESSION_KEYS = ['userId', 'username', 'userRoles', 'sessionExpiresAt'];
+
+  function storeSession(user, expiresAt) {
+    localStorage.setItem('userId', user.id);
+    localStorage.setItem('username', user.username);
+    localStorage.setItem('userRoles', (user.roles || []).join(','));
+    localStorage.setItem('sessionExpiresAt', expiresAt);
+  }
+  // Connecté = une session dont l'heure de fin n'est pas passée (le cookie expire au même moment).
   function isLoggedIn() {
-    return !!(localStorage.getItem('userId') || getUsername());
+    var expiresAt = Date.parse(localStorage.getItem('sessionExpiresAt') || '');
+    return !isNaN(expiresAt) && expiresAt > Date.now();
   }
-  function logout() {
-    // Self-contained (contrib.js n'est pas chargé sur ces pages) : on vide les deux
-    // emplacements utilisés par le login (voir contrib.js storeSession/logoutContrib).
-    ['jwtToken', 'username'].forEach(function (k) { sessionStorage.removeItem(k); });
-    ['userToken', 'userId', 'username', 'userRoles'].forEach(function (k) { localStorage.removeItem(k); });
+  function getUsername() {
+    return localStorage.getItem('username');
   }
+  // Seule l'API peut effacer le cookie httpOnly : on le lui demande, puis on oublie la session affichée.
+  async function logout() {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) { /* API injoignable : la session affichée est quand même oubliée */ }
+    SESSION_KEYS.forEach(function (k) { localStorage.removeItem(k); });
+  }
+
+  // ===== État de session dans le header (accueil / planificateur) =====
+  // Le header est rendu par le serveur dans l'état déconnecté. Connecté, le lien
+  // « Contributeur ? Connexion » disparaît au profit de l'avatar, dont le menu déroulant
+  // porte l'espace contributeur, la création de voyage et la déconnexion.
 
   function initAccountMenu() {
     var account = document.querySelector('[data-account]');
@@ -98,9 +121,9 @@
 
     var logoutLink = account.querySelector('[data-account-logout]');
     if (logoutLink) {
-      logoutLink.addEventListener('click', function (e) {
+      logoutLink.addEventListener('click', async function (e) {
         e.preventDefault();
-        logout();
+        await logout();
         // Retour à l'accueil plutôt qu'un simple reload : la page courante peut
         // être réservée aux contributeurs (dashboard, ajout de spot/rando).
         window.location.href = window.APP_URLS.duration;
@@ -194,8 +217,13 @@
   });
 
   // ===== Helpers exposés =====
-  // Déblocage du chat Vany (payé ou code contributeur validé) - mock front-only pour l'instant.
   window.RVG = window.RVG || {};
+  window.RVG.apiFetch = apiFetch;
+  window.RVG.storeSession = storeSession;
+  window.RVG.isLoggedIn = isLoggedIn;
+  window.RVG.logout = logout;
+
+  // Déblocage du chat Vany (payé ou code contributeur validé) - mock front-only pour l'instant.
   window.RVG.isVanyUnlocked = function () {
     return localStorage.getItem('vanyUnlocked') === '1';
   };

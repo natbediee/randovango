@@ -43,6 +43,56 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 
+# --- Cookie de connexion (carte #24) ---
+# Le jeton voyage dans un cookie, et plus dans le localStorage : un script injecté dans une page
+# (faille XSS) lit tout le localStorage, mais ne peut pas lire un cookie httpOnly.
+AUTH_COOKIE_NAME = "access_token"
+# Le cookie n'est envoyé qu'aux routes de l'API, pas aux pages du front, qui n'en ont pas besoin.
+AUTH_COOKIE_PATH = "/api"
+
+
+def cookie_is_secure() -> bool:
+    """
+    Le cookie part-il seulement en HTTPS ? Oui par défaut (préprod, prod).
+    COOKIE_SECURE=0 le permet en HTTP, pour le poste de développement : Safari refuse
+    un cookie « Secure » sur http://localhost, même si Chrome et Firefox l'acceptent.
+    """
+    return os.getenv("COOKIE_SECURE", "1") != "0"
+
+
+def set_auth_cookie(response, token: str) -> None:
+    """
+    Pose le jeton de connexion dans le cookie de la réponse.
+
+    - httponly : le JavaScript de la page ne peut ni le lire ni le modifier (protection contre le vol par XSS) ;
+      le navigateur le joint tout seul aux appels de l'API.
+    - samesite="lax" : le navigateur ne le joint pas aux POST, PUT ou DELETE venus d'un autre site. C'est la
+      protection contre la falsification de requête (CSRF) : une page piégée ne peut pas agir au nom du voyageur.
+      Elle suppose qu'aucune route GET ne modifie de données.
+    - max_age : le cookie disparaît à l'expiration du jeton, pas avant, pas après.
+    """
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path=AUTH_COOKIE_PATH,
+        httponly=True,
+        samesite="lax",
+        secure=cookie_is_secure(),
+    )
+
+
+def clear_auth_cookie(response) -> None:
+    """Efface le cookie de connexion. Le JavaScript ne peut pas le faire lui-même : il ne le voit pas."""
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path=AUTH_COOKIE_PATH,
+        httponly=True,
+        samesite="lax",
+        secure=cookie_is_secure(),
+    )
+
+
 # --- DB ---
 def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(str(DB_PATH))
