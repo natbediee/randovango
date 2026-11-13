@@ -40,6 +40,18 @@ def js_round(value) -> int:
     return math.floor(float(value) + 0.5)
 
 
+# UN DOUTE EN ATTENTE = « NON VÉRIFIÉ » (11 novembre 2026). Un service dont un signal attend une relecture dans la
+# supervision (un lien d'OSM à valider, un renommage, un doublon possible) s'affiche « non vérifié » jusqu'à la décision :
+# 78 services s'affichaient « Vérifié » avec un doute en attente. Le badge en base n'est pas touché : il revient tout seul
+# quand le doute est tranché. À mettre dans le SELECT d'une requête sur « poi p », puis à donner à shown_verified.
+PENDING_DOUBT_SQL = "EXISTS (SELECT 1 FROM poi_signals doute WHERE doute.poi_id = p.id AND doute.statut = 'a_relire')"
+
+
+def shown_verified(verified, pending_doubt) -> bool:
+    """Le badge montré : celui de la base, sauf si un doute attend une relecture (PENDING_DOUBT_SQL)."""
+    return bool(verified) and not pending_doubt
+
+
 def verified_badge(verifie) -> dict:
     """Badge de vérification affiché sur les cartes randonnée/spot/service."""
     if verifie:

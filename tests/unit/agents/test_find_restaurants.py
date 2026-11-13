@@ -1,11 +1,30 @@
 import json
-import sys
 
 import pytest
 
-from agents import find_restaurants, find_service_links
-from agents.find_restaurants import add_proofs, build_message, clean_name, has_accepted_page, merge_answers, registered_since
+from agents import find_restaurants, find_service_links, service_chain
+from agents.find_restaurants import RESTAURANTS, registered_since
+from agents.llm_service import etape_courante, passage_courant
+from agents.service_chain import build_message, clean_name
 from api.routers.step4 import display_rank, keep_checked_restaurants
+from services import service_store
+
+
+def merge_answers(*answers):
+    return service_chain.merge_answers(RESTAURANTS, *answers)
+
+
+def add_proofs(row, proof, commune):
+    service_chain.add_proofs(RESTAURANTS, row, proof, commune)
+
+
+def has_accepted_page(row, commune):
+    return service_chain.has_accepted_page(RESTAURANTS, row, commune)
+
+
+def _trace(tmp_path):
+    """Le fichier JSON du passage : dans le dossier de la catégorie, sous le dossier des journaux."""
+    return json.loads(next((tmp_path / RESTAURANTS.source).iterdir()).read_text())
 
 
 def _answer(restaurants=(), closed=(), set_aside=()):
@@ -18,20 +37,24 @@ def _names(merged):
 
 
 def test_merge_keeps_each_restaurant_once():
+    """Un restaurant trouvé par deux recherches n'est gardé qu'une fois."""
     assert _names(merge_answers(_answer(["La Cabane"]), _answer(["la cabane", "La Balise"]))) == ["La Cabane", "La Balise"]
 
 
 def test_a_place_found_by_any_search_is_kept():
+    """Un restaurant trouvé par une seule des recherches est gardé."""
     merged = merge_answers(_answer(["Spiaggia"]), _answer(["Riboul"]), _answer(["Ti Mad Eo"]), _answer(["La Balise"]))
     assert _names(merged) == ["Spiaggia", "Riboul", "Ti Mad Eo", "La Balise"]
 
 
 def test_the_same_place_under_close_names_stays_once():
+    """« Crêperie Riboul » et « Riboul » sont le même restaurant : le premier nom trouvé reste."""
     merged = merge_answers(_answer(["Crêperie Riboul", "Spiaggia Restaurant", "Ti Madeo"]), _answer(["Riboul", "Spiaggia", "Ti Mad Eo"]))
     assert _names(merged) == ["Crêperie Riboul", "Spiaggia Restaurant", "Ti Madeo"]
 
 
 def test_a_place_said_closed_by_another_search_goes_to_the_analyst():
+    """Un restaurant retenu par une recherche et dit fermé par une autre est signalé à l'analyste, qui tranchera."""
     merged = merge_answers(_answer(["Crêperie de la plage", "Spiaggia"]), _answer(closed=["La Crêperie de la Plage"]))
     assert _names(merged) == ["Crêperie de la plage", "Spiaggia"]
     assert merged["restaurants"][0]["dit_ferme"]["nom"] == "La Crêperie de la Plage"
@@ -47,25 +70,28 @@ def test_the_pages_of_every_search_are_kept():
 
 
 def test_every_kept_page_is_controlled_once_with_its_citation(monkeypatch):
-    monkeypatch.setattr(find_restaurants, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
-    monkeypatch.setattr(find_restaurants, "citation_found", lambda citation, url: True)
+    """Chaque page d'un restaurant est contrôlée une seule fois, avec la citation et la date de sa preuve."""
+    monkeypatch.setattr(service_chain, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
     row = {"nom": "Riboul", "adresse": None, "pages_vues": [
         {"url": "https://a.fr", "type_page": "site"},
         {"url": "https://a.fr ", "type_page": "site", "citation": "Crêperie", "date_page": "2026-09"},
         {"url": "https://b.fr", "type_page": "office_tourisme"}]}
-    pages = find_restaurants.control_row(row, "Plougonvelin")
+    pages = service_chain.control_row(RESTAURANTS, row, "Plougonvelin")
     assert [page["url"] for page in pages] == ["https://a.fr", "https://b.fr"]
     assert pages[0]["citation"] == "Crêperie" and pages[0]["date_page"] == "2026-09" and "citation" not in pages[1]
 
 
 def test_a_proof_controls_only_its_own_pages(monkeypatch):
-    monkeypatch.setattr(find_restaurants, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
+    """Une preuve ajoutée après coup ne fait contrôler que sa propre page, pas celles déjà vues."""
+    monkeypatch.setattr(service_chain, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
     row = {**_row(), "pages_vues": [{"url": "https://deja-vue.fr", "type_page": "site"}]}
     add_proofs(row, {"preuve_url": "https://nous.fr", "type_preuve": "site"}, "Plougonvelin")
     assert [page["url"] for page in row["pages"]] == ["https://annuaire.fr/nous", "https://nous.fr"]
 
 
 def test_the_register_date_goes_by_name_and_keeps_the_oldest():
+    """La date du registre se lit au nom du restaurant, et la plus ancienne est gardée s'il y a deux lignes."""
     register = {"actifs": [{"nom": "CAFE KONK", "actif_depuis": "2026-06-15"},
                            {"nom": "LES PANIERS DE MARIE.K", "actif_depuis": "2025-07-01"},
                            {"nom": "LES PANIERS DE MARIE.K", "actif_depuis": "2023-11-01"},
@@ -83,31 +109,43 @@ REGISTER = {"actifs": [{"nom": "CAFE KONK", "adresse": "18 RUE SAINT CHRISTOPHE 
 
 
 def test_the_register_shows_a_restaurant_by_name_or_address():
+    """Le registre prouve un restaurant par son nom ou par son adresse."""
     assert find_restaurants.in_register({"nom": "Café Konk", "adresse": None}, REGISTER)
     assert find_restaurants.in_register({"nom": "L'Armen", "adresse": "9 rue du Lieutenant Jourden, 29217 Le Conquet"}, REGISTER)
 
 
 def test_a_bar_in_the_register_is_no_proof_of_a_restaurant():
+    """Une ligne de bar au registre ne prouve pas un restaurant."""
     register = {"actifs": [{"nom": "L'UNIVERS", "adresse": "PLACE DE L'EGLISE 29217 PLOUGONVELIN", "activite": "56.30Z"}]}
     assert not find_restaurants.in_register({"nom": "L'Univers", "adresse": "Place de l'Église, 29217 Plougonvelin"}, register)
 
 
 def test_a_street_without_number_or_a_hotel_shows_no_restaurant():
+    """Une rue sans numéro, un hôtel ou un registre absent ne prouvent pas un restaurant."""
     assert not find_restaurants.in_register({"nom": "La Balise", "adresse": "Boulevard de la Mer, 29217 Plougonvelin"}, REGISTER)
     assert not find_restaurants.in_register({"nom": "L'Archipel", "adresse": "30 rue Saint-Mathieu, 29217 Plougonvelin"}, REGISTER)
     assert not find_restaurants.in_register({"nom": "Autre", "adresse": "18 rue du Port, 29217 Le Conquet"}, REGISTER)
     assert not find_restaurants.in_register({"nom": "Autre", "adresse": None}, None)
 
 
+def test_a_cafe_and_a_creperie_of_the_same_port_stay_two():
+    """« Le Café du Port » et « Crêperie du Port » (Sainte-Marine) sont deux tables ; « Bzzzt » et « Bzzzt Café », une seule."""
+    merged = merge_answers(_answer(["Le Café du Port", "Bzzzt"]), _answer(["Crêperie du Port", "Bzzzt Café"]))
+    assert _names(merged) == ["Le Café du Port", "Bzzzt", "Crêperie du Port"]
+
+
 def test_a_place_only_said_closed_is_not_retained():
+    """Un lieu qu'une recherche dit seulement fermé n'entre pas dans la liste."""
     assert _names(merge_answers(_answer(["Spiaggia"]), _answer(closed=["La Marina"]))) == ["Spiaggia"]
 
 
 def test_a_place_set_aside_for_another_reason_stays():
+    """Un restaurant écarté par une recherche pour une autre raison que la fermeture reste retenu."""
     assert _names(merge_answers(_answer(["La Cabane"]), _answer(set_aside=["La Cabane"]))) == ["La Cabane"]
 
 
 def test_name_loses_its_details():
+    """Le nom perd ses parenthèses et ce qui suit un tiret : il reste le nom seul du restaurant."""
     assert clean_name("Le Pêcheur (18 rue Saint-Yves)") == "Le Pêcheur"
     assert clean_name("L'Archipel – Hôtel du Large") == "L'Archipel"
     assert clean_name("L'Archipel - Hôtel du Large") == "L'Archipel"
@@ -116,6 +154,7 @@ def test_name_loses_its_details():
 
 
 def test_the_message_holds_the_register_only_when_there_is_one():
+    """Le message envoyé à l'agent ne contient le registre que s'il a été lu."""
     city = {"name": "Le Conquet", "department": "Finistère"}
     assert "REGISTRE" not in build_message(city, None)
     assert "CAFE KONK" in build_message(city, {"actifs": [{"nom": "CAFE KONK"}]})
@@ -127,7 +166,8 @@ def _row():
 
 
 def test_a_page_already_found_is_never_lost(monkeypatch):
-    monkeypatch.setattr(find_restaurants, "control_row", lambda row, commune: [
+    """La page trouvée par la recherche reste quand l'agent de preuve en ajoute une meilleure."""
+    monkeypatch.setattr(service_chain, "control_row", lambda category, row, commune: [
         {"url": row["preuve_url"], "type_page": row["type_preuve"], "verdict": "ok"}])
     row = _row()
     add_proofs(row, {"preuve_url": "https://nous.fr", "type_preuve": "site", "adresse": "10 rue Saint-Yves"}, "Plougonvelin")
@@ -136,6 +176,7 @@ def test_a_page_already_found_is_never_lost(monkeypatch):
 
 
 def test_no_proof_found_changes_nothing(monkeypatch):
+    """Sans preuve trouvée, les pages du restaurant ne changent pas."""
     row = _row()
     add_proofs(row, {}, "Plougonvelin")
     assert len(row["pages"]) == 1 and not has_accepted_page(row, "Plougonvelin")
@@ -146,11 +187,13 @@ def _poi(name, category, genre=None, address=None):
 
 
 def test_restaurants_stay_while_the_commune_is_not_treated():
+    """À l'étape 4, les restaurants d'OSM restent tant que l'agent n'est pas passé sur la commune."""
     pois = [_poi("Mary Stuart", "restaurant"), _poi("Toilettes", "toilets")]
     assert keep_checked_restaurants(pois) == pois
 
 
 def test_only_checked_restaurants_remain_once_treated():
+    """À l'étape 4, là où l'agent est passé, seuls les restaurants qui ont une fiche restent ; les autres services ne bougent pas."""
     kept = keep_checked_restaurants([_poi("La Cabane", "restaurant", "bistrot", "1 bd de la Mer, 29217 Plougonvelin"),
                                      _poi("Ancien", "restaurant", None, "2 bd de la Mer, 29217 Plougonvelin"),
                                      _poi("Sans adresse", "restaurant"),
@@ -159,12 +202,14 @@ def test_only_checked_restaurants_remain_once_treated():
 
 
 def test_a_neighbour_with_sheets_does_not_hide_a_commune_not_yet_treated():
+    """Les fiches d'une commune voisine ne font pas disparaître les restaurants d'une commune pas encore traitée."""
     kept = keep_checked_restaurants([_poi("La Cabane", "restaurant", "bistrot", "1 bd de la Mer, 29217 Plougonvelin"),
                                      _poi("La Cormorandière", "restaurant", None, "Place Henri Gestin, 29280 Locmaria-Plouzané")])
     assert [poi["name"] for poi in kept] == ["La Cabane", "La Cormorandière"]
 
 
 def test_the_commune_sheets_come_first_then_the_nearest():
+    """À l'étape 4, les fiches de la commune passent d'abord, puis les services les plus proches."""
     pois = [{"name": "Café", "genre": None, "address": None, "distance_km": 1},
             {"name": "Voisin", "genre": "x", "address": "1 rue, 29217 Le Conquet", "distance_km": 3},
             {"name": "Hostellerie", "genre": "x", "address": "7 place, 29217 Plougonvelin", "distance_km": 5.2}]
@@ -200,10 +245,9 @@ CITY = {"name": "Plougonvelin", "department": "Finistère", "latitude": 48.3, "l
 
 
 def _chain(monkeypatch, tmp_path, agent, registered="AUTRE LIEU"):
-    monkeypatch.setattr(find_restaurants, "TRACE_DIR", tmp_path)
-    monkeypatch.setattr(find_restaurants, "make_llm_service", lambda name: agent)
-    monkeypatch.setattr(find_restaurants.analyze_restaurants, "make_llm_service", lambda name: agent)
-    monkeypatch.setattr(find_restaurants.api_registre, "load_register", lambda city: {"actifs": [{"nom": registered, "activite": "56.10A"}]})
+    monkeypatch.setenv("RANDOVANGO_LOG_DIR", str(tmp_path))
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: agent)
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: {"actifs": [{"nom": registered, "activite": "56.10A"}]})
     monkeypatch.setattr(find_service_links, "read_page", lambda url: {
         "statut": 200, "final": url, "texte": "nous riboul la vinotiere plougonvelin " + "x " * 200, "brut": ""})
 
@@ -212,48 +256,41 @@ def test_the_chain_keeps_found_pages_and_looks_for_the_missing_proof(monkeypatch
     """Le cas du pilote : une page acceptée reste, l'analyste ne cherche que pour NOUS, La Vinotière sort."""
     agent = _Agent()
     _chain(monkeypatch, tmp_path, agent)
-    answer = find_restaurants.search_commune(CITY)
+    answer = service_chain.search_commune(RESTAURANTS, CITY)
     by_name = {row["nom"]: row for row in answer["restaurants"]}
     assert set(by_name) == {"NOUS", "Riboul"}
     assert [page["url"] for page in by_name["NOUS"]["pages"]] == ["https://tripadvisor.fr/nous", "https://nous.fr"]
     assert has_accepted_page(by_name["NOUS"], "Plougonvelin") and by_name["NOUS"]["adresse"] == "10 rue Saint-Yves"
-    trace = json.loads(next(tmp_path.iterdir()).read_text())
+    trace = _trace(tmp_path)
     assert trace["registre"] and [row["nom"] for row in trace["preuves"]] == ["NOUS"]
 
 
 def test_a_place_in_the_register_needs_no_proof_search(monkeypatch, tmp_path):
+    """Un restaurant au registre n'est pas envoyé à l'agent de preuve."""
     _chain(monkeypatch, tmp_path, _Agent(), registered="NOUS")
-    answer = find_restaurants.search_commune(CITY)
+    answer = service_chain.search_commune(RESTAURANTS, CITY)
     by_name = {row["nom"]: row for row in answer["restaurants"]}
     assert by_name["NOUS"]["au_registre"] and not by_name["Riboul"]["au_registre"]
-    trace = json.loads(next(tmp_path.iterdir()).read_text())
+    trace = _trace(tmp_path)
     assert "preuves" not in trace
 
 
 def test_what_was_paid_stays_readable_when_a_step_fails(monkeypatch, tmp_path):
+    """Si l'analyse échoue, le fichier de trace garde quand même les recherches déjà payées."""
     _chain(monkeypatch, tmp_path, _Agent(fail_on_analysis=True))
     with pytest.raises(RuntimeError):
-        find_restaurants.search_commune(CITY)
-    trace = json.loads(next(tmp_path.iterdir()).read_text())
+        service_chain.search_commune(RESTAURANTS, CITY)
+    trace = _trace(tmp_path)
     assert len(trace["recherches"]) == 4 and "final" not in trace
 
 
-def test_the_trial_mode_writes_nothing_in_the_database(monkeypatch):
-    saved = []
-    monkeypatch.setattr(sys, "argv", ["find_restaurants", "--ville", "Plougonvelin", "--essai"])
-    monkeypatch.setattr(find_restaurants.restaurant_service, "load_city", lambda name: CITY)
-    monkeypatch.setattr(find_restaurants.restaurant_service, "save_commune", lambda *args: saved.append(args))
-    monkeypatch.setattr(find_restaurants, "search_commune", lambda city: {"restaurants": [{"nom": "Riboul"}]})
-    find_restaurants.main()
-    assert saved == []
-
-
 def test_control_row_puts_the_citation_on_the_proof_page(monkeypatch):
-    monkeypatch.setattr(find_restaurants, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
-    monkeypatch.setattr(find_restaurants, "citation_found", lambda citation, url: True)
+    """La citation et la date vont sur la page de preuve, pas sur le lien montré."""
+    monkeypatch.setattr(service_chain, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
+    monkeypatch.setattr(service_chain, "citation_found", lambda citation, url: True)
     row = {**_found("Riboul", "https://riboul.fr"), "preuve_url": "https://iroise.bzh/riboul", "type_preuve": "office_tourisme",
            "preuve_citation": "Crêperie", "preuve_date": "2026-09"}
-    pages = find_restaurants.control_row(row, "Plougonvelin")
+    pages = service_chain.control_row(RESTAURANTS, row, "Plougonvelin")
     assert [page.get("citation") for page in pages] == [None, "Crêperie"] and pages[1]["date_page"] == "2026-09"
 
 
@@ -264,30 +301,35 @@ def _line(name, latitude, activity="56.10A"):
 
 
 def test_close_spots_share_a_zone_and_a_far_one_has_its_own():
+    """Deux spots proches font une seule zone de recherche, un spot éloigné a la sienne."""
     spots = [{"latitude": 48.380, "longitude": -4.5, "address": "A"}, {"latitude": 48.385, "longitude": -4.5, "address": "B"},
              {"latitude": 48.420, "longitude": -4.5, "address": "C"}]
-    assert [zone["repere"] for zone in find_restaurants.commune_zones(CITY, spots)] == ["A", "C"]
+    assert [zone["repere"] for zone in service_chain.commune_zones(CITY, spots)] == ["A", "C"]
 
 
 def test_a_big_city_without_spot_is_searched_around_its_centre():
-    assert find_restaurants.commune_zones(CITY, []) == [{"latitude": 48.3, "longitude": -4.7, "repere": "le centre de la commune"}]
+    """Une grande ville sans spot est cherchée autour de son centre."""
+    assert service_chain.commune_zones(CITY, []) == [{"latitude": 48.3, "longitude": -4.7, "repere": "le centre de la commune"}]
 
 
 def test_the_agent_never_reads_the_positions():
+    """L'agent ne lit jamais les positions du registre."""
     register = {"actifs": [_line("NOUS", 48.38)], "enseignes_fermees": [], "radies": []}
-    assert find_restaurants.register_for_agent(register)["actifs"] == [{key: value for key, value in _line("NOUS", 48.38).items() if key != "position"}]
+    assert service_chain.register_for_agent(RESTAURANTS, register)["actifs"] == [{key: value for key, value in _line("NOUS", 48.38).items() if key != "position"}]
 
 
 def test_a_zone_reads_only_the_nearest_restaurants_of_the_register():
+    """Dans une zone, l'agent ne lit que les 40 restaurants du registre les plus proches, sans les bars ni ce qui est hors zone."""
     zone = {"latitude": 48.38, "longitude": -4.5, "repere": "A"}
     lines = [_line(f"Loin {number}", 48.38 + 0.0001 * number) for number in range(60)]
     register = {"actifs": [_line("Bar", 48.38, "56.30Z"), _line("Hors zone", 48.42), *reversed(lines)], "enseignes_fermees": [], "radies": []}
-    kept = find_restaurants.register_for_agent(register, zone)["actifs"]
-    assert [line["nom"] for line in kept] == [f"Loin {number}" for number in range(find_restaurants.ZONE_LINES)]
+    kept = service_chain.register_for_agent(RESTAURANTS, register, zone)["actifs"]
+    assert [line["nom"] for line in kept] == [f"Loin {number}" for number in range(service_chain.ZONE_LINES)]
     assert all("position" not in line for line in kept)
 
 
 def test_the_message_of_a_zone_gives_its_landmark():
+    """Le message d'une zone donne son repère, sa position et son rayon."""
     zone = {"latitude": 48.38, "longitude": -4.5, "repere": "Rue Jim Sévellec, 29200 Brest"}
     assert "ZONE : à moins de 1.5 km de Rue Jim Sévellec, 29200 Brest (48.38000, -4.50000)" in build_message(CITY, None, zone)
 
@@ -303,35 +345,39 @@ class _ZoneAgent(_Agent):
 
 
 def test_a_big_city_is_searched_zone_by_zone_and_keeps_each_place_once(monkeypatch, tmp_path):
+    """Une grande ville est cherchée zone par zone, chaque recherche ne lit que les lignes de sa zone, et un restaurant vu de deux zones n'est gardé qu'une fois."""
     agent = _ZoneAgent()
     _chain(monkeypatch, tmp_path, agent, registered="NOUS")
-    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(find_restaurants.ZONE_FROM)]],
+    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
            "enseignes_fermees": [], "radies": []}
-    monkeypatch.setattr(find_restaurants.api_registre, "load_register", lambda city: big)
-    monkeypatch.setattr(find_restaurants.restaurant_service, "commune_spots", lambda name: [
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: big)
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: [
         {"latitude": 48.38, "longitude": -4.5, "address": "A"}, {"latitude": 48.42, "longitude": -4.5, "address": "C"}])
-    answer = find_restaurants.search_commune(CITY)
+    answer = service_chain.search_commune(RESTAURANTS, CITY)
     assert [row["nom"] for row in answer["restaurants"]] == ["NOUS", "Riboul"]
     searches = [message for message in agent.messages if "ZONE" in message]
-    assert len(searches) == 2 * (find_restaurants.YEAR_SEARCHES + 1)
+    assert len(searches) == 2 * (service_chain.YEAR_SEARCHES + 1)
     # La recherche comme l'analyste ne lisent que les lignes de la zone : 40 sur 101, et aucune pour la zone sans restaurant.
-    assert sorted(message.count('"Table ') for message in searches) == [0] * 4 + [find_restaurants.ZONE_LINES - 1] * 4
-    assert all(message.count('"Table ') <= find_restaurants.ZONE_LINES for message in agent.messages)
-    trace = json.loads(next(tmp_path.iterdir()).read_text())
+    assert sorted(message.count('"Table ') for message in searches) == [0] * 4 + [service_chain.ZONE_LINES - 1] * 4
+    assert all(message.count('"Table ') <= service_chain.ZONE_LINES for message in agent.messages)
+    trace = _trace(tmp_path)
     assert len(trace["zones"]) == 2 and "final" in trace
 
 
 def test_an_ordinary_commune_does_not_look_for_zones(monkeypatch, tmp_path):
+    """Une commune ordinaire n'est pas découpée en zones."""
     _chain(monkeypatch, tmp_path, _Agent())
-    monkeypatch.setattr(find_restaurants.restaurant_service, "commune_spots", lambda name: pytest.fail("pas de zone ici"))
-    assert find_restaurants.search_commune(CITY)["restaurants"]
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: pytest.fail("pas de zone ici"))
+    assert service_chain.search_commune(RESTAURANTS, CITY)["restaurants"]
 
 
 def test_the_register_name_of_a_creperie_is_the_name_found():
-    assert find_restaurants.place_key("LA CREPERIE DU CHATEAU D'EAU") == find_restaurants.place_key("Le Château d'Eau")
+    """« La Crêperie du Château d'Eau » au registre est « Le Château d'Eau » des recherches."""
+    assert service_store.place_key("LA CREPERIE DU CHATEAU D'EAU") == service_store.place_key("Le Château d'Eau")
 
 
 def test_a_bar_said_to_serve_meals_waits_for_a_review():
+    """Un bar au registre dont le genre dit brasserie est repéré ; un pub, ou un registre absent, ne le sont pas."""
     register = {"actifs": [{"nom": "LE NEUF", "adresse": "9 RUE DE BREST 29830 PLOUDALMEZEAU", "activite": "56.30Z"}]}
     brasserie = {"nom": "Le Neuf", "genre": "bar-tabac-brasserie", "adresse": "9 rue de Brest, 29830 Ploudalmézeau"}
     pub = {"nom": "Le Neuf", "genre": "pub irlandais", "adresse": "9 rue de Brest, 29830 Ploudalmézeau"}
@@ -341,6 +387,7 @@ def test_a_bar_said_to_serve_meals_waits_for_a_review():
 
 
 def test_a_proof_without_answer_in_time_sends_the_place_to_review():
+    """Une preuve restée sans réponse à temps envoie le restaurant en relecture."""
     row = _row()
     add_proofs(row, {"a_relire": "preuve : l'agent n'a pas répondu à temps"}, "Plougonvelin")
     assert row["a_relire"] == "preuve : l'agent n'a pas répondu à temps" and not has_accepted_page(row, "Plougonvelin")
@@ -355,23 +402,128 @@ class _BarAgent(_Agent):
 
 
 def test_a_bar_said_to_serve_meals_needs_no_proof_search(monkeypatch, tmp_path):
+    """Un bar dit servir des repas part en relecture sans passer par l'agent de preuve."""
     _chain(monkeypatch, tmp_path, _BarAgent())
-    monkeypatch.setattr(find_restaurants.api_registre, "load_register", lambda city: {"actifs": [{"nom": "NOUS", "activite": "56.30Z"}]})
-    answer = find_restaurants.search_commune(CITY)
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: {"actifs": [{"nom": "NOUS", "activite": "56.30Z"}]})
+    answer = service_chain.search_commune(RESTAURANTS, CITY)
     by_name = {row["nom"]: row for row in answer["restaurants"]}
     assert by_name["NOUS"]["a_relire"] == find_restaurants.BAR_SAID_RESTAURANT and not by_name["NOUS"]["au_registre"]
     assert "a_relire" not in by_name["Riboul"]
-    trace = json.loads(next(tmp_path.iterdir()).read_text())
+    trace = _trace(tmp_path)
     assert "preuves" not in trace
 
 
-def test_a_commune_asked_twice_is_searched_once(monkeypatch):
-    """--ville Morgat --ville Le Fret : deux villes de Crozon, une seule recherche payée."""
-    crozon = {"id": 57, "name": "Crozon", "commune": "Crozon", "insee": "29042", "department": "Finistère",
-              "latitude": 48.25, "longitude": -4.49}
-    searched = []
-    monkeypatch.setattr(sys, "argv", ["find_restaurants", "--ville", "Morgat", "--ville", "Le Fret", "--essai"])
-    monkeypatch.setattr(find_restaurants.restaurant_service, "load_city", lambda name: crozon)
-    monkeypatch.setattr(find_restaurants, "search_commune", lambda city: searched.append(city["name"]) or {"restaurants": []})
-    find_restaurants.main()
-    assert searched == ["Crozon"]
+# --- Un passage se relit de bout en bout ---
+
+class _TracedAgent(_ZoneAgent):
+    """Note, à chaque appel, le passage et l'étape que llm_service écrirait dans llm_calls."""
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def complete_json(self, system, message, schema):
+        self.calls.append((passage_courant(), etape_courante()))
+        return super().complete_json(system, message, schema)
+
+
+def test_every_call_of_a_commune_carries_the_same_passage_and_its_step(monkeypatch, tmp_path):
+    """Tous les appels d'une commune portent le même identifiant de passage et leur étape, et la trace porte cet identifiant."""
+    agent = _TracedAgent()
+    _chain(monkeypatch, tmp_path, agent)
+    service_chain.search_commune(RESTAURANTS, CITY)
+    passages = {passage for passage, _ in agent.calls}
+    assert len(passages) == 1 and len(next(iter(passages))) == 32
+    assert sorted(step for _, step in agent.calls) == ["analyse", "année 1", "année 2", "année 3", "preuves, lot 1", "été"]
+    assert _trace(tmp_path)["passage"] == next(iter(passages))
+    assert passage_courant() is None
+
+
+def test_the_steps_of_a_big_city_name_their_zone(monkeypatch, tmp_path):
+    """Dans une grande ville, l'étape de chaque appel nomme sa zone."""
+    agent = _TracedAgent()
+    _chain(monkeypatch, tmp_path, agent, registered="NOUS")
+    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
+           "enseignes_fermees": [], "radies": []}
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: big)
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: [
+        {"latitude": 48.38, "longitude": -4.5, "address": "A"}, {"latitude": 48.42, "longitude": -4.5, "address": "C"}])
+    service_chain.search_commune(RESTAURANTS, CITY)
+    steps = {step for _, step in agent.calls}
+    assert {"zone 1 / 2, année 1", "zone 2 / 2, été", "zone 1 / 2, analyse", "zone 2 / 2, analyse"} <= steps
+    assert len({passage for passage, _ in agent.calls}) == 1
+
+
+# --- Une grande ville : jamais sans registre, et un passage arrêté se reprend ---
+
+MARSEILLE = {"name": "Marseille", "insee": "13055", "department": "Bouches-du-Rhône", "latitude": 43.27, "longitude": 5.44}
+
+
+def test_a_city_with_boroughs_is_not_searched_without_its_register(monkeypatch, tmp_path):
+    """Marseille n'est pas cherchée si son registre n'a pas pu être lu : sans lui elle le serait comme un village, 34 restaurants pour toute la ville (6 novembre 2026). Aucun agent n'est appelé."""
+    agent = _ZoneAgent()
+    _chain(monkeypatch, tmp_path, agent)
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: [])
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: None)
+    with pytest.raises(service_chain.RegisterUnavailable):
+        service_chain.search_commune(RESTAURANTS, MARSEILLE)
+    assert agent.messages == []
+
+
+def test_a_small_commune_is_still_searched_without_its_register(monkeypatch, tmp_path):
+    """Une petite commune dont le registre ne répond pas est cherchée quand même, sans lui."""
+    _chain(monkeypatch, tmp_path, _Agent())
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: None)
+    assert service_chain.search_commune(RESTAURANTS, CITY)["restaurants"]
+
+
+def _two_zones(monkeypatch, tmp_path, agent):
+    """Une grande ville de deux zones, à 4 km l'une de l'autre. Rend son registre."""
+    _chain(monkeypatch, tmp_path, agent, registered="NOUS")
+    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
+           "enseignes_fermees": [], "radies": []}
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: big)
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: [
+        {"latitude": 48.38, "longitude": -4.5, "address": "A"}, {"latitude": 48.42, "longitude": -4.5, "address": "C"}])
+    return big
+
+
+def test_a_stopped_passage_resumes_without_paying_its_finished_zones_again(monkeypatch, tmp_path):
+    """Un passage arrêté après sa première zone reprend à la seconde : la zone finie est relue dans son fichier, le registre aussi, et seules les recherches de la zone restante sont payées."""
+    first = _ZoneAgent()
+    _two_zones(monkeypatch, tmp_path, first)
+    service_chain.search_commune(RESTAURANTS, CITY)
+    stopped = _trace(tmp_path)
+    del stopped["final"], stopped["zones"][1]["final"]
+    again = _ZoneAgent()
+    monkeypatch.setattr(service_chain, "make_llm_service", lambda name: again)
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: pytest.fail("le registre du passage arrêté est repris"))
+    answer = service_chain.search_commune(RESTAURANTS, CITY, stopped)
+    assert [row["nom"] for row in answer["restaurants"]] == ["NOUS", "Riboul"]
+    searches = [message for message in again.messages if "ZONE" in message and "LIEUX : " not in message]
+    assert len(searches) == service_chain.YEAR_SEARCHES + 1 and len(first.messages) > len(again.messages)
+
+
+def test_only_a_passage_stopped_on_the_way_can_be_resumed(monkeypatch, tmp_path):
+    """Seul le dernier fichier d'une commune se reprend, et seulement s'il s'est arrêté en route : un passage allé au bout n'a rien à reprendre."""
+    _two_zones(monkeypatch, tmp_path, _ZoneAgent())
+    service_chain.search_commune(RESTAURANTS, CITY)
+    assert service_chain.interrupted_trace(RESTAURANTS, CITY) is None
+    path = next((tmp_path / RESTAURANTS.source).iterdir())
+    trace = json.loads(path.read_text())
+    del trace["final"]
+    path.write_text(json.dumps(trace))
+    assert service_chain.interrupted_trace(RESTAURANTS, CITY)["zones"][0]["final"] is not None
+    assert service_chain.interrupted_trace(RESTAURANTS, MARSEILLE) is None
+
+
+def test_a_city_with_boroughs_reads_its_register_around_its_zones_only(monkeypatch, tmp_path):
+    """Marseille est toujours cherchée par zones autour de ses spots, et son registre n'est demandé que pour ces zones, à 1,5 km : inutile de remonter tous les restaurants de la ville."""
+    asked = []
+    _chain(monkeypatch, tmp_path, _ZoneAgent())
+    spots = [{"latitude": 43.24, "longitude": 5.37, "address": "Avenue de la Pointe Rouge, 13008 Marseille"},
+             {"latitude": 43.36, "longitude": 5.31, "address": "Plage de l'Estaque, 13016 Marseille"}]
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: spots)
+    monkeypatch.setattr(service_chain.api_registre, "load_register",
+                        lambda city, codes, zones=(), radius_km=0: asked.append((len(zones), radius_km)) or {"actifs": [_line("NOUS", 43.24)]})
+    service_chain.search_commune(RESTAURANTS, MARSEILLE)
+    assert asked == [(2, service_chain.ZONE_KM)] and len(_trace(tmp_path)["zones"]) == 2

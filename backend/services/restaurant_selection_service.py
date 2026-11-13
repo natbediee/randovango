@@ -12,6 +12,7 @@ Une saison complète, d'après la date du registre. La date est comparée à l'a
 passage. Le registre ne distingue pas une ouverture d'une reprise : Café Konk reprend la Taverne de Kermorvan.
 """
 import json
+import re
 from datetime import date
 from urllib.parse import quote_plus
 
@@ -43,15 +44,22 @@ def is_new(since: date | None, today: date | None = None) -> bool:
 
 
 def maps_url(name: str, address: str | None, latitude: float | None = None, longitude: float | None = None,
-             generic: bool = False) -> str:
+             generic: bool = False, several: bool = True) -> str:
     """
     Le lien de recherche que Google autorise (guide « geo-guidelines »). Nos agents n'ouvrent jamais cette page.
-    Le nom et l'adresse pour un lieu qui a les deux ; la position pour un lieu sans adresse ou au nom générique
-    (« Laverie », « Point d'eau potable ») : chercher « Laverie » ferait sortir n'importe quelle laverie.
+    La position pour un lieu sans adresse ou au nom générique (« Laverie », « Point d'eau potable ») : chercher « Laverie »
+    ferait sortir n'importe quelle laverie. Sinon le nom, suivi :
+        - de sa commune seule quand il est le seul à ce nom autour de la ville (several = False). Avec le numéro et la
+          rue, Google cherche l'adresse et non le commerce : « Aber Wrac'h Huitres Bar 175 Route de Doenna, 29870 Landéda »
+          restait sur une recherche, « Aber Wrac'h Huitres Bar 29870 Landéda » ouvre le lieu (essai du 11 novembre 2026) ;
+        - de son adresse entière quand plusieurs lieux portent ce nom : « Carrefour City 56000 Vannes » donne une liste,
+          « Carrefour City 10 Rue Hoche, 56000 Vannes » ouvre le bon magasin.
     """
     if (generic or not address) and latitude is not None and longitude is not None:
         return MAPS_SEARCH_URL + quote_plus(f"{float(latitude):.6f},{float(longitude):.6f}")
-    return MAPS_SEARCH_URL + quote_plus(f"{name} {address or ''}".strip())
+    town = re.search(r"\b\d{5}\s+\S.*$", address or "")
+    where = town.group(0) if town and not several else (address or "")
+    return MAPS_SEARCH_URL + quote_plus(f"{name} {where}".strip())
 
 
 def open_months(months) -> list:

@@ -10,11 +10,13 @@ def _shop(poi_id, name, category, genre, address, categorie=None, jours=None, la
 
 
 def test_the_query_reads_the_commerce_sheets(monkeypatch):
+    """La requête de l'étape 4 lit aussi la fiche des commerces."""
     _, cursor = _get_poi(monkeypatch, [])
     assert "LEFT JOIN commerces c" in cursor.sql and "c.poi_id IS NOT NULL" in cursor.sql
 
 
 def test_a_shop_shows_its_category_its_market_day_and_a_maps_link(monkeypatch):
+    """Un marché affiche sa sous-catégorie, son jour, le texte de l'agent, la mention « nouveau » et un lien Google Maps."""
     rows = [{**_shop(1, "Marché de Plougonvelin", "marketplace", "marché", "Place, 29217 Plougonvelin", "marche", "jeudi matin"),
              "commerce_pourquoi": "Le marché du bourg.", "commerce_registre_depuis": date.today()}]
     result, _ = _get_poi(monkeypatch, rows)
@@ -24,6 +26,7 @@ def test_a_shop_shows_its_category_its_market_day_and_a_maps_link(monkeypatch):
 
 
 def test_once_treated_only_the_checked_shops_remain_and_supermarkets_stay(monkeypatch):
+    """Là où l'agent est passé, seuls les commerces qui ont une fiche restent ; les supermarchés et la commune voisine ne bougent pas."""
     rows = [_shop(1, "Le Gall", "bakery", "boulangerie", "1 rue, 29217 Plougonvelin", "boulangerie"),
             _shop(2, "Boulangerie d'OSM", "bakery", None, "2 rue, 29217 Plougonvelin"),
             _shop(3, "Super U", "supermarket", None, "3 rue, 29217 Plougonvelin"),
@@ -34,13 +37,39 @@ def test_once_treated_only_the_checked_shops_remain_and_supermarkets_stay(monkey
     assert "query=" in result["commerce"][1]["maps_url"]
 
 
+def test_where_the_supermarket_agent_passed_only_its_supermarkets_remain(monkeypatch):
+    """Là où l'agent des supermarchés est passé, le supermarché d'OSM sans fiche n'est plus montré ; celui de la commune voisine reste, et celui qui a sa fiche affiche « Supermarché »."""
+    rows = [_shop(1, "Super U", "supermarket", "supermarché", "3 rue, 29217 Plougonvelin", "supermarche"),
+            _shop(2, "Ancien Huit à 8", "supermarket", None, "9 rue, 29217 Plougonvelin"),
+            _shop(3, "Lidl", "supermarket", None, "1 rue, 29280 Locmaria-Plouzané"),
+            _shop(4, "Boulangerie d'OSM", "bakery", None, "2 rue, 29217 Plougonvelin")]
+    result, _ = _get_poi(monkeypatch, rows)
+    assert [poi["name"] for poi in result["supermarche"]] == ["Super U", "Lidl"]
+    assert result["supermarche"][0]["service_type_label"] == "Supermarché"
+    assert [poi["verifie"] for poi in result["supermarche"]] == [1, 0]
+    assert [poi["name"] for poi in result["commerce"]] == ["Boulangerie d'OSM"]
+
+
+def test_a_mixed_place_shows_the_right_sheet_in_each_tab(monkeypatch):
+    """La Maison du Phare, boulangerie qui fait snack, a une fiche restaurant et une fiche commerce : elle apparaît dans les deux onglets, chacun avec sa fiche (Plougonvelin)."""
+    both = {**_row(30745, "La Maison du Phare", "restaurant", "bistrot", "1 rue Antre Kear, 29217 Plougonvelin"),
+            "categorie": "bistrot", "commerce_genre": "boulangerie, snack", "commerce_pourquoi": None,
+            "commerce_categorie": "boulangerie", "commerce_registre_depuis": None, "jours": None}
+    result, _ = _get_poi(monkeypatch, [both, {**both, "service_category": "bakery", "service_name": "bakery"}])
+    assert [(poi["name"], poi["genre"]) for poi in result["restauration"]] == [("La Maison du Phare", "bistrot")]
+    assert [(poi["name"], poi["genre"]) for poi in result["commerce"]] == [("La Maison du Phare", "boulangerie, snack")]
+    assert result["commerce"][0]["service_type_label"] == "Boulangerie"
+
+
 def test_a_commune_not_treated_keeps_its_osm_shops(monkeypatch):
+    """Une commune où l'agent n'est pas passé garde ses commerces d'OSM."""
     rows = [_shop(1, "Boulangerie", "bakery", None, "1 rue, 29217 Plougonvelin"), _shop(2, "Ferme", "farm", None, "2 rue, 29217 Plougonvelin")]
     result, _ = _get_poi(monkeypatch, rows)
     assert {poi["name"] for poi in result["commerce"]} == {"Boulangerie", "Ferme"}
 
 
 def test_a_shop_sheet_does_not_hide_the_osm_restaurants(monkeypatch):
+    """La fiche d'un commerce ne fait pas disparaître les restaurants d'OSM."""
     rows = [_shop(1, "Le Gall", "bakery", "boulangerie", "1 rue, 29217 Plougonvelin", "boulangerie"),
             _row(2, "Restaurant d'OSM", "restaurant", None, "2 rue, 29217 Plougonvelin")]
     result, _ = _get_poi(monkeypatch, rows)
@@ -48,6 +77,7 @@ def test_a_shop_sheet_does_not_hide_the_osm_restaurants(monkeypatch):
 
 
 def test_the_commune_shops_show_up_to_fifteen_nearest_the_spot(monkeypatch):
+    """Les commerces de la commune sont montrés jusqu'à quinze, les plus proches du spot d'abord."""
     shops = [_shop(number, f"Commerce {number}", "bakery", "boulangerie", "1 rue, 29217 Plougonvelin", "boulangerie",
                    latitude=48.34 + 0.001 * number) for number in reversed(range(20))]
     result, _ = _get_poi(monkeypatch, shops, spot=(48.34, -4.70))
@@ -55,6 +85,7 @@ def test_the_commune_shops_show_up_to_fifteen_nearest_the_spot(monkeypatch):
 
 
 def test_an_osm_shop_without_a_sheet_is_not_shown_verified(monkeypatch):
+    """Un commerce d'OSM sans fiche s'affiche « non vérifié », même chargé avec le badge ; les toilettes gardent le leur."""
     rows = [{**_shop(1, "Boulangerie d'OSM", "bakery", None, "1 rue, 29280 Locmaria-Plouzané"), "verifie": 1},
             {**_shop(2, "Le Gall", "bakery", "boulangerie", "2 rue, 29217 Plougonvelin", "boulangerie"), "verifie": 1},
             {**_row(3, "Toilettes", "toilets", None, "3 rue"), "verifie": 1}]
@@ -74,6 +105,7 @@ def _get_poi_on(monkeypatch, rows, day):
 
 
 def test_a_place_out_of_season_on_the_trip_day_is_not_shown(monkeypatch):
+    """Un service hors saison le jour du voyage n'est pas montré (le bateau de pêche Kervouroc, d'avril à octobre)."""
     fish = {**_shop(1, "Bateau de pêche Kervouroc", "farm", "poissonnier", "1 rue, 29217 Plougonvelin", "producteur"),
             "statut_saison": "confirmee", "mois_ouverture": "[3, 4, 5, 6, 7, 8, 9]"}
     assert _get_poi_on(monkeypatch, [fish], date(2026, 11, 7))["commerce"] == []
@@ -82,18 +114,21 @@ def test_a_place_out_of_season_on_the_trip_day_is_not_shown(monkeypatch):
 
 
 def test_a_probable_season_is_shown_with_a_warning(monkeypatch):
+    """Une saison probable, sans mois, est montrée avec la mention « vérifie l'ouverture » (La Balise)."""
     beach = {**_row(1, "La Balise", "restaurant", "x", "1 bd, 29217 Plougonvelin"), "statut_saison": "probable"}
     shown = _get_poi_on(monkeypatch, [beach], date(2026, 11, 7))["restauration"]
     assert shown[0]["saison_label"] == "Saisonnier, vérifie l'ouverture"
 
 
 def test_without_a_trip_date_today_is_used(monkeypatch):
+    """Sans date de voyage, la saison est comparée à aujourd'hui."""
     fish = {**_shop(1, "Kervouroc", "farm", "poissonnier", "1 rue, 29217 Plougonvelin", "producteur"),
             "statut_saison": "confirmee", "mois_ouverture": f"[{(date.today().month) % 12}]"}
     assert _get_poi_on(monkeypatch, [fish], None)["commerce"] == []
 
 
 def test_cafes_and_laundries_have_their_own_tab(monkeypatch):
+    """Les cafés et les laveries ont chacun leur onglet."""
     rows = [_shop(1, "Le Café du Port", "cafe", "café", "1 quai, 29217 Plougonvelin", "cafe"),
             _row(2, "Laverie du Trez-Hir", "laundry", None, "2 bd, 29217 Plougonvelin")]
     result, _ = _get_poi(monkeypatch, rows)
@@ -114,6 +149,7 @@ def test_shop_sheets_without_cafes_do_not_hide_the_osm_cafes(monkeypatch):
 
 
 def test_every_service_card_has_a_maps_link(monkeypatch):
+    """Chaque carte de service a son lien Google Maps : la position pour un nom générique ou sans adresse, sinon le nom et la commune."""
     rows = [{**_row(1, "Laverie", "laundry", None, None), "latitude": 48.3424, "longitude": -4.72313},
             _row(2, "Toilettes publiques", "toilets", None, "Place, 29217 Plougonvelin"),
             _row(3, "Musée", "museum", None, "1 rue, 29217 Plougonvelin"),
@@ -121,11 +157,12 @@ def test_every_service_card_has_a_maps_link(monkeypatch):
     result, _ = _get_poi(monkeypatch, rows)
     assert result["laverie"][0]["maps_url"].endswith("query=48.342400%2C-4.723130")
     assert result["toilettes"][0]["maps_url"].endswith("%2C-4.700000")
-    assert "query=Mus%C3%A9e+1+rue" in result["culture"][0]["maps_url"]
+    assert result["culture"][0]["maps_url"].endswith("query=Mus%C3%A9e+29217+Plougonvelin")
     assert result["gasoil"][0]["maps_url"].endswith("%2C-4.700000")    # sans marque : la position
 
 
 def test_a_place_without_a_position_is_left_out(monkeypatch):
+    """Un service sans position n'est pas montré : il ne peut être ni mesuré ni placé sur la carte."""
     rows = [{**_shop(1, "Biscuiterie", "farm", "biscuiterie", "Lieu-dit Le Lannou, 29217 Plougonvelin", "producteur"),
              "latitude": None, "longitude": None},
             _shop(2, "Le Gall", "bakery", "boulangerie", "1 rue, 29217 Plougonvelin", "boulangerie")]
@@ -134,6 +171,7 @@ def test_a_place_without_a_position_is_left_out(monkeypatch):
 
 
 def test_a_google_maps_link_typed_by_an_admin_wins(monkeypatch):
+    """Le lien Google Maps saisi par un admin passe avant celui que le code fabrique."""
     rows = [{**_row(1, "Laverie", "laundry", None, None), "maps_saisi": "https://maps.app.goo.gl/AbCdEf123"}]
     result, _ = _get_poi(monkeypatch, rows)
     assert result["laverie"][0]["maps_url"] == "https://maps.app.goo.gl/AbCdEf123"

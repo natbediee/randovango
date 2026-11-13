@@ -1,7 +1,8 @@
 """
 Toute la structure de la base MySQL : à relancer sans risque, en « create or alter ».
 Une table absente est créée ; une colonne absente d'une table existante est ajoutée, avec sa clé
-étrangère si elle en a une. Le script n'écrit aucune donnée et ne supprime ni ne renomme rien.
+étrangère si elle en a une, et un index nommé absent est ajouté. Le script n'écrit aucune donnée et ne
+supprime ni ne renomme rien.
 Une colonne existante n'est pas modifiée : changer son type reste un geste à faire à la main.
 """
 import re
@@ -59,6 +60,23 @@ def add_missing_columns(cursor, database: str, statement: str) -> list:
         if column in foreign_keys:
             cursor.execute(f"ALTER TABLE {table} ADD {foreign_keys[column]}")
         logger.info(f"[MySQL] :→ Colonne ajoutée : {table}.{column}")
+    return missing
+
+
+def add_missing_indexes(cursor, database: str, statement: str) -> list:
+    """
+    Ajoute à une table existante les index nommés de sa définition qui lui manquent (« INDEX nom (colonnes) »). Renvoie
+    leurs noms. Une colonne ajoutée après coup arrive ainsi avec son index : llm_calls.passage_id, le 11 novembre 2026.
+    """
+    table = re.search(r"CREATE TABLE IF NOT EXISTS (\w+)", statement).group(1)
+    wanted = dict(re.findall(r"^\s*INDEX (\w+) (\([^)]*\))", statement, re.M))
+    cursor.execute("SELECT DISTINCT index_name FROM information_schema.statistics WHERE table_schema = %s AND table_name = %s",
+                   (database, table))
+    existing = {row[0] for row in cursor.fetchall()}
+    missing = [name for name in wanted if name not in existing]
+    for name in missing:
+        cursor.execute(f"ALTER TABLE {table} ADD INDEX {name} {wanted[name]}")
+        logger.info(f"[MySQL] :→ Index ajouté : {table}.{name}")
     return missing
 
 
@@ -573,6 +591,9 @@ def init_database():
             # 19. llm_calls : une ligne par appel d'agent (agents/llm_service.py), réussi ou non.
             # cost_usd est le prix équivalent API ; objet_type vaut commune, spot ou plan, comme objet_id
             # renvoie à cities, spots ou trip_plans (sans clé étrangère : une mesure ne bloque aucune suppression).
+            # passage_id : le passage d'une commune par la chaîne des services (agents/find_services.py), le même pour
+            # toutes ses catégories et tous ses appels ; etape : la place de l'appel dans le passage (« année 2 »,
+            # « zone 3 / 10, analyse », « preuves, lot 2 »).
             """
             CREATE TABLE IF NOT EXISTS llm_calls (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -594,9 +615,12 @@ def init_database():
                 error VARCHAR(255),
                 objet_type VARCHAR(20),
                 objet_id INT,
+                passage_id CHAR(32),
+                etape VARCHAR(80),
                 INDEX idx_llm_calls_date (called_at),
                 INDEX idx_llm_calls_agent (agent),
-                INDEX idx_llm_calls_objet (objet_type, objet_id)
+                INDEX idx_llm_calls_objet (objet_type, objet_id),
+                INDEX idx_llm_calls_passage (passage_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
         ]
@@ -611,6 +635,7 @@ def init_database():
                 except Exception:
                     pass
                 add_missing_columns(user_cursor, DB_NAME, stmt)
+                add_missing_indexes(user_cursor, DB_NAME, stmt)
                 logger.info(f"[MySQL] :→ OK : {stmt.strip().split()[5]}")
             except Exception as table_err:
                 logger.error(f"[MySQL] :✗ [ERREUR SQL] lors de la création: {table_err}\nStatement:\n{stmt}")

@@ -36,7 +36,7 @@ from urllib.parse import urlparse
 
 from agents.find_service_links import commune_of, control_page, read_page
 from services import poi_review_service as review
-from services.commerce_selection_service import CAFE, CAFE_SERVICES, COMMERCE_SERVICES
+from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB
 from etl.load.load_carburants import REMOVING_DECISIONS, SIGNALS_FROM_OSM, SIGNALS_FROM_STATE
 from etl.load.load_carburants import SOURCE_NAME as FUEL_SOURCE
 from utils.db_utils import MySQLUtils
@@ -171,10 +171,13 @@ def postcode_of(address: str | None) -> str | None:
 
 
 # Les chaînes d'agents, comme à l'étape 4 (step4.keep_checked) : leurs services, et les fiches qui les prouvent.
+# Les fiches de la table commerces qui ont leur onglet (cafés, supermarchés) font chacune une chaîne, avec leurs seules fiches.
+SHOP_SHEETS = "SELECT p.id, p.address FROM poi p JOIN commerces c ON c.poi_id = p.id WHERE c.categorie"
+OWN_TAB_SHEETS = ", ".join(f"'{sheet}'" for sheet in OWN_TAB)
 CHAINS = (
     ((RESTAURANT,), "SELECT p.id, p.address FROM poi p JOIN restaurants r ON r.poi_id = p.id"),
-    (COMMERCE_SERVICES, f"SELECT p.id, p.address FROM poi p JOIN commerces c ON c.poi_id = p.id WHERE c.categorie <> '{CAFE}'"),
-    (CAFE_SERVICES, f"SELECT p.id, p.address FROM poi p JOIN commerces c ON c.poi_id = p.id WHERE c.categorie = '{CAFE}'"),
+    (COMMERCE_SERVICES, f"{SHOP_SHEETS} NOT IN ({OWN_TAB_SHEETS})"),
+    *((services, f"{SHOP_SHEETS} = '{sheet}'") for sheet, services in OWN_TAB.items()),
 )
 
 
@@ -197,7 +200,7 @@ def _chains(cursor) -> tuple:
 
 def _clear_unproved_badges(cursor, chains: list, categories: dict) -> int:
     """
-    « Vérifié » suit la preuve dans les onglets des agents (restaurant_service.set_verified) : une ligne d'OSM sans
+    « Vérifié » suit la preuve dans les onglets des agents (service_store.set_verified) : une ligne d'OSM sans
     fiche n'a été contrôlée par personne, même chargée avec verifie = 1 (load_poi.py). L'étape 4 le cachait déjà
     (step4.shown_verified) ; la supervision lit la base, elle montrait « Vérifié » (8 novembre 2026, « Au jardin »).
     """

@@ -12,17 +12,18 @@ pouvoir les remettre.
 LES MÊMES CORRECTIONS QUE LA RELECTURE, et le même code : applied_fields, typed_name, typed_link, typed_maps_link.
 Chaque correction est une décision (objet_type = 'poi', detail.file = 'modifier') qui garde les valeurs d'avant :
 poi_review_service.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
-pas un nom ou un lien corrigé ici (restaurant_service._decided_by_human).
+pas un nom ou un lien corrigé ici (service_store._decided_by_human).
 """
 import json
 import re
 from datetime import date
 
-from services import commerce_service, poi_review_service as review, restaurant_service
+from services import poi_review_service as review, service_store
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
 from services.station_selection_service import STATION_VIEW_SQL, station_view
 from utils.db_utils import MySQLUtils
+from utils.display_utils import PENDING_DOUBT_SQL, shown_verified
 from utils.geo_utils import (address_town, city_commune, get_bounding_box, haversine_distance_km, town_choices,
                              town_key)
 
@@ -241,6 +242,8 @@ def decide_one(cursor, poi_id: int, action: str, note: str, decided_by: str, mon
         VALUES (%s, %s, %s, %s, %s, NOW(), %s)
     """, (review.POI, poi_id, action, (note or "").strip()[:255] or None, decided_by,
           json.dumps(detail, ensure_ascii=False, default=str)))
+    if action == "autre_maps":
+        review.confirm_located(cursor, poi_id, fields, decided_by)
 
 
 def decide(poi_id: int, action: str, note: str, decided_by: str, months: list | None = None,
@@ -270,7 +273,7 @@ def decide(poi_id: int, action: str, note: str, decided_by: str, months: list | 
 # On la corrige là, et « Confirmer et afficher le lieu » écrit la fiche corrigée.
 
 SHEET_DECISION = "modifier_fiche"
-SOURCE_TABLES = {restaurant_service.SOURCE: "restaurants", commerce_service.SOURCE: "commerces"}
+SOURCE_TABLES = {source: category.sheet_table for source, category in review.CATEGORIES.items()}
 TABLE_LABELS = {"restaurants": TABLE_CATEGORY_LABELS, "commerces": SHOP_CATEGORY_LABELS}
 TEXT_LIMITS = {"address": 255, "texte": 1000, "genre": 100, "distinction": 100, "jours": 150}
 SEASONS = (None, PROBABLE_SEASON, CONFIRMED_SEASON)
@@ -280,8 +283,8 @@ DOUBT_FIELDS = {"liens": ["url"], "fermetures": ["name"], "saison": ["saison"], 
 # Corriger dans une file le champ qu'elle met en doute la tranche, comme « Renommer ainsi » et « Mettre ce lien ».
 CLOSING_FIELDS = {"fermetures": ("name", "valide"), "liens": ("url", "rejete"), "saison": ("saison", "valide")}
 # Les champs qu'une ancienne décision de la relecture a tranchés (human_fields).
-LEGACY_FIELDS = {**{action: "name" for action in restaurant_service.HUMAN_NAME_DECISIONS},
-                 **{action: "url" for action in restaurant_service.HUMAN_LINK_DECISIONS if action != "valider_lien_nom"},
+LEGACY_FIELDS = {**{action: "name" for action in service_store.HUMAN_NAME_DECISIONS},
+                 **{action: "url" for action in service_store.HUMAN_LINK_DECISIONS if action != "valider_lien_nom"},
                  "valider_lien_nom": "name", "valider_saison": "saison", "pas_saisonnier": "saison", "autre_maps": "maps_url"}
 POI_SHEET_COLUMNS = ("name", "address", "url", "maps_url", "description", "statut_saison", "mois_ouverture", "verifie")
 
@@ -323,7 +326,7 @@ def sheet_view(poi: dict, sheet: dict | None, service_name: str | None = None, s
         "poi_id": poi["id"], "nom": poi.get("name") or "", "adresse": poi.get("address") or "",
         "url": poi.get("url") or "", "maps_url": poi.get("maps_url") or "",
         "position": [float(poi["latitude"]), float(poi["longitude"])] if poi.get("latitude") is not None else None,
-        "verifie": bool(poi.get("verifie")), "masque": bool(poi.get("masque")),
+        "verifie": shown_verified(poi.get("verifie"), poi.get("doute")), "masque": bool(poi.get("masque")),
         "texte": (poi.get("description") if text_target == "description" else values.get("pourquoi")) or "",
         "texte_cible": text_target,
         "genre": values.get("genre") or "", "categorie": values.get("categorie") or "",
@@ -477,6 +480,7 @@ def decide_sheet_one(cursor, poi_id: int, changes: dict, note: str, decided_by: 
         VALUES (%s, %s, %s, %s, %s, NOW(), %s)
     """, (review.POI, poi_id, SHEET_DECISION, (note or "").strip()[:255] or None, decided_by,
           json.dumps(detail, ensure_ascii=False, default=str)))
+    review.confirm_located(cursor, poi_id, poi_fields, decided_by)
     return changed
 
 
@@ -514,6 +518,7 @@ def _sheet_views(cursor, poi_ids: list) -> dict:
     marks = ",".join(["%s"] * len(poi_ids))
     cursor.execute(f"""
         SELECT p.id, p.latitude, p.longitude, p.masque, {', '.join(f'p.{column}' for column in POI_SHEET_COLUMNS)},
+               {PENDING_DOUBT_SQL} AS doute,
                (SELECT MIN(s.name) FROM poi_service ps JOIN services s ON s.id = ps.service_id
                 WHERE ps.poi_id = p.id) AS service_name
         FROM poi p WHERE p.id IN ({marks})
