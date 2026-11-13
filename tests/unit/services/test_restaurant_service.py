@@ -93,6 +93,22 @@ def test_page_accepted_follows_the_code_verdict():
     assert not page_accepted({"verdict": "a_valider_social", "type_page": "facebook"})
 
 
+def test_a_store_page_protected_by_its_brand_is_accepted_when_it_names_the_commune():
+    """La page d'un magasin que son enseigne refuse au code (403) est acceptée si son adresse nomme la commune (Super U de Combrit, Carrefour Contact de Locmaria-Plouzané, passage des supermarchés du 13 novembre 2026)."""
+    combrit = {"verdict": "page_illisible", "type_page": "site", "statut": 403, "url": "https://www.magasins-u.com/magasin/superu-combrit"}
+    locmaria = {**combrit, "url": "https://www.carrefour.fr/magasin/contact-locmaria-plouzane"}
+    assert page_accepted(combrit, commune="Combrit") and page_accepted(locmaria, commune="Locmaria-Plouzané")
+
+
+def test_a_protected_page_is_refused_without_the_commune_in_its_path():
+    """Une page protégée n'est pas acceptée si son chemin ne nomme pas la commune, si le nom n'est que dans le domaine, si elle est morte ou si c'est un annuaire (Intermarché de Châteaulin, page « magasin?pdvref=04253 »)."""
+    page = {"verdict": "page_illisible", "type_page": "site", "statut": 403, "url": "https://www.intermarche.com/magasin?pdvref=04253"}
+    assert not page_accepted(page, commune="Châteaulin")
+    assert not page_accepted({**page, "url": "https://creperie-plougonvelin.fr/"}, commune="Plougonvelin")
+    assert not page_accepted({**page, "statut": 404, "url": "https://www.magasins-u.com/magasin/superu-combrit"}, commune="Combrit")
+    assert not page_accepted({**page, "type_page": "agregateur", "url": "https://annuaire.fr/combrit/super-u"}, commune="Combrit")
+
+
 def test_a_social_page_is_never_a_proof():
     """Une page Facebook ou Instagram ne prouve jamais un service, quel que soit le type annoncé."""
     assert not page_accepted({"verdict": "ok", "type_page": "facebook", "url": "https://www.facebook.com/x"})

@@ -23,6 +23,7 @@ la règle d'une page acceptée, et le choix de la ville d'où chercher une commu
 import json
 import re
 from datetime import date, datetime
+from urllib.parse import urlparse
 
 from agents.find_service_links import AUTO_VERDICTS, SOCIAL_TYPES, TYPE_RANK, commune_of, domain
 from etl.load.load_poi import get_or_create_source, insert_histo_poi, insert_service_and_link
@@ -170,8 +171,32 @@ def is_town_hall(url: str, commune: str) -> bool:
     return host.startswith(("mairie", "ville-")) or compact_name(host.rsplit(".", 1)[0]) == compact_name(commune)
 
 
+# LA PAGE D'UN MAGASIN QUE SON ENSEIGNE PROTÈGE (13 novembre 2026, #130)
+# carrefour.fr, magasins-u.com et intermarche.com refusent tout programme (réponse 403, protection contre les robots) :
+# le code ne peut pas lire la page de leurs magasins, et 15 supermarchés restaient sans preuve. On ne contourne pas
+# cette protection. La page est acceptée sans être lue quand son adresse nomme la commune : magasins-u.com/magasin/
+# superu-combrit ne peut désigner que le Super U de Combrit, et c'est l'enseigne elle-même qui la publie.
+REFUSED_STATUS = 403
+
+
+def protected_store_page(page: dict, commune: str) -> bool:
+    """
+    La page du lieu sur son propre site, refusée au code par une protection (403), dont l'adresse nomme la commune.
+    Le domaine ne compte pas, seulement le chemin : creperie-plougonvelin.fr ne dit pas de quelle page il s'agit.
+    """
+    if page.get("type_page") != "site" or page.get("statut") != REFUSED_STATUS or not commune:
+        return False
+    parts = urlparse(page.get("url") or "")
+    return compact_name(commune) in compact_name(f"{parts.path} {parts.query}")
+
+
 def page_accepted(page: dict, today: date = None, commune: str = "") -> bool:
-    """Une page acceptée par le code, hors mairie, agrégateur et réseau social. Un article doit en plus être daté et récent."""
+    """
+    Une page acceptée par le code, hors mairie, agrégateur et réseau social. Un article doit en plus être daté et récent.
+    La page d'un magasin protégée par son enseigne est acceptée sans être lue (protected_store_page).
+    """
+    if protected_store_page(page, commune):
+        return True
     if page.get("verdict") not in AUTO_VERDICTS or page["type_page"] in ("mairie", "agregateur", *SOCIAL_TYPES):
         return False
     if any(site in domain(page.get("url") or "").split(".") for site in SOCIAL_TYPES):

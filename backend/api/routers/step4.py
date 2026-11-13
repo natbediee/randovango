@@ -3,6 +3,9 @@ import unicodedata
 from collections import Counter
 from datetime import date
 
+from fastapi import APIRouter, Query, Body
+from services.commerce_selection_service import (COMMERCE_SERVICES, OWN_TAB, PROVEN_ONLY_TABS, SHOP_CATEGORY_LABELS,
+                                                 SHOPS_SHOWN)
 from fastapi import APIRouter, Query, Body, Depends
 from api.dependencies import require_plan_owner
 from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB, SHOP_CATEGORY_LABELS, SHOPS_SHOWN
@@ -55,6 +58,11 @@ def keep_checked(poi_list: list, services: tuple, has_sheet) -> list:
             or postcode_of(poi.get("address")) not in treated | {None}]
 
 
+def keep_proven(poi_list: list, services: tuple, has_sheet) -> list:
+    """Ces services ne sont montrés qu'avec leur fiche, où qu'ils soient : un lieu d'OSM sans preuve n'est jamais montré."""
+    return [poi for poi in poi_list if poi["service_category"] not in services or has_sheet(poi)]
+
+
 def keep_state_stations(poi_list: list) -> list:
     """
     Les stations-service : l'État est la référence (etl/etl_carburants.py). Seules les stations de prix-carburants.gouv.fr
@@ -81,14 +89,22 @@ def station_fields(poi: dict) -> dict:
 def keep_checked_commerces(poi_list: list) -> list:
     """
     La règle des restaurants pour les fiches de la table commerces : boulangeries, épiceries, marchés et producteurs
-    d'OSM disparaissent là où l'agent des commerces a écrit des fiches. Les cafés et les supermarchés, qui ont leur onglet
+    d'OSM disparaissent là où l'agent des commerces a écrit des fiches. Les cafés, qui ont leur onglet
     (commerce_selection_service.OWN_TAB), suivent la même règle avec leurs seules fiches : une commune où les commerces
-    sont passés sans les supermarchés garde ses supermarchés d'OSM.
+    sont passés sans les cafés garde ses cafés d'OSM.
+    Les supermarchés (PROVEN_ONLY_TABS) : seuls ceux qui ont leur fiche sont montrés, partout (keep_proven).
     """
     poi_list = keep_checked(poi_list, COMMERCE_SERVICES,
                             lambda poi: bool(poi.get("commerce_genre")) and poi.get("commerce_categorie") not in OWN_TAB)
     for sheet, services in OWN_TAB.items():
-        poi_list = keep_checked(poi_list, services, lambda poi, sheet=sheet: poi.get("commerce_categorie") == sheet)
+        def has_sheet(poi: dict, sheet: str = sheet) -> bool:
+            """Le lieu a sa fiche de cet onglet (café ou supermarché)."""
+            return poi.get("commerce_categorie") == sheet
+
+        if sheet in PROVEN_ONLY_TABS:
+            poi_list = keep_proven(poi_list, services, has_sheet)
+        else:
+            poi_list = keep_checked(poi_list, services, has_sheet)
     return poi_list
 
 

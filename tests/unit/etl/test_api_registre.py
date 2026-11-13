@@ -156,6 +156,59 @@ def test_around_a_point_the_borough_codes_are_those_of_the_commune(monkeypatch):
     assert url == api_registre.NEAR_URL and (params["lat"], params["long"], params["radius"]) == (43.24, 5.37, 1.5) and "code_commune" not in params
 
 
+LIDL = {"siren": "343262622", "nature_juridique": "5202", "nom_raison_sociale": "LIDL", "nombre_etablissements": 2810}
+OLD_LIDL = _place("F", siret="34326262200001", commune="29260", activite_principale="47.11D", liste_enseignes=["LIDL"],
+                  date_fermeture="2024-01-20")
+NEW_LIDL = _place(siret="34326262200002", commune="29260", activite_principale="47.11D", liste_enseignes=["LIDL"],
+                  date_creation="2024-09-25")
+
+
+def test_a_firm_with_several_places_is_asked_again_by_its_name(monkeypatch):
+    """Une société à plusieurs établissements est redemandée à son nom : le registre voit le nouveau Lidl de Saint-Renan, ouvert en septembre 2024, à côté de l'ancien fermé, que l'API seule rendait (passage des supermarchés du 13 novembre 2026)."""
+    asked = []
+
+    def get(url, params):
+        asked.append(params)
+        places = [OLD_LIDL, NEW_LIDL] if "q" in params else [OLD_LIDL]
+        return {"total_pages": 1, "results": [{**LIDL, "matching_etablissements": places}]}
+
+    monkeypatch.setattr(api_registre, "_get", get)
+    monkeypatch.setattr(api_registre, "last_notice", lambda siren: {})
+    register = api_registre.read_register("29260", ("47.11D", "47.11F"))
+    assert [(line["nom"], line["actif_depuis"]) for line in register["actifs"]] == [("LIDL", "2024-09-25")]
+    assert [line["ferme_le"] for line in register["enseignes_fermees"]] == ["2024-01-20"]
+    assert (asked[1]["q"], asked[1]["code_commune"]) == ("LIDL", "29260")
+
+
+def test_a_firm_with_a_single_place_is_not_asked_again(monkeypatch):
+    """Une société à un seul établissement n'est pas redemandée : la première réponse l'a déjà tout entière."""
+    asked = []
+    firm = {"siren": "1", "nature_juridique": "5710", "nom_raison_sociale": "FINIS TERRA", "nombre_etablissements": 1,
+            "matching_etablissements": [_place(commune="29260", activite_principale="47.11D")]}
+    monkeypatch.setattr(api_registre, "_get", lambda url, params: asked.append(params) or {"total_pages": 1, "results": [firm]})
+    monkeypatch.setattr(api_registre, "last_notice", lambda siren: {})
+    assert len(api_registre.read_register("29260", ("47.11D",))["actifs"]) == 1 and len(asked) == 1
+
+
+def test_around_a_point_a_firm_asked_by_name_keeps_only_the_places_in_the_radius(monkeypatch):
+    """Autour d'un point, l'API refuse un nom : la société est redemandée dans tous les arrondissements de Marseille, et seuls ses établissements du rayon sont gardés."""
+    asked = []
+    near_place = _place(siret="2", commune="13201", liste_enseignes=["LIDL"], latitude="43.2990", longitude="5.3790")
+    far_place = _place(siret="3", commune="13204", liste_enseignes=["LIDL"], latitude="43.3080", longitude="5.4050")
+
+    def get(url, params):
+        asked.append((url, params))
+        places = [near_place, far_place] if "q" in params else []
+        return {"total_pages": 1, "results": [{**LIDL, "matching_etablissements": places}]}
+
+    monkeypatch.setattr(api_registre, "_get", get)
+    monkeypatch.setattr(api_registre, "last_notice", lambda siren: {})
+    register = api_registre.read_register("13055", near=(43.2985, 5.3785, 0.5))
+    assert len(register["actifs"]) == 1
+    url, params = asked[1]
+    assert url == api_registre.SIRENE_URL and params["code_commune"] == ",".join(api_registre.BOROUGHS["13055"])
+
+
 def test_paris_and_lyon_have_their_boroughs_too():
     """Paris (20 arrondissements) et Lyon (9) ont le même défaut que Marseille : leurs codes d'arrondissement sont connus."""
     assert api_registre.BOROUGHS["75056"][0] == "75101" and len(api_registre.BOROUGHS["75056"]) == 20

@@ -145,9 +145,11 @@ PROOF_SCHEMA = {
 # --- Les réponses des recherches, réunies ---
 
 def found_pages(row: dict) -> list:
-    """Les pages d'une réponse : le lien montré, puis la preuve, qui porte la citation et la date."""
-    return [{"url": row["lien"], "type_page": row["type_lien"]},
-            {"url": row["preuve_url"], "type_page": row["type_preuve"], "citation": row.get("preuve_citation"), "date_page": row.get("preuve_date")}]
+    """Les pages d'une réponse : le lien montré, puis la preuve, qui porte la citation et la date. Une page vide est laissée."""
+    pages = [{"url": row.get("lien"), "type_page": row.get("type_lien")},
+             {"url": row.get("preuve_url"), "type_page": row.get("type_preuve"), "citation": row.get("preuve_citation"),
+              "date_page": row.get("preuve_date")}]
+    return [page for page in pages if page["url"]]
 
 
 def unique_pages(pages: list) -> list:
@@ -219,15 +221,21 @@ def has_accepted_page(category, row: dict, commune: str) -> bool:
 
 
 def add_proofs(category, row: dict, proof: dict, commune: str) -> None:
-    """Les pages de l'analyste s'ajoutent à celles déjà trouvées : aucune n'est jetée."""
+    """
+    Les pages de l'agent de preuve s'ajoutent à celles déjà trouvées : aucune n'est jetée.
+    Sa page du lieu (« lien ») est contrôlée même sans « preuve_url » : l'agent rend souvent la page du magasin sur le site
+    de l'enseigne sans la remplir comme preuve. Le passage des supermarchés du 13 novembre 2026 jetait ainsi, sans la
+    lire, la page carrefour.fr du Carrefour Contact de Locmaria-Plouzané ou celle du Super U de Combrit : 8 magasins
+    restaient sans preuve. Contrôlée, une page du site de l'enseigne est acceptée comme les autres (page_accepted).
+    """
     if proof.get("a_relire"):
         row["a_relire"] = proof["a_relire"]
     if proof.get("adresse") and not row.get("adresse"):
         row["adresse"] = proof["adresse"]
-    if not proof.get("preuve_url"):
+    if not (proof.get("preuve_url") or proof.get("lien")):
         return
-    found = {"lien": proof.get("lien") or proof["preuve_url"], "type_lien": proof.get("type_lien") or proof["type_preuve"],
-             "preuve_url": proof["preuve_url"], "type_preuve": proof["type_preuve"],
+    found = {"lien": proof.get("lien") or proof["preuve_url"], "type_lien": proof.get("type_lien") or proof.get("type_preuve"),
+             "preuve_url": proof.get("preuve_url"), "type_preuve": proof.get("type_preuve"),
              "preuve_citation": proof.get("preuve_citation"), "preuve_date": proof.get("preuve_date")}
     known = {page["url"].strip() for page in row["pages"]}
     row["pages"] += [page for page in control_row(category, {**row, **found, "pages_vues": None}, commune) if page["url"].strip() not in known]

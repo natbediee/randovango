@@ -25,28 +25,27 @@ def test_a_shop_shows_its_category_its_market_day_and_a_maps_link(monkeypatch):
     assert "query=March" in shop["maps_url"] and shop["nouveau"] is True
 
 
-def test_once_treated_only_the_checked_shops_remain_and_supermarkets_stay(monkeypatch):
-    """Là où l'agent est passé, seuls les commerces qui ont une fiche restent ; les supermarchés et la commune voisine ne bougent pas."""
+def test_once_treated_only_the_checked_shops_remain(monkeypatch):
+    """Là où l'agent est passé, seuls les commerces qui ont une fiche restent ; la commune voisine ne bouge pas, et un supermarché d'OSM sans fiche n'est jamais montré."""
     rows = [_shop(1, "Le Gall", "bakery", "boulangerie", "1 rue, 29217 Plougonvelin", "boulangerie"),
             _shop(2, "Boulangerie d'OSM", "bakery", None, "2 rue, 29217 Plougonvelin"),
             _shop(3, "Super U", "supermarket", None, "3 rue, 29217 Plougonvelin"),
             _shop(4, "Épicerie voisine", "convenience", None, "1 rue, 29280 Locmaria-Plouzané")]
     result, _ = _get_poi(monkeypatch, rows)
     assert [poi["name"] for poi in result["commerce"]] == ["Le Gall", "Épicerie voisine"]
-    assert [poi["name"] for poi in result["supermarche"]] == ["Super U"]
+    assert result["supermarche"] == []
     assert "query=" in result["commerce"][1]["maps_url"]
 
 
-def test_where_the_supermarket_agent_passed_only_its_supermarkets_remain(monkeypatch):
-    """Là où l'agent des supermarchés est passé, le supermarché d'OSM sans fiche n'est plus montré ; celui de la commune voisine reste, et celui qui a sa fiche affiche « Supermarché »."""
-    rows = [_shop(1, "Super U", "supermarket", "supermarché", "3 rue, 29217 Plougonvelin", "supermarche"),
-            _shop(2, "Ancien Huit à 8", "supermarket", None, "9 rue, 29217 Plougonvelin"),
-            _shop(3, "Lidl", "supermarket", None, "1 rue, 29280 Locmaria-Plouzané"),
-            _shop(4, "Boulangerie d'OSM", "bakery", None, "2 rue, 29217 Plougonvelin")]
+def test_only_the_supermarkets_with_a_sheet_are_shown_everywhere(monkeypatch):
+    """Seuls les supermarchés qui ont leur fiche sont montrés, même dans une commune où l'agent n'est jamais passé (le Leclerc et l'Aldi d'OSM de Guilers, dans l'onglet de Saint-Renan, 13 novembre 2026) ; celui qui a sa fiche affiche « Supermarché »."""
+    rows = [_shop(1, "Lidl", "supermarket", "supermarché", "Rue du Pont de Bois, 29290 Saint-Renan", "supermarche"),
+            _shop(2, "Ancien Lidl", "supermarket", None, "Rue du Pont-de-Bois, 29290 Saint-Renan"),
+            _shop(3, "Centre Commercial E.Leclerc", "supermarket", None, "Rue du Tumulus, 29820 Guilers"),
+            _shop(4, "Boulangerie d'OSM", "bakery", None, "2 rue, 29820 Guilers")]
     result, _ = _get_poi(monkeypatch, rows)
-    assert [poi["name"] for poi in result["supermarche"]] == ["Super U", "Lidl"]
+    assert [poi["name"] for poi in result["supermarche"]] == ["Lidl"]
     assert result["supermarche"][0]["service_type_label"] == "Supermarché"
-    assert [poi["verifie"] for poi in result["supermarche"]] == [1, 0]
     assert [poi["name"] for poi in result["commerce"]] == ["Boulangerie d'OSM"]
 
 
