@@ -197,7 +197,7 @@ def test_a_possible_duplicate_goes_to_the_duplicates_queue(monkeypatch):
     assert (poi_id, kind, detail["autre_id"]) == (2, "doublon_commerce", 1) and 600 < detail["distance_m"] < 800
     from services import poi_review_service as review
     card = review.build_card("doublons", {"id": 2, "name": "Fumaison d'Iroise"}, [{"id": 9, "signal_type": kind, "source": "agent_commerces", "detail": detail}])
-    assert card["actions"][:2] == ["fusionner", "deux_lieux"] and "Fumaisons d'Iroise" in card["preuves"][0]["texte"]
+    assert card["actions"][:3] == ["garder_celui_ci", "fusionner", "deux_lieux"] and "Fumaisons d'Iroise" in card["preuves"][0]["texte"]
 
 
 def test_a_visible_twin_wins_over_a_masked_one():

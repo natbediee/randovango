@@ -2330,7 +2330,14 @@ a.bilan-total:hover { border-color: var(--teal); }
 .fiche-preview__line { font-size: 13px; color: var(--muted); margin: 2px 0; }
 /* Une station-service : ce que dit l'État, sous l'aperçu ; l'autre station d'un doublon, au-dessus de la fiche. */
 .fiche-station { margin-top: 12px; }
-.review-card__twin { border: 1px dashed var(--card-border); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+/* « Doublons » : les deux lieux en deux colonnes ; le lieu gardé est encadré (supervision_services.js, duplicatePair). */
+.duplicate-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin: 10px 0; }
+.duplicate-place { display: flex; flex-direction: column; gap: 2px; border: 1px dashed var(--card-border); border-radius: 10px;
+  padding: 10px 12px; background: var(--white); }
+.duplicate-place h4 { margin: 4px 0; font-size: 16px; }
+.duplicate-place .btn { margin-top: auto; align-self: flex-start; }
+.duplicate-place .fuel-prices { margin: 6px 0; }
+.duplicate-place.is-kept { border: 2px solid var(--teal); }
 .fiche__form { display: flex; flex-direction: column; gap: 8px; }
 .fiche__form .label { display: flex; flex-direction: column; gap: 3px; }
 .fiche__form input, .fiche__form textarea, .fiche__form select { box-sizing: border-box; width: 100%; padding: 6px 10px; font: inherit;
@@ -2356,7 +2363,7 @@ a.bilan-total:hover { border-color: var(--teal); }
 .edit-row__place { margin-left: auto; color: var(--muted); font-size: 13px; }
 .edit-open { padding: 14px; background: var(--mint-2); display: flex; flex-direction: column; gap: 12px; }
 @media (max-width: 760px) {
-  .fiche, .fiche__pair { grid-template-columns: minmax(0, 1fr); }
+  .fiche, .fiche__pair, .duplicate-pair { grid-template-columns: minmax(0, 1fr); }
 }
 /* La relecture montre d'abord ce que voit le voyageur : un clic sur l'aperçu ouvre le formulaire de la fiche. */
 .fiche--closed { grid-template-columns: minmax(0, 520px); }

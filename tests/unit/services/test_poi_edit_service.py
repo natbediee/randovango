@@ -314,13 +314,47 @@ def test_the_towns_offered_come_with_their_postcodes():
     assert towns == [{"nom": "Guilvinec", "codes": ["29730"]}]
 
 
-def test_a_station_declared_twice_comes_with_the_other_station(monkeypatch):
-    """Plouguerneau en supervision : la fiche de l'ancienne station arrive avec l'autre, à 9 m, et ses prix du jour."""
+def _attach_with(monkeypatch, views: dict, cards: list) -> tuple:
+    """Lance attach_sheets sans base : _sheet_views rend les fiches données ; rend les cartes et les lieux demandés."""
     monkeypatch.setattr(edit.MySQLUtils, "connect", lambda: MagicMock())
     monkeypatch.setattr(edit.MySQLUtils, "disconnect", lambda c: None)
-    monkeypatch.setattr(edit, "_sheet_views", lambda cursor, ids: {48528: {"station": {"pdv_id": "29880005"}}})
     asked = []
-    monkeypatch.setattr(edit, "_station_views", lambda cursor, ids: asked.append(ids) or {48527: {"pdv_id": "29880006"}})
-    reviews = edit.attach_sheets({"cards": [{"poi_id": 48528, "tab": "doublons", "autre_id": 48527}]})
-    assert asked == [[48527]]
-    assert reviews["cards"][0]["station_voisine"] == {"pdv_id": "29880006"}
+    monkeypatch.setattr(edit, "_sheet_views", lambda cursor, ids: asked.append(sorted(ids)) or
+                        {poi_id: views[poi_id] for poi_id in ids if poi_id in views})
+    return edit.attach_sheets({"cards": cards})["cards"], asked
+
+
+def test_a_station_declared_twice_comes_with_the_other_station(monkeypatch):
+    """Plouguerneau en supervision : la fiche de l'ancienne station arrive avec l'autre, à 9 m, et ses prix du jour."""
+    views = {48528: {"poi_id": 48528, "station": {"pdv_id": "29880005"}, "position": [48.6050, -4.5040]},
+             48527: {"poi_id": 48527, "station": {"pdv_id": "29880006"}, "position": [48.6050, -4.50388]}}
+    cards, asked = _attach_with(monkeypatch, views, [{"poi_id": 48528, "tab": "doublons", "autre_id": 48527,
+                                                      "position": [48.6050, -4.5040]}])
+    assert asked == [[48528], [48527]]
+    assert cards[0]["autre_lieu"]["station"] == {"pdv_id": "29880006"}
+    assert cards[0]["autre_lieu"]["distance_m"] == 9
+
+
+def test_a_duplicate_restaurant_comes_with_the_other_place_and_its_distance(monkeypatch):
+    """« A l'Aise Breizh Café » proposé comme doublon de « Fraya » : Fraya arrive à côté, avec son adresse et sa distance."""
+    fraya = {"poi_id": 2, "nom": "Fraya", "adresse": "Quai, 29217 Le Conquet", "commune": "Le Conquet",
+             "type_label": "Crêperie", "url": "https://fraya.fr", "position": [48.3600, -4.7700], "station": None}
+    cards, _ = _attach_with(monkeypatch, {1: {"poi_id": 1}, 2: fraya},
+                            [{"poi_id": 1, "tab": "doublons", "autre_id": 2, "position": [48.3600, -4.7705]}])
+    other = cards[0]["autre_lieu"]
+    assert (other["nom"], other["adresse"], other["commune"], other["type_label"]) == \
+           ("Fraya", "Quai, 29217 Le Conquet", "Le Conquet", "Crêperie")
+    assert other["distance_m"] == 37
+
+
+def test_a_card_outside_duplicates_has_no_other_place(monkeypatch):
+    """Une carte d'une autre file (un lien à valider) n'a pas d'autre lieu : rien n'est cherché pour elle."""
+    cards, asked = _attach_with(monkeypatch, {1: {"poi_id": 1}}, [{"poi_id": 1, "tab": "liens"}])
+    assert cards[0]["autre_lieu"] is None
+    assert asked == [[1], []]
+
+
+def test_the_distance_is_unknown_when_a_place_has_no_position():
+    """Un lieu sans position (un objet OSM sans coordonnées) : la distance n'est pas inventée, elle reste inconnue."""
+    assert edit.distance_m(None, [48.36, -4.77]) is None
+    assert edit.distance_m([48.36, -4.77], [48.36, -4.77]) == 0

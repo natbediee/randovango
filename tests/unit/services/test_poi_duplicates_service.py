@@ -129,12 +129,12 @@ def test_a_group_keeps_a_single_place():
 
 
 def test_the_signal_is_reviewed_in_the_duplicates_tab():
-    """Le signal d'un doute se relit dans la file « Doublons » de la supervision, avec « fusionner » et « deux lieux »."""
+    """Le signal d'un doute se relit dans la file « Doublons », avec « Garder ce lieu » sous chacun des deux et « Deux lieux »."""
     signal = {"id": 9, "signal_type": "doublon_service", "source": "doublons",
               "detail": {"autre_id": 9690, "autre_nom": "2 pignons de Kéravel", "autre_adresse": "Route de Saint-Mathieu",
                          "distance_m": 12, "raison": "même nom, même service"}}
     card = review.build_card("doublons", {"id": 9691, "name": "2 pignons de Kéravel"}, [signal])
-    assert card["actions"][:2] == ["fusionner", "deux_lieux"] and "à 12 m" in card["preuves"][0]["texte"]
+    assert card["actions"][:3] == ["garder_celui_ci", "fusionner", "deux_lieux"] and "à 12 m" in card["preuves"][0]["texte"]
     assert review.applied_fields("fusionner", card, None) == {"masque": 1}
 
 

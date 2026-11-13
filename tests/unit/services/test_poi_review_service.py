@@ -348,8 +348,111 @@ def test_cancelling_a_mixed_place_gives_back_the_sheet_and_the_services(monkeypa
 
 
 def test_the_mixed_place_button_comes_first_on_its_card():
-    """Sur le doute d'un lieu mixte, « Lieu mixte » est proposé en premier, avant « Fusionner » et « Deux lieux »."""
+    """Sur le doute d'un lieu mixte, « Lieu mixte » est proposé en premier, avant « Garder ce lieu » (des deux côtés) et « Deux lieux »."""
     card = review.build_card("doublons", {"id": 32496, "name": "La Maison du Phare"}, [PHARE_DOUBT])
     review.offer_mixed_place(card)
-    assert card["actions"][:3] == ["lieu_mixte", "fusionner", "deux_lieux"]
+    assert card["actions"][:4] == ["lieu_mixte", "garder_celui_ci", "fusionner", "deux_lieux"]
     assert card["boutons"][0]["action"] == "lieu_mixte" and "Lieu mixte" in card["proposal"]
+
+
+# --- « Garder ce lieu » : on choisit lequel des deux lieux d'un doublon reste ---
+
+BREIZH_DOUBT = {"id": 41, "poi_id": 1201, "source": "doublons", "signal_type": "doublon_service",
+                "detail": json.dumps({"autre_id": 1187, "autre_nom": "Fraya", "distance_m": 40, "raison": "même adresse"})}
+STATION_DOUBT = {"id": 42, "poi_id": 48528, "source": "carburants_etat", "signal_type": "doublon_station",
+                 "detail": json.dumps({"autre_id": 48527, "autre_nom": "Carrefour Contact", "distance_m": 9})}
+
+
+def _calls(cursor) -> list:
+    """Les requêtes passées au curseur, sans les retours à la ligne, avec leurs paramètres."""
+    return [(" ".join(call[0][0].split()), call[0][1] if len(call[0]) > 1 else None) for call in cursor.execute.call_args_list]
+
+
+def _decision(cursor) -> tuple:
+    """La décision enregistrée : (lieu, nom de la décision, detail)."""
+    params = next(params for sql, params in _calls(cursor) if sql.startswith("INSERT INTO decisions"))
+    return params[1], params[2], json.loads(params[-1])
+
+
+def test_a_duplicate_card_offers_to_keep_either_place():
+    """« A l'Aise Breizh Café » proposé comme doublon de « Fraya » : on peut garder l'un ou l'autre, ou dire « Deux lieux »."""
+    card = review.build_card("doublons", {"id": 1201, "name": "A l'Aise Breizh Café"}, [BREIZH_DOUBT])
+    assert card["actions"][:3] == ["garder_celui_ci", "fusionner", "deux_lieux"]
+    assert card["autre_id"] == 1187
+
+
+def test_a_duplicate_without_the_other_number_only_offers_to_hide_this_one():
+    """Un ancien doute sans numéro de l'autre lieu : impossible de le masquer ou de le retirer, seul « fusionner » (masquer celui-ci) reste."""
+    card = review.build_card("doublons", POI, [signal("doublon_service", source="doublons", autre_nom="X")])
+    assert "garder_celui_ci" not in card["actions"] and "retirer_les_deux" not in card["actions"]
+    assert "fusionner" in card["actions"]
+
+
+def test_keeping_the_card_place_hides_the_other_and_records_the_merge_on_it():
+    """Garder « A l'Aise Breizh Café » masque « Fraya » ; la décision « fusionner » est enregistrée sur Fraya, le lieu masqué."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [[BREIZH_DOUBT], [{"id": 1201, "masque": 0}, {"id": 1187, "masque": 0}]]
+    review.decide_one(cursor, "doublons", 1201, "garder_celui_ci", "même crêperie", "admin", None)
+    calls = _calls(cursor)
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 1187)) in calls
+    assert not any(params and params[-1] == 1201 for sql, params in calls if sql.startswith("UPDATE poi SET"))
+    objet_id, decision, detail = _decision(cursor)
+    assert (objet_id, decision) == (1187, "fusionner")
+    assert detail == {"file": "doublons", "signal_ids": [41], "avant": {"masque": 0}, "garde": {"poi_id": 1201, "avant": {}}}
+
+
+def test_keeping_the_other_place_is_still_the_merge_of_this_one():
+    """Garder « Fraya » (le bouton sous l'autre lieu) fait ce que faisait « Fusionner » : A l'Aise Breizh Café est masqué."""
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [BREIZH_DOUBT]
+    cursor.fetchone.return_value = {"url": None, "name": "A l'Aise Breizh Café", "masque": 0}
+    review.decide_one(cursor, "doublons", 1201, "fusionner", "", "admin", None)
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 1201)) in _calls(cursor)
+    assert _decision(cursor)[:2] == (1201, "fusionner")
+
+
+def test_keeping_a_frozen_station_shows_it_again_and_hides_the_other():
+    """Plouguerneau : garder la station figée (masquée en attendant) la réaffiche et masque l'autre, qui porte la décision."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [[STATION_DOUBT], [{"id": 48528, "masque": 1}, {"id": 48527, "masque": 0}]]
+    review.decide_one(cursor, "doublons", 48528, "garder_celui_ci", "", "admin", None)
+    calls = _calls(cursor)
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 48527)) in calls
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (0, 48528)) in calls
+    objet_id, _, detail = _decision(cursor)
+    assert objet_id == 48527 and detail["garde"] == {"poi_id": 48528, "avant": {"masque": 1}}
+
+
+def test_cancelling_keep_this_place_puts_both_places_back(monkeypatch):
+    """Annuler la garde de la station figée : l'autre station est réaffichée, la figée redevient masquée, le doute rouvert."""
+    connection = MagicMock()
+    cursor = connection.cursor.return_value
+    detail = {"file": "doublons", "signal_ids": [42], "avant": {"masque": 0}, "garde": {"poi_id": 48528, "avant": {"masque": 1}}}
+    cursor.fetchone.return_value = {"objet_id": 48527, "detail": json.dumps(detail)}
+    monkeypatch.setattr(review.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(review.MySQLUtils, "disconnect", lambda connection: None)
+    review.cancel_decision(9)
+    calls = _calls(cursor)
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (0, 48527)) in calls
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 48528)) in calls
+    assert ("UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL WHERE id IN (%s)", (42,)) in calls
+
+
+def test_a_duplicate_card_offers_to_remove_both_places():
+    """Rarement, aucun des deux n'est à garder : la carte d'« A l'Aise Breizh Café » propose aussi « Aucun des deux »."""
+    card = review.build_card("doublons", {"id": 1201, "name": "A l'Aise Breizh Café"}, [BREIZH_DOUBT])
+    assert "retirer_les_deux" in card["actions"]
+
+
+def test_removing_both_places_hides_each_with_its_own_decision():
+    """« Aucun des deux » : A l'Aise Breizh Café et Fraya sont masqués, chacun avec sa décision « retirer », annulable à part."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [[BREIZH_DOUBT], [BREIZH_DOUBT], [{"id": 41}], [{"id": 77}]]
+    cursor.fetchone.side_effect = [{"url": None, "name": "A l'Aise Breizh Café", "masque": 0}, {"masque": 0}]
+    review.decide_one(cursor, "doublons", 1201, "retirer_les_deux", "fermé", "admin", None)
+    calls = _calls(cursor)
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 1201)) in calls
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 1187)) in calls
+    decisions = [(params[1], params[2], json.loads(params[-1])) for sql, params in calls if sql.startswith("INSERT INTO decisions")]
+    assert [(objet_id, decision) for objet_id, decision, _ in decisions] == [(1201, "retirer"), (1187, "retirer")]
+    assert decisions[1][2] == {"file": "doublons", "signal_ids": [77], "avant": {"masque": 0}}
