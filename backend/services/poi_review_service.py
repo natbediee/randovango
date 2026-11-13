@@ -16,7 +16,8 @@ QUATRE FILES, parce que les décisions ne se prennent pas pareil :
     doublons   : deux restaurants proches que la règle n'a pas su trancher (restaurant_duplicates_service.py), ou deux
                  lieux de même nom, quel que soit le service (poi_duplicates_service.py, signal doublon_service).
                  On choisit le lieu qu'on garde (« Garder ce lieu » sous chacun des deux, 13 novembre 2026) : l'autre est
-                 masqué, et la décision « fusionner » est enregistrée sur lui ; rien n'est effacé. Une station figée près d'une station
+                 masqué, et la décision « fusionner » est enregistrée sur lui ; rien n'est effacé. Rarement, aucun des
+                 deux n'est à garder : « Aucun des deux » les retire tous les deux (remove_both_places). Une station figée près d'une station
                  active (doublon_station) est déjà masquée : « Deux lieux » la réaffiche (poi_triage_service.hide_doubtful_stations l'avait masquée).
                  Un lieu mixte, qui vend et sert à la fois (une boulangerie qui fait snack, des viviers avec dégustation),
                  a une fiche restaurant d'un côté et une fiche commerce de l'autre : « Lieu mixte » donne la fiche de
@@ -84,6 +85,7 @@ ACTIONS = {
     "valider_saison": "valide", "pas_saisonnier": "rejete",
     "retirer_lien": "valide", "garder_lien": "rejete",
     "fusionner": "valide", "deux_lieux": "rejete", "lieu_mixte": "valide", "garder_celui_ci": "valide",
+    "retirer_les_deux": "valide",
     "valider_pepite": "valide",
     "sans_suite": "rejete",
     "autre_lien": "rejete",
@@ -98,6 +100,8 @@ ACTION_LABELS = {
     "fusionner": "fusionné", "deux_lieux": "deux lieux", "lieu_mixte": "lieu mixte : une fiche, deux onglets",
     # Jamais enregistré sous ce nom : la décision est « fusionner », sur l'autre lieu (keep_this_place).
     "garder_celui_ci": "gardé, l'autre lieu masqué",
+    # Jamais enregistré sous ce nom non plus : une décision « retirer » sur chacun des deux lieux (remove_both_places).
+    "retirer_les_deux": "les deux lieux retirés",
     "valider_pepite": "lieu confirmé",
     "sans_suite": "classé sans suite",
     "autre_lien": "lien saisi à la main",
@@ -113,6 +117,7 @@ ACTION_BUTTONS = {
     "retirer_lien": ("Retirer le lien", "main"), "garder_lien": ("Garder le lien", "line"),
     "fusionner": ("Même lieu : garder l'autre", "remove"), "deux_lieux": ("Deux lieux", "line"),
     "garder_celui_ci": ("Même lieu : garder celui-ci", "remove"),
+    "retirer_les_deux": ("Aucun des deux : retirer les deux lieux", "remove"),
     "lieu_mixte": ("Lieu mixte : un seul lieu, deux fiches", "main"),
     "valider_pepite": ("Confirmer et afficher le lieu", "main"),
     "autre_lien": ("Mettre ce lien", "line"),
@@ -136,6 +141,8 @@ MIXED = "lieu_mixte"
 # « Garder ce lieu » sous le lieu de la carte, dans la file « Doublons » : c'est l'autre lieu qui est masqué
 # (keep_this_place). « fusionner » reste le geste inverse : il masque le lieu de la carte et garde l'autre.
 KEEP_THIS = "garder_celui_ci"
+# « Aucun des deux » : les deux lieux d'un doublon sont retirés, chacun avec sa décision « retirer » (remove_both_places).
+REMOVE_BOTH = "retirer_les_deux"
 SHEET_TABLES = ("restaurants", "commerces")
 # Le filtre « Type de lieu » reprend les onglets de l'étape 4 (utils/service_utils.POI_FRONTEND_CATEGORY_MAP), puis le
 # type précis : la catégorie de la fiche de l'agent quand il y en a une (« Crêperie », « Marché »), sinon le service
@@ -272,11 +279,14 @@ def _duplicate_card(signals: list) -> dict:
     # Une station figée est masquée dès qu'elle est repérée : « Deux lieux » doit donc la réafficher.
     hidden = signals[0]["signal_type"] == "doublon_station"
     # Sans le numéro de l'autre lieu, on ne peut pas le masquer : on ne propose alors que de masquer celui-ci.
-    keep = [KEEP_THIS] if detail.get("autre_id") else []
+    if detail.get("autre_id"):
+        actions = [KEEP_THIS, "fusionner", "deux_lieux", REMOVE_BOTH]
+    else:
+        actions = ["fusionner", "deux_lieux"]
     return {"link": None, "autre_id": detail.get("autre_id"), "reafficher": hidden,
-            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Choisis le lieu à garder : l'autre sera masqué, "
-                        "rien n'est effacé." + (" En attendant, celui-ci est masqué." if hidden else ""),
-            "actions": [*keep, "fusionner", "deux_lieux"]}
+            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Coche le lieu à garder, les deux si ce sont "
+                        "deux lieux différents ; rien n'est effacé." + (" En attendant, celui-ci est masqué." if hidden else ""),
+            "actions": actions}
 
 
 def _to_confirm_card(signals: list) -> dict:
@@ -644,6 +654,9 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     if action == KEEP_THIS:
         keep_this_place(cursor, poi_id, card, signals, note, decided_by)
         return
+    if action == REMOVE_BOTH:
+        remove_both_places(cursor, poi_id, card, note, decided_by)
+        return
     fields = applied_fields(action, card, months, url, name)
     cursor.execute(f"SELECT {', '.join(APPLIED_COLUMNS)} FROM poi WHERE id = %s", (poi_id,))
     before = cursor.fetchone()
@@ -710,6 +723,39 @@ def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, d
         INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
         VALUES (%s, %s, %s, %s, %s, NOW(), %s)
     """, (POI, other_id, "fusionner", (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
+
+
+def remove_both_places(cursor, poi_id: int, card: dict, note: str, decided_by: str) -> None:
+    """
+    « Aucun des deux » : ni ce lieu ni l'autre ne sont à garder (rare : deux lignes d'un restaurant qui a fermé).
+    Ce lieu est retiré comme avec « Retirer le lieu », puis l'autre de la même façon. Chacun reçoit sa propre décision
+    « retirer » : les agents et les carburants la lisent déjà pour ne pas le réafficher, et chaque retrait s'annule à part.
+    """
+    decide_one(cursor, "doublons", poi_id, "retirer", note, decided_by, None)
+    remove_other_place(cursor, card["autre_id"], note, decided_by)
+
+
+def remove_other_place(cursor, other_id: int, note: str, decided_by: str) -> None:
+    """
+    Retire l'autre lieu d'un doublon, qui n'a pas de carte à lui : il est masqué, ses signaux à relire sont tranchés
+    (un lieu retiré n'a plus rien à relire), et la décision « retirer » garde son état d'avant pour l'annulation.
+    """
+    cursor.execute("SELECT masque FROM poi WHERE id = %s", (other_id,))
+    before = cursor.fetchone()
+    if not before:
+        raise ValueError("L'autre lieu n'existe plus : impossible de le retirer")
+    cursor.execute("UPDATE poi SET masque = %s WHERE id = %s", (1, other_id))
+    cursor.execute("SELECT id FROM poi_signals WHERE poi_id = %s AND statut = 'a_relire'", (other_id,))
+    signal_ids = [row["id"] for row in cursor.fetchall()]
+    if signal_ids:
+        marks = ",".join(["%s"] * len(signal_ids))
+        cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
+                       (ACTIONS["retirer"], *signal_ids))
+    detail = {"file": "doublons", "signal_ids": signal_ids, "avant": {"masque": before["masque"]}}
+    cursor.execute("""
+        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
+        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
+    """, (POI, other_id, "retirer", (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
 
 
 def confirm_located(cursor, poi_id: int, fields: dict, decided_by: str) -> bool:

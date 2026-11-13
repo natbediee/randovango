@@ -382,9 +382,10 @@ def test_a_duplicate_card_offers_to_keep_either_place():
 
 
 def test_a_duplicate_without_the_other_number_only_offers_to_hide_this_one():
-    """Un ancien doute sans numéro de l'autre lieu : impossible de le masquer, seul « fusionner » (masquer celui-ci) reste."""
+    """Un ancien doute sans numéro de l'autre lieu : impossible de le masquer ou de le retirer, seul « fusionner » (masquer celui-ci) reste."""
     card = review.build_card("doublons", POI, [signal("doublon_service", source="doublons", autre_nom="X")])
-    assert "garder_celui_ci" not in card["actions"] and "fusionner" in card["actions"]
+    assert "garder_celui_ci" not in card["actions"] and "retirer_les_deux" not in card["actions"]
+    assert "fusionner" in card["actions"]
 
 
 def test_keeping_the_card_place_hides_the_other_and_records_the_merge_on_it():
@@ -435,3 +436,23 @@ def test_cancelling_keep_this_place_puts_both_places_back(monkeypatch):
     assert ("UPDATE poi SET masque = %s WHERE id = %s", (0, 48527)) in calls
     assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 48528)) in calls
     assert ("UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL WHERE id IN (%s)", (42,)) in calls
+
+
+def test_a_duplicate_card_offers_to_remove_both_places():
+    """Rarement, aucun des deux n'est à garder : la carte d'« A l'Aise Breizh Café » propose aussi « Aucun des deux »."""
+    card = review.build_card("doublons", {"id": 1201, "name": "A l'Aise Breizh Café"}, [BREIZH_DOUBT])
+    assert "retirer_les_deux" in card["actions"]
+
+
+def test_removing_both_places_hides_each_with_its_own_decision():
+    """« Aucun des deux » : A l'Aise Breizh Café et Fraya sont masqués, chacun avec sa décision « retirer », annulable à part."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [[BREIZH_DOUBT], [BREIZH_DOUBT], [{"id": 41}], [{"id": 77}]]
+    cursor.fetchone.side_effect = [{"url": None, "name": "A l'Aise Breizh Café", "masque": 0}, {"masque": 0}]
+    review.decide_one(cursor, "doublons", 1201, "retirer_les_deux", "fermé", "admin", None)
+    calls = _calls(cursor)
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 1201)) in calls
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 1187)) in calls
+    decisions = [(params[1], params[2], json.loads(params[-1])) for sql, params in calls if sql.startswith("INSERT INTO decisions")]
+    assert [(objet_id, decision) for objet_id, decision, _ in decisions] == [(1201, "retirer"), (1187, "retirer")]
+    assert decisions[1][2] == {"file": "doublons", "signal_ids": [77], "avant": {"masque": 0}}
