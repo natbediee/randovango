@@ -1,5 +1,5 @@
 """
-Connexion et déconnexion des comptes (contributeurs, admins).
+Connexion et déconnexion des comptes (contributeurs, admins), et session des voyageurs sans compte.
 
 Le jeton de connexion est posé dans un cookie httpOnly (services/authentification.py,
 set_auth_cookie) : il n'apparaît jamais dans le JSON renvoyé, donc le JavaScript du front
@@ -11,8 +11,8 @@ from fastapi.responses import ORJSONResponse
 from passlib.hash import bcrypt
 from datetime import datetime, timedelta
 from services.authentification import (
-    ACCESS_TOKEN_EXPIRE_MINUTES, clear_auth_cookie, create_access_token, get_roles_for_user,
-    get_user_by_username, insert_auth_log, set_auth_cookie,
+    ACCESS_TOKEN_EXPIRE_MINUTES, GUEST_TOKEN_EXPIRE_DAYS, clear_auth_cookie, create_access_token,
+    create_guest_token, get_roles_for_user, get_user_by_username, insert_auth_log, set_auth_cookie,
 )
 
 router = APIRouter()
@@ -55,8 +55,22 @@ async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse
             "expires_at": expires_at
         }
     )
-    set_auth_cookie(response, token)
+    set_auth_cookie(response, token, expires_delta)
     return response
+
+
+@router.post("/guest", summary="Starts a guest session: a JWT for a traveller without an account")
+async def guest() -> ORJSONResponse:
+    """
+    Un voyageur sans compte reçoit un jeton invité, dans le même cookie httpOnly qu'une connexion.
+    Les routes du voyage exigent un jeton (carte #103) : c'est par lui qu'un voyageur est reconnu.
+    """
+    expires_delta = timedelta(days=GUEST_TOKEN_EXPIRE_DAYS)
+    expires_at = (datetime.utcnow() + expires_delta).isoformat() + "Z"
+    response = ORJSONResponse(content={"success": True, "expires_at": expires_at})
+    set_auth_cookie(response, create_guest_token(), expires_delta)
+    return response
+
 
 @router.post("/logout", summary="Logout user: the cookie is cleared")
 async def logout(request: Request) -> ORJSONResponse:

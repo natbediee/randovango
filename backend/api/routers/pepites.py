@@ -1,8 +1,15 @@
-from fastapi import APIRouter, Body, Query
+"""
+Les pépites de Vany : ses idées pour chaque jour du voyage.
 
+Toutes ces routes exigent un jeton, de compte ou d'invité (carte #103) : la dépendance est posée
+sur le router entier, pour qu'une route ajoutée plus tard ne puisse pas l'oublier.
+"""
+from fastapi import APIRouter, Body, Depends, Query
+
+from api.dependencies import get_current_traveller
 from services import pepite_service
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_traveller)])
 
 
 @router.get("/", summary="Returns Vany's ideas (pépites) for a trip day.")

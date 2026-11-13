@@ -1,6 +1,7 @@
 import sqlite3
 import logging
 import os
+import uuid
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from fastapi import HTTPException
@@ -41,6 +42,8 @@ def load_jwt_secret() -> str:
 SECRET_KEY = load_jwt_secret()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+# Un voyageur sans compte garde son jeton invité 30 jours : il revient à son voyage d'un jour à l'autre.
+GUEST_TOKEN_EXPIRE_DAYS = 30
 
 
 # --- Cookie de connexion (carte #24) ---
@@ -60,7 +63,7 @@ def cookie_is_secure() -> bool:
     return os.getenv("COOKIE_SECURE", "1") != "0"
 
 
-def set_auth_cookie(response, token: str) -> None:
+def set_auth_cookie(response, token: str, expires_delta: timedelta) -> None:
     """
     Pose le jeton de connexion dans le cookie de la réponse.
 
@@ -69,12 +72,12 @@ def set_auth_cookie(response, token: str) -> None:
     - samesite="lax" : le navigateur ne le joint pas aux POST, PUT ou DELETE venus d'un autre site. C'est la
       protection contre la falsification de requête (CSRF) : une page piégée ne peut pas agir au nom du voyageur.
       Elle suppose qu'aucune route GET ne modifie de données.
-    - max_age : le cookie disparaît à l'expiration du jeton, pas avant, pas après.
+    - max_age : le cookie disparaît à l'expiration du jeton (expires_delta), pas avant, pas après.
     """
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        max_age=int(expires_delta.total_seconds()),
         path=AUTH_COOKIE_PATH,
         httponly=True,
         samesite="lax",
@@ -142,6 +145,15 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def create_guest_token() -> str:
+    """
+    Jeton d'un voyageur sans compte (carte #103). Il porte un identifiant invité tiré au hasard par
+    le serveur, jamais choisi par le navigateur : personne ne peut se déclarer l'invité d'un autre.
+    Il n'a ni user_id ni rôle : il ouvre les routes du voyage, jamais celles des comptes.
+    """
+    return create_access_token({"guest_id": str(uuid.uuid4())}, timedelta(days=GUEST_TOKEN_EXPIRE_DAYS))
 
 # --- JWT Token Verification ---
 def verify_access_token(token: str):

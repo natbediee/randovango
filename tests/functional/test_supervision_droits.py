@@ -13,8 +13,9 @@ from fastapi.testclient import TestClient
 from jose import jwt
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from api.routers import etl, supervision, supervision_bilan
-from services.authentification import AUTH_COOKIE_NAME
+from api import dependencies
+from api.routers import supervision, supervision_bilan
+from services.authentification import ALGORITHM, AUTH_COOKIE_NAME, SECRET_KEY, create_guest_token
 
 scenarios("features/supervision_droits.feature")
 
@@ -24,7 +25,7 @@ USER = {"user_id": 7, "username": "camille"}
 def token_for(user: dict, expires_in: timedelta = timedelta(minutes=5)) -> str:
     """Un jeton signé comme à la connexion, qui expire dans expires_in."""
     expires = datetime.now(timezone.utc) + expires_in
-    return jwt.encode({**user, "exp": expires}, etl.SECRET_KEY, algorithm=etl.ALGORITHM)
+    return jwt.encode({**user, "exp": expires}, SECRET_KEY, algorithm=ALGORITHM)
 
 
 @pytest.fixture
@@ -38,7 +39,7 @@ def world(monkeypatch):
     def record(*args, **kwargs):
         state.decisions.append(args)
 
-    monkeypatch.setattr(supervision, "get_roles_for_user", lambda user_id: state.roles)
+    monkeypatch.setattr(dependencies, "get_roles_for_user", lambda user_id: state.roles)
     monkeypatch.setattr(supervision.supervision_service, "get_reviews", review_calls)
     monkeypatch.setattr(supervision.supervision_service, "decide", record)
     monkeypatch.setattr(supervision.supervision_service, "correct_a_savoir", record)
@@ -87,6 +88,12 @@ def bearer_header(world):
     """L'ancien envoi du jeton, par l'en-tête Authorization : il n'est plus lu (carte #24)."""
     world.roles = ["admin"]
     world.headers = {"Authorization": f"Bearer {token_for(USER)}"}
+
+
+@given("un voyageur sans compte, avec son jeton invité")
+def guest(world):
+    """Un invité : son jeton est valide, mais il n'a pas de compte (carte #103)."""
+    world.client.cookies.set(AUTH_COOKIE_NAME, create_guest_token())
 
 
 @given("son rôle admin vient de lui être retiré")

@@ -2,37 +2,15 @@ from utils.db_utils import MySQLUtils
 from utils.mongo_utils import MongoUtils
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from pathlib import Path
-from fastapi.security import APIKeyCookie
-from jose import JWTError, jwt
+from api.dependencies import get_current_user
 from api.models.etl import GPXUploadResponse, GPXDeleteResponse
 from etl.etl_pipeline import main as run_etl_pipeline
-# Le secret et l'algorithme viennent d'un seul endroit : deux copies pourraient diverger.
-from services.authentification import (
-    ALGORITHM, AUTH_COOKIE_NAME, SECRET_KEY, get_roles_for_user, insert_auth_log,
-)
+from services.authentification import get_roles_for_user, insert_auth_log
 
 router = APIRouter()
 
 ALLOWED_EXT = {"gpx"}
-# Le jeton est lu dans le cookie httpOnly, et nulle part ailleurs (carte #24) : un en-tête
-# « Authorization: Bearer » n'est plus accepté. APIKeyCookie décrit aussi ce cookie dans la doc OpenAPI.
-# auto_error=False : sans cookie, on répond 401 ci-dessous, et non le 403 par défaut de FastAPI.
-auth_cookie = APIKeyCookie(name=AUTH_COOKIE_NAME, auto_error=False)
 
-
-def get_current_user(token: str | None = Depends(auth_cookie)):
-    """Qui appelle ? L'identité lue dans le jeton du cookie, ou 401 s'il manque, est faux ou expiré."""
-    if token is None:
-        raise HTTPException(status_code=401, detail="Token manquant")
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
-        username: str = payload.get("username")
-        if user_id is None or username is None:
-            raise HTTPException(status_code=401, detail="Token invalide")
-        return {"user_id": user_id, "username": username}
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token invalide")
 
 @router.post("/upload_gpx", summary="Upload a GPX file and launch the ETL pipeline (Admin and Contributor only)", response_model=GPXUploadResponse)
 async def upload_gpx(

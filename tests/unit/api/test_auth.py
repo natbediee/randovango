@@ -68,6 +68,16 @@ def test_cookie_can_travel_over_http_in_development(client, monkeypatch):
     assert "secure" not in login(client).headers["set-cookie"].lower()
 
 
+def test_guest_session_puts_a_guest_token_in_the_cookie(client):
+    """Un voyageur sans compte reçoit un jeton invité dans le même cookie httpOnly, valable 30 jours."""
+    response = client.post("/api/auth/guest")
+    cookie = response.headers["set-cookie"].lower()
+    assert cookie.startswith("access_token=")
+    assert "httponly" in cookie
+    assert f"max-age={30 * 24 * 3600}" in cookie
+    assert "token" not in response.json()
+
+
 def test_logout_clears_the_cookie(client):
     """La déconnexion efface le cookie : seul le serveur le peut, le JavaScript ne le voit pas."""
     cookie = client.post("/api/auth/logout").headers["set-cookie"].lower()
