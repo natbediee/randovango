@@ -65,7 +65,8 @@
             supervisionServices: "{{ url_for('supervision_services') }}",
             contributorAddSpot: "{{ url_for('contributor_add_spot') }}",
             contributorAddHike: "{{ url_for('contributor_add_hike') }}",
-            unlockVany: "{{ url_for('unlock_vany') }}"
+            unlockVany: "{{ url_for('unlock_vany') }}",
+            freeLimit: "{{ url_for('free_limit') }}"
         };
         // URL de l'API FastAPI, jointe directement par le navigateur (plus de relais Flask)
         window.API_BASE = "{{ public_api_base_url }}";

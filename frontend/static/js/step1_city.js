@@ -660,6 +660,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                 })
             });
 
+            // 429 : le voyage gratuit du jour est déjà composé (carte #21). Une page l'explique,
+            // plutôt qu'une alerte qui laisserait le voyageur devant le bouton sans comprendre.
+            if (response.status === 429) {
+                window.location.href = window.APP_URLS.freeLimit;
+                return;
+            }
+
             if (!response.ok) {
                 const text = await response.text();
                 console.error('create_plan response not ok', response.status, text);
