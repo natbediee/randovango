@@ -31,23 +31,90 @@
     });
   }
 
-  // ===== État de session dans le header (accueil / planificateur) =====
-  // Le header est rendu par le serveur dans l'état déconnecté (il ignore l'auth,
-  // stockée côté client). Connecté, le lien « Contributeur ? Connexion » disparaît
-  // au profit de l'avatar, dont le menu déroulant porte l'espace contributeur,
-  // la création de voyage et la déconnexion.
-  function getUsername() {
-    return localStorage.getItem('username') || sessionStorage.getItem('username');
+  // ===== Appels à l'API =====
+  // Le jeton de connexion est dans un cookie httpOnly posé par l'API (carte #24) : le JavaScript
+  // ne le voit pas et ne l'envoie pas lui-même. credentials: 'include' demande au navigateur de
+  // joindre ce cookie, y compris quand le front et l'API ne sont pas sur le même port.
+  // Tous les appels à l'API passent par ici, pour qu'aucun n'oublie le cookie.
+  // Les routes du voyage exigent un jeton (carte #103) : un visiteur sans compte reçoit d'abord un
+  // jeton invité (ensureSession), puis l'appel part. Les routes /api/auth/ n'en ont pas besoin.
+  async function apiFetch(path, options) {
+    if (path.indexOf('/api/auth/') !== 0) await ensureSession();
+    var response = await fetch(window.API_BASE + path, Object.assign({}, options, { credentials: 'include' }));
+    // 429 : l'API a refusé, trop de demandes en peu de temps (carte #21). Certains appels se font
+    // en arrière-plan sans rien afficher (choix du spot) : le message est donc montré ici, pour tous.
+    if (response.status === 429) showTooManyRequests(response.clone());
+    return response;
+  }
+
+  // Bandeau en haut de page avec le message de l'API ; il disparaît seul après quelques secondes.
+  async function showTooManyRequests(response) {
+    var body = await response.json().catch(function () { return {}; });
+    var notice = document.createElement('div');
+    notice.className = 'rate-limit-notice';
+    notice.setAttribute('role', 'alert');
+    notice.textContent = body.detail || 'Trop de demandes en peu de temps. Réessaie dans une heure au plus.';
+    document.body.appendChild(notice);
+    setTimeout(function () { notice.remove(); }, 8000);
+  }
+
+  // Plusieurs appels partent en même temps au chargement d'une page : ils attendent tous la même
+  // demande de jeton invité, au lieu d'en demander un chacun.
+  var guestRequest = null;
+  function ensureSession() {
+    if (isLoggedIn() || hasGuestSession()) return Promise.resolve();
+    if (!guestRequest) {
+      guestRequest = requestGuestSession().finally(function () { guestRequest = null; });
+    }
+    return guestRequest;
+  }
+  // L'API pose le jeton invité dans le cookie ; le front ne garde que son heure de fin.
+  async function requestGuestSession() {
+    try {
+      var response = await fetch(window.API_BASE + '/api/auth/guest', { method: 'POST', credentials: 'include' });
+      if (response.ok) localStorage.setItem('guestExpiresAt', (await response.json()).expires_at);
+    } catch (err) { /* API injoignable : l'appel qui suit échouera de lui-même, avec son propre message */ }
+  }
+
+  // ===== Session affichée =====
+  // Ce que le front garde de la connexion, pour l'affichage seulement : nom, rôles et heure de fin.
+  // Rien de secret : c'est l'API qui décide des droits, en lisant le cookie.
+  var SESSION_KEYS = ['userId', 'username', 'userRoles', 'sessionExpiresAt', 'guestExpiresAt'];
+
+  function storeSession(user, expiresAt) {
+    localStorage.setItem('userId', user.id);
+    localStorage.setItem('username', user.username);
+    localStorage.setItem('userRoles', (user.roles || []).join(','));
+    localStorage.setItem('sessionExpiresAt', expiresAt);
+    // Le cookie du compte a remplacé celui de l'invité : à la fin de la session, il en faudra un nouveau.
+    localStorage.removeItem('guestExpiresAt');
+  }
+  // Une heure de fin (texte ISO) pas encore passée ? Le cookie expire au même moment.
+  function isStillValid(expiresAt) {
+    var time = Date.parse(expiresAt || '');
+    return !isNaN(time) && time > Date.now();
   }
   function isLoggedIn() {
-    return !!(localStorage.getItem('userId') || getUsername());
+    return isStillValid(localStorage.getItem('sessionExpiresAt'));
   }
-  function logout() {
-    // Self-contained (contrib.js n'est pas chargé sur ces pages) : on vide les deux
-    // emplacements utilisés par le login (voir contrib.js storeSession/logoutContrib).
-    ['jwtToken', 'username'].forEach(function (k) { sessionStorage.removeItem(k); });
-    ['userToken', 'userId', 'username', 'userRoles'].forEach(function (k) { localStorage.removeItem(k); });
+  function hasGuestSession() {
+    return isStillValid(localStorage.getItem('guestExpiresAt'));
   }
+  function getUsername() {
+    return localStorage.getItem('username');
+  }
+  // Seule l'API peut effacer le cookie httpOnly : on le lui demande, puis on oublie la session affichée.
+  async function logout() {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) { /* API injoignable : la session affichée est quand même oubliée */ }
+    SESSION_KEYS.forEach(function (k) { localStorage.removeItem(k); });
+  }
+
+  // ===== État de session dans le header (accueil / planificateur) =====
+  // Le header est rendu par le serveur dans l'état déconnecté. Connecté, le lien
+  // « Contributeur ? Connexion » disparaît au profit de l'avatar, dont le menu déroulant
+  // porte l'espace contributeur, la création de voyage et la déconnexion.
 
   function initAccountMenu() {
     var account = document.querySelector('[data-account]');
@@ -98,9 +165,9 @@
 
     var logoutLink = account.querySelector('[data-account-logout]');
     if (logoutLink) {
-      logoutLink.addEventListener('click', function (e) {
+      logoutLink.addEventListener('click', async function (e) {
         e.preventDefault();
-        logout();
+        await logout();
         // Retour à l'accueil plutôt qu'un simple reload : la page courante peut
         // être réservée aux contributeurs (dashboard, ajout de spot/rando).
         window.location.href = window.APP_URLS.duration;
@@ -194,8 +261,13 @@
   });
 
   // ===== Helpers exposés =====
-  // Déblocage du chat Vany (payé ou code contributeur validé) - mock front-only pour l'instant.
   window.RVG = window.RVG || {};
+  window.RVG.apiFetch = apiFetch;
+  window.RVG.storeSession = storeSession;
+  window.RVG.isLoggedIn = isLoggedIn;
+  window.RVG.logout = logout;
+
+  // Déblocage du chat Vany (payé ou code contributeur validé) - mock front-only pour l'instant.
   window.RVG.isVanyUnlocked = function () {
     return localStorage.getItem('vanyUnlocked') === '1';
   };

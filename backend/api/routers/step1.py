@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from api.dependencies import get_current_traveller, require_plan_owner
+from api.rate_limit import CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT, limiter
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
@@ -9,12 +11,11 @@ from utils.meteo_utils import meteo_code_to_picto
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from utils.display_utils import enrich_meteo_forecasts, city_stats_labels
 from services.pepite_service import start_zone_search
-from services.plan_service import set_day_city
+from services.plan_service import owner_columns, set_day_city
 from typing import List
 from datetime import datetime, timedelta, date
 import time
 import threading
-import uuid
 
 router = APIRouter()
 logger = LoggerUtil.get_logger("router")
@@ -260,29 +261,21 @@ async def get_ville_list(
     return cities
 
 
-@router.post("/create_plan", summary="Create a new trip plan with empty days.")
+@router.post("/create_plan", summary="Create a new trip plan with empty days (owner taken from the token).")
+# La ville choisie lance les recherches de Vany (carte #21).
+@limiter.limit(CREATE_PLAN_LIMIT, error_message=CREATE_PLAN_MESSAGE)
 def create_plan(
+    request: Request,
     city_id: int = Body(...),
     duration_days: int = Body(...),
-    user_token: str = Body(None),
-    user_id: int = Body(None),
-    start_date: date = Body(None)
+    start_date: date = Body(None),
+    traveller: dict = Depends(get_current_traveller),
 ):
     """Créer un nouveau plan (trip_plans + jours vides pour l'étape 1)"""
-    # Un plan appartient SOIT à un compte (user_id), SOIT à un invité (user_token
-    # UUID) - jamais les deux. Pour un utilisateur connecté on ignore donc tout
-    # user_token reçu : le frontend peut transmettre par erreur son JWT d'auth, qui
-    # déborde la colonne user_token (varchar 64) et n'a rien à faire ici.
-    if user_id is not None:
-        user_id_to_insert = user_id
-        user_token_to_insert = None
-    else:
-        # Invité : on génère l'UUID ici (le renvoyer dans la réponse permet au
-        # frontend de simplement le stocker) et user_id 0 = « invité ».
-        user_id_to_insert = 0
-        if user_token is None or user_token.strip() == "":
-            user_token = str(uuid.uuid4())
-        user_token_to_insert = user_token
+    # Le propriétaire du plan vient du jeton du cookie, jamais du corps de la requête (carte #104) :
+    # avant, le navigateur envoyait lui-même user_id ou user_token, et pouvait créer un plan au nom
+    # d'un autre. Un compte possède le plan par son user_id, un invité par son identifiant invité.
+    user_id_to_insert, user_token_to_insert = owner_columns(traveller)
     # Garde-fous : une durée valide et une ville qui existe réellement. Sans ces
     # contrôles, une ville absente déclenche une violation de contrainte FK que
     # l'on renvoyait en 500 opaque au frontend (« Erreur lors de la création du
@@ -315,7 +308,7 @@ def create_plan(
         # La ville est choisie : Vany commence à chercher ses pépites
         # pendant que l'utilisateur choisit sa rando et son spot.
         start_zone_search(plan_id, 1)
-        return {"plan_id": plan_id, "user_token": user_token_to_insert, "message": "Plan créé avec succès."}
+        return {"plan_id": plan_id, "message": "Plan créé avec succès."}
     except HTTPException:
         # Erreur client déjà formée (ville introuvable, etc.) : la laisser passer
         # telle quelle plutôt que de la ré-emballer en 500.
@@ -329,8 +322,11 @@ def create_plan(
         raise HTTPException(status_code=500, detail=f"Erreur lors de la création du plan : {str(e)}")
 
 
-@router.put("/update_day_city/{plan_id}", summary="Set (or change) the city for a given day of the trip.")
-def update_day_city(plan_id: int, data: dict = Body(...)):
+@router.put("/update_day_city/{plan_id}", summary="Set (or change) the city for a given day of the trip.",
+            dependencies=[Depends(require_plan_owner)])
+# Chaque ville choisie lance les recherches de Vany (carte #21).
+@limiter.limit(DAY_CITY_LIMIT, error_message=DAY_CHOICE_MESSAGE)
+def update_day_city(request: Request, plan_id: int, data: dict = Body(...)):
     """Fixe la ville d'un jour du séjour, appelé à chaque transition de jour depuis /results."""
     day_number = data.get("day_number")
     city_id = data.get("city_id")

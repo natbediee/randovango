@@ -122,6 +122,11 @@ def supervision_modifier():
     """Supervision (admin) : corriger n'importe quel service ou spot, même sans signal à relire"""
     return page('supervision_modifier')
 
+@app.route('/limite-gratuite')
+def free_limit():
+    """Voyage gratuit du jour déjà composé : la limite expliquée, l'offre illimitée annoncée (carte #21)"""
+    return page('free_limit')
+
 @app.route('/unlock-vany')
 def unlock_vany():
     """Accès à Vany - paiement unique ou code contributeur"""

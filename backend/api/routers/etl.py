@@ -1,10 +1,8 @@
 from utils.db_utils import MySQLUtils
 from utils.mongo_utils import MongoUtils
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends
 from pathlib import Path
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
-from utils.service_utils import ServiceUtil
+from api.dependencies import get_current_user, require_admin
 from api.models.etl import GPXUploadResponse, GPXDeleteResponse
 from etl.etl_pipeline import main as run_etl_pipeline
 from services.authentification import get_roles_for_user, insert_auth_log
@@ -12,26 +10,7 @@ from services.authentification import get_roles_for_user, insert_auth_log
 router = APIRouter()
 
 ALLOWED_EXT = {"gpx"}
-security = HTTPBearer(auto_error=False)  # sans jeton : 401 ci-dessous, et non le 403 par défaut
 
-
-# Auth dépendance
-SECRET_KEY = ServiceUtil.get_env("JWT_SECRET", "dev-secret")
-ALGORITHM = "HS256"
-
-def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)):
-    if credentials is None:
-        raise HTTPException(status_code=401, detail="Token manquant")
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
-        username: str = payload.get("username")
-        if user_id is None or username is None:
-            raise HTTPException(status_code=401, detail="Token invalide")
-        return {"user_id": user_id, "username": username}
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token invalide")
 
 @router.post("/upload_gpx", summary="Upload a GPX file and launch the ETL pipeline (Admin and Contributor only)", response_model=GPXUploadResponse)
 async def upload_gpx(
@@ -69,7 +48,6 @@ async def upload_gpx(
             action="upload_gpx",
             route="/api/etl/upload_gpx",
             status_code=200,
-            token=None,
             filename=file.filename
         )
         return GPXUploadResponse(success=True, message=msg, city=city, role=user_role)
@@ -81,7 +59,6 @@ async def upload_gpx(
             action="upload_gpx_failed",
             route="/api/etl/upload_gpx",
             status_code=500,
-            token=None,
             filename=file.filename
         )
         return GPXUploadResponse(success=False, message=f"Erreur ETL: {e}", role=user_role)
@@ -89,16 +66,13 @@ async def upload_gpx(
 @router.delete("/delete_gpx/{filename}", summary="Delete a GPX file (Admin only)", response_model=GPXDeleteResponse)
 async def delete_gpx(
     filename: str,
-    user=Depends(get_current_user)
+    user=Depends(require_admin)
 ):
     """
-    Supprime un fichier GPX du dossier data et la randonnée associée dans MySQL/MongoDB. Nécessite un rôle admin.
+    Supprime un fichier GPX du dossier data et la randonnée associée dans MySQL/MongoDB. Nécessite un rôle admin :
+    require_admin le vérifie avant la route (carte #106), comme pour la supervision, et la doc l'affiche.
     """
-    # Vérifier que l'utilisateur est admin
     user_id = user["user_id"]
-    roles = get_roles_for_user(user_id)
-    if "admin" not in roles:
-        raise HTTPException(status_code=403, detail="Accès refusé : rôle admin requis")
 
     # Vérifier l'extension
     ext = filename.split(".")[-1].lower()
@@ -128,7 +102,6 @@ async def delete_gpx(
         action="delete_gpx",
         route="/api/etl/delete_gpx",
         status_code=200,
-        token=None,
         filename=filename
     )
     msg = f"Suppression en base : MySQL={mysql_deleted}, MongoDB={mongo_deleted}"

@@ -1,42 +1,10 @@
 /* Front RandoVanGo - espace contributeur (connexion + garde du dashboard).
    Login branché sur le vrai endpoint FastAPI POST /api/auth/login (JWT).
    NB: l'API attend `username` ; on envoie la saisie telle quelle (le passage à
-   l'email se fera côté backend plus tard). Le token est stocké de façon unifiée
-   pour lever l'incohérence historique localStorage.userToken / sessionStorage.jwtToken. */
+   l'email se fera côté backend plus tard). Le jeton n'est jamais vu par cette page :
+   l'API le pose dans un cookie httpOnly (carte #24), voir common.js apiFetch. */
 (function () {
   'use strict';
-
-  function storeSession(token, user) {
-    // Deux emplacements, pour rester compatible avec l'existant :
-    // - sessionStorage (utilisé par le widget legacy / durée)
-    // - localStorage (lu par step1_city.js : userToken / userId)
-    sessionStorage.setItem('jwtToken', token);
-    sessionStorage.setItem('username', user.username);
-    localStorage.setItem('userToken', token);
-    localStorage.setItem('userId', user.id);
-    localStorage.setItem('username', user.username);
-    localStorage.setItem('userRoles', (user.roles || []).join(','));
-  }
-
-  window.RVG = window.RVG || {};
-  // Le jeton de connexion expire au bout de 60 minutes, et userToken peut aussi être un jeton
-  // invité (UUID) : seul un JWT encore valable compte comme connexion.
-  function isLiveToken(token) {
-    try {
-      var payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      return payload.exp * 1000 > Date.now();
-    } catch (err) {
-      return false;
-    }
-  }
-
-  window.RVG.getContribToken = function () {
-    return [sessionStorage.getItem('jwtToken'), localStorage.getItem('userToken')].filter(isLiveToken)[0] || null;
-  };
-  window.RVG.logoutContrib = function () {
-    ['jwtToken', 'username'].forEach(function (k) { sessionStorage.removeItem(k); });
-    ['userToken', 'userId', 'username', 'userRoles'].forEach(function (k) { localStorage.removeItem(k); });
-  };
 
   // ===== Page connexion =====
   function initLogin() {
@@ -68,14 +36,15 @@
       submit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connexion…';
 
       try {
-        var res = await fetch(window.API_BASE + '/api/auth/login', {
+        var res = await window.RVG.apiFetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: username, password: password })
         });
         var data = await res.json();
         if (res.ok && data.success) {
-          storeSession(data.token, data.user);
+          // Le jeton est déjà dans le cookie posé par l'API : on ne garde que ce qui s'affiche.
+          window.RVG.storeSession(data.user, data.expires_at);
           window.location.href = window.APP_URLS.contributor;
         } else {
           errorBox.textContent = data.message || 'Identifiant ou mot de passe incorrect.';
@@ -98,15 +67,14 @@
   function initDashboardGreeting() {
     var nameEl = document.getElementById('contribName');
     if (!nameEl) return;
-    nameEl.textContent = sessionStorage.getItem('username')
-      || localStorage.getItem('username') || 'contributeur';
+    nameEl.textContent = localStorage.getItem('username') || 'contributeur';
   }
 
   // ===== Garde du dashboard : redirige vers la connexion si non authentifié =====
   function initDashboardGuard() {
     var el = document.querySelector('[data-contrib-dashboard]');
     if (!el) return;
-    if (!window.RVG.getContribToken()) {
+    if (!window.RVG.isLoggedIn()) {
       window.location.href = window.APP_URLS.contributorLogin;
       return;
     }
@@ -167,7 +135,7 @@
     if (!root) return;
 
     // Garde : réservé aux contributeurs connectés.
-    if (!window.RVG.getContribToken()) {
+    if (!window.RVG.isLoggedIn()) {
       window.location.href = window.APP_URLS.contributorLogin;
       return;
     }
@@ -201,7 +169,7 @@
     if (!root) return;
 
     // Garde : réservé aux contributeurs connectés.
-    if (!window.RVG.getContribToken()) {
+    if (!window.RVG.isLoggedIn()) {
       window.location.href = window.APP_URLS.contributorLogin;
       return;
     }
@@ -247,8 +215,7 @@
         msg.style.display = 'none';
         if (!selectedFile) { showMsg('Ajoute d\'abord ton fichier .gpx.', false); return; }
 
-        var token = window.RVG.getContribToken();
-        if (!token) { window.location.href = window.APP_URLS.contributorLogin; return; }
+        if (!window.RVG.isLoggedIn()) { window.location.href = window.APP_URLS.contributorLogin; return; }
         var formData = new FormData();
         formData.append('file', selectedFile);
 
@@ -256,9 +223,8 @@
         var original = submit.innerHTML;
         submit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi…';
         try {
-          var res = await fetch(window.API_BASE + '/api/etl/upload_gpx', {
+          var res = await window.RVG.apiFetch('/api/etl/upload_gpx', {
             method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token },
             body: formData
           });
           if (res.status === 401) { window.location.href = window.APP_URLS.contributorLogin; return; }

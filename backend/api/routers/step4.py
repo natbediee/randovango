@@ -6,6 +6,9 @@ from datetime import date
 from fastapi import APIRouter, Query, Body
 from services.commerce_selection_service import (COMMERCE_SERVICES, OWN_TAB, PROVEN_ONLY_TABS, SHOP_CATEGORY_LABELS,
                                                  SHOPS_SHOWN)
+from fastapi import APIRouter, Query, Body, Depends
+from api.dependencies import require_plan_owner
+from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB, SHOP_CATEGORY_LABELS, SHOPS_SHOWN
 from services.plan_service import insert_or_update_plan
 from services.station_selection_service import (closure_label, is_closed_for_good, is_motorway, price_badges,
                                                 prices_summary, station_maps_url)
@@ -411,7 +414,8 @@ def get_poi(
 
     return categorized_poi
 
-@router.put("/update_plan/{plan_id}",summary="Update an existing trip plan with new data.")
+@router.put("/update_plan/{plan_id}", summary="Update an existing trip plan with new data.",
+            dependencies=[Depends(require_plan_owner)])
 def update_plan(plan_id: int, data: dict = Body(...)):
     plan_id = insert_or_update_plan(plan_id, data)
     return {"status": "updated", "plan_id": plan_id, "recap": data}
