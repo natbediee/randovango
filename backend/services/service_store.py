@@ -326,7 +326,12 @@ def without_locality(address: str) -> str | None:
 def _name_rank(name: str, other: str) -> int | None:
     """
     0 : le même nom ; 1 : l'un contient l'autre (« Cinéma Le Dauphin » / « Le Dauphin »), s'ils font au moins 8 lettres ;
+    2 : le même nom une fois retiré le mot qui dit ce qu'est le lieu (same_name) : « Riboul Crêperie » et « Riboul » ;
     None sinon. Un nom qui dit ce qu'est un lieu, pas lequel (« Boulangerie »), ne reconnaît personne.
+
+    Le rang 2 est la règle du nom de toute la chaîne (same_name), qui réunit déjà les réponses des recherches et lit le
+    registre. Sans lui, « Riboul » (6 lettres, trop court pour le rang 1) n'était pas retrouvé dans « Riboul Crêperie » :
+    le pilote du 13 novembre 2026 aurait créé un second Riboul à Plougonvelin.
     """
     key, other_key = name_key(name), name_key(other)
     if is_generic(key) or is_generic(other_key):
@@ -337,6 +342,8 @@ def _name_rank(name: str, other: str) -> int | None:
         return 0
     if min(len(key), len(other_key)) >= 8 and (compact in other_compact or other_compact in compact):
         return 1
+    if len(place_key(name)) >= 4 and same_name(name, other):
+        return 2
     return None
 
 
@@ -711,13 +718,14 @@ def flag(category, cursor, row: dict, position: tuple | None, city: dict, known:
 
 def namesake_in_commune(row: dict, position: tuple | None, city: dict, known: list) -> dict | None:
     """
-    Un service visible qui porte exactement ce nom dans la même commune, mais trop loin pour être repris d'office
+    Un service visible qui porte ce nom dans la même commune (le même, ou le même sans le mot qui dit ce qu'est le lieu :
+    _name_rank 0 ou 2), mais trop loin pour être repris d'office
     (find_in) : le plus proche. Rien pour un nom passe-partout, ni quand l'adresse n'a pas pu être placée.
     """
     if not position:
         return None
     far = [poi for poi in known if not poi["masque"] and poi["latitude"] is not None
-           and _name_rank(row["nom"], poi["name"]) == 0 and _in_commune(poi, row, city)]
+           and _name_rank(row["nom"], poi["name"]) in (0, 2) and _in_commune(poi, row, city)]
     return min(far, key=lambda poi: haversine_distance_km(*position, poi["latitude"], poi["longitude"]), default=None)
 
 

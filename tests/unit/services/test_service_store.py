@@ -379,3 +379,31 @@ def test_a_twin_masked_by_a_human_is_left_alone(monkeypatch):
     """Un jumeau masqué par un humain, sans relecture en attente, n'est pas touché."""
     closed, decided = _superseded(monkeypatch, waiting=False)
     assert not closed and decided == []
+
+
+# --- La même règle du nom pour retrouver un service que pour réunir les réponses ---
+
+RIBOUL_SPOT = (48.3488, -4.70276)
+
+
+def test_a_name_with_the_word_saying_what_the_place_is_finds_the_known_place():
+    """« Riboul Crêperie », au 2 boulevard de la Mer, retrouve le service « Riboul » à 200 m au lieu d'en créer un second (pilote de Plougonvelin, 13 novembre 2026)."""
+    riboul = _poi("Riboul", "Résidence de l'Océan, boulevard de la Mer, 29217 Plougonvelin", RIBOUL_SPOT, poi_id=84)
+    row = {"nom": "Riboul Crêperie", "adresse": "2 boulevard de la Mer, 29217 Plougonvelin"}
+    assert find_known(row, (RIBOUL_SPOT[0] + 0.0018, RIBOUL_SPOT[1]), PLOUDALMEZEAU, [riboul]) == riboul
+
+
+def test_two_places_whose_names_contradict_stay_two():
+    """« Marché de Plougonvelin » ne retrouve pas « Épicerie de Plougonvelin » au même endroit : même nom une fois les mots retirés, mais un marché n'est pas une épicerie."""
+    grocery = _poi("Épicerie de Plougonvelin", "Place, 29217 Plougonvelin", RIBOUL_SPOT, poi_id=81)
+    row = {"nom": "Marché de Plougonvelin", "adresse": "Place, 29217 Plougonvelin"}
+    assert find_known(row, RIBOUL_SPOT, PLOUDALMEZEAU, [grocery]) is None
+
+
+def test_the_same_name_without_its_kind_further_in_the_commune_makes_a_doubt():
+    """« Riboul Crêperie » trouvé à 2 km du « Riboul » de la même commune n'est pas rattaché d'office : un doute, comme pour un nom identique."""
+    riboul = _poi("Riboul", "Boulevard de la Mer, 29830 Ploudalmézeau", RIBOUL_SPOT, poi_id=84)
+    row = {"nom": "Riboul Crêperie", "adresse": "2 rue du Port, 29830 Ploudalmézeau"}
+    far = (RIBOUL_SPOT[0] + 0.018, RIBOUL_SPOT[1])
+    assert find_known(row, far, PLOUDALMEZEAU, [riboul]) is None
+    assert service_store.namesake_in_commune(row, far, PLOUDALMEZEAU, [riboul]) == riboul
