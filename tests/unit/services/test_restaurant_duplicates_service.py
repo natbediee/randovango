@@ -29,9 +29,10 @@ def test_places_too_far_apart_make_no_pair():
 
 
 def test_a_merge_masks_the_place_and_is_shown_in_its_own_review_tab():
+    """« Restaurant Racines », doublon possible de « Racines », se relit dans « Doublons » : garder l'un ou l'autre, ou « Deux lieux »."""
     signal = {"signal_type": "doublon_restaurant", "source": "doublons",
               "detail": {"autre_id": 1, "autre_nom": "Racines", "autre_adresse": "82 bd", "distance_m": 0, "raison": "même adresse, autre nom"}}
     card = review.build_card("doublons", {"id": 2, "name": "Restaurant Racines"}, [{**signal, "id": 9}])
-    assert card["actions"] == ["fusionner", "deux_lieux", "retirer", "autre_nom", "autre_lien", "autre_maps"] and "Racines" in card["preuves"][0]["texte"]
+    assert card["actions"] == ["garder_celui_ci", "fusionner", "deux_lieux", "retirer", "autre_nom", "autre_lien", "autre_maps"] and "Racines" in card["preuves"][0]["texte"]
     assert review.applied_fields("fusionner", card, None) == {"masque": 1}
     assert review.applied_fields("deux_lieux", card, None) == {}

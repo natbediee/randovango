@@ -15,7 +15,8 @@ QUATRE FILES, parce que les décisions ne se prennent pas pareil :
                  « Garder tel quel » la réaffiche, retirer la laisse masquée ;
     doublons   : deux restaurants proches que la règle n'a pas su trancher (restaurant_duplicates_service.py), ou deux
                  lieux de même nom, quel que soit le service (poi_duplicates_service.py, signal doublon_service).
-                 Fusionner masque celui-ci, l'autre reste ; rien n'est effacé. Une station figée près d'une station
+                 On choisit le lieu qu'on garde (« Garder ce lieu » sous chacun des deux, 13 novembre 2026) : l'autre est
+                 masqué, et la décision « fusionner » est enregistrée sur lui ; rien n'est effacé. Une station figée près d'une station
                  active (doublon_station) est déjà masquée : « Deux lieux » la réaffiche (poi_triage_service.hide_doubtful_stations l'avait masquée).
                  Un lieu mixte, qui vend et sert à la fois (une boulangerie qui fait snack, des viviers avec dégustation),
                  a une fiche restaurant d'un côté et une fiche commerce de l'autre : « Lieu mixte » donne la fiche de
@@ -82,7 +83,7 @@ ACTIONS = {
     "renommer": "valide", "retirer": "valide", "fermer_moment": "valide", "garder": "rejete",
     "valider_saison": "valide", "pas_saisonnier": "rejete",
     "retirer_lien": "valide", "garder_lien": "rejete",
-    "fusionner": "valide", "deux_lieux": "rejete", "lieu_mixte": "valide",
+    "fusionner": "valide", "deux_lieux": "rejete", "lieu_mixte": "valide", "garder_celui_ci": "valide",
     "valider_pepite": "valide",
     "sans_suite": "rejete",
     "autre_lien": "rejete",
@@ -95,6 +96,8 @@ ACTION_LABELS = {
     "valider_saison": "saison validée", "pas_saisonnier": "pas saisonnier",
     "retirer_lien": "lien retiré", "garder_lien": "lien gardé",
     "fusionner": "fusionné", "deux_lieux": "deux lieux", "lieu_mixte": "lieu mixte : une fiche, deux onglets",
+    # Jamais enregistré sous ce nom : la décision est « fusionner », sur l'autre lieu (keep_this_place).
+    "garder_celui_ci": "gardé, l'autre lieu masqué",
     "valider_pepite": "lieu confirmé",
     "sans_suite": "classé sans suite",
     "autre_lien": "lien saisi à la main",
@@ -108,7 +111,8 @@ ACTION_BUTTONS = {
     "fermer_moment": ("Fermé pour le moment", "main"), "garder": ("Garder tel quel", "line"),
     "valider_saison": ("Valider la saison", "main"), "pas_saisonnier": ("Pas saisonnier", "line"),
     "retirer_lien": ("Retirer le lien", "main"), "garder_lien": ("Garder le lien", "line"),
-    "fusionner": ("Même lieu : fusionner", "remove"), "deux_lieux": ("Deux lieux", "line"),
+    "fusionner": ("Même lieu : garder l'autre", "remove"), "deux_lieux": ("Deux lieux", "line"),
+    "garder_celui_ci": ("Même lieu : garder celui-ci", "remove"),
     "lieu_mixte": ("Lieu mixte : un seul lieu, deux fiches", "main"),
     "valider_pepite": ("Confirmer et afficher le lieu", "main"),
     "autre_lien": ("Mettre ce lien", "line"),
@@ -129,6 +133,9 @@ RULE_ACTIONS = ("sans_suite",)
 # La décision des lieux mixtes : proposée seulement dans la file « Doublons », quand l'un a une fiche restaurant et
 # l'autre une fiche commerce (mixed_sheet_table).
 MIXED = "lieu_mixte"
+# « Garder ce lieu » sous le lieu de la carte, dans la file « Doublons » : c'est l'autre lieu qui est masqué
+# (keep_this_place). « fusionner » reste le geste inverse : il masque le lieu de la carte et garde l'autre.
+KEEP_THIS = "garder_celui_ci"
 SHEET_TABLES = ("restaurants", "commerces")
 # Le filtre « Type de lieu » reprend les onglets de l'étape 4 (utils/service_utils.POI_FRONTEND_CATEGORY_MAP), puis le
 # type précis : la catégorie de la fiche de l'agent quand il y en a une (« Crêperie », « Marché »), sinon le service
@@ -264,10 +271,12 @@ def _duplicate_card(signals: list) -> dict:
     detail = _detail(signals[0])
     # Une station figée est masquée dès qu'elle est repérée : « Deux lieux » doit donc la réafficher.
     hidden = signals[0]["signal_type"] == "doublon_station"
+    # Sans le numéro de l'autre lieu, on ne peut pas le masquer : on ne propose alors que de masquer celui-ci.
+    keep = [KEEP_THIS] if detail.get("autre_id") else []
     return {"link": None, "autre_id": detail.get("autre_id"), "reafficher": hidden,
-            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Fusionner masque celui-ci, l'autre reste."
-                        + (" En attendant, celui-ci est masqué." if hidden else ""),
-            "actions": ["fusionner", "deux_lieux"]}
+            "proposal": f"même lieu que « {detail.get('autre_nom')} » ? Choisis le lieu à garder : l'autre sera masqué, "
+                        "rien n'est effacé." + (" En attendant, celui-ci est masqué." if hidden else ""),
+            "actions": [*keep, "fusionner", "deux_lieux"]}
 
 
 def _to_confirm_card(signals: list) -> dict:
@@ -632,6 +641,9 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
         raise ValueError("Lieu mixte : il faut une fiche restaurant d'un côté et une fiche commerce de l'autre")
     if action not in card["actions"] and action not in RULE_ACTIONS and action != MIXED:
         raise ValueError(f"Décision impossible ici : {action}")
+    if action == KEEP_THIS:
+        keep_this_place(cursor, poi_id, card, signals, note, decided_by)
+        return
     fields = applied_fields(action, card, months, url, name)
     cursor.execute(f"SELECT {', '.join(APPLIED_COLUMNS)} FROM poi WHERE id = %s", (poi_id,))
     before = cursor.fetchone()
@@ -667,6 +679,37 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     """, (POI, poi_id, action, (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
     if action == "autre_maps":
         confirm_located(cursor, poi_id, fields, decided_by)
+
+
+def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, decided_by: str) -> None:
+    """
+    « Garder ce lieu » sous le lieu de la carte : l'autre lieu (autre_id) est masqué, celui-ci reste. La décision est
+    enregistrée sur le lieu masqué, sous le nom « fusionner » : c'est elle que lisent les règles, les agents et les
+    carburants (poi_triage_service, load_carburants) pour ne jamais le réafficher. Une décision « fusionner » veut donc
+    toujours dire « ce lieu est masqué comme doublon d'un autre », quel que soit le bouton cliqué.
+    Une station figée (doublon_station) était masquée en attendant : la garder la réaffiche. detail.garde retient le
+    lieu gardé et son état d'avant, pour que l'annulation remette les deux lieux comme avant (cancel_decision).
+    """
+    other_id = card["autre_id"]
+    cursor.execute("SELECT id, masque FROM poi WHERE id IN (%s, %s)", (poi_id, other_id))
+    masked_before = {row["id"]: row["masque"] for row in cursor.fetchall()}
+    if other_id not in masked_before:
+        raise ValueError("L'autre lieu n'existe plus : impossible de le masquer")
+    cursor.execute("UPDATE poi SET masque = %s WHERE id = %s", (1, other_id))
+    kept = {"poi_id": poi_id, "avant": {}}
+    if card.get("reafficher"):
+        cursor.execute("UPDATE poi SET masque = %s WHERE id = %s", (0, poi_id))
+        kept["avant"] = {"masque": masked_before.get(poi_id)}
+    # Les signaux tranchés sont ceux de la carte : c'est ce lieu-ci qui portait le doute.
+    signal_ids = [signal["id"] for signal in signals]
+    marks = ",".join(["%s"] * len(signal_ids))
+    cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
+                   (ACTIONS[KEEP_THIS], *signal_ids))
+    detail = {"file": "doublons", "signal_ids": signal_ids, "avant": {"masque": masked_before[other_id]}, "garde": kept}
+    cursor.execute("""
+        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
+        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
+    """, (POI, other_id, "fusionner", (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
 
 
 def confirm_located(cursor, poi_id: int, fields: dict, decided_by: str) -> bool:
@@ -728,6 +771,8 @@ def cancel_decision(decision_id: int) -> None:
             restore_sheet(cursor, row["objet_id"], detail["avant_fiche"])
         if detail.get("lieu_mixte"):
             split_mixed_place(cursor, row["objet_id"], detail["lieu_mixte"])
+        if detail.get("garde"):
+            restore_kept_place(cursor, detail["garde"])
         signal_ids = detail["signal_ids"]
         if signal_ids:
             marks = ",".join(["%s"] * len(signal_ids))
@@ -737,6 +782,14 @@ def cancel_decision(decision_id: int) -> None:
         cursor.close()
     finally:
         MySQLUtils.disconnect(connection)
+
+
+def restore_kept_place(cursor, kept: dict) -> None:
+    """Annulation de « Garder ce lieu » : le lieu gardé reprend son état d'avant (une station figée redevient masquée)."""
+    before = {column: value for column, value in (kept.get("avant") or {}).items() if column in APPLIED_COLUMNS}
+    if before:
+        assignments = ", ".join(f"{column} = %s" for column in before)
+        cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*before.values(), kept["poi_id"]))
 
 
 def restore_sheet(cursor, poi_id: int, before: dict) -> None:
