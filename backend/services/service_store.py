@@ -277,16 +277,18 @@ def known_services(cursor, city: dict, services: tuple) -> list:
 
 def known_sheets(cursor, city: dict, table: str, kinds: tuple = ()) -> list:
     """
-    Les lieux qui ont une fiche dans cette table autour de la commune, de ces catégories seulement s'il y en a. Un café
-    qui a déjà une fiche restaurant n'est pas enregistré : il s'affiche en restauration (ServiceCategory.shown_elsewhere,
-    souhait de l'utilisatrice, 7 novembre 2026). De même une épicerie qui a déjà sa fiche supermarché.
+    Les lieux visibles qui ont une fiche dans cette table autour de la commune, de ces catégories seulement s'il y en a.
+    Un café qui a déjà une fiche restaurant n'est pas enregistré : il s'affiche en restauration (ServiceCategory.
+    shown_elsewhere, souhait de l'utilisatrice, 7 novembre 2026). De même une épicerie qui a déjà sa fiche supermarché.
+    Seulement si cette fiche est visible : une fiche masquée ne montre rien. Le bar L'Univers (Plougonvelin) n'était
+    affiché nulle part, écarté pour une fiche restaurant masquée, à raison : ce n'est pas un restaurant (13 novembre 2026).
     """
     min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], MAX_KM)
     of_kinds = f"AND sheet.categorie IN ({', '.join(['%s'] * len(kinds))})" if kinds else ""
     cursor.execute(f"""
         SELECT p.id, p.name, p.address, p.latitude, p.longitude, p.url, p.masque
         FROM poi p JOIN {table} sheet ON sheet.poi_id = p.id
-        WHERE p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s {of_kinds}
+        WHERE p.masque = 0 AND p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s {of_kinds}
     """, (min_lat, max_lat, min_lon, max_lon, *kinds))
     return _rows(cursor)
 

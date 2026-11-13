@@ -407,3 +407,22 @@ def test_the_same_name_without_its_kind_further_in_the_commune_makes_a_doubt():
     far = (RIBOUL_SPOT[0] + 0.018, RIBOUL_SPOT[1])
     assert find_known(row, far, PLOUDALMEZEAU, [riboul]) is None
     assert service_store.namesake_in_commune(row, far, PLOUDALMEZEAU, [riboul]) == riboul
+
+
+# --- Une fiche masquée ne montre rien : elle ne cache pas le café ---
+
+def test_a_masked_restaurant_sheet_does_not_hide_the_cafe(monkeypatch):
+    """Le bar L'Univers est enregistré en café : sa fiche restaurant est masquée (ce n'est pas un restaurant), elle ne l'affiche nulle part (Plougonvelin, 13 novembre 2026)."""
+    univers = {"nom": "L'Univers", "genre": "bar", "categorie": "cafe", "adresse": GALION_ADDRESS, "pages": [SITE]}
+    osm_cafe = _poi("L'univers", GALION_ADDRESS, GALION_SPOT, poi_id=96)
+    summary, base, created, linked = _save(monkeypatch, COMMERCES, univers, known=[osm_cafe])
+    assert summary["fiches"] == 1 and summary["deja_restaurant"] == 0 and linked == [(96, "cafe")]
+
+
+def test_only_visible_sheets_are_read_as_shown_elsewhere():
+    """Les fiches lues pour « déjà une fiche restaurant » ne sont que celles des services visibles."""
+    base = _Base()
+    base.description = [("id",)]
+    service_store.known_sheets(base, PLOUDALMEZEAU, "restaurants")
+    [(sql, _)] = base.queries
+    assert "WHERE p.masque = 0 AND" in sql
