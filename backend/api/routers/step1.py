@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from api.dependencies import get_current_traveller, require_plan_owner
-from api.rate_limit import CREATE_PLAN_LIMIT, DAY_CITY_LIMIT, limiter
+from api.rate_limit import CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT, limiter
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
@@ -262,7 +262,8 @@ async def get_ville_list(
 
 
 @router.post("/create_plan", summary="Create a new trip plan with empty days (owner taken from the token).")
-@limiter.limit(CREATE_PLAN_LIMIT)  # la ville choisie lance les recherches de Vany (carte #21)
+# La ville choisie lance les recherches de Vany (carte #21).
+@limiter.limit(CREATE_PLAN_LIMIT, error_message=CREATE_PLAN_MESSAGE)
 def create_plan(
     request: Request,
     city_id: int = Body(...),
@@ -323,7 +324,8 @@ def create_plan(
 
 @router.put("/update_day_city/{plan_id}", summary="Set (or change) the city for a given day of the trip.",
             dependencies=[Depends(require_plan_owner)])
-@limiter.limit(DAY_CITY_LIMIT)  # chaque ville choisie lance les recherches de Vany (carte #21)
+# Chaque ville choisie lance les recherches de Vany (carte #21).
+@limiter.limit(DAY_CITY_LIMIT, error_message=DAY_CHOICE_MESSAGE)
 def update_day_city(request: Request, plan_id: int, data: dict = Body(...)):
     """Fixe la ville d'un jour du séjour, appelé à chaque transition de jour depuis /results."""
     day_number = data.get("day_number")

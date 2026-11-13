@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Query, Body, Depends, Request
 from api.dependencies import require_plan_owner
-from api.rate_limit import DAY_SPOT_LIMIT, limiter
+from api.rate_limit import DAY_CHOICE_MESSAGE, DAY_SPOT_LIMIT, limiter
 from services.pepite_service import start_preparation
 from services.plan_service import insert_or_update_plan
 from services.spot_selection_service import proposable_spots
@@ -142,7 +142,8 @@ def _spots_around_city(connection, cursor, city_id, distance_km, get_bounding_bo
 
 @router.put("/update_plan/{plan_id}", summary="Update an existing trip plan with new data.",
             dependencies=[Depends(require_plan_owner)])
-@limiter.limit(DAY_SPOT_LIMIT)  # le spot choisi lance la préparation des pépites de Vany (carte #21)
+# Le spot choisi lance la préparation des pépites de Vany (carte #21).
+@limiter.limit(DAY_SPOT_LIMIT, error_message=DAY_CHOICE_MESSAGE)
 def update_plan(request: Request, plan_id: int, data: dict = Body(...)):
     plan_id = insert_or_update_plan(plan_id, data)
     # Le spot est choisi : on prépare tout de suite, en tâche de fond, les idées

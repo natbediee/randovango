@@ -20,9 +20,9 @@ from slowapi.errors import RateLimitExceeded
 from api.dependencies import get_current_traveller
 from services.authentification import AUTH_COOKIE_NAME
 
-# Un voyage se crée une fois, parfois deux si on recommence. Deux plafonds à la fois (« ; ») :
-# 3 dans l'heure, et 5 dans la journée.
-CREATE_PLAN_LIMIT = "3/hour;5/day"
+# Un voyage gratuit par jour et par voyageur : c'est la future offre gratuite (une offre payante
+# viendra au-delà). Le compteur repart 24 heures après le premier voyage de la journée.
+CREATE_PLAN_LIMIT = "1/day"
 # Une ville par jour du séjour (7 au plus), plus quelques changements d'avis.
 DAY_CITY_LIMIT = "15/hour"
 # Le spot du jour se choisit en quelques clics : environ 3 par jour sur 7 jours.
@@ -31,6 +31,12 @@ DAY_SPOT_LIMIT = "30/hour"
 # pour contourner les trois précédents. Compté par adresse IP : 10 nouveaux visiteurs par heure
 # derrière un même wifi de camping partagé, avant qu'un onzième soit refusé.
 GUEST_TOKEN_LIMIT = "10/hour"
+
+# Le message de chaque refus dit au voyageur ce qui s'est passé et quand recommencer, sans jargon.
+# Les compteurs à l'heure repartent au plus une heure après le premier appel compté.
+CREATE_PLAN_MESSAGE = "Tu as déjà composé ton voyage gratuit aujourd'hui. Reviens demain pour en composer un autre."
+DAY_CHOICE_MESSAGE = "Trop de changements en peu de temps : ton choix n'a pas été enregistré. Réessaie dans une heure au plus."
+GUEST_TOKEN_MESSAGE = "Trop de nouveaux visiteurs depuis ta connexion internet. Réessaie dans une heure au plus."
 
 
 def client_ip(request: Request) -> str:
@@ -69,11 +75,8 @@ limiter = Limiter(key_func=traveller_key, enabled=rate_limit_enabled())
 
 
 def too_many_requests(request: Request, exc: RateLimitExceeded) -> JSONResponse:
-    """La réponse 429 : un message que le front affiche tel quel au voyageur."""
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Tu vas un peu vite : trop de demandes en peu de temps. Réessaie dans un moment."},
-    )
+    """La réponse 429 : le message du plafond atteint (error_message de la route), que le front affiche tel quel."""
+    return JSONResponse(status_code=429, content={"detail": exc.detail})
 
 
 def add_rate_limit(app) -> None:

@@ -53,7 +53,7 @@
     var notice = document.createElement('div');
     notice.className = 'rate-limit-notice';
     notice.setAttribute('role', 'alert');
-    notice.textContent = body.detail || 'Trop de demandes en peu de temps. Réessaie dans un moment.';
+    notice.textContent = body.detail || 'Trop de demandes en peu de temps. Réessaie dans une heure au plus.';
     document.body.appendChild(notice);
     setTimeout(function () { notice.remove(); }, 8000);
   }

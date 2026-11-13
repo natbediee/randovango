@@ -34,3 +34,14 @@ def llm_calls(monkeypatch):
     recorded = []
     monkeypatch.setattr(llm_service, "record_call", recorded.append)
     return recorded
+
+
+@pytest.fixture(autouse=True)
+def rate_limit_counters():
+    """
+    Chaque test part de compteurs de débit à zéro (api/rate_limit.py, carte #21) : sinon les plans
+    créés par un test compteraient pour le suivant, et le plafond d'un plan par jour le bloquerait.
+    """
+    from api.rate_limit import limiter
+
+    limiter.reset()

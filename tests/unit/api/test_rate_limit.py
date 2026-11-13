@@ -23,9 +23,8 @@ def guest_token(guest_id: str) -> str:
 
 @pytest.fixture
 def world(monkeypatch):
-    """Les routes plafonnées, compteurs remis à zéro ; chaque recherche de Vany lancée est notée."""
+    """Les routes plafonnées (compteurs remis à zéro par conftest.py) ; chaque recherche de Vany lancée est notée."""
     state = SimpleNamespace(searches=[])
-    rate_limit.limiter.reset()
 
     def search(*args):
         state.searches.append(args)
@@ -46,8 +45,7 @@ def world(monkeypatch):
     for router, prefix in ((auth, "auth"), (step1, "step1"), (step3, "step3")):
         app.include_router(router.router, prefix=f"/api/{prefix}")
     state.client = TestClient(app)
-    yield state
-    rate_limit.limiter.reset()
+    return state
 
 
 def create_plan(world, guest_id="invite-1"):
@@ -55,30 +53,23 @@ def create_plan(world, guest_id="invite-1"):
     return world.client.post("/api/step1/create_plan", json={"city_id": 5, "duration_days": 2})
 
 
-def test_fourth_plan_in_an_hour_is_refused(world):
-    """Trois plans par heure passent ; le quatrième reçoit 429, et Vany ne lance pas de recherche de plus."""
-    statuses = [create_plan(world).status_code for _ in range(4)]
-    assert statuses == [200] * 3 + [429]
-    assert len(world.searches) == 3
+def test_second_plan_of_the_day_is_refused(world):
+    """Un voyage gratuit par jour : le deuxième plan reçoit 429, et Vany ne lance pas de recherche de plus."""
+    statuses = [create_plan(world).status_code for _ in range(2)]
+    assert statuses == [200, 429]
+    assert len(world.searches) == 1
 
 
-def test_plans_are_also_capped_per_day():
-    """La création de plans a aussi un plafond par jour : 5, en plus des 3 par heure."""
-    assert rate_limit.CREATE_PLAN_LIMIT == "3/hour;5/day"
-
-
-def test_429_answer_is_clear(world):
-    """La réponse 429 porte un message en français que le front affiche tel quel au voyageur."""
-    for _ in range(3):
-        create_plan(world)
-    response = create_plan(world)
-    assert response.json() == {"detail": "Tu vas un peu vite : trop de demandes en peu de temps. Réessaie dans un moment."}
+def test_plan_refusal_says_why_and_when(world):
+    """Le refus d'un deuxième plan dit au voyageur que son voyage gratuit du jour est déjà composé, et quand revenir."""
+    create_plan(world)
+    assert create_plan(world).json() == {"detail": rate_limit.CREATE_PLAN_MESSAGE}
+    assert "demain" in rate_limit.CREATE_PLAN_MESSAGE
 
 
 def test_each_traveller_has_its_own_count(world):
     """Un voyageur au plafond ne bloque pas un autre voyageur, même sur le même wifi."""
-    for _ in range(3):
-        create_plan(world, "invite-1")
+    create_plan(world, "invite-1")
     assert create_plan(world, "invite-1").status_code == 429
     assert create_plan(world, "invite-2").status_code == 200
 
@@ -89,6 +80,8 @@ def test_day_city_is_capped(world):
     statuses = [world.client.put("/api/step1/update_day_city/1", json={"day_number": 1, "city_id": 5}).status_code
                 for _ in range(16)]
     assert statuses == [200] * 15 + [429]
+    last = world.client.put("/api/step1/update_day_city/1", json={"day_number": 1, "city_id": 5})
+    assert last.json() == {"detail": rate_limit.DAY_CHOICE_MESSAGE}
 
 
 def test_day_spot_is_capped(world):
