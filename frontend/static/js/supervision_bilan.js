@@ -3,7 +3,7 @@
 // compte avec les mêmes règles que les pages Spots et Services.
 
 const CITIES_SHOWN = 12;
-f
+
 function authToken() {
     return sessionStorage.getItem('jwtToken') || localStorage.getItem('userToken');
 }
