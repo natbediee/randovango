@@ -3,7 +3,7 @@
 // compte avec les mêmes règles que les pages Spots et Services.
 
 const CITIES_SHOWN = 12;
-
+f
 function authToken() {
     return sessionStorage.getItem('jwtToken') || localStorage.getItem('userToken');
 }
@@ -68,9 +68,9 @@ function render(data) {
     const spots = data.spots;
     showBlock('spotsBlock', 'spotsRows', rows([
         { label: 'Retraits proposés par l\'agent, à relire', n: spots.a_relire, href: urls.supervision },
-        { label: 'Gardés par toi', n: spots.gardes },
-        { label: 'Retirés par toi', n: spots.retires },
-        { label: 'Ouvertures tranchées par toi', n: spots.ouvertures },
+        { label: 'Gardés par l\'administrateur', n: spots.gardes },
+        { label: 'Retirés par l\'administrateur', n: spots.retires },
+        { label: 'Ouvertures tranchées par l\'administrateur', n: spots.ouvertures },
     ], item => item.href));
 
     showBlock('servicesBlock', 'servicesRows',
