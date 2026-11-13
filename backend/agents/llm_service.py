@@ -18,7 +18,8 @@ du JSON qu'on attend en retour. Claude est obligé de le respecter, donc on
 reçoit toujours un JSON propre, directement utilisable.
 
 Chaque appel, réussi ou non, laisse une ligne dans la table llm_calls (voir record_call) :
-durée, tokens, coût, statut, et l'objet traité quand l'agent l'a annoncé avec mesure_objet.
+durée, tokens, coût, statut, l'objet traité quand l'agent l'a annoncé avec mesure_objet, et le passage
+et l'étape quand la chaîne des services les a annoncés avec mesure_passage et mesure_etape.
 """
 import contextvars
 import json
@@ -27,6 +28,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -80,7 +82,8 @@ _current_object = contextvars.ContextVar("llm_object", default=(None, None))
 
 CALL_COLUMNS = ("called_at", "agent", "engine", "model", "effort", "duration_ms",
                 "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens",
-                "web_searches", "cost_usd", "turns", "tools", "status", "error", "objet_type", "objet_id")
+                "web_searches", "cost_usd", "turns", "tools", "status", "error", "objet_type", "objet_id",
+                "passage_id", "etape")
 INSERT_CALL = (f"INSERT INTO llm_calls ({', '.join(CALL_COLUMNS)}) "
                f"VALUES ({', '.join(['%s'] * len(CALL_COLUMNS))})")
 
@@ -100,6 +103,64 @@ def mesure_objet(objet_type: str, objet_id: int):
         yield
     finally:
         _current_object.reset(token)
+
+
+# Le passage en cours et l'étape de l'appel dans ce passage. Un passage est une commune traitée par la chaîne des
+# services (agents/find_services.py) : toutes ses catégories et tous ses appels portent le même identifiant, ce qui
+# permet de relire en base l'enchaînement des agents (services/llm_calls_service.passage_calls).
+_current_passage = contextvars.ContextVar("llm_passage", default=None)
+_current_step = contextvars.ContextVar("llm_step", default="")
+STEP_LENGTH = 80        # la longueur de llm_calls.etape
+
+
+def new_passage_id() -> str:
+    """
+    Un identifiant de passage : 32 caractères hexadécimaux. C'est aussi la forme d'un identifiant de trace de Langfuse :
+    il pourra servir tel quel quand Langfuse sera branché ici (carte #111).
+    """
+    return uuid.uuid4().hex
+
+
+@contextmanager
+def mesure_passage(passage_id: str):
+    """Annonce le passage auquel appartiennent les appels faits à l'intérieur du bloc."""
+    token = _current_passage.set(passage_id)
+    try:
+        yield
+    finally:
+        _current_passage.reset(token)
+
+
+def passage_courant() -> str | None:
+    return _current_passage.get()
+
+
+@contextmanager
+def mesure_etape(name: str):
+    """
+    Annonce l'étape des appels faits à l'intérieur du bloc. Les étapes s'emboîtent : « zone 3 / 10, » puis « année 2 »
+    donnent « zone 3 / 10, année 2 ».
+    """
+    token = _current_step.set(_current_step.get() + name)
+    try:
+        yield
+    finally:
+        _current_step.reset(token)
+
+
+def etape_courante() -> str:
+    return _current_step.get()
+
+
+def map_in_context(pool, function, items) -> list:
+    """
+    pool.map, en donnant à chaque fil le contexte de celui qui le lance. Un fil d'un ThreadPoolExecutor démarre avec un
+    contexte vide : sans cela, les appels faits en parallèle (les recherches d'une commune, les lots de preuves) perdraient
+    leur passage et leur étape. Chaque fil reçoit sa propre copie, prise ici, avant le lancement.
+    """
+    items = list(items)
+    contexts = [contextvars.copy_context() for _ in items]
+    return list(pool.map(lambda pair: pair[0].run(function, pair[1]), zip(contexts, items)))
 
 
 def call_status(error: Exception | None) -> str:
@@ -149,6 +210,7 @@ def build_call_row(agent: str | None, engine: str, model: str, effort: str | Non
         "status": call_status(error),
         "error": str(error)[:255] if error is not None else None,
         "objet_type": objet_type, "objet_id": objet_id,
+        "passage_id": _current_passage.get(), "etape": _current_step.get()[:STEP_LENGTH] or None,
     }
 
 

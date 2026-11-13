@@ -8,6 +8,7 @@ def signal(kind, source="osm", **detail):
 
 
 def test_a_reported_closure_hides_the_place() -> None:
+    """Une fermeture signalée par OSM ou par un agent, ou un lieu absent d'OSM, masque le service."""
     assert triage.must_hide([signal("fermeture_osm", "osm")])
     assert triage.must_hide([signal("absent_osm", "osm")])
     assert triage.must_hide([signal("fermeture_agent", "agent", type="definitive")])
@@ -15,11 +16,13 @@ def test_a_reported_closure_hides_the_place() -> None:
 
 
 def test_a_place_that_still_exists_stays_visible() -> None:
+    """Un renommage ou une fermeture momentanée laisse le service visible."""
     assert not triage.must_hide([signal("renommage_osm", "osm")])
     assert not triage.must_hide([signal("fermeture_agent", "agent", type="momentanee")])
 
 
 def test_only_checked_sites_and_tourism_pages_are_applied() -> None:
+    """Seul le lien d'agent contrôlé qui mène au site du lieu ou à un office de tourisme est appliqué sans relecture."""
     assert triage.auto_link_allowed([signal("lien_agent", "agent", niveau="auto", type_page="site")])
     assert triage.auto_link_allowed([signal("lien_agent", "agent", niveau="auto", type_page="office_tourisme")])
     assert not triage.auto_link_allowed([signal("lien_agent", "agent", niveau="auto", type_page="facebook")])
@@ -27,32 +30,38 @@ def test_only_checked_sites_and_tourism_pages_are_applied() -> None:
 
 
 def test_an_osm_link_needs_the_same_control() -> None:
+    """Un lien d'OSM n'est appliqué que si le contrôle de la page a retrouvé le lieu."""
     assert triage.auto_link_allowed([signal("lien_osm", "osm", url="https://a.fr", controle="ok")])
     assert not triage.auto_link_allowed([signal("lien_osm", "osm", url="https://a.fr", controle="nom_absent")])
     assert not triage.auto_link_allowed([signal("lien_osm", "osm", url="https://a.fr")])
 
 
 def test_an_osm_social_page_is_accepted_without_reading_it() -> None:
+    """Une page sociale donnée par OSM, ou une page qui porte le téléphone du lieu, est acceptée sans être lue."""
     assert triage.auto_link_allowed([signal("lien_osm", "osm", url="https://www.facebook.com/a", controle="a_valider_social")])
     assert triage.auto_link_allowed([signal("lien_osm", "osm", url="https://a.fr", controle="ok_telephone")])
 
 
 def test_an_agent_social_page_still_waits_for_a_human() -> None:
+    """Une page sociale proposée par un agent attend toujours la décision d'un humain."""
     assert not triage.auto_link_allowed([signal("lien_agent", "agent", niveau="a_valider", type_page="facebook")])
 
 
 def test_a_closure_without_another_name_removes_the_place() -> None:
+    """Une fermeture définitive sans autre nom retire le service."""
     assert triage.must_remove([signal("absent_osm")])
     assert triage.must_remove([signal("fermeture_agent", type="definitive")])
 
 
 def test_a_new_name_or_a_closure_for_now_waits_for_a_human() -> None:
+    """Un nouveau nom, une reprise ou une fermeture momentanée attend la décision d'un humain."""
     assert not triage.must_remove([signal("fermeture_osm"), signal("renommage_osm", nom_osm="La Cale")])
     assert not triage.must_remove([signal("fermeture_agent", type="reprise", autre_nom="Le Neuf")])
     assert not triage.must_remove([signal("fermeture_agent", type="momentanee")])
 
 
 def test_what_the_restaurant_agent_made_useless_has_no_follow_up() -> None:
+    """Là où l'agent des restaurants est passé, les signaux d'un restaurant sans fiche sont classés sans suite ; ailleurs, et pour les autres services, ils restent."""
     hidden = {"poi_id": 1, "address": "3 rue du Port, 29830 Ploudalmézeau"}
     elsewhere = {"poi_id": 2, "address": "1 place, 22000 Saint-Brieuc"}
     checked = {"poi_id": 3, "address": "4 rue du Port, 29830 Ploudalmézeau"}
@@ -67,22 +76,42 @@ def test_what_the_restaurant_agent_made_useless_has_no_follow_up() -> None:
 
 
 def test_a_shop_without_a_sheet_where_the_shop_agent_went_has_no_follow_up() -> None:
+    """Là où l'agent des commerces est passé, le lien d'un commerce sans fiche est classé sans suite (« Au jardin », Marseille)."""
     au_jardin = {"poi_id": 6377, "address": "52 Boulevard Chave, 13005 Marseille"}
     chains = [({"restaurant"}, set(), set()), ({"convenience"}, {10}, {"13005"})]
     assert triage.without_follow_up("liens", au_jardin, chains, {6377: {"convenience"}})
 
 
 def test_a_link_already_refused_or_removed_is_not_proposed_again() -> None:
+    """Un lien déjà refusé ou retiré pour ce lieu n'est pas proposé une seconde fois (« Au jardin », Marseille)."""
     signal = {"signal_type": "lien_osm", "detail": {"url": "https://www.aujardin-marseille.com/"}}
     judged = {(6377, triage.link_key("http://aujardin-marseille.com"))}
     assert triage.already_judged([signal], 6377, judged) and not triage.already_judged([signal], 1, judged)
 
 
 def test_a_domain_that_no_longer_exists_is_a_dead_link(monkeypatch) -> None:
+    """Un domaine qui n'existe plus fait un lien mort."""
     def no_domain(host, port):
         raise triage.socket.gaierror("introuvable")
     monkeypatch.setattr(triage.socket, "getaddrinfo", no_domain)
     assert triage._control_osm_link({"detail": {"url": "http://aujardin-marseille.com"}}) == "lien_mort"
+
+
+def test_every_family_of_shop_sheets_is_a_chain_of_its_own() -> None:
+    """Le tri connaît les supermarchés : leurs fiches font une chaîne à part, comme les cafés, et ne comptent pas pour les commerces."""
+    by_services = {services: sql for services, sql in triage.CHAINS}
+    assert "c.categorie = 'supermarche'" in by_services[triage.OWN_TAB["supermarche"]] and "supermarket" in triage.OWN_TAB["supermarche"]
+    assert "c.categorie = 'cafe'" in by_services[triage.OWN_TAB["cafe"]]
+    assert "NOT IN ('cafe', 'supermarche')" in by_services[triage.COMMERCE_SERVICES]
+
+
+def test_a_supermarket_without_a_sheet_where_the_supermarket_agent_went_has_no_follow_up() -> None:
+    """Là où l'agent des supermarchés est passé, le lien d'un supermarché d'OSM sans fiche est classé sans suite ; dans une commune où seuls les commerces sont passés, il reste."""
+    old = {"poi_id": 2087, "address": "9 rue du Port, 29217 Plougonvelin"}
+    passed = [({"convenience"}, {10}, {"29217"}), ({"supermarket"}, {11}, {"29217"})]
+    shops_only = [({"convenience"}, {10}, {"29217"}), ({"supermarket"}, set(), set())]
+    assert triage.without_follow_up("liens", old, passed, {2087: {"supermarket"}})
+    assert not triage.without_follow_up("liens", old, shops_only, {2087: {"supermarket"}})
 
 
 def _sort_stations(monkeypatch, trial=False):

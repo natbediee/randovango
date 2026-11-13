@@ -1,6 +1,6 @@
 """
-Le rattrapage des doublons de restaurants déjà en base : la règle que restaurant_service.py applique à l'enregistrement
-(_find_known), rejouée sur les pépites visibles. Elle teste la règle sur les vraies données, comme le fera le code.
+Le rattrapage des doublons de restaurants déjà en base : la règle que service_store.py applique à l'enregistrement
+(find_in), rejouée sur les pépites visibles. Elle teste la règle sur les vraies données, comme le fera le code.
 
     même lieu : la règle le reconnaît (même adresse et un nom qui contient l'autre, ou même nom à 50 m sans numéro).
                 Le plus récent est masqué sous le nom RULE_AUTHOR, l'autre reste. Annulable dans la supervision ;
@@ -23,8 +23,8 @@ import argparse
 
 from etl.load.load_poi_checks import save_signal
 from services import poi_review_service as review
-from services import restaurant_service
-from services.restaurant_service import place_key, same_address
+from services import service_store
+from services.service_store import place_key, same_address
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
@@ -43,7 +43,7 @@ def verdict(first: dict, second: dict) -> tuple | None:
     """(verdict, raison) pour deux pépites proches, ou None si ce sont deux voisins."""
     position = (second["latitude"], second["longitude"])
     city = {"latitude": second["latitude"], "longitude": second["longitude"]}
-    if restaurant_service._find_known({"nom": second["name"], "adresse": second["address"]}, position, city, [first]):
+    if service_store.find_in({"nom": second["name"], "adresse": second["address"]}, position, city, [first]):
         return SAME_PLACE, "même lieu selon la règle"
     if same_address(first["address"], second["address"]):
         return DOUBT, "même adresse, autre nom"

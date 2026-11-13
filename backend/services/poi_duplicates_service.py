@@ -11,16 +11,24 @@ poi est (original_id, source_id), donc chaque objet devient un lieu.
                 tranchés par un humain. Signal doublon_service, à trancher dans la file « Doublons » de /supervision/services ;
     voisins   : tout le reste. Rien n'est écrit.
 
-LEQUEL RESTE : celui qui a une fiche d'agent (restaurants, commerces), sinon celui qu'un humain a déjà tranché, sinon
-celui qui a un lien, sinon celui d'OSM, sinon le plus ancien. Dans un groupe de plus de deux, c'est toujours le même
-qui reste.
+D'UNE SOURCE À L'AUTRE, L'ADRESSE ET LA POSITION NE SE COMPARENT PAS AU MÈTRE
+L'adresse d'OSM est souvent celle du point le plus proche (Nektar et L'Armen, au Conquet, portent la même « 10 rue
+Poncelin, Lochrist »), et un agent place un lieu à son adresse, pas sur son bâtiment. Entre OSM et une autre source, le
+numéro de la rue ne fait donc pas un doute (Kafé Kanggui, 5 et 3 rue Louis Pasteur, à 3 m), et un service d'agent est
+le même lieu jusqu'à PAIR_M (Biocoop Biogastell, à 29 m).
+
+LEQUEL RESTE : la station de la source de l'État (l'étape 4 ne montre qu'elle, et la règle masquait la sienne au profit
+de celle d'OSM), sinon celui qui a une fiche d'agent (restaurants, commerces), sinon celui qu'un humain a déjà tranché,
+sinon celui qui a un lien, sinon celui d'OSM, sinon le plus ancien. Dans un groupe de plus de deux, c'est toujours le
+même qui reste.
 
 Deux restaurants qui ont chacun une fiche sont laissés à restaurant_duplicates_service.py, qui a sa propre règle.
 
 JAMAIS DE MASQUAGE AUTOMATIQUE D'UNE FICHE D'AGENT : les agents prennent un lieu masqué pour une décision humaine et
 ne le reprennent plus. Le jumeau sans fiche est masqué, celui qui a la fiche reste (les agents reprennent cette ligne).
 Deux jumeaux qui ont chacun une fiche, ou un jumeau sans fiche déjà tranché par un humain, font un doute
-(choix de l'utilisatrice du 7 novembre 2026 : le moins possible de cas à relire).
+(choix de l'utilisatrice du 7 novembre 2026 : le moins possible de cas à relire). Une exception : le café des commerces
+qui a aussi sa fiche restaurant est masqué, comme les commerces l'écartent à l'enregistrement (Le Galion).
 
 UNE DÉCISION HUMAINE PRIME : un lieu dont le signal a déjà été tranché n'est plus repris, et une fusion que quelqu'un a
 annulée ne sera pas refaite par la règle. Rien n'est effacé.
@@ -41,15 +49,15 @@ from etl.load.load_poi_checks import save_signal
 from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
 from services import poi_review_service as review
 from services.pepite_service import is_generic, name_key
-from services.restaurant_service import place_key, street_words
+from services.service_store import DUPLICATE_SIGNAL, DUPLICATE_SOURCE, same_name, street_words
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("poi_duplicates")
 
-SOURCE = "doublons"
-SIGNAL = "doublon_service"
+SOURCE = DUPLICATE_SOURCE
+SIGNAL = DUPLICATE_SIGNAL
 TAB = "doublons"
 RULE_AUTHOR = review.RULE_AUTHOR
 DOUBLE_M = 25
@@ -59,7 +67,10 @@ SAME_SPOT_M = 3
 LATITUDE_WINDOW = 0.0005
 SAME_PLACE, DOUBT = "meme_lieu", "doute"
 OSM, WIKIDATA = "osm", "wikidata"
-AGENT_SOURCES = ("agent_restaurants", "agent_commerces")
+AGENT_SOURCES = tuple(review.CATEGORIES)     # la source des services créés par chaque catégorie d'agents
+# Les stations de la source de l'État (etl/load/load_fuel) : les seules que l'étape 4 montre.
+STATE_FUEL, FUEL = "prix-carburants", "fuel"
+CAFE_SHEET = "cafe"
 # Les noms qui disent ce qu'est un lieu, pas lequel : ceux que le chargement OSM donne aux lieux sans nom, et quelques
 # autres. 5 « Toilettes publiques » à 1 m l'une de l'autre à Quimper sont un seul endroit, pas 5.
 PLAIN_NAMES = {name_key(name) for name in (*DEFAULT_NAME_BY_TYPE.values(), "Toilettes", "WC", "Sanitaires", "PMR", "Abri bus")}
@@ -79,6 +90,10 @@ def same_service(first: dict, second: dict) -> bool:
     Un service en commun, ou un même onglet de l'étape 4. Wikidata et les agents ne rangent pas un lieu comme OSM
     (« fortification » et « museum », « cafe » et « restaurant ») : le même nom au même endroit suffit alors.
     """
+    # Une station ne fait la paire qu'avec une station : le Spar et sa pompe, à 44 m, sont deux services.
+    fuel = [FUEL in place["categories"] for place in (first, second)]
+    if any(fuel):
+        return all(fuel)
     if first["categories"] & second["categories"]:
         return True
     if {first["source"], second["source"]} & {WIKIDATA, *AGENT_SOURCES}:
@@ -89,12 +104,18 @@ def same_service(first: dict, second: dict) -> bool:
 
 def rank(place: dict) -> tuple:
     """Plus grand = celui qui reste."""
-    return (place["sheet"], place["decided"], bool(place["url"]), place["source"] == OSM, -place["id"])
+    return (place["source"] == STATE_FUEL, place["sheet"], place["restaurant"], place["decided"], bool(place["url"]),
+            place["source"] == OSM, -place["id"])
+
+
+def _cafe_with_a_restaurant_sheet(first: dict, second: dict) -> bool:
+    """Un café des commerces et un restaurant : les commerces écartent ce café à l'enregistrement, la fiche restaurant suffit."""
+    return any(place["restaurant"] and other.get("shop") == CAFE_SHEET for place, other in ((first, second), (second, first)))
 
 
 def _sheet_doubt(first: dict, second: dict) -> str | None:
     """La raison d'un doute dû aux fiches d'agent, ou None si l'un des deux peut être masqué."""
-    if first["sheet"] and second["sheet"]:
+    if first["sheet"] and second["sheet"] and not _cafe_with_a_restaurant_sheet(first, second):
         return "même nom, deux fiches d'agent"
     if first["sheet"] != second["sheet"] and (second if first["sheet"] else first)["decided"]:
         return "même nom, le lieu sans fiche a déjà été tranché"
@@ -103,7 +124,7 @@ def _sheet_doubt(first: dict, second: dict) -> str | None:
 
 def verdict(first: dict, second: dict, distance_m: float) -> tuple | None:
     """(verdict, raison) pour deux lieux proches, ou None si ce sont deux voisins."""
-    if place_key(first["name"]) != place_key(second["name"]) or not same_service(first, second):
+    if not same_name(first["name"], second["name"]) or not same_service(first, second):
         return None
     if first["sheet"] and second["sheet"] and first["restaurant"] and second["restaurant"]:
         return None
@@ -112,17 +133,22 @@ def verdict(first: dict, second: dict, distance_m: float) -> tuple | None:
             return None
         reason = _sheet_doubt(first, second)
         return (DOUBT, reason) if reason else (SAME_PLACE, "même nom, au même endroit")
+    sources = {first["source"], second["source"]}
     numbers = street_number(first["address"]), street_number(second["address"])
-    if all(numbers) and numbers[0] != numbers[1]:
+    if all(numbers) and numbers[0] != numbers[1] and (len(sources) == 1 or OSM not in sources):
         return DOUBT, "même nom, autre numéro de la rue"
     if first["decided"] and second["decided"]:
         return DOUBT, "même nom, deux lieux déjà tranchés"
-    if distance_m > DOUBLE_M:
+    if distance_m > DOUBLE_M and not sources & set(AGENT_SOURCES):
         return DOUBT, f"même nom, à plus de {DOUBLE_M} m"
     reason = _sheet_doubt(first, second)
     if reason:
         return DOUBT, reason
     return SAME_PLACE, "même nom, même service"
+
+
+def _distance_m(first: dict, second: dict) -> float:
+    return 1000 * haversine_distance_km(first["latitude"], first["longitude"], second["latitude"], second["longitude"])
 
 
 def find_pairs(places: list) -> list:
@@ -133,8 +159,7 @@ def find_pairs(places: list) -> list:
         for second in places[index + 1:]:
             if second["latitude"] - first["latitude"] > LATITUDE_WINDOW:
                 break
-            distance_m = 1000 * haversine_distance_km(first["latitude"], first["longitude"],
-                                                      second["latitude"], second["longitude"])
+            distance_m = _distance_m(first, second)
             if distance_m > PAIR_M:
                 continue
             found = verdict(first, second, distance_m)
@@ -172,7 +197,7 @@ def _visible_places(cursor) -> list:
                (SELECT GROUP_CONCAT(sv.category) FROM poi_service ps JOIN services sv ON sv.id = ps.service_id
                 WHERE ps.poi_id = p.id) AS categories,
                EXISTS (SELECT 1 FROM restaurants r WHERE r.poi_id = p.id) AS restaurant,
-               EXISTS (SELECT 1 FROM commerces c WHERE c.poi_id = p.id) AS commerce,
+               (SELECT c.categorie FROM commerces c WHERE c.poi_id = p.id) AS shop,
                EXISTS (SELECT 1 FROM decisions d WHERE d.objet_type = %s AND d.objet_id = p.id
                        AND d.annulee_at IS NULL AND d.decided_by <> %s) AS decided
         FROM poi p LEFT JOIN sources s ON s.id = p.source_id
@@ -180,7 +205,7 @@ def _visible_places(cursor) -> list:
     """, (review.POI, RULE_AUTHOR))
     return [{**row, "latitude": float(row["latitude"]), "longitude": float(row["longitude"]), "address": row["address"] or "",
              "categories": set((row["categories"] or "").lower().split(",")) - {""},
-             "restaurant": bool(row["restaurant"]), "sheet": bool(row["restaurant"] or row["commerce"]),
+             "restaurant": bool(row["restaurant"]), "sheet": bool(row["restaurant"] or row["shop"]),
              "decided": bool(row["decided"])}
             for row in cursor.fetchall()]
 

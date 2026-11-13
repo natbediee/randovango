@@ -282,3 +282,74 @@ def test_the_review_keeps_the_places_of_the_chosen_address_town():
     cursor.fetchall.return_value = [row, other]
     groups, pois = review._pending(cursor, None, None, town="Guilvinec")
     assert list(pois) == [48710] and list(groups) == [("confirmer", 48710)]
+
+
+# --- Un lieu mixte : une fiche restaurant d'un côté, une fiche commerce de l'autre ---
+
+PHARE_DOUBT = {"id": 31, "poi_id": 32496, "source": "doublons", "signal_type": "doublon_service",
+               "detail": json.dumps({"autre_id": 30745, "autre_nom": "La Maison du Phare", "distance_m": 0,
+                                     "raison": "même nom, deux fiches d'agent"})}
+BEFORE = {"url": None, "name": "La Maison du Phare", "masque": 0, "ferme_moment": 0, "statut_saison": None, "mois_ouverture": None}
+
+
+def _sheets(restaurants, commerces):
+    """Ce que les tables de fiches rendent pour les deux lieux d'un doublon : restaurants, puis commerces."""
+    return [[{"poi_id": poi_id} for poi_id in restaurants], [{"poi_id": poi_id} for poi_id in commerces]]
+
+
+def test_a_mixed_place_needs_a_restaurant_sheet_and_a_shop_sheet():
+    """« Lieu mixte » n'est possible qu'entre une fiche restaurant et une fiche commerce (La Maison du Phare), pas entre deux fiches de la même table ni sans fiche."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = _sheets([30745], [32496])
+    assert review.mixed_sheet_table(cursor, 32496, 30745) == "commerces"
+    cursor.fetchall.side_effect = _sheets([30745, 32496], [])
+    assert review.mixed_sheet_table(cursor, 32496, 30745) is None
+    cursor.fetchall.side_effect = _sheets([30745], [])
+    assert review.mixed_sheet_table(cursor, 32496, 30745) is None
+
+
+def test_a_mixed_place_gives_its_sheet_and_services_to_the_other_and_is_masked():
+    """« Lieu mixte » sur La Maison du Phare : la fiche boulangerie et le service bakery passent au restaurant, la ligne en double est masquée, et la décision garde de quoi l'annuler."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [[PHARE_DOUBT], *_sheets([30745], [32496]), [{"service_id": 12}]]
+    cursor.fetchone.return_value = BEFORE
+    review.decide_one(cursor, "doublons", 32496, "lieu_mixte", "", "admin", None)
+    calls = [(" ".join(call[0][0].split()), call[0][1] if len(call[0]) > 1 else None) for call in cursor.execute.call_args_list]
+    assert ("UPDATE commerces SET poi_id = %s WHERE poi_id = %s", (30745, 32496)) in calls
+    assert ("INSERT INTO poi_service (poi_id, service_id) VALUES (%s, %s)", (30745, 12)) in calls
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 32496)) in calls
+    detail = json.loads(next(params[-1] for sql, params in calls if sql.startswith("INSERT INTO decisions")))
+    assert detail["lieu_mixte"] == {"vers": 30745, "table": "commerces", "services": [12]} and detail["avant"] == {"masque": 0}
+
+
+def test_a_mixed_place_is_refused_between_two_restaurant_sheets():
+    """Deux fiches restaurant au même nom ne font pas un lieu mixte : la décision est refusée, rien n'est écrit."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [[PHARE_DOUBT], *_sheets([30745, 32496], [])]
+    with pytest.raises(ValueError):
+        review.decide_one(cursor, "doublons", 32496, "lieu_mixte", "", "admin", None)
+    assert not any("UPDATE" in call[0][0] for call in cursor.execute.call_args_list)
+
+
+def test_cancelling_a_mixed_place_gives_back_the_sheet_and_the_services(monkeypatch):
+    """Annuler « Lieu mixte » rend la fiche boulangerie à son lieu, retire au restaurant le service reçu et rouvre le doute."""
+    connection = MagicMock()
+    cursor = connection.cursor.return_value
+    detail = {"file": "doublons", "signal_ids": [31], "avant": {"masque": 0},
+              "lieu_mixte": {"vers": 30745, "table": "commerces", "services": [12]}}
+    cursor.fetchone.return_value = {"objet_id": 32496, "detail": json.dumps(detail)}
+    monkeypatch.setattr(review.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(review.MySQLUtils, "disconnect", lambda connection: None)
+    review.cancel_decision(5)
+    calls = [(" ".join(call[0][0].split()), call[0][1] if len(call[0]) > 1 else None) for call in cursor.execute.call_args_list]
+    assert ("UPDATE poi SET masque = %s WHERE id = %s", (0, 32496)) in calls
+    assert ("UPDATE commerces SET poi_id = %s WHERE poi_id = %s", (32496, 30745)) in calls
+    assert ("DELETE FROM poi_service WHERE poi_id = %s AND service_id = %s", (30745, 12)) in calls
+
+
+def test_the_mixed_place_button_comes_first_on_its_card():
+    """Sur le doute d'un lieu mixte, « Lieu mixte » est proposé en premier, avant « Fusionner » et « Deux lieux »."""
+    card = review.build_card("doublons", {"id": 32496, "name": "La Maison du Phare"}, [PHARE_DOUBT])
+    review.offer_mixed_place(card)
+    assert card["actions"][:3] == ["lieu_mixte", "fusionner", "deux_lieux"]
+    assert card["boutons"][0]["action"] == "lieu_mixte" and "Lieu mixte" in card["proposal"]
