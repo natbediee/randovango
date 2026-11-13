@@ -1,8 +1,8 @@
 from utils.db_utils import MySQLUtils
 from utils.mongo_utils import MongoUtils
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends
 from pathlib import Path
-from api.dependencies import get_current_user
+from api.dependencies import get_current_user, require_admin
 from api.models.etl import GPXUploadResponse, GPXDeleteResponse
 from etl.etl_pipeline import main as run_etl_pipeline
 from services.authentification import get_roles_for_user, insert_auth_log
@@ -66,16 +66,13 @@ async def upload_gpx(
 @router.delete("/delete_gpx/{filename}", summary="Delete a GPX file (Admin only)", response_model=GPXDeleteResponse)
 async def delete_gpx(
     filename: str,
-    user=Depends(get_current_user)
+    user=Depends(require_admin)
 ):
     """
-    Supprime un fichier GPX du dossier data et la randonnée associée dans MySQL/MongoDB. Nécessite un rôle admin.
+    Supprime un fichier GPX du dossier data et la randonnée associée dans MySQL/MongoDB. Nécessite un rôle admin :
+    require_admin le vérifie avant la route (carte #106), comme pour la supervision, et la doc l'affiche.
     """
-    # Vérifier que l'utilisateur est admin
     user_id = user["user_id"]
-    roles = get_roles_for_user(user_id)
-    if "admin" not in roles:
-        raise HTTPException(status_code=403, detail="Accès refusé : rôle admin requis")
 
     # Vérifier l'extension
     ext = filename.split(".")[-1].lower()

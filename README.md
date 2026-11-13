@@ -17,7 +17,8 @@ Application de planification de randonnées en itinérance en van avec recherche
     - Docker pour la conteneurisation, orchestration via docker-compose
     - Logging centralisé, gestion des variables d’environnement
 - **Sécurité** :
-    - Authentification JWT, gestion des rôles (SQLite), audit des accès
+    - Authentification JWT en cookie httpOnly, gestion des rôles (SQLite), audit des accès
+      (voir « Sécurité de l'API » plus bas)
 
 ### Schéma simplifié
 
@@ -168,7 +169,25 @@ python app.py
 
 ### Backend API (FastAPI)
 - URL : `http://localhost:8000`
-- Documentation interactive : `http://localhost:8000/docs`
+- Documentation interactive : `http://localhost:8000/docs` (chaque route y affiche son niveau d'accès)
+
+### Sécurité de l'API
+Le jeton de connexion (JWT) est posé par l'API dans un cookie httpOnly `access_token` : le JavaScript des
+pages ne le voit pas. Un compte l'obtient par `POST /api/auth/login` (60 minutes), un voyageur sans compte
+par `POST /api/auth/guest` (30 jours). Chaque route a un niveau d'accès, lu dans ses dépendances
+(`backend/api/access.py`) et vérifié route par route par `tests/functional/test_api_access.py` :
+
+| Niveau | Routes | Il faut | Sinon |
+| --- | --- | --- | --- |
+| public | connexion, villes, randos, spots, services | rien | |
+| voyageur | création du plan, idées « en chemin » | un jeton, de compte ou d'invité | 401 |
+| propriétaire du plan | choix du jour, carnet, PDF, pépites du séjour | un jeton, et le plan à ce voyageur | 401, 404, 403 |
+| compte | envoi d'un tracé GPX | un compte connecté | 401, 403 |
+| admin | supervision, suppression d'un tracé | le rôle admin, relu en base | 401, 403 |
+
+Les routes qui lancent les recherches de Vany sont plafonnées (429 au-delà, `backend/api/rate_limit.py`) ;
+`RATE_LIMIT_ENABLED=0` coupe ces plafonds sur le poste de développement. CORS n'accepte que les origines
+de `ALLOWED_ORIGINS` (`backend/api/cors.py`).
 
 ### Frontend (Flask)
 - URL : `http://localhost:5000`

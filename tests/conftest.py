@@ -13,6 +13,10 @@ os.environ["RANDOVANGO_LOG_DIR"] = tempfile.mkdtemp(prefix="randovango-test-logs
 # et la CI qui n'a pas de .env, reçoivent un secret de test, lui aussi posé avant tout import.
 os.environ.setdefault("JWT_SECRET", "secret-de-test-uniquement-0123456789abcdef")
 
+# main.py crée les bases au démarrage quand ENV vaut « dev » (sa valeur par défaut) : les tests qui
+# chargent l'application entière (tests/functional/test_api_access.py) ne doivent jamais le faire.
+os.environ.setdefault("ENV", "test")
+
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
