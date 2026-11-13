@@ -144,11 +144,19 @@ def order_category(pois: list, category: str, city_name: str) -> list:
 
 CATEGORY_LABELS = {**TABLE_CATEGORY_LABELS, **SHOP_CATEGORY_LABELS}
 SHEET_FIELDS = ("genre", "pourquoi", "categorie", "registre_depuis")
+# Les onglets dont la fiche vient de l'agent des commerces (table commerces).
+SHOP_TABS = {COMMERCE_CATEGORY, CAFE_CATEGORY, SUPERMARKET_CATEGORY}
 
 
-def sheet_of(poi: dict) -> dict:
-    """La fiche du lieu, celle de l'agent restaurants ou celle de l'agent commerces (colonnes commerce_*)."""
-    if poi.get("genre") or not poi.get("commerce_genre"):
+def sheet_of(poi: dict, tab: str | None = None) -> dict:
+    """
+    La fiche du lieu, celle de l'agent restaurants ou celle de l'agent commerces (colonnes commerce_*).
+    Un lieu mixte a les deux : La Maison du Phare (Plougonvelin) est une boulangerie qui fait snack, et apparaît dans
+    deux onglets. Chaque onglet montre la fiche qui le concerne : la fiche commerce dans les onglets des commerces,
+    la fiche restaurant ailleurs.
+    """
+    shop = bool(poi.get("commerce_genre")) and (not poi.get("genre") or tab in SHOP_TABS)
+    if not shop:
         return {field: poi.get(field) for field in SHEET_FIELDS}
     return {field: poi.get(f"commerce_{field}") for field in SHEET_FIELDS}
 
@@ -341,7 +349,7 @@ def get_poi(
         seen_ids[frontend_category].add(poi_id)
 
         distance_km = haversine_distance_km(ref_lat, ref_lon, poi['latitude'], poi['longitude'])
-        sheet = sheet_of(poi)
+        sheet = sheet_of(poi, frontend_category)
 
         categorized_poi[frontend_category].append(enrich_poi({
             "id": poi_id,

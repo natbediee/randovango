@@ -426,3 +426,16 @@ def test_only_visible_sheets_are_read_as_shown_elsewhere():
     service_store.known_sheets(base, PLOUDALMEZEAU, "restaurants")
     [(sql, _)] = base.queries
     assert "WHERE p.masque = 0 AND" in sql
+
+
+# --- Un lieu mixte : le commerce trouvé à la place d'un restaurant enrichit le même service ---
+
+def test_a_shop_found_at_a_restaurant_gets_its_sheet_on_the_same_service(monkeypatch):
+    """Une boulangerie trouvée au nom et à l'adresse d'un restaurant déjà en base reçoit sa fiche commerce sur ce même service : un seul point sur la carte, deux fiches (La Maison du Phare)."""
+    restaurant = _poi("La Maison du Phare", GALION_ADDRESS, GALION_SPOT, poi_id=30745)
+    bakery = {"nom": "La Maison du Phare", "genre": "boulangerie, snack", "categorie": "boulangerie", "adresse": GALION_ADDRESS,
+              "pages": [SITE]}
+    summary, base, created, linked = _save(monkeypatch, COMMERCES, bakery, known=[restaurant])
+    assert created == [] and linked == [(30745, "bakery")] and summary["fiches"] == 1
+    [params] = base.wrote("REPLACE INTO commerces")
+    assert params[0] == 30745

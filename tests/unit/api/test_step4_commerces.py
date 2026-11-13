@@ -50,6 +50,17 @@ def test_where_the_supermarket_agent_passed_only_its_supermarkets_remain(monkeyp
     assert [poi["name"] for poi in result["commerce"]] == ["Boulangerie d'OSM"]
 
 
+def test_a_mixed_place_shows_the_right_sheet_in_each_tab(monkeypatch):
+    """La Maison du Phare, boulangerie qui fait snack, a une fiche restaurant et une fiche commerce : elle apparaît dans les deux onglets, chacun avec sa fiche (Plougonvelin)."""
+    both = {**_row(30745, "La Maison du Phare", "restaurant", "bistrot", "1 rue Antre Kear, 29217 Plougonvelin"),
+            "categorie": "bistrot", "commerce_genre": "boulangerie, snack", "commerce_pourquoi": None,
+            "commerce_categorie": "boulangerie", "commerce_registre_depuis": None, "jours": None}
+    result, _ = _get_poi(monkeypatch, [both, {**both, "service_category": "bakery", "service_name": "bakery"}])
+    assert [(poi["name"], poi["genre"]) for poi in result["restauration"]] == [("La Maison du Phare", "bistrot")]
+    assert [(poi["name"], poi["genre"]) for poi in result["commerce"]] == [("La Maison du Phare", "boulangerie, snack")]
+    assert result["commerce"][0]["service_type_label"] == "Boulangerie"
+
+
 def test_a_commune_not_treated_keeps_its_osm_shops(monkeypatch):
     """Une commune où l'agent n'est pas passé garde ses commerces d'OSM."""
     rows = [_shop(1, "Boulangerie", "bakery", None, "1 rue, 29217 Plougonvelin"), _shop(2, "Ferme", "farm", None, "2 rue, 29217 Plougonvelin")]
