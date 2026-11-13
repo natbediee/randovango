@@ -26,10 +26,6 @@ function chooseCity({ ville, commune }) {
     load();
 }
 
-function authToken() {
-    return sessionStorage.getItem('jwtToken') || localStorage.getItem('userToken');
-}
-
 function showMessage(text) {
     const box = document.getElementById('supervisionMsg');
     box.textContent = text;
@@ -53,9 +49,9 @@ function filterQuery() {
 }
 
 async function editFetch(path, options = {}) {
-    const response = await fetch(`${window.API_BASE}/api/supervision/edit/${mode}${path}`, {
+    const response = await window.RVG.apiFetch(`/api/supervision/edit/${mode}${path}`, {
         ...options,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
+        headers: { 'Content-Type': 'application/json' },
     });
     if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi, ta correction n\'a pas été enregistrée.');
     if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
@@ -378,7 +374,7 @@ function setMode(next) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!authToken()) {
+    if (!window.RVG.isLoggedIn()) {
         window.location.href = window.APP_URLS.contributorLogin;
         return;
     }

@@ -1,4 +1,34 @@
+"""
+Lecture et écriture des plans de voyage (trip_plans, trip_days, trip_day_pois).
+
+Un plan appartient SOIT à un compte (trip_plans.user_id), SOIT à un invité (trip_plans.user_token,
+l'identifiant invité de son jeton, avec user_id = 0). Le propriétaire est toujours pris dans le
+jeton du cookie, jamais dans ce qu'envoie le navigateur (carte #104).
+"""
 from utils.db_utils import MySQLUtils
+
+# user_id d'un plan d'invité : 0, qui n'est l'identifiant d'aucun compte (les comptes commencent à 1).
+GUEST_USER_ID = 0
+
+
+def owner_columns(traveller: dict) -> tuple:
+    """Les colonnes (user_id, user_token) d'un nouveau plan, d'après le voyageur du jeton."""
+    if traveller["user_id"] is not None:
+        return traveller["user_id"], None
+    return GUEST_USER_ID, traveller["guest_id"]
+
+
+def get_plan_owner(plan_id: int) -> dict | None:
+    """Le propriétaire d'un plan : {"user_id", "user_token"}, ou None si le plan n'existe pas."""
+    cnx = MySQLUtils.connect()
+    cursor = cnx.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT user_id, user_token FROM trip_plans WHERE id = %s", (plan_id,))
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(cnx)
+
 
 
 def insert_or_update_plan(plan_id, data):

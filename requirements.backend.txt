@@ -14,6 +14,7 @@ python-dotenv==1.1.1  # Chargement de variables d'environnement
 numpy==2.3.4 # Calcul scientifique et manipulation de matrices
 passlib==1.7.4  # Hachage de mots de passe
 python-multipart==0.0.20  # Gestion des formulaires multipart (FastAPI)
+slowapi==0.1.9  # Plafonds de débit des routes qui lancent les agents (carte #21)
 orjson==3.11.4 # Sérialisation JSON ultra-rapide
 folium==0.20.0  # Visualisation de données géospatiales
 weasyprint==69.0 # Génération de PDF à partir de HTML/CSS

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from api.routers.supervision import require_admin
+from api.dependencies import require_admin
 from services import supervision_summary_service
 
 router = APIRouter()

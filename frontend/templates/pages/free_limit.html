@@ -1,0 +1,59 @@
+{#
+  Page « voyage gratuit du jour déjà composé » (carte #21). Le voyageur y arrive quand l'API refuse
+  un deuxième plan dans la journée (réponse 429, voir step1_city.js createPlan). Elle explique la
+  limite et annonce l'offre illimitée, encore fictive : le bouton reste désactivé tant que l'offre
+  payante n'existe pas (carte « Offre gratuite et offre payante »).
+#}
+{% extends "base.html" %}
+{% block title %}Ton voyage gratuit du jour - RandoVanGo{% endblock %}
+
+{% block header %}
+  {% with nav_mode='minimal', back_url=url_for('duration') %}
+    {% include 'partials/header.html' %}
+  {% endwith %}
+{% endblock %}
+
+{% block page_content %}
+<div class="container unlock" data-free-limit>
+
+  <div class="unlock-intro">
+    <img src="{{ url_for('static', filename='images/vany/pensive.png') }}" alt="Vany, pensive" class="unlock-vany">
+    <span class="eyebrow">Voyage gratuit</span>
+    <h1 style="font-size:30px;">Ton voyage gratuit du jour est déjà composé</h1>
+    <p class="muted" style="max-width:540px;">Chaque jour, tu peux composer un voyage gratuitement. <br>Reviens demain pour en composer un autre.</p>
+  </div>
+
+  <div class="unlock-cards">
+    {# L'offre gratuite, celle du voyageur aujourd'hui #}
+    <div class="card unlock-code">
+      <span class="eyebrow">Gratuit</span>
+      <ul class="hiw-check">
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Un voyage par jour</li>
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Jusqu'à 7 jours de séjour</li>
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Les pépites de Vany et le carnet PDF</li>
+      </ul>
+      <a href="{{ url_for('results') }}" class="btn btn--outline btn--block" style="margin-top:auto;">Revoir mon carnet</a>
+    </div>
+
+    <div class="unlock-or"><span class="unlock-or__line"></span><span class="unlock-or__label">ou</span><span class="unlock-or__line"></span></div>
+
+    {# L'offre illimitée, annoncée mais pas encore en vente #}
+    <div class="card card--selected unlock-pay">
+      <div class="unlock-pay__head">
+        <span class="eyebrow">Voyages illimités</span>
+        <span class="tag" style="color:var(--white); background:var(--teal);">Bientôt</span>
+      </div>
+      <ul class="hiw-check">
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Autant de voyages que tu veux, chaque jour</li>
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Des séjours de plus de 7 jours</li>
+      </ul>
+      <button class="btn btn--primary btn--block" style="margin-top:auto;" disabled>Bientôt disponible</button>
+    </div>
+  </div>
+
+  <p class="muted text-center" style="font-size:13px;">
+    <a href="{{ url_for('duration') }}">Retour à l'accueil</a>
+  </p>
+
+</div>
+{% endblock %}

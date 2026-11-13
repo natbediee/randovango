@@ -2,19 +2,11 @@ import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from api.routers.etl import get_current_user
+from api.dependencies import require_admin
 from services import poi_edit_service, poi_review_service, spot_edit_service, supervision_service
-from services.authentification import get_roles_for_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-def require_admin(user=Depends(get_current_user)) -> dict:
-    """Réservé aux admins. Les rôles sont relus en base : un rôle retiré vaut tout de suite."""
-    if "admin" not in get_roles_for_user(user["user_id"]):
-        raise HTTPException(status_code=403, detail="Accès refusé : rôle admin requis")
-    return user
 
 
 @router.get("/reviews", summary="Agents' proposals awaiting a human decision.")

@@ -272,7 +272,7 @@ async function downloadPdfBooklet() {
     msg.style.display = '';
 
     try {
-        const response = await fetch(`${window.API_BASE}/api/result/pdf?plan_id=${planId}`);
+        const response = await window.RVG.apiFetch(`/api/result/pdf?plan_id=${planId}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
 

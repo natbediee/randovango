@@ -2,10 +2,6 @@
 // preuves ; l'admin tranche (services/supervision_service.py). La sécurité est côté API :
 // cette page ne fait que renvoyer à la connexion quand l'API refuse.
 
-function authToken() {
-    return sessionStorage.getItem('jwtToken') || localStorage.getItem('userToken');
-}
-
 function showMessage(text) {
     const box = document.getElementById('supervisionMsg');
     box.textContent = text;
@@ -14,9 +10,9 @@ function showMessage(text) {
 
 // Session expirée : la fiche reste à l'écran, rien n'est perdu ; on se reconnecte et on recommence.
 async function supervisionFetch(path, options = {}) {
-    const response = await fetch(`${window.API_BASE}/api/supervision${path}`, {
+    const response = await window.RVG.apiFetch(`/api/supervision${path}`, {
         ...options,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
+        headers: { 'Content-Type': 'application/json' },
     });
     if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi, ta décision n\'a pas été enregistrée.');
     if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
@@ -146,7 +142,7 @@ async function cancelOpening(decisionId) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!authToken()) {
+    if (!window.RVG.isLoggedIn()) {
         window.location.href = window.APP_URLS.contributorLogin;
         return;
     }

@@ -1,5 +1,6 @@
 from datetime import timedelta
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from api.dependencies import require_plan_owner
 from fastapi.responses import Response
 from utils.db_utils import MySQLUtils
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -117,7 +118,8 @@ def _fetch_plan_data(plan_id: int):
     return plan
 
 
-@router.get("/", summary="Retrieve the trip plan details by plan ID.")
+@router.get("/", summary="Retrieve the trip plan details by plan ID.",
+            dependencies=[Depends(require_plan_owner)])
 def get_plan(
     plan_id: int = Query(...),
     up_to_day: int = Query(None, description="Ne renvoyer que les jours 1 à up_to_day (récapitulatif partiel)")
@@ -130,7 +132,8 @@ def get_plan(
     return plan
 
 
-@router.get("/pdf", summary="Download the trip plan as a printable PDF booklet.")
+@router.get("/pdf", summary="Download the trip plan as a printable PDF booklet.",
+            dependencies=[Depends(require_plan_owner)])
 def get_plan_pdf(plan_id: int = Query(...)):
     plan = _fetch_plan_data(plan_id)
     if not plan:
