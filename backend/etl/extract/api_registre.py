@@ -15,6 +15,11 @@ de chaque société encore active, hors dépôts des comptes : Breizh Crépier a
 LE FILTRE « ACTIF » EST FAIT ICI, ÉTABLISSEMENT PAR ÉTABLISSEMENT
 Celui de l'API porte sur l'entreprise : une entreprise active peut avoir un établissement fermé.
 
+UNE SOCIÉTÉ À PLUSIEURS ÉTABLISSEMENTS EST REDEMANDÉE À SON NOM
+Sans nom cherché, l'API ne rend d'une grande société qu'une partie de ses établissements de la commune : à Saint-Renan,
+l'ancien Lidl fermé, pas le nouveau (13 novembre 2026). Chaque société qui a plusieurs établissements est donc
+redemandée à son nom (firm_establishments) : une question de plus par société, pour tous les services.
+
 PARIS, LYON ET MARSEILLE SE LISENT AUTOUR DE LEURS ZONES
 Le registre range chaque établissement sous le code de son arrondissement, jamais sous celui de la commune. Lu avec
 13055, le registre de Marseille était vide (12 novembre 2026) : la ville, prise pour une petite commune, a été cherchée
@@ -40,6 +45,7 @@ import time
 
 import requests
 
+from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("agent_restaurants")
@@ -133,30 +139,83 @@ def add_establishment(register: dict, establishment: dict, firm: dict, notice: d
 
 def read_register(code: str, activities: tuple = ACTIVITIES, near: tuple | None = None) -> dict:
     """
-    Le registre d'une commune, page après page, pour ces codes d'activité (ceux des restaurants par défaut).
+    Le registre d'une commune pour ces codes d'activité (ceux des restaurants par défaut).
     `near` : (latitude, longitude, rayon en km), pour ne lire que les établissements de la commune autour de ce point.
     """
     register = {"actifs": [], "enseignes_fermees": [], "radies": []}
     oldest_closure = str(time.gmtime().tm_year - CLOSED_YEARS_KEPT)
+    notices = {}
+    for firm, establishment in commune_establishments(code, activities, near):
+        notice = {}
+        if establishment.get("etat_administratif") == "A":
+            notice = notices.setdefault(firm["siren"], last_notice(firm["siren"]))
+        add_establishment(register, establishment, firm, notice, oldest_closure)
+    return register
+
+
+def _search(url: str, params: dict) -> list:
+    """Toutes les sociétés que rend une recherche du registre, page après page, avec leurs établissements."""
+    firms, page = [], 1
+    while True:
+        data = _get(url, {**params, "per_page": 25, "page": page, "limite_matching_etablissements": 100,
+                          "minimal": "true", "include": "matching_etablissements"})
+        firms += data["results"]
+        if page >= data.get("total_pages", 1):
+            return firms
+        page += 1
+
+
+def commune_establishments(code: str, activities: tuple, near: tuple | None = None) -> list:
+    """
+    [(société, établissement)] de la commune pour ces codes d'activité, chaque établissement une seule fois.
+    Une société qui a plusieurs établissements est redemandée à son nom (firm_establishments) : la première réponse
+    peut avoir oublié son magasin ouvert.
+    """
     # Les établissements d'une commune à arrondissements portent le code de leur arrondissement.
     codes = BOROUGHS.get(code, (code,))
     url, where = (NEAR_URL, {"lat": near[0], "long": near[1], "radius": near[2]}) if near else (SIRENE_URL, {"code_commune": code})
-    notices, page = {}, 1
-    while True:
-        data = _get(url, {**where, "activite_principale": ",".join(activities), "per_page": 25,
-                          "page": page, "limite_matching_etablissements": 100, "minimal": "true",
-                          "include": "matching_etablissements"})
-        for firm in data["results"]:
-            for establishment in firm.get("matching_etablissements") or []:
-                if establishment.get("commune") not in codes or establishment.get("activite_principale") not in activities:
-                    continue
-                notice = {}
-                if establishment.get("etat_administratif") == "A":
-                    notice = notices.setdefault(firm["siren"], last_notice(firm["siren"]))
-                add_establishment(register, establishment, firm, notice, oldest_closure)
-        if page >= data.get("total_pages", 1):
-            return register
-        page += 1
+    found, seen = [], set()
+    for firm in _search(url, {**where, "activite_principale": ",".join(activities)}):
+        establishments = list(firm.get("matching_etablissements") or [])
+        if firm.get("nombre_etablissements", 1) > 1:
+            establishments += firm_establishments(firm, codes, activities, near)
+        for establishment in establishments:
+            key = establishment.get("siret") or json.dumps(establishment, sort_keys=True)
+            if key in seen or establishment.get("commune") not in codes \
+                    or establishment.get("activite_principale") not in activities:
+                continue
+            seen.add(key)
+            found.append((firm, establishment))
+    return found
+
+
+def firm_establishments(firm: dict, codes: tuple, activities: tuple, near: tuple | None = None) -> list:
+    """
+    Les établissements de cette société dans la commune, demandés à son nom.
+    Sans nom cherché, l'API ne rend d'une grande société qu'une partie de ses établissements de la commune, sans dire
+    lesquels. Pour Lidl (2 810 établissements), elle ne rendait à Saint-Renan que l'ancien magasin, fermé le 20 janvier
+    2024, et pas le nouveau, ouvert le 25 septembre 2024 rue du Pont-de-Bois ; à Crozon, que celui du bourg, fermé en
+    2021, et pas celui de Penandreff. L'agent des supermarchés, ne voyant que la fermeture, a écarté les deux Lidl
+    (passage du 13 novembre 2026). Demandée à son nom, l'API rend bien le magasin ouvert.
+    Le numéro de la société (SIREN) ne peut pas servir de nom : l'API ne rend alors aucun établissement.
+    Autour d'un point, l'API refuse un nom : on demande dans tous les codes de la commune, puis on garde ceux du rayon.
+    """
+    name = firm.get("nom_raison_sociale") or firm.get("nom_complet")
+    if not name:
+        return []
+    rows = []
+    for other in _search(SIRENE_URL, {"q": name, "code_commune": ",".join(codes), "activite_principale": ",".join(activities)}):
+        if other.get("siren") == firm["siren"]:
+            rows += other.get("matching_etablissements") or []
+    return [row for row in rows if _within(row, near)] if near else rows
+
+
+def _within(establishment: dict, near: tuple) -> bool:
+    """L'établissement est dans le rayon de lecture. Sans position (non diffusible), on ne peut pas le dire : il est écarté."""
+    position = establishment.get("latitude"), establishment.get("longitude")
+    if not all(re.fullmatch(r"-?\d+(\.\d+)?", str(value or "")) for value in position):
+        return False
+    return haversine_distance_km(near[0], near[1], float(position[0]), float(position[1])) <= near[2]
 
 
 def near_radius(zone: dict, activities: tuple, radius_km: float) -> float:
