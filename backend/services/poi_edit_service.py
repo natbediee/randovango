@@ -324,6 +324,8 @@ def sheet_view(poi: dict, sheet: dict | None, service_name: str | None = None, s
         fields += ["genre", "categorie", "distinction" if table == "restaurants" else "jours"]
     return {
         "poi_id": poi["id"], "nom": poi.get("name") or "", "adresse": poi.get("address") or "",
+        # La commune dit où est un lieu sans adresse (un objet OSM) : dans « Doublons », on compare les deux lieux.
+        "commune": poi.get("commune") or "",
         "url": poi.get("url") or "", "maps_url": poi.get("maps_url") or "",
         "position": [float(poi["latitude"]), float(poi["longitude"])] if poi.get("latitude") is not None else None,
         "verifie": shown_verified(poi.get("verifie"), poi.get("doute")), "masque": bool(poi.get("masque")),
@@ -520,7 +522,8 @@ def _sheet_views(cursor, poi_ids: list) -> dict:
         SELECT p.id, p.latitude, p.longitude, p.masque, {', '.join(f'p.{column}' for column in POI_SHEET_COLUMNS)},
                {PENDING_DOUBT_SQL} AS doute,
                (SELECT MIN(s.name) FROM poi_service ps JOIN services s ON s.id = ps.service_id
-                WHERE ps.poi_id = p.id) AS service_name
+                WHERE ps.poi_id = p.id) AS service_name,
+               (SELECT MIN(c.name) FROM histo_poi h JOIN cities c ON c.id = h.city_id WHERE h.poi_id = p.id) AS commune
         FROM poi p WHERE p.id IN ({marks})
     """, tuple(poi_ids))
     return {row["id"]: sheet_view(row, load_sheet(cursor, row["id"]), row["service_name"], stations.get(row["id"]))
@@ -541,8 +544,30 @@ def get_sheet(poi_id: int) -> dict:
         MySQLUtils.disconnect(connection)
 
 
+def distance_m(position: list | None, other: list | None) -> int | None:
+    """La distance en mètres entre deux positions [latitude, longitude] ; None si l'une manque."""
+    if not position or not other:
+        return None
+    return round(haversine_distance_km(*position, *other) * 1000)
+
+
+def other_place(card: dict, others: dict) -> dict | None:
+    """
+    L'autre lieu d'un doublon, décrit comme le premier (sa fiche : nom, adresse, commune, catégorie, liens, et ses prix
+    si c'est une station), avec sa distance au premier. Sans lui, on ne voyait que son nom : « A l'Aise Breizh Café »
+    proposé comme doublon de « Fraya » ne pouvait pas être tranché (13 novembre 2026).
+    """
+    view = others.get(card.get("autre_id"))
+    if not view:
+        return None
+    return {**view, "distance_m": distance_m(card.get("position"), view.get("position"))}
+
+
 def attach_sheets(reviews: dict) -> dict:
-    """Ajoute à chaque fiche de relecture la fiche complète du lieu et ce que sa file met en doute."""
+    """
+    Ajoute à chaque fiche de relecture la fiche complète du lieu et ce que sa file met en doute ; à un doublon, la fiche
+    de l'autre lieu, pour comparer les deux côte à côte.
+    """
     cards = reviews.get("cards") or []
     if not cards:
         return reviews
@@ -550,16 +575,16 @@ def attach_sheets(reviews: dict) -> dict:
     try:
         cursor = connection.cursor(dictionary=True)
         views = _sheet_views(cursor, list({card["poi_id"] for card in cards}))
-        # Une station déclarée deux fois : l'autre station, à côté, avec ses prix (le Carrefour Contact de Plouguerneau).
-        twins = _station_views(cursor, list({card["autre_id"] for card in cards
-                                             if card.get("autre_id") and (views.get(card["poi_id"]) or {}).get("station")}))
+        # Le même mécanisme pour tous les services : une station déclarée deux fois arrive avec l'autre station et ses
+        # prix (le Carrefour Contact de Plouguerneau), un restaurant avec l'autre restaurant.
+        others = _sheet_views(cursor, list({card["autre_id"] for card in cards if card.get("autre_id")}))
         cursor.close()
     finally:
         MySQLUtils.disconnect(connection)
     for card in cards:
         card["fiche"] = views.get(card["poi_id"])
         card["a_verifier"] = DOUBT_FIELDS.get(card["tab"], [])
-        card["station_voisine"] = twins.get(card.get("autre_id"))
+        card["autre_lieu"] = other_place(card, others)
     return reviews
 
 
