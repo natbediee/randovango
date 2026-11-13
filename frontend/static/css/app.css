@@ -2367,3 +2367,19 @@ a.bilan-total:hover { border-color: var(--teal); }
 /* Le numéro d'un lieu ou d'un spot dans la supervision, à donner aux agents : un clic le sélectionne en entier. */
 .fiche-id { display: inline-block; padding: 1px 7px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--white);
   color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 400; user-select: all; cursor: text; }
+
+/* Bandeau « trop de demandes » (réponse 429 de l'API, common.js showTooManyRequests). */
+.rate-limit-notice {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  max-width: calc(100% - 32px);
+  padding: 12px 18px;
+  border: 1px solid var(--warn-bd);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn-tx);
+  box-shadow: var(--shadow-soft);
+}

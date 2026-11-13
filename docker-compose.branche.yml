@@ -28,6 +28,9 @@ services:
       ALLOWED_ORIGINS: http://localhost:${FRONT_PORT:-5001},http://127.0.0.1:${FRONT_PORT:-5001}
       # Le front de branche est en HTTP : le cookie de connexion ne doit pas exiger le HTTPS (voir .env.example).
       COOKIE_SECURE: "0"
+      # Plafonds de débit coupés par défaut sur une branche, où l'on compose beaucoup de voyages pour tester.
+      # Pour les essayer : RATE_LIMIT_ENABLED=1 devant la commande docker compose (voir .env.example).
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-0}
     volumes:
       - ./backend:/usr/src/app
       # Un seul .env pour tout le projet : celui du dossier principal, rangé à côté (~/Dev/randovango).

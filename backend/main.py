@@ -5,6 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from api.cors import add_cors
+from api.rate_limit import add_rate_limit
 from api.routers import step1, step2, step3, step4, result, auth, etl, pepites, supervision, supervision_bilan
 from utils.logger_util import LoggerUtil
 
@@ -17,6 +18,8 @@ app = FastAPI(
 
 # Règles CORS : origines exactes (ALLOWED_ORIGINS), méthodes et en-têtes utilisés seulement (api/cors.py).
 add_cors(app)
+# Plafonds de débit des routes qui lancent les recherches de Vany (api/rate_limit.py).
+add_rate_limit(app)
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(step1.router, prefix="/api/step1", tags=["Step 1 Cities"])

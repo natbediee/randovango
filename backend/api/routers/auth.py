@@ -10,6 +10,7 @@ from api.models.auth import UserLogin
 from fastapi.responses import ORJSONResponse
 from passlib.hash import bcrypt
 from datetime import datetime, timedelta
+from api.rate_limit import GUEST_TOKEN_LIMIT, client_ip, limiter
 from services.authentification import (
     ACCESS_TOKEN_EXPIRE_MINUTES, GUEST_TOKEN_EXPIRE_DAYS, clear_auth_cookie, create_access_token,
     create_guest_token, get_roles_for_user, get_user_by_username, insert_auth_log, set_auth_cookie,
@@ -60,7 +61,8 @@ async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse
 
 
 @router.post("/guest", summary="Starts a guest session: a JWT for a traveller without an account")
-async def guest() -> ORJSONResponse:
+@limiter.limit(GUEST_TOKEN_LIMIT, key_func=client_ip)  # compté par adresse IP (carte #21, api/rate_limit.py)
+async def guest(request: Request) -> ORJSONResponse:
     """
     Un voyageur sans compte reçoit un jeton invité, dans le même cookie httpOnly qu'une connexion.
     Les routes du voyage exigent un jeton (carte #103) : c'est par lui qu'un voyageur est reconnu.

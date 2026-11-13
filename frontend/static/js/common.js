@@ -40,7 +40,22 @@
   // jeton invité (ensureSession), puis l'appel part. Les routes /api/auth/ n'en ont pas besoin.
   async function apiFetch(path, options) {
     if (path.indexOf('/api/auth/') !== 0) await ensureSession();
-    return fetch(window.API_BASE + path, Object.assign({}, options, { credentials: 'include' }));
+    var response = await fetch(window.API_BASE + path, Object.assign({}, options, { credentials: 'include' }));
+    // 429 : l'API a refusé, trop de demandes en peu de temps (carte #21). Certains appels se font
+    // en arrière-plan sans rien afficher (choix du spot) : le message est donc montré ici, pour tous.
+    if (response.status === 429) showTooManyRequests(response.clone());
+    return response;
+  }
+
+  // Bandeau en haut de page avec le message de l'API ; il disparaît seul après quelques secondes.
+  async function showTooManyRequests(response) {
+    var body = await response.json().catch(function () { return {}; });
+    var notice = document.createElement('div');
+    notice.className = 'rate-limit-notice';
+    notice.setAttribute('role', 'alert');
+    notice.textContent = body.detail || 'Trop de demandes en peu de temps. Réessaie dans un moment.';
+    document.body.appendChild(notice);
+    setTimeout(function () { notice.remove(); }, 8000);
   }
 
   // Plusieurs appels partent en même temps au chargement d'une page : ils attendent tous la même
