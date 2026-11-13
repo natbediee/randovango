@@ -175,6 +175,16 @@ def test_a_page_already_found_is_never_lost(monkeypatch):
     assert row["adresse"] == "10 rue Saint-Yves" and has_accepted_page(row, "Plougonvelin")
 
 
+def test_the_place_page_of_the_proof_is_controlled_without_a_proof_url(monkeypatch):
+    """La page du lieu rendue par l'agent de preuve est contrôlée même sans « preuve_url », et acceptée si c'est le site de l'enseigne (Carrefour Contact de Locmaria-Plouzané : sa page carrefour.fr était jetée au passage des supermarchés du 13 novembre 2026)."""
+    monkeypatch.setattr(service_chain, "check_links_of", lambda row, place: [dict(link, verdict="ok") for link in row["liens"]])
+    row = _row()
+    page = "https://www.carrefour.fr/magasin/contact-locmaria-plouzane"
+    add_proofs(row, {"preuve_url": None, "type_preuve": None, "lien": page, "type_lien": "site"}, "Plougonvelin")
+    assert [page["url"] for page in row["pages"]] == ["https://annuaire.fr/nous", page]
+    assert has_accepted_page(row, "Plougonvelin")
+
+
 def test_no_proof_found_changes_nothing(monkeypatch):
     """Sans preuve trouvée, les pages du restaurant ne changent pas."""
     row = _row()
