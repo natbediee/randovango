@@ -48,7 +48,6 @@ async def upload_gpx(
             action="upload_gpx",
             route="/api/etl/upload_gpx",
             status_code=200,
-            token=None,
             filename=file.filename
         )
         return GPXUploadResponse(success=True, message=msg, city=city, role=user_role)
@@ -60,7 +59,6 @@ async def upload_gpx(
             action="upload_gpx_failed",
             route="/api/etl/upload_gpx",
             status_code=500,
-            token=None,
             filename=file.filename
         )
         return GPXUploadResponse(success=False, message=f"Erreur ETL: {e}", role=user_role)
@@ -107,7 +105,6 @@ async def delete_gpx(
         action="delete_gpx",
         route="/api/etl/delete_gpx",
         status_code=200,
-        token=None,
         filename=filename
     )
     msg = f"Suppression en base : MySQL={mysql_deleted}, MongoDB={mongo_deleted}"

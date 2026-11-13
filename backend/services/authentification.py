@@ -126,13 +126,20 @@ def get_roles_for_user(uid):
         return {row[0] for row in c.execute(sql, (uid,))}
 
 
-def insert_auth_log(user_id, username, action, route, status_code, token=None, filename=None):
-    logging.info(f"insert_auth_log: user_id={user_id}, username={username}, action={action}, route={route}, status_code={status_code}, token={token}, filename={filename}")
+def insert_auth_log(user_id, username, action, route, status_code, filename=None):
+    """
+    Note une connexion ou une action sensible dans auth_log (qui, quoi, quand, avec quel résultat).
+
+    Le jeton n'y est jamais écrit (carte #61) : un jeton lu dans la base ou dans les journaux se
+    rejoue tel quel jusqu'à son expiration, comme un mot de passe. Pour savoir qui a fait quoi,
+    user_id et username suffisent ; la colonne token reste vide.
+    """
+    logging.info(f"insert_auth_log: user_id={user_id}, username={username}, action={action}, route={route}, status_code={status_code}, filename={filename}")
     with connect() as c:
         c.execute(
-            """INSERT INTO auth_log(user_id, username, token, action, route, status_code, ip_address, access_type, filename, expires_at)
-                     VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (user_id, username, token, action, route, status_code, None, None, filename, None),
+            """INSERT INTO auth_log(user_id, username, action, route, status_code, ip_address, access_type, filename, expires_at)
+                     VALUES (?,?,?,?,?,?,?,?,?)""",
+            (user_id, username, action, route, status_code, None, None, filename, None),
         )
         c.commit()
 

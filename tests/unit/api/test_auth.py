@@ -49,6 +49,15 @@ def test_login_answer_has_no_token(client):
     assert "token" not in body
 
 
+def test_login_journal_holds_no_token(client, monkeypatch):
+    """La connexion est notée dans auth_log sans le jeton : avant la carte #61, il y était écrit en clair."""
+    journal = []
+    monkeypatch.setattr(auth, "insert_auth_log", lambda *args, **kwargs: journal.append((args, kwargs)))
+    token = login(client).cookies["access_token"]
+    assert len(journal) == 1
+    assert token not in str(journal)
+
+
 def test_wrong_password_sets_no_cookie(client):
     """Un mauvais mot de passe reçoit 401, sans cookie."""
     response = login(client, password="faux")

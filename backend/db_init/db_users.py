@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS auth_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id      INTEGER NULL,
     username     TEXT    NULL,
+    -- Plus jamais rempli (carte #61) : un jeton stocké se rejoue comme un mot de passe.
+    -- La colonne reste, pour ne pas toucher à la structure d'une base existante.
     token        TEXT    NULL,
     action       TEXT    NOT NULL,
     route        TEXT    NOT NULL,
@@ -120,10 +122,23 @@ def seed(conn):
     conn.commit()
 
 
+def forget_stored_tokens(conn) -> int:
+    """
+    Efface les jetons que auth_log gardait en clair avant la carte #61 ; renvoie combien.
+    Sans cela, les anciennes lignes resteraient lisibles par quiconque ouvre la base.
+    Sans risque à rejouer : la seconde fois, il n'y a plus rien à effacer.
+    """
+    cursor = conn.execute("UPDATE auth_log SET token = NULL WHERE token IS NOT NULL")
+    conn.commit()
+    return cursor.rowcount
+
+
 def main():
     with sqlite3.connect(DB_PATH) as conn:
         conn.executescript(DDL)
         seed(conn)
+        erased = forget_stored_tokens(conn)
+    logger.info(f"[SQLITE] : {erased} jeton(s) effacé(s) de auth_log")
     logger.info(f"[SQLITE] : Base créée: {DB_PATH.resolve()}")
 
 
