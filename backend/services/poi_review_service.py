@@ -17,6 +17,9 @@ QUATRE FILES, parce que les décisions ne se prennent pas pareil :
                  lieux de même nom, quel que soit le service (poi_duplicates_service.py, signal doublon_service).
                  Fusionner masque celui-ci, l'autre reste ; rien n'est effacé. Une station figée près d'une station
                  active (doublon_station) est déjà masquée : « Deux lieux » la réaffiche (poi_triage_service.hide_doubtful_stations l'avait masquée).
+                 Un lieu mixte, qui vend et sert à la fois (une boulangerie qui fait snack, des viviers avec dégustation),
+                 a une fiche restaurant d'un côté et une fiche commerce de l'autre : « Lieu mixte » donne la fiche de
+                 celui-ci à l'autre, qui garde ainsi les deux et s'affiche dans les deux onglets (join_mixed_place).
 
 PARTOUT, « Retirer le lieu » : un lieu qui n'a rien à faire là se voit dans n'importe quelle file. Il est masqué
 et sort de toutes les files.
@@ -79,7 +82,7 @@ ACTIONS = {
     "renommer": "valide", "retirer": "valide", "fermer_moment": "valide", "garder": "rejete",
     "valider_saison": "valide", "pas_saisonnier": "rejete",
     "retirer_lien": "valide", "garder_lien": "rejete",
-    "fusionner": "valide", "deux_lieux": "rejete",
+    "fusionner": "valide", "deux_lieux": "rejete", "lieu_mixte": "valide",
     "valider_pepite": "valide",
     "sans_suite": "rejete",
     "autre_lien": "rejete",
@@ -91,7 +94,7 @@ ACTION_LABELS = {
     "renommer": "renommé", "retirer": "retiré", "fermer_moment": "fermé pour le moment", "garder": "gardé",
     "valider_saison": "saison validée", "pas_saisonnier": "pas saisonnier",
     "retirer_lien": "lien retiré", "garder_lien": "lien gardé",
-    "fusionner": "fusionné", "deux_lieux": "deux lieux",
+    "fusionner": "fusionné", "deux_lieux": "deux lieux", "lieu_mixte": "lieu mixte : une fiche, deux onglets",
     "valider_pepite": "lieu confirmé",
     "sans_suite": "classé sans suite",
     "autre_lien": "lien saisi à la main",
@@ -106,6 +109,7 @@ ACTION_BUTTONS = {
     "valider_saison": ("Valider la saison", "main"), "pas_saisonnier": ("Pas saisonnier", "line"),
     "retirer_lien": ("Retirer le lien", "main"), "garder_lien": ("Garder le lien", "line"),
     "fusionner": ("Même lieu : fusionner", "remove"), "deux_lieux": ("Deux lieux", "line"),
+    "lieu_mixte": ("Lieu mixte : un seul lieu, deux fiches", "main"),
     "valider_pepite": ("Confirmer et afficher le lieu", "main"),
     "autre_lien": ("Mettre ce lien", "line"),
     "autre_nom": ("Renommer ainsi", "line"),
@@ -122,6 +126,10 @@ ALL_TABS = "tous"
 HIDDEN_TABS = ("morts",)
 # Les décisions que seule la règle prend (poi_triage_service.py) : aucun bouton, mais annulables comme les autres.
 RULE_ACTIONS = ("sans_suite",)
+# La décision des lieux mixtes : proposée seulement dans la file « Doublons », quand l'un a une fiche restaurant et
+# l'autre une fiche commerce (mixed_sheet_table).
+MIXED = "lieu_mixte"
+SHEET_TABLES = ("restaurants", "commerces")
 # Le filtre « Type de lieu » reprend les onglets de l'étape 4 (utils/service_utils.POI_FRONTEND_CATEGORY_MAP), puis le
 # type précis : la catégorie de la fiche de l'agent quand il y en a une (« Crêperie », « Marché »), sinon le service
 # (« Café »). Un service sans onglet (le voyageur ne le voit jamais) est rangé à part.
@@ -305,6 +313,14 @@ def build_card(tab: str, poi: dict, signals: list) -> dict:
     }
 
 
+def offer_mixed_place(card: dict) -> None:
+    """Ajoute « Lieu mixte » en tête des décisions d'un doublon entre une fiche restaurant et une fiche commerce."""
+    card["actions"] = [MIXED, *card["actions"]]
+    card["boutons"] = [{"action": MIXED, "label": ACTION_BUTTONS[MIXED][0], "style": ACTION_BUTTONS[MIXED][1]}, *card["boutons"]]
+    card["proposal"] += (" S'il vend et sert à la fois (une boulangerie qui fait snack), « Lieu mixte » garde un seul lieu"
+                         " avec ses deux fiches, dans les deux onglets.")
+
+
 def typed_link(url: str | None) -> str:
     """
     Le lien qu'un admin a trouvé lui-même : une adresse web complète, et rien d'autre. Une apostrophe ou un guillemet sont
@@ -383,7 +399,7 @@ def applied_fields(action: str, card: dict, months: list | None, url: str | None
         return {"statut_saison": None, "mois_ouverture": None}
     if action == "retirer_lien":
         return {"url": None}
-    if action == "fusionner":
+    if action in ("fusionner", MIXED):
         return {"masque": 1}
     if action == "deux_lieux" and card.get("reafficher"):
         return {"masque": 0}
@@ -466,6 +482,9 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
             if card["tab"] == "liens" and card["poi_id"] in masked:
                 card["auto"] = False
                 card["proposal"] = "ce lieu est masqué pour une fermeture signalée : à trancher d'abord."
+        for card in cards:
+            if card["tab"] == "doublons" and mixed_sheet_table(cursor, card["poi_id"], card.get("autre_id")):
+                offer_mixed_place(card)
         cards.sort(key=lambda card: (card["nom"] or "").lower())
 
         cursor.execute("""
@@ -561,6 +580,43 @@ def confirm_audit(decision_id: int) -> None:
         MySQLUtils.disconnect(connection)
 
 
+def mixed_sheet_table(cursor, poi_id: int, other_id: int | None) -> str | None:
+    """
+    La table de la fiche que poi_id peut donner à other_id pour en faire un lieu mixte : l'un a une fiche restaurant,
+    l'autre une fiche commerce. None sinon (deux fiches de la même table, ou un lieu sans fiche).
+    """
+    if not other_id:
+        return None
+    tables = {poi_id: set(), other_id: set()}
+    for table in SHEET_TABLES:
+        cursor.execute(f"SELECT poi_id FROM {table} WHERE poi_id IN (%s, %s)", (poi_id, other_id))
+        for row in cursor.fetchall():
+            tables[row["poi_id"]].add(table)
+    mine, theirs = tables[poi_id], tables[other_id]
+    return next(iter(mine)) if len(mine) == 1 and len(theirs) == 1 and mine != theirs else None
+
+
+def join_mixed_place(cursor, poi_id: int, other_id: int, table: str) -> list:
+    """
+    Fait de other_id un lieu mixte : il reçoit la fiche de poi_id (dans sa table) et ses services, pour s'afficher dans
+    les deux onglets de l'étape 4. poi_id, lui, est masqué par la décision. Rend les services ajoutés, pour l'annulation.
+    """
+    cursor.execute(f"UPDATE {table} SET poi_id = %s WHERE poi_id = %s", (other_id, poi_id))
+    cursor.execute("""SELECT service_id FROM poi_service WHERE poi_id = %s
+                      AND service_id NOT IN (SELECT service_id FROM poi_service WHERE poi_id = %s)""", (poi_id, other_id))
+    added = [row["service_id"] for row in cursor.fetchall()]
+    for service_id in added:
+        cursor.execute("INSERT INTO poi_service (poi_id, service_id) VALUES (%s, %s)", (other_id, service_id))
+    return added
+
+
+def split_mixed_place(cursor, poi_id: int, mixed: dict) -> None:
+    """Défait un lieu mixte (annulation) : la fiche revient à poi_id, l'autre perd les services qu'il avait reçus."""
+    cursor.execute(f"UPDATE {mixed['table']} SET poi_id = %s WHERE poi_id = %s", (poi_id, mixed["vers"]))
+    for service_id in mixed["services"]:
+        cursor.execute("DELETE FROM poi_service WHERE poi_id = %s AND service_id = %s", (mixed["vers"], service_id))
+
+
 def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by: str, months: list | None,
                url: str | None = None, name: str | None = None) -> None:
     cursor.execute("""
@@ -571,7 +627,10 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     if not signals:
         raise ValueError("Ce lieu n'a plus rien à relire dans cette file")
     card = build_card(tab, {"id": poi_id, "name": ""}, signals)
-    if action not in card["actions"] and action not in RULE_ACTIONS:
+    mixed_table = mixed_sheet_table(cursor, poi_id, card.get("autre_id")) if action == MIXED and tab == "doublons" else None
+    if action == MIXED and not mixed_table:
+        raise ValueError("Lieu mixte : il faut une fiche restaurant d'un côté et une fiche commerce de l'autre")
+    if action not in card["actions"] and action not in RULE_ACTIONS and action != MIXED:
         raise ValueError(f"Décision impossible ici : {action}")
     fields = applied_fields(action, card, months, url, name)
     cursor.execute(f"SELECT {', '.join(APPLIED_COLUMNS)} FROM poi WHERE id = %s", (poi_id,))
@@ -584,6 +643,10 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
         # La fiche va dans la table de l'agent qui l'a préparée : restaurants ou commerces.
         category = CATEGORIES.get(signals[0].get("source"), RESTAURANTS)
         service_store.save_validated_sheet(category, cursor, poi_id, _detail(signals[0]).get("fiche"))
+    mixed = None
+    if mixed_table:
+        added = join_mixed_place(cursor, poi_id, card["autre_id"], mixed_table)
+        mixed = {"vers": card["autre_id"], "table": mixed_table, "services": added}
     # Ajouter un lien depuis une autre file ne tranche pas ce qu'elle demande (le nom, la fermeture) : le signal reste.
     signal_ids = [] if SIDE_ACTIONS.get(action, tab) != tab else [signal["id"] for signal in signals]
     if action == "retirer":
@@ -596,6 +659,8 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
         cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
                        (ACTIONS[action], *signal_ids))
     detail = {"file": tab, "signal_ids": signal_ids, "avant": {column: before[column] for column in fields}}
+    if mixed:
+        detail["lieu_mixte"] = mixed
     cursor.execute("""
         INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
         VALUES (%s, %s, %s, %s, %s, NOW(), %s)
@@ -661,6 +726,8 @@ def cancel_decision(decision_id: int) -> None:
             cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*before.values(), row["objet_id"]))
         if detail.get("avant_fiche"):
             restore_sheet(cursor, row["objet_id"], detail["avant_fiche"])
+        if detail.get("lieu_mixte"):
+            split_mixed_place(cursor, row["objet_id"], detail["lieu_mixte"])
         signal_ids = detail["signal_ids"]
         if signal_ids:
             marks = ",".join(["%s"] * len(signal_ids))
