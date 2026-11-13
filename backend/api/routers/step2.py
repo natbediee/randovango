@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Query, Body
+from fastapi import APIRouter, Query, Body, Depends
+from api.dependencies import require_plan_owner
 from services.plan_service import insert_or_update_plan
 from utils.db_utils import MySQLUtils
 from utils.display_utils import enrich_hike
@@ -104,7 +105,8 @@ def get_hike_trace(hike_id: int):
         return {"points": []}
 
 
-@router.put("/update_plan/{plan_id}", summary="Update an existing trip plan with new data.")
+@router.put("/update_plan/{plan_id}", summary="Update an existing trip plan with new data.",
+            dependencies=[Depends(require_plan_owner)])
 def update_plan(plan_id: int, data: dict = Body(...)):
     plan_id = insert_or_update_plan(plan_id, data)
     return {"status": "updated", "plan_id": plan_id, "recap": data}

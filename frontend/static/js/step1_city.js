@@ -635,8 +635,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     /**
      * Appelle l'API create_plan pour créer un nouveau plan de voyage, puis
-     * redirige vers l'étape 2. Pour un invité sans jeton, c'est le serveur qui
-     * génère le user_token (renvoyé dans la réponse) : on le mémorise ici.
+     * redirige vers l'étape 2. Le plan appartient au voyageur du jeton (compte ou
+     * invité), que l'API lit dans le cookie.
      * @param {number} cityId - L'ID de la ville sélectionnée
      * @param {number} days - La durée du séjour en jours
      */
@@ -646,12 +646,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             planButton.disabled = true;
             planButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création du plan...';
 
-            // userId si connecté (défini au login, common.js storeSession)
-            const userId = localStorage.getItem('userId') ? parseInt(localStorage.getItem('userId')) : null;
-            // Jeton invité (UUID) : uniquement pour un visiteur anonyme. Ce n'est pas le jeton de
-            // connexion, qui reste dans le cookie httpOnly et que cette page ne voit pas.
-            const userToken = userId ? null : localStorage.getItem('userToken');
-
+            // Le propriétaire du plan n'est pas envoyé : l'API le lit dans le jeton du cookie,
+            // compte ou invité (carte #104).
             const response = await window.RVG.apiFetch(`/api/step1/create_plan`, {
                 method: 'POST',
                 headers: {
@@ -660,8 +656,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 body: JSON.stringify({
                     city_id: parseInt(cityId),
                     duration_days: days,
-                    user_token: userToken,
-                    user_id: userId,
                     start_date: localStorage.getItem('selectedStartDate') || new Date().toISOString().slice(0, 10)
                 })
             });
@@ -686,9 +680,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 updatePlanButton();
                 return;
             }
-
-            // Mémoriser le jeton invité généré par le serveur (réutilisé aux séjours suivants)
-            if (data.user_token) localStorage.setItem('userToken', data.user_token);
 
             // Stocker le plan_id dans localStorage pour les étapes suivantes
             localStorage.setItem('planId', data.plan_id);

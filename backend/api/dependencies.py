@@ -9,6 +9,7 @@ plus stricte :
     get_current_traveller   tout porteur d'un jeton valide : compte ou invité   (sinon 401)
       └ get_current_user    un compte, pas un invité                            (sinon 403)
           └ require_admin   un compte qui a le rôle admin en base               (sinon 403)
+      └ require_plan_owner  le propriétaire du plan demandé, compte ou invité (sinon 404 ou 403)
 
 401 veut dire « je ne sais pas qui tu es » ; 403 « je sais qui tu es, et c'est non ».
 """
@@ -17,6 +18,7 @@ from fastapi.security import APIKeyCookie
 from jose import JWTError, jwt
 
 from services.authentification import ALGORITHM, AUTH_COOKIE_NAME, SECRET_KEY, get_roles_for_user
+from services.plan_service import get_plan_owner
 
 # Le jeton est lu dans le cookie httpOnly, et nulle part ailleurs (carte #24) : un en-tête
 # « Authorization: Bearer » n'est pas accepté. APIKeyCookie décrit aussi ce cookie dans la doc OpenAPI.
@@ -65,3 +67,30 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if "admin" not in get_roles_for_user(user["user_id"]):
         raise HTTPException(status_code=403, detail="Accès refusé : rôle admin requis")
     return user
+
+
+def is_plan_owner(traveller: dict, owner: dict) -> bool:
+    """
+    Le plan est-il à ce voyageur ? Un compte possède les plans qui portent son user_id ; un invité,
+    ceux qui portent son identifiant invité dans user_token.
+    """
+    if traveller["user_id"] is not None:
+        return owner["user_id"] == traveller["user_id"]
+    return owner["user_token"] is not None and owner["user_token"] == traveller["guest_id"]
+
+
+def require_plan_owner(plan_id: int, traveller: dict = Depends(get_current_traveller)) -> dict:
+    """
+    Contrôle de propriété du plan (carte #104, OWASP API1 « BOLA ») : les numéros de plan se suivent
+    (41, 42, 43…), il suffirait d'en changer un dans l'adresse pour lire ou modifier le voyage d'un
+    autre. On compare donc le propriétaire du plan, lu en base, au voyageur du jeton.
+
+    plan_id vient du chemin (/update_plan/{plan_id}) ou de la requête (?plan_id=42) : FastAPI le
+    cherche au même endroit que pour la route.
+    """
+    owner = get_plan_owner(plan_id)
+    if owner is None:
+        raise HTTPException(status_code=404, detail="Plan introuvable")
+    if not is_plan_owner(traveller, owner):
+        raise HTTPException(status_code=403, detail="Accès refusé : ce plan appartient à un autre voyageur")
+    return traveller

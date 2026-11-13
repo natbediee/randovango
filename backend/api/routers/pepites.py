@@ -2,17 +2,19 @@
 Les pépites de Vany : ses idées pour chaque jour du voyage.
 
 Toutes ces routes exigent un jeton, de compte ou d'invité (carte #103) : la dépendance est posée
-sur le router entier, pour qu'une route ajoutée plus tard ne puisse pas l'oublier.
+sur le router entier, pour qu'une route ajoutée plus tard ne puisse pas l'oublier. Celles qui
+touchent un plan vérifient en plus qu'il appartient au voyageur (require_plan_owner, carte #104).
 """
 from fastapi import APIRouter, Body, Depends, Query
 
-from api.dependencies import get_current_traveller
+from api.dependencies import get_current_traveller, require_plan_owner
 from services import pepite_service
 
 router = APIRouter(dependencies=[Depends(get_current_traveller)])
 
 
-@router.get("/", summary="Returns Vany's ideas (pépites) for a trip day.")
+@router.get("/", summary="Returns Vany's ideas (pépites) for a trip day.",
+            dependencies=[Depends(require_plan_owner)])
 def get_pepites(plan_id: int = Query(...), day_number: int = Query(...)):
     """
     Contenu de l'étape « Les pépites de Vany » pour un jour : 'recherche', 'propositions',
@@ -33,20 +35,23 @@ def get_trail_tips(hike_ids: str = Query(..., description="Identifiants des rand
     return pepite_service.trail_tips_for_hikes(ids)
 
 
-@router.get("/news", summary="Vany's new ideas for a trip, not seen yet.")
+@router.get("/news", summary="Vany's new ideas for a trip, not seen yet.",
+            dependencies=[Depends(require_plan_owner)])
 def get_news(plan_id: int = Query(...)):
     """Idées du séjour arrivées après le passage du voyageur : rappel de la barre du bas."""
     return pepite_service.day_news(plan_id)
 
 
-@router.put("/seen/{plan_id}", summary="The traveller saw the ideas of a trip day.")
+@router.put("/seen/{plan_id}", summary="The traveller saw the ideas of a trip day.",
+            dependencies=[Depends(require_plan_owner)])
 def mark_seen(plan_id: int, data: dict = Body(...)):
     """data = {"day_number": 2} : le rappel de ce jour disparaît."""
     pepite_service.mark_seen(plan_id, data.get("day_number", 1))
     return {"ok": True}
 
 
-@router.put("/choose/{plan_id}", summary="Adds an idea to a trip day, or removes it.")
+@router.put("/choose/{plan_id}", summary="Adds an idea to a trip day, or removes it.",
+            dependencies=[Depends(require_plan_owner)])
 def choose_pepite(plan_id: int, data: dict = Body(...)):
     """
     data = {"day_number": 2, "pepite_id": 15, "added": true} pour ajouter une idée

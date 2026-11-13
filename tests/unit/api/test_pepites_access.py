@@ -1,6 +1,7 @@
 """
 Les routes des pépites de Vany exigent un jeton, de compte ou d'invité (api/routers/pepites.py,
 carte #103). Le routeur et les jetons sont les vrais ; les pépites en base sont remplacées.
+Celles qui touchent un plan vérifient en plus son propriétaire : voir test_plan_access.py (carte #104).
 """
 import pytest
 from fastapi import FastAPI
@@ -40,15 +41,13 @@ def test_pepites_refused_without_token(client, method, path):
     assert call(client, method, path).status_code == 401
 
 
-@pytest.mark.parametrize("method,path", ROUTES)
-def test_pepites_open_to_a_guest(client, method, path):
-    """Un voyageur sans compte, avec son jeton invité, reçoit les pépites."""
+def test_trail_tips_open_to_a_guest(client):
+    """Un voyageur sans compte, avec son jeton invité, reçoit les idées « en chemin » de ses randos."""
     client.cookies.set(AUTH_COOKIE_NAME, create_guest_token())
-    assert call(client, method, path).status_code == 200
+    assert call(client, "GET", "/api/pepites/trail-tips?hike_ids=12").status_code == 200
 
 
-@pytest.mark.parametrize("method,path", ROUTES)
-def test_pepites_open_to_an_account(client, method, path):
-    """Un compte connecté reçoit aussi les pépites."""
+def test_trail_tips_open_to_an_account(client):
+    """Un compte connecté reçoit aussi les idées « en chemin »."""
     client.cookies.set(AUTH_COOKIE_NAME, create_access_token({"user_id": 7, "username": "camille"}))
-    assert call(client, method, path).status_code == 200
+    assert call(client, "GET", "/api/pepites/trail-tips?hike_ids=12").status_code == 200
