@@ -21,11 +21,11 @@ def test_step4_shows_a_doubted_service_as_not_verified(monkeypatch):
 
 
 def test_step4_applies_the_rule_to_every_tab(monkeypatch):
-    """La règle vaut aussi hors des onglets des agents : un supermarché d'OSM avec un doute en attente n'a plus le badge."""
-    rows = [{**_row(1, "Super U", "supermarket", None, "3 rue, 29217 Plougonvelin"), "doute": 1},
+    """La règle vaut aussi hors des onglets des agents : une pharmacie d'OSM avec un doute en attente n'a plus le badge, des toilettes sans doute le gardent."""
+    rows = [{**_row(1, "Pharmacie du Trez-Hir", "pharmacy", None, "3 rue, 29217 Plougonvelin"), "doute": 1},
             {**_row(2, "Toilettes publiques", "toilets", None, "4 rue, 29217 Plougonvelin"), "doute": 0}]
     result, _ = _get_poi(monkeypatch, rows)
-    assert result["supermarche"][0]["verifie"] == 0 and result["toilettes"][0]["verifie"] == 1
+    assert result["urgence"][0]["verifie"] == 0 and result["toilettes"][0]["verifie"] == 1
 
 
 def test_the_supervision_sheet_shows_the_same_badge():

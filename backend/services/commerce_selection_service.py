@@ -40,3 +40,9 @@ SUPERMARKET = "supermarche"
 # Là où leur agent est passé, seuls ceux qui ont une fiche de cette catégorie sont montrés (step4.keep_checked_commerces)
 # et triés (poi_triage_service.CHAINS). Toutes les autres catégories vont dans l'onglet « commerce ».
 OWN_TAB = {CAFE: CAFE_SERVICES, SUPERMARKET: SUPERMARKET_SERVICES}
+# Les onglets où seuls les services prouvés sont montrés, partout, même là où l'agent n'est jamais passé.
+# Les supermarchés (décision de l'utilisatrice, 13 novembre 2026, #130) : OSM ne suit ni les déménagements ni les
+# changements d'enseigne (Lidl de Saint-Renan et de Crozon, Super U de Saint-Renan devenu Carrefour). La règle du code
+# postal laissait pourtant le Leclerc et l'Aldi d'OSM de Guilers, commune où l'agent ne passe pas, dans l'onglet de
+# Saint-Renan. Sans preuve, pas de présentation.
+PROVEN_ONLY_TABS = (SUPERMARKET,)

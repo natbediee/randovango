@@ -120,9 +120,10 @@ def test_every_restaurant_and_every_café_has_a_maps_link(monkeypatch):
 
 def test_a_single_name_is_searched_in_its_commune_and_a_chain_at_its_address(monkeypatch):
     """« Aber Wrac'h Huitres Bar » se cherche avec sa commune : avec le numéro, Google ouvrait l'adresse. Deux « Carrefour City » gardent leur adresse."""
+    sheet = {"commerce_categorie": "supermarche", "commerce_genre": "supermarché"}
     rows = [_row(22, "Aber Wrac'h Huitres Bar", "restaurant", "x", "175 Route de Doenna, 29870 Landéda"),
-            _row(1, "Carrefour City", "supermarket", None, "10 Rue Hoche, 56000 Vannes"),
-            _row(2, "Carrefour City", "supermarket", None, "2 Place de la République, 56000 Vannes")]
+            {**_row(1, "Carrefour City", "supermarket", None, "10 Rue Hoche, 56000 Vannes"), **sheet},
+            {**_row(2, "Carrefour City", "supermarket", None, "2 Place de la République, 56000 Vannes"), **sheet}]
     result, _ = _get_poi(monkeypatch, rows)
     assert result["restauration"][0]["maps_url"].endswith("query=Aber+Wrac%27h+Huitres+Bar+29870+Land%C3%A9da")
     assert sorted(poi["maps_url"].split("query=")[1] for poi in result["supermarche"]) == [

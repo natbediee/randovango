@@ -105,13 +105,15 @@ def test_every_family_of_shop_sheets_is_a_chain_of_its_own() -> None:
     assert "NOT IN ('cafe', 'supermarche')" in by_services[triage.COMMERCE_SERVICES]
 
 
-def test_a_supermarket_without_a_sheet_where_the_supermarket_agent_went_has_no_follow_up() -> None:
-    """Là où l'agent des supermarchés est passé, le lien d'un supermarché d'OSM sans fiche est classé sans suite ; dans une commune où seuls les commerces sont passés, il reste."""
-    old = {"poi_id": 2087, "address": "9 rue du Port, 29217 Plougonvelin"}
-    passed = [({"convenience"}, {10}, {"29217"}), ({"supermarket"}, {11}, {"29217"})]
-    shops_only = [({"convenience"}, {10}, {"29217"}), ({"supermarket"}, set(), set())]
-    assert triage.without_follow_up("liens", old, passed, {2087: {"supermarket"}})
-    assert not triage.without_follow_up("liens", old, shops_only, {2087: {"supermarket"}})
+def test_a_supermarket_without_a_sheet_has_no_follow_up_anywhere() -> None:
+    """Les signaux d'un supermarché d'OSM sans fiche sont classés sans suite partout, même où l'agent n'est jamais passé : l'étape 4 ne le montre plus (Leclerc de Guilers) ; ceux d'un supermarché qui a sa fiche suivent la règle des fiches."""
+    guilers = {"poi_id": 8277, "address": "Rue du Tumulus, 29820 Guilers"}
+    lidl = {"poi_id": 11, "address": "Rue du Pont de Bois, 29290 Saint-Renan"}
+    chains = [({"convenience"}, {10}, {"29217"}), ({"supermarket"}, {11}, {"29290"})]
+    categories = {8277: {"supermarket"}, 11: {"supermarket"}}
+    assert triage.without_follow_up("fermetures", guilers, chains, categories)
+    assert triage.without_follow_up("liens", lidl, chains, categories)
+    assert not triage.without_follow_up("fermetures", lidl, chains, categories)
 
 
 def _sort_stations(monkeypatch, trial=False):

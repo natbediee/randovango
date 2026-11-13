@@ -36,7 +36,7 @@ from urllib.parse import urlparse
 
 from agents.find_service_links import commune_of, control_page, read_page
 from services import poi_review_service as review
-from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB
+from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB, PROVEN_ONLY_TABS
 from etl.load.load_carburants import REMOVING_DECISIONS, SIGNALS_FROM_OSM, SIGNALS_FROM_STATE
 from etl.load.load_carburants import SOURCE_NAME as FUEL_SOURCE
 from utils.db_utils import MySQLUtils
@@ -179,6 +179,8 @@ CHAINS = (
     (COMMERCE_SERVICES, f"{SHOP_SHEETS} NOT IN ({OWN_TAB_SHEETS})"),
     *((services, f"{SHOP_SHEETS} = '{sheet}'") for sheet, services in OWN_TAB.items()),
 )
+# Les services que l'étape 4 ne montre qu'avec leur fiche, partout (step4.keep_proven) : les supermarchés.
+PROVEN_ONLY_SERVICES = {service for sheet in PROVEN_ONLY_TABS for service in OWN_TAB[sheet]}
 
 
 def _chains(cursor) -> tuple:
@@ -215,13 +217,16 @@ def _clear_unproved_badges(cursor, chains: list, categories: dict) -> int:
 
 
 def without_follow_up(tab: str, poi: dict, chains: list, categories: dict) -> bool:
-    """Ce signal n'apporte plus rien : l'agent de l'onglet du lieu est passé après lui."""
+    """
+    Ce signal n'apporte plus rien : l'agent de l'onglet du lieu est passé après lui. Un supermarché sans fiche n'est
+    jamais montré (PROVEN_ONLY_SERVICES) : ses signaux ne servent plus, où qu'il soit.
+    """
     for services, with_sheet, treated in chains:
         if not categories.get(poi["poi_id"], set()) & services:
             continue
         if poi["poi_id"] in with_sheet:
             return tab in ("liens", "saison")
-        return postcode_of(poi["address"]) in treated
+        return services <= PROVEN_ONLY_SERVICES or postcode_of(poi["address"]) in treated
     return False
 
 
