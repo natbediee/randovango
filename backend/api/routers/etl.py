@@ -4,20 +4,16 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from pathlib import Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from utils.service_utils import ServiceUtil
 from api.models.etl import GPXUploadResponse, GPXDeleteResponse
 from etl.etl_pipeline import main as run_etl_pipeline
-from services.authentification import get_roles_for_user, insert_auth_log
+# Le secret et l'algorithme viennent d'un seul endroit : deux copies pourraient diverger.
+from services.authentification import ALGORITHM, SECRET_KEY, get_roles_for_user, insert_auth_log
 
 router = APIRouter()
 
 ALLOWED_EXT = {"gpx"}
 security = HTTPBearer(auto_error=False)  # sans jeton : 401 ci-dessous, et non le 403 par défaut
 
-
-# Auth dépendance
-SECRET_KEY = ServiceUtil.get_env("JWT_SECRET", "dev-secret")
-ALGORITHM = "HS256"
 
 def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)):
     if credentials is None:

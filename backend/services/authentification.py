@@ -4,17 +4,41 @@ import os
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from fastapi import HTTPException
-from dotenv import load_dotenv
 
 from pathlib import Path
+
+from utils.service_utils import ServiceUtil
 
 # ------ Config --------
 DB_PATH = Path("/usr/src/storage/rando_users.sqlite")
 
-load_dotenv()
+# Le .env est chargé ici, et pas seulement dans main.py : main.py importe les routers (donc ce
+# fichier) avant d'appeler load_dotenv, et le secret doit être lu dès l'import.
+ServiceUtil.load_env()
 
 # --- JWT Config ---
-SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret")
+# HS256 signe le jeton avec une clé de 256 bits : une clé plus courte se devine plus vite (RFC 7518, § 3.2).
+JWT_SECRET_MIN_LENGTH = 32
+
+
+def load_jwt_secret() -> str:
+    """
+    Lit le secret qui signe les jetons de connexion (JWT_SECRET), ou refuse de continuer.
+
+    Pourquoi refuser : avec un secret par défaut écrit dans le code (avant : "dev-secret"), toute
+    personne qui lit le dépôt Git peut fabriquer un jeton admin valide. Sans variable, ou avec un
+    secret trop court, l'API ne démarre donc pas, et le message dit quoi corriger.
+    """
+    secret = os.getenv("JWT_SECRET", "")
+    if not secret:
+        raise RuntimeError("JWT_SECRET manquant dans le .env : l'API ne peut pas signer les jetons de connexion.")
+    if len(secret) < JWT_SECRET_MIN_LENGTH:
+        raise RuntimeError(f"JWT_SECRET trop court : {JWT_SECRET_MIN_LENGTH} caractères au moins.")
+    return secret
+
+
+# Lu une seule fois, à l'import : une erreur ici arrête le démarrage de l'API, pas une requête.
+SECRET_KEY = load_jwt_secret()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 

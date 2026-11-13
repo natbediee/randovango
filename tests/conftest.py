@@ -9,6 +9,10 @@ from pathlib import Path
 # car le dossier est lu à la création du logger (utils/logger_util.py).
 os.environ["RANDOVANGO_LOG_DIR"] = tempfile.mkdtemp(prefix="randovango-test-logs-")
 
+# L'API refuse de démarrer sans JWT_SECRET (services/authentification.py, carte #105). Les tests,
+# et la CI qui n'a pas de .env, reçoivent un secret de test, lui aussi posé avant tout import.
+os.environ.setdefault("JWT_SECRET", "secret-de-test-uniquement-0123456789abcdef")
+
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
