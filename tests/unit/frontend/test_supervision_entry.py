@@ -2,7 +2,9 @@
 L'entrée de la supervision mène au Bilan (carte #186) : il résume ce qui reste à trancher et mène à chaque file.
 Rendu par le vrai front Flask, comme test_free_limit_page.py.
 """
-from tests.unit.frontend.test_free_limit_page import load_front
+# pytest met le dossier de ce test dans le chemin d'import (pas de __init__.py) : on importe le fichier voisin par
+# son nom. « tests.unit… » ne marchait qu'en lançant « python -m pytest », pas « pytest » comme la CI.
+from test_free_limit_page import load_front
 
 
 def test_the_supervision_button_opens_the_summary():
