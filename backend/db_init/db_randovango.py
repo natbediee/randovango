@@ -628,7 +628,7 @@ def init_database():
             # un invité sur user_id = 0 et son identifiant invité dans user_token. Jamais le jeton lui-même, qui change
             # à chaque connexion. user_token vaut '' et non NULL pour un compte : une clé primaire n'accepte pas NULL.
             # fuel : la clé du carburant (Gazole, E10, SP95, SP98, E85, GPLc), NULL pour « Tout ».
-            # Sans ligne, rien n'a été choisi : l'onglet s'ouvre sur le gazole.
+            # Sans ligne, rien n'a été choisi : l'onglet s'ouvre sur « Tout ».
             """
             CREATE TABLE IF NOT EXISTS fuel_choices (
                 user_id INT NOT NULL,
