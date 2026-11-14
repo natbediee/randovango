@@ -4,12 +4,6 @@
 // (supervision_fiche.js), corrigée par l'admin et contrôlée par l'API (services_edit.decide_sheet).
 
 const TABS = { fermetures: 'Doute sur le nom', liens: 'Liens', saison: 'Saison', doublons: 'Doublons', confirmer: 'À confirmer' };
-// Les onglets de l'étape 4 (CATEGORY_META de step4_services.js), dans le même ordre, puis les services sans onglet :
-// le voyageur ne les voit jamais. Seuls les onglets qui ont des lieux à relire sont proposés.
-const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Carburant'], ['supermarche', 'Supermarché'],
-                      ['commerce', 'Commerce'], ['restauration', 'Restauration'], ['cafe', 'Café, bar'], ['toilettes', 'Toilettes'],
-                      ['hygiene', 'Hygiène'], ['laverie', 'Laverie'], ['culture', 'Culture & Loisirs'], ['urgence', 'Urgences'],
-                      ['hors_etape4', "Hors étape 4"]];
 // Hors du filtre : la règle tranche tous les liens morts, seule une décision annulée en ramène un, visible dans « Tous ».
 const HIDDEN_TABS = { morts: 'Liens morts' };
 
@@ -251,14 +245,7 @@ function render(data) {
     document.getElementById('reviewsCount').textContent =
         waiting === 0 ? 'Rien à relire' : `${waiting} décision${waiting > 1 ? 's' : ''} en attente`;
     // Le nombre de lieux par type, dans le problème et la ville choisis.
-    const serviceSelect = document.getElementById('filterService');
-    const chosenService = serviceSelect.value;
-    const byService = data.service_counts || {};
-    const allServices = Object.values(byService).reduce((sum, count) => sum + count, 0);
-    serviceSelect.innerHTML = `<option value="">Tous (${allServices})</option>` + SERVICE_TABS
-        .filter(([key]) => byService[key] || key === chosenService)
-        .map(([key, label]) =>
-            `<option value="${key}" ${key === chosenService ? 'selected' : ''}>${escapeHtml(label)} (${byService[key] || 0})</option>`).join('');
+    const chosenService = renderCategoryMenu(data.service_counts, true);
     // Le sous-filtre : les types précis de l'onglet choisi (Boulangerie, Marché...), seulement s'il y en a plusieurs.
     const typeSelect = document.getElementById('filterType');
     const chosenType = typeSelect.value;

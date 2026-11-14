@@ -4,10 +4,6 @@
 // Chaque correction est une décision tracée : « Corrigé récemment » permet de l'annuler.
 // La sécurité est côté API : tout ce qui est tapé y est contrôlé.
 
-const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Carburant'], ['supermarche', 'Supermarché'],
-                      ['commerce', 'Commerce'], ['restauration', 'Restauration'], ['cafe', 'Café, bar'], ['toilettes', 'Toilettes'],
-                      ['hygiene', 'Hygiène'], ['laverie', 'Laverie'], ['culture', 'Culture & Loisirs'], ['urgence', 'Urgences'],
-                      ['hors_etape4', 'Hors étape 4']];
 const OPENINGS = [['toute_annee', "Toute l'année"], ['periode', 'Sur une période'], ['saison', 'Saisonnier, dates inconnues'],
                   ['inconnue', 'Inconnue']];
 
@@ -108,13 +104,8 @@ function decidePlace(poiId, action) {
 }
 
 function renderServiceFilters(data) {
-    const serviceSelect = document.getElementById('filterService');
-    const chosen = serviceSelect.value;
-    const counts = data.service_counts || {};
-    const all = Object.values(counts).reduce((sum, count) => sum + count, 0);
-    serviceSelect.innerHTML = `<option value="">Tous (${all})</option>` + SERVICE_TABS
-        .filter(([key]) => counts[key] || key === chosen)
-        .map(([key, label]) => `<option value="${key}" ${key === chosen ? 'selected' : ''}>${escapeHtml(label)} (${counts[key] || 0})</option>`).join('');
+    // Avant toute recherche, les nombres ne sont pas connus : le menu montre les catégories sans nombre.
+    const chosen = renderCategoryMenu(data.service_counts, data.searched);
     const typeSelect = document.getElementById('filterType');
     const chosenType = typeSelect.value;
     const byType = data.type_counts || {};

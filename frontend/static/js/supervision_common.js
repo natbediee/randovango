@@ -45,6 +45,28 @@ function safeLink(url) {
     return /^https?:\/\//.test(url || '') ? escapeHtml(url) : null;
 }
 
+// Les onglets de l'étape 4 (CATEGORY_META de step4_services.js), dans le même ordre, puis les services sans onglet :
+// le voyageur ne les voit jamais. Le menu « Catégorie » de Services et de Modifier les propose tous.
+const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Carburant'], ['supermarche', 'Supermarché'],
+                      ['commerce', 'Commerce'], ['restauration', 'Restauration'], ['cafe', 'Café, bar'], ['toilettes', 'Toilettes'],
+                      ['hygiene', 'Hygiène'], ['laverie', 'Laverie'], ['culture', 'Culture & Loisirs'], ['urgence', 'Urgences'],
+                      ['hors_etape4', 'Hors étape 4']];
+
+// Le menu « Catégorie » (filterService) : toujours toutes les catégories, même celles qui n'ont rien, pour qu'on
+// puisse en choisir une avant de chercher (carte #186 ; avant, seules celles qui avaient des lieux étaient proposées).
+// counts : {catégorie: nombre} ; known : les nombres sont-ils connus ? Sinon, le menu n'en montre aucun.
+// Rend la catégorie choisie, qui reste choisie.
+function renderCategoryMenu(counts, known) {
+    const select = document.getElementById('filterService');
+    const chosen = select.value;
+    const byTab = counts || {};
+    const number = count => known ? ` (${count || 0})` : '';
+    const total = Object.values(byTab).reduce((sum, count) => sum + count, 0);
+    select.innerHTML = `<option value="">Tous${number(total)}</option>` + SERVICE_TABS.map(([key, label]) =>
+        `<option value="${key}" ${key === chosen ? 'selected' : ''}>${escapeHtml(label)}${number(byTab[key])}</option>`).join('');
+    return chosen;
+}
+
 // La ville choisie dans la recherche de ville (supervision_ville.js) : l'identifiant d'une ville de l'étape 1,
 // ou une commune d'adresse. Les pages Services et Modifier ont les mêmes deux champs cachés ; load() est celle
 // de la page.
