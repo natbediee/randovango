@@ -64,13 +64,14 @@ def read_detail(stored) -> dict:
     return stored or {}
 
 
-def cancel_decision(decision_id: int) -> None:
+def cancel_decision(decision_id: int) -> dict:
     """
     Annule une décision (erreur de clic, avis changé) : ce qu'elle avait changé revient comme avant, puis elle est
     marquée annulée (`annulee_at`). Elle reste en base : rien n'est effacé, l'historique garde la trace du geste.
 
     Refuse (ValueError, que la route rend en 422) une décision inconnue ou déjà annulée : annuler deux fois
     remettrait un état d'avant par-dessus un état qui a pu changer depuis (cas du double clic).
+    Rend la décision annulée : {"id", "objet_type", "objet_id"}, la réponse de la route.
     """
     connection = MySQLUtils.connect()
     try:
@@ -85,6 +86,7 @@ def cancel_decision(decision_id: int) -> None:
         cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
         connection.commit()
         cursor.close()
+        return {"id": decision_id, "objet_type": decision["objet_type"], "objet_id": decision["objet_id"]}
     except Exception:
         # Rien de partiel : si une étape échoue, la décision et ce qu'elle avait changé restent comme avant.
         connection.rollback()

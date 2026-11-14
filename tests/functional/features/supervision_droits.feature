@@ -46,20 +46,16 @@ Fonctionnalité: La supervision est réservée aux admins
       | contributor | GET     | /api/supervision/reviews/services       |
       | contributor | POST    | /api/supervision/services/decisions     |
       | contributor | POST    | /api/supervision/services/audit/1       |
-      | contributor | DELETE  | /api/supervision/services/decisions/1   |
       | contributor | GET     | /api/supervision/reviews/summary        |
       | contributor | GET     | /api/supervision/search/services         |
       | contributor | POST    | /api/supervision/services/fiche          |
       | contributor | GET     | /api/supervision/services/1              |
       | contributor | POST    | /api/supervision/edit/services/fiche     |
       | contributor | POST    | /api/supervision/edit/services/decisions |
-      | contributor | DELETE  | /api/supervision/edit/services/decisions/1 |
       | contributor | GET     | /api/supervision/search/spots            |
       | contributor | POST    | /api/supervision/edit/spots/decisions    |
       | contributor | PUT     | /api/supervision/edit/spots/decisions/1  |
-      | contributor | DELETE  | /api/supervision/edit/spots/decisions/1  |
       | contributor | POST    | /api/supervision/edit/spots/openings     |
-      | contributor | DELETE  | /api/supervision/edit/spots/openings/1   |
 
   Scénario: Un admin enregistre une décision à son nom
     Étant donné un utilisateur connecté avec le rôle "admin"

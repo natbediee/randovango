@@ -59,7 +59,7 @@ function openingLine(opening) {
            ${opening.convention ? '· dates par convention' : ''}
            ${opening.texte ? `· fiche : « ${escapeHtml(opening.texte)} »` : ''}
            ${opening.note ? `· « ${escapeHtml(opening.note)} »` : ''} · ${escapeHtml(opening.par)}, le ${escapeHtml(opening.le)}
-           · <a href="#" onclick="cancelOpening(${opening.id}); return false;">annuler</a>${changed}</p>`;
+           · <a href="#" onclick="cancelDecision(${opening.id}); return false;">annuler</a>${changed}</p>`;
 }
 
 function render(data) {
@@ -115,28 +115,15 @@ async function correctText(decisionId) {
     }
 }
 
-async function cancelDecision(decisionId) {
-    try {
-        showMessage('');
-        render(await supervisionCall(`/decisions/${decisionId}`, { method: 'DELETE' }));
-    } catch (error) {
-        showMessage(error.message);
-    }
-}
-
-async function cancelOpening(decisionId) {
-    try {
-        showMessage('');
-        render(await supervisionCall(`/openings/${decisionId}`, { method: 'DELETE' }));
-    } catch (error) {
-        showMessage(error.message);
-    }
+// Redessine la page avec la liste à jour (après une annulation, cancelDecision de supervision_common.js).
+async function refresh() {
+    render(await supervisionCall('/reviews/spots'));
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (redirectIfLoggedOut()) return;
     try {
-        render(await supervisionCall('/reviews/spots'));
+        await refresh();
     } catch (error) {
         showMessage(error.message);
     }

@@ -174,7 +174,7 @@ function spotSheet(card) {
     const link = safeLink(card.url);
     const decided = card.decision_id
         ? `<p class="muted">Décision en vigueur : <strong>${card.decision === 'retirer' ? 'retiré' : 'gardé'}</strong>
-             · <a href="#" onclick="cancelSpot(${card.decision_id}); return false;">annuler</a>
+             · <a href="#" onclick="cancelDecision(${card.decision_id}); return false;">annuler</a>
              · <a href="#" onclick="correctText(${card.spot_id}, ${card.decision_id}); return false;">corriger seulement le texte</a></p>`
         : '';
     return `
@@ -216,7 +216,7 @@ function spotSheet(card) {
                 <label class="label" style="flex-direction:row; align-items:center; gap:6px;"><input type="checkbox" class="spot-convention" style="width:auto; height:auto;"> Dates choisies par moi, la fiche ne les donne pas</label>
                 <div>
                     <button class="btn btn--outline btn--sm" onclick="decideOpening(${card.spot_id})">Fixer l'ouverture</button>
-                    ${opening.decision_id ? `<a href="#" onclick="cancelOpening(${opening.decision_id}); return false;">annuler l'ouverture fixée</a>` : ''}
+                    ${opening.decision_id ? `<a href="#" onclick="cancelDecision(${opening.decision_id}); return false;">annuler l'ouverture fixée</a>` : ''}
                 </div>
                 <label class="label">Note (facultative)
                     <input type="text" class="spot-note" maxlength="255" placeholder="Vu sur place le 3 novembre">
@@ -260,14 +260,6 @@ function decideOpening(spotId) {
                                 note: card.querySelector('.spot-note').value, ...searchBody() });
 }
 
-function cancelSpot(decisionId) {
-    send(`/decisions/${decisionId}?${filterQuery()}`, 'DELETE');
-}
-
-function cancelOpening(decisionId) {
-    send(`/openings/${decisionId}?${filterQuery()}`, 'DELETE');
-}
-
 // --- Commun ---
 
 function renderCards(data) {
@@ -294,17 +286,11 @@ function render(data) {
 
     document.getElementById('recentSection').style.display = data.recent.length ? '' : 'none';
     document.getElementById('recentList').innerHTML = data.recent.map(decision => {
-        const cancel = mode === 'services' ? `cancelPlace(${decision.id})`
-                     : decision.ouverture ? `cancelOpening(${decision.id})` : `cancelSpot(${decision.id})`;
         return `<p>${escapeHtml(decision.nom)} : <strong>${escapeHtml(decision.action)}</strong>
            ${decision.champs ? `(${escapeHtml(decision.champs)})` : ''}
            ${decision.note ? `· « ${escapeHtml(decision.note)} »` : ''} · ${escapeHtml(decision.par)}, le ${escapeHtml(decision.le)}
-           · <a href="#" onclick="${cancel}; return false;">annuler</a></p>`;
+           · <a href="#" onclick="cancelDecision(${decision.id}); return false;">annuler</a></p>`;
     }).join('');
-}
-
-function cancelPlace(decisionId) {
-    send(`/decisions/${decisionId}?${filterQuery()}`, 'DELETE');
 }
 
 // Après une correction, la fiche ouverte se recharge : elle montre ce que voit maintenant le voyageur.
@@ -318,11 +304,19 @@ async function send(path, method, body = null) {
     }
 }
 
+// Redessine la liste avec la recherche affichée, sans fermer la fiche ouverte : après une annulation
+// (cancelDecision de supervision_common.js), elle montre ce que voit maintenant le voyageur.
+async function refresh() {
+    render(await supervisionCall(`/search/${mode}?${filterQuery()}`));
+    if (mode === 'services' && openId) showSheet(openId);
+}
+
+// Une nouvelle recherche : la fiche ouverte se ferme.
 async function load() {
     try {
         showMessage('');
         openId = null;
-        render(await supervisionCall(`/search/${mode}?${filterQuery()}`));
+        await refresh();
     } catch (error) {
         showMessage(error.message);
     }

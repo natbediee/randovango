@@ -8,7 +8,7 @@ from api.dependencies import require_admin
 # Ce renvoi disparaît quand une décision ne répond plus que par elle-même (plan de #186, 2.1).
 from api.routers.supervision_reviews import service_reviews, spot_reviews
 from api.routers.supervision_search import service_search, spot_search
-from services.supervision import decisions, rating, services_edit, services_review, spots_edit, spots_review
+from services.supervision import rating, services_edit, services_review, spots_edit, spots_review
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -25,17 +25,6 @@ def _rating(data: dict) -> tuple:
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     return pertinence, raison
-
-
-def _cancel(decision_id: int) -> None:
-    """
-    Annule une décision, quel que soit l'onglet d'où vient le clic : decisions.cancel_decision lit son type.
-    Une décision inconnue ou déjà annulée (double clic) est refusée (422) : rien n'est changé.
-    """
-    try:
-        decisions.cancel_decision(decision_id)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error))
 
 
 @router.post("/decisions", summary="Records a human decision on a proposal.")
@@ -60,18 +49,6 @@ def put_decision(decision_id: int, data: dict = Body(...), _admin=Depends(requir
     if not isinstance(data.get("a_savoir"), str):
         raise HTTPException(status_code=422, detail="Texte invalide")
     spots_review.correct_a_savoir(decision_id, data["a_savoir"])
-    return spot_reviews()
-
-
-@router.delete("/decisions/{decision_id}", summary="Cancels a decision; it stays recorded.")
-def delete_decision(decision_id: int, _admin=Depends(require_admin)):
-    _cancel(decision_id)
-    return spot_reviews()
-
-
-@router.delete("/openings/{decision_id}", summary="Cancels an opening decision and restores the previous values.")
-def delete_opening_decision(decision_id: int, _admin=Depends(require_admin)):
-    _cancel(decision_id)
     return spot_reviews()
 
 
@@ -128,14 +105,6 @@ def post_service_audit(decision_id: int, tab: str = "liens", service: str | None
     return service_reviews(tab, service or None, ville or None, type or None, commune or None)
 
 
-@router.delete("/services/decisions/{decision_id}", summary="Cancels a service decision and restores the place.")
-def delete_service_decision(decision_id: int, tab: str = "liens", service: str | None = None,
-                            ville: str | None = None, type: str | None = None, commune: str | None = None,
-                            _admin=Depends(require_admin)):
-    _cancel(decision_id)
-    return service_reviews(tab, service or None, ville or None, type or None, commune or None)
-
-
 # Onglet « Modifier » : corriger n'importe quel lieu ou spot, même sans signal (services_edit, spots_edit).
 # Chaque réponse renvoie la recherche telle qu'elle était (supervision_search), avec la correction appliquée.
 
@@ -166,14 +135,6 @@ def post_edit_sheet(data: dict = Body(...), admin=Depends(require_admin)):
         raise HTTPException(status_code=422, detail=str(error))
 
 
-@router.delete("/edit/services/decisions/{decision_id}", summary="Cancels a correction and restores the place.")
-def delete_edit_service(decision_id: int, ville: int | None = None, service: str | None = None,
-                        type: str | None = None, nom: str | None = None, commune: str | None = None,
-                        _admin=Depends(require_admin)):
-    _cancel(decision_id)
-    return service_search({"ville": ville, "service": service, "type": type, "nom": nom, "commune": commune})
-
-
 @router.post("/edit/spots/decisions", summary="Removes or keeps a spot, with its corrected text.")
 def post_edit_spot(data: dict = Body(...), admin=Depends(require_admin)):
     """data = {"spot_id": 1368, "decision": "retirer", "note": "", "a_savoir": None, "ville": 12, "nom": ""}"""
@@ -197,12 +158,6 @@ def put_edit_spot(decision_id: int, data: dict = Body(...), _admin=Depends(requi
     return spot_search(data)
 
 
-@router.delete("/edit/spots/decisions/{decision_id}", summary="Cancels a spot decision; it stays recorded.")
-def delete_edit_spot(decision_id: int, ville: int | None = None, nom: str | None = None, _admin=Depends(require_admin)):
-    _cancel(decision_id)
-    return spot_search({"ville": ville, "nom": nom})
-
-
 @router.post("/edit/spots/openings", summary="Sets the opening dates of a spot.")
 def post_edit_opening(data: dict = Body(...), admin=Depends(require_admin)):
     """data = {"spot_id": 1368, "statut": "periode", "debut": "01/04", "fin": "31/10", "convention": False, "note": ""}"""
@@ -214,10 +169,3 @@ def post_edit_opening(data: dict = Body(...), admin=Depends(require_admin)):
         return spot_search(data)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
-
-
-@router.delete("/edit/spots/openings/{decision_id}", summary="Cancels an opening decision and restores the previous values.")
-def delete_edit_opening(decision_id: int, ville: int | None = None, nom: str | None = None,
-                        _admin=Depends(require_admin)):
-    _cancel(decision_id)
-    return spot_search({"ville": ville, "nom": nom})

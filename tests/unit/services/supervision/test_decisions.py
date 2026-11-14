@@ -112,3 +112,11 @@ def test_a_decision_of_an_unknown_type_is_refused_and_nothing_is_written(monkeyp
         _cancel(monkeypatch, connection)
     connection.commit.assert_not_called()
     connection.rollback.assert_called_once()
+
+
+def test_the_cancelled_decision_is_given_back(monkeypatch):
+    """L'annulation rend la décision annulée (numéro, type, objet visé) : c'est la réponse de DELETE /decisions/{id}."""
+    connection = _stored("ouverture", 1368, json.dumps({"avant": {"statut": "saison", "debut": None, "fin": None}}))
+    monkeypatch.setattr(decisions.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(decisions.MySQLUtils, "disconnect", lambda connection: None)
+    assert decisions.cancel_decision(77) == {"id": 77, "objet_type": "ouverture", "objet_id": 1368}

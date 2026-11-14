@@ -309,10 +309,15 @@ function render(data) {
            · <a href="#" onclick="cancelDecision(${decision.id}); return false;">annuler</a></p>`).join('');
 }
 
+// Redessine la page avec la file à jour et ses filtres (au chargement, et après une annulation : cancelDecision).
+async function refresh() {
+    render(await supervisionCall(`/reviews/services?${reviewsQuery()}`));
+}
+
 async function load() {
     try {
         showMessage('');
-        render(await supervisionCall(`/reviews/services?${reviewsQuery()}`));
+        await refresh();
     } catch (error) {
         showMessage(error.message);
     }
@@ -443,15 +448,6 @@ async function confirmAudit(decisionId) {
     try {
         showMessage('');
         render(await servicesFetch(`/audit/${decisionId}?${filterQuery()}`, { method: 'POST' }));
-    } catch (error) {
-        showMessage(error.message);
-    }
-}
-
-async function cancelDecision(decisionId) {
-    try {
-        showMessage('');
-        render(await servicesFetch(`/decisions/${decisionId}?${filterQuery()}`, { method: 'DELETE' }));
     } catch (error) {
         showMessage(error.message);
     }

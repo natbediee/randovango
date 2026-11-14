@@ -53,3 +53,21 @@ function chooseCity({ ville, commune }) {
     document.getElementById('filterTown').value = commune;
     load();
 }
+
+// Annule une décision, quelle qu'elle soit (spot, ouverture, service) : une seule route, DELETE /decisions/{id},
+// qui lit elle-même ce que vise la décision. Puis la page se redessine par refresh(), que chaque page définit.
+// Si l'annulation passe mais pas le rechargement, on le dit : la décision est bien annulée.
+async function cancelDecision(decisionId) {
+    showMessage('');
+    try {
+        await supervisionCall(`/decisions/${decisionId}`, { method: 'DELETE' });
+    } catch (error) {
+        showMessage(error.message);
+        return;
+    }
+    try {
+        await refresh();
+    } catch (error) {
+        showMessage('Décision annulée, mais la liste n\'a pas pu être rechargée : recharge la page.');
+    }
+}
