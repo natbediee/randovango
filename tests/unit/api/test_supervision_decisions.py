@@ -1,5 +1,5 @@
 """
-Les gestes de décision de la supervision (carte #186) : décider sur un spot ou ses dates d'ouverture
+Les gestes de décision de la supervision (carte #186) : décider sur un spot, ses dates d'ouverture ou un service
 (POST /decisions), corriger le texte d'une décision (PUT /decisions/{id}) et la dire juste (POST /decisions/{id}/audit).
 
 Le routeur est le vrai ; l'admin connecté et les services sont remplacés : on regarde ce que la route transmet, ce
@@ -28,6 +28,8 @@ def api(monkeypatch):
     monkeypatch.setattr(supervision_decisions.spots_review, "correct_a_savoir", record)
     monkeypatch.setattr(supervision_decisions.spots_review, "decide", record)
     monkeypatch.setattr(supervision_decisions.spots_edit, "decide_opening", record)
+    monkeypatch.setattr(supervision_decisions.services_review, "decide", lambda *args: record("relecture", *args))
+    monkeypatch.setattr(supervision_decisions.services_edit, "decide", lambda *args: record("modifier", *args))
     monkeypatch.setattr(supervision_decisions.services_review, "confirm_audit", record)
     app = FastAPI()
     app.include_router(supervision_decisions.router, prefix="/api/supervision")
@@ -114,4 +116,48 @@ def test_a_refused_spot_decision_answers_422(api):
 @pytest.mark.parametrize("path", ["/edit/spots/decisions", "/edit/spots/openings"])
 def test_the_old_spot_routes_are_gone(api, path):
     """Les deux anciennes routes de Modifier pour les spots n'existent plus : on décide par POST /decisions."""
+    assert api.client.post(f"/api/supervision{path}", json={}).status_code in (404, 405)
+
+
+def test_a_service_decision_from_a_review_file_settles_the_file(api):
+    """Retirer la crêperie de la file « fermetures », notée « à corriger » : la décision va à la relecture des services."""
+    body = {"objet": "service", "objet_ids": [2686], "file": "fermetures", "decision": "retirer",
+            "pertinence": "a_corriger", "raison": "nom_adresse"}
+    response = api.client.post("/api/supervision/decisions", json=body)
+    assert response.status_code == 200
+    assert api.calls == [("relecture", "fermetures", [2686], "retirer", "", "camille", None, None, None,
+                          "a_corriger", "nom_adresse")]
+
+
+def test_a_service_decision_from_modifier_corrects_the_service(api):
+    """« Retirer le lieu » dans Modifier, sans file : la décision corrige le service, même sans signal."""
+    response = api.client.post("/api/supervision/decisions",
+                               json={"objet": "service", "objet_ids": [32498], "decision": "retirer"})
+    assert response.status_code == 200
+    assert api.calls == [("modifier", 32498, "retirer", "", "camille", None, None, None)]
+
+
+def test_modifier_corrects_one_service_at_a_time(api):
+    """Dans Modifier, un lot de services est refusé (422) : seuls les liens d'une file se valident par lot."""
+    body = {"objet": "service", "objet_ids": [12, 13], "decision": "retirer"}
+    assert api.client.post("/api/supervision/decisions", json=body).status_code == 422
+    assert api.calls == []
+
+
+def test_a_correction_in_modifier_is_not_rated(api):
+    """Une note de pertinence sans file est refusée (400) : dans Modifier, il n'y a pas de proposition de l'agent."""
+    body = {"objet": "service", "objet_ids": [32498], "decision": "retirer", "pertinence": "juste"}
+    assert api.client.post("/api/supervision/decisions", json=body).status_code == 400
+    assert api.calls == []
+
+
+def test_a_service_decision_without_service_is_refused(api):
+    """Une décision sur une liste de services vide est refusée (422) par le modèle."""
+    body = {"objet": "service", "objet_ids": [], "decision": "retirer"}
+    assert api.client.post("/api/supervision/decisions", json=body).status_code == 422
+
+
+@pytest.mark.parametrize("path", ["/services/decisions", "/edit/services/decisions"])
+def test_the_old_service_routes_are_gone(api, path):
+    """Les deux anciennes routes de décision sur un service, une par page, n'existent plus : on décide par POST /decisions."""
     assert api.client.post(f"/api/supervision{path}", json={}).status_code in (404, 405)

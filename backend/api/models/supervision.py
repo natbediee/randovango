@@ -62,6 +62,27 @@ class OpeningDecision(BaseModel):
     note: str = ""
 
 
+class ServiceDecision(BaseModel):
+    """
+    Décider sur un service (POST /decisions, "objet": "service") : decision est l'action choisie (« retirer »,
+    « autre_nom », « valider_lien »…), contrôlée par le service.
+    objet_ids : un service, ou un lot de liens contrôlés (« valider_lien » dans la file « liens »).
+    file : la file de relecture d'où vient la décision (page Services) ; absente, elle vient de Modifier.
+    mois, url, nom : ce que l'admin a choisi ou tapé (mois d'ouverture, lien trouvé, nouveau nom).
+    pertinence et raison : la note facultative de la proposition de l'agent (carte #201), pour un seul service.
+    """
+    objet: Literal["service"]
+    objet_ids: list[int] = Field(min_length=1)
+    decision: str
+    file: str | None = None
+    note: str = ""
+    mois: list[int] | None = None
+    url: str | None = None
+    nom: str | None = None
+    pertinence: str | None = None
+    raison: str | None = None
+
+
 # Le corps de POST /decisions : le champ « objet » dit lequel des modèles s'applique (un « discriminant »).
 # Pydantic lit d'abord « objet », puis vérifie les champs du bon modèle ; /docs montre les formes possibles.
-Decision = Annotated[SpotDecision | OpeningDecision, Field(discriminator="objet")]
+Decision = Annotated[SpotDecision | OpeningDecision | ServiceDecision, Field(discriminator="objet")]

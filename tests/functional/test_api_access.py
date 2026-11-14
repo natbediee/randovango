@@ -52,8 +52,6 @@ ACCESS = {
     ("DELETE", "/api/supervision/decisions/{decision_id}"): ADMIN,
     ("PUT", "/api/supervision/decisions/{decision_id}"): ADMIN,
     ("POST", "/api/supervision/decisions/{decision_id}/audit"): ADMIN,
-    ("POST", "/api/supervision/services/decisions"): ADMIN,
-    ("POST", "/api/supervision/edit/services/decisions"): ADMIN,
     ("GET", "/api/supervision/reviews/spots"): ADMIN,
     ("GET", "/api/supervision/reviews/services"): ADMIN,
     ("GET", "/api/supervision/reviews/summary"): ADMIN,

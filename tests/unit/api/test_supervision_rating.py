@@ -1,6 +1,6 @@
 """
-Les routes où la superviseuse tranche une proposition de l'agent reçoivent sa note de pertinence (carte #201) :
-POST /decisions pour un spot, POST /services/decisions pour un service.
+POST /decisions, où la superviseuse tranche une proposition de l'agent sur un spot ou un service, reçoit sa note de
+pertinence (carte #201).
 
 Le routeur est le vrai ; l'admin connecté et les services sont remplacés : on regarde seulement ce que la route
 transmet au service, et ce qu'elle refuse (400) sans rien enregistrer. Les droits d'accès sont testés à part
@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.dependencies import require_admin
-from api.routers import supervision, supervision_decisions
+from api.routers import supervision_decisions
 
 
 @pytest.fixture
@@ -25,10 +25,8 @@ def api(monkeypatch):
         state.calls.append(args)
 
     monkeypatch.setattr(supervision_decisions.spots_review, "decide", record)
-    monkeypatch.setattr(supervision.services_review, "decide", record)
-    monkeypatch.setattr(supervision, "service_reviews", lambda *args: {})
+    monkeypatch.setattr(supervision_decisions.services_review, "decide", record)
     app = FastAPI()
-    app.include_router(supervision.router, prefix="/api/supervision")
     app.include_router(supervision_decisions.router, prefix="/api/supervision")
     app.dependency_overrides[require_admin] = lambda: {"username": "camille"}
     state.client = TestClient(app)
@@ -60,23 +58,23 @@ def test_a_wrong_spot_rating_is_refused_and_nothing_recorded(api, rating):
 
 def test_a_rated_service_decision_passes_its_rating(api):
     """Une décision sur un service notée « à corriger, nom ou adresse faux » arrive au service avec sa note."""
-    response = api.client.post("/api/supervision/services/decisions", json={
-        "tab": "fermetures", "poi_ids": [2686], "action": "retirer", "pertinence": "a_corriger", "raison": "nom_adresse"})
+    response = api.client.post("/api/supervision/decisions", json={
+        "objet": "service", "file": "fermetures", "objet_ids": [2686], "decision": "retirer", "pertinence": "a_corriger", "raison": "nom_adresse"})
     assert response.status_code == 200
     assert api.calls == [("fermetures", [2686], "retirer", "", "camille", None, None, None, "a_corriger", "nom_adresse")]
 
 
 def test_a_wrong_service_rating_is_refused_and_nothing_recorded(api):
     """Une raison inconnue sur un service est refusée (400), et la décision n'est pas enregistrée."""
-    response = api.client.post("/api/supervision/services/decisions", json={
-        "tab": "fermetures", "poi_ids": [2686], "action": "retirer", "pertinence": "fausse", "raison": "trop_loin"})
+    response = api.client.post("/api/supervision/decisions", json={
+        "objet": "service", "file": "fermetures", "objet_ids": [2686], "decision": "retirer", "pertinence": "fausse", "raison": "trop_loin"})
     assert response.status_code == 400
     assert api.calls == []
 
 
 def test_a_batch_decision_cannot_be_rated(api):
     """Une décision par lot (liens cochés) n'est pas notée : une note juge une proposition, pas un lot (400)."""
-    response = api.client.post("/api/supervision/services/decisions", json={
-        "tab": "liens", "poi_ids": [12, 13], "action": "valider_lien", "pertinence": "juste"})
+    response = api.client.post("/api/supervision/decisions", json={
+        "objet": "service", "file": "liens", "objet_ids": [12, 13], "decision": "valider_lien", "pertinence": "juste"})
     assert response.status_code == 400
     assert api.calls == []

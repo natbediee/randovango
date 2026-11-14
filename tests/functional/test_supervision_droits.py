@@ -14,7 +14,7 @@ from jose import jwt
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from api import dependencies
-from api.routers import supervision, supervision_decisions, supervision_reviews, supervision_search, supervision_sheets
+from api.routers import supervision_decisions, supervision_reviews, supervision_search, supervision_sheets
 from services.authentification import ALGORITHM, AUTH_COOKIE_NAME, SECRET_KEY, create_guest_token
 
 scenarios("features/supervision_droits.feature")
@@ -44,20 +44,19 @@ def world(monkeypatch):
     monkeypatch.setattr(supervision_decisions.spots_review, "decide", record)
     monkeypatch.setattr(supervision_decisions.spots_review, "correct_a_savoir", record)
     monkeypatch.setattr(supervision_decisions.decisions, "cancel_decision", record)
-    monkeypatch.setattr(supervision.services_review, "get_reviews", review_calls)
-    monkeypatch.setattr(supervision.services_review, "decide", record)
+    monkeypatch.setattr(supervision_reviews.services_review, "get_reviews", review_calls)
+    monkeypatch.setattr(supervision_decisions.services_review, "decide", record)
     monkeypatch.setattr(supervision_decisions.services_review, "confirm_audit", record)
     monkeypatch.setattr(supervision_reviews.summary, "get_summary", review_calls)
-    monkeypatch.setattr(supervision.services_edit, "search", review_calls)
-    monkeypatch.setattr(supervision.services_edit, "decide", record)
+    monkeypatch.setattr(supervision_search.services_edit, "search", review_calls)
+    monkeypatch.setattr(supervision_decisions.services_edit, "decide", record)
     monkeypatch.setattr(supervision_sheets.services_edit, "decide_sheet", record)
-    monkeypatch.setattr(supervision.services_edit, "get_sheet", review_calls)
-    monkeypatch.setattr(supervision.services_edit, "attach_sheets", lambda reviews: reviews)
+    monkeypatch.setattr(supervision_sheets.services_edit, "get_sheet", review_calls)
+    monkeypatch.setattr(supervision_reviews.services_edit, "attach_sheets", lambda reviews: reviews)
     monkeypatch.setattr(supervision_search.spots_edit, "search", review_calls)
     monkeypatch.setattr(supervision_decisions.spots_edit, "decide_opening", record)
 
     app = FastAPI()
-    app.include_router(supervision.router, prefix="/api/supervision")
     app.include_router(supervision_decisions.router, prefix="/api/supervision")
     app.include_router(supervision_reviews.router, prefix="/api/supervision")
     app.include_router(supervision_search.router, prefix="/api/supervision")

@@ -33,11 +33,6 @@ function reviewsQuery() {
     return new URLSearchParams({ file: currentTab, ...filters() }).toString();
 }
 
-// Un appel à /api/supervision/services… : le préfixe de cette page devant l'appel commun (supervision_common.js).
-function servicesFetch(path, options = {}) {
-    return supervisionCall(`/services${path}`, options);
-}
-
 // Une recherche Google sur le nom et l'adresse : pour l'admin seulement, nos agents n'ouvrent jamais Google.
 function searchUrl(name, address) {
     return `https://www.google.com/search?q=${encodeURIComponent(`${name} ${address || ''}`.trim())}`;
@@ -321,21 +316,28 @@ function selectTab(tab) {
     load();
 }
 
-// Envoie la décision d'une carte, avec la note de la proposition de l'agent si elle a été donnée.
-async function send(tab, poiIds, action, note, months, url = null, name = null) {
-    const key = `${tab}-${poiIds[0]}`;
+// Envoie la décision d'une carte (POST /decisions), avec la note de la proposition de l'agent si elle a été donnée,
+// puis recharge la file. file : la file de la carte ; la décision tranche ses signaux.
+// Un refus s'affiche sous les boutons de la carte, là où on regarde.
+async function send(tab, poiId, action, note, months) {
+    const key = `${tab}-${poiId}`;
     const card = document.querySelector(`[data-key="${key}"]`);
     try {
         cardMessage(card, '');
-        const data = await servicesFetch('/decisions', {
+        await supervisionCall('/decisions', {
             method: 'POST',
-            body: JSON.stringify({ tab, vue: currentTab, poi_ids: poiIds, action, note, mois: months, url, nom: name,
-                                   ...ratingOf(key), ...filters() }),
+            body: JSON.stringify({ objet: 'service', objet_ids: [poiId], file: tab, decision: action, note, mois: months,
+                                   ...ratingOf(key) }),
         });
-        forgetRating(key);
-        render(data);
     } catch (error) {
         cardMessage(card, error.message);
+        return;
+    }
+    forgetRating(key);
+    try {
+        await refresh();
+    } catch (error) {
+        showMessage('C\'est enregistré, mais la liste n\'a pas pu être rechargée : recharge la page.');
     }
 }
 
@@ -433,7 +435,7 @@ async function decide(key, action) {
             return;
         }
     }
-    send(card.dataset.tab, [Number(card.dataset.poi)], action, cardNote(card), months);
+    send(card.dataset.tab, Number(card.dataset.poi), action, cardNote(card), months);
 }
 
 // « C'est juste » sur une décision de la règle tirée au sort : elle ne le sera plus (decisionGesture, page commune).

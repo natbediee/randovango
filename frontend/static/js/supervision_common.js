@@ -74,7 +74,7 @@ async function decisionGesture(path, options) {
     return true;
 }
 
-// Une nouvelle décision, sur un spot ou ses dates d'ouverture : body.objet dit laquelle (POST /decisions).
+// Une nouvelle décision, sur un spot, ses dates d'ouverture ou un service : body.objet dit sur quoi (POST /decisions).
 function postDecision(body) {
     return decisionGesture('/decisions', { method: 'POST', body: JSON.stringify(body) });
 }

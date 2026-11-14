@@ -9,8 +9,8 @@ Toutes sont réservées aux admins (require_admin) ; les règles communes sont d
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import require_admin
-from api.models.supervision import Decision, OpeningDecision, SpotDecision, TextCorrection
-from services.supervision import decisions, rating, services_review, spots_edit, spots_review
+from api.models.supervision import Decision, OpeningDecision, ServiceDecision, SpotDecision, TextCorrection
+from services.supervision import decisions, rating, services_edit, services_review, spots_edit, spots_review
 
 router = APIRouter()
 
@@ -40,21 +40,44 @@ def decide_opening(body: OpeningDecision, decided_by: str) -> None:
     spots_edit.decide_opening(body.objet_id, body.statut, body.debut, body.fin, body.note, decided_by, body.convention)
 
 
-@router.post("/decisions", summary="Records a decision on a spot or on its opening dates.")
+def decide_service(body: ServiceDecision, decided_by: str) -> None:
+    """
+    Décide sur un service. Depuis une file de relecture (body.file), la décision tranche aussi les signaux de la file
+    (services_review) ; depuis Modifier, elle corrige le service, même sans signal (services_edit).
+    """
+    pertinence, raison = checked_rating(body.pertinence, body.raison)
+    if pertinence and (len(body.objet_ids) > 1 or not body.file):
+        # La note juge une proposition de l'agent : un lot de liens, ou une correction dans Modifier, n'en a pas.
+        raise HTTPException(status_code=400, detail="Seule une décision sur une proposition de l'agent se note")
+    if body.file:
+        services_review.decide(body.file, body.objet_ids, body.decision, body.note, decided_by, body.mois, body.url,
+                               body.nom, pertinence, raison)
+        return
+    if len(body.objet_ids) > 1:
+        raise ValueError("Dans Modifier, on corrige un service à la fois")
+    services_edit.decide(body.objet_ids[0], body.decision, body.note, decided_by, body.mois, body.url, body.nom)
+
+
+@router.post("/decisions", summary="Records a decision on a spot, its opening dates, or a service.")
 def post_decision(body: Decision, admin=Depends(require_admin)):
     """
-    Une seule route pour décider, depuis Spots comme depuis Modifier : le champ « objet » dit sur quoi.
+    Une seule route pour décider, depuis Spots, Services ou Modifier : le champ « objet » dit sur quoi.
     {"objet": "spot", "objet_id": 1368, "decision": "garder", "note": "Vu sur Street View", "pertinence": "fausse",
      "raison": "preuve_faible"}
     {"objet": "ouverture", "objet_id": 1368, "statut": "periode", "debut": "01/04", "fin": "31/10", "convention": false}
-    Un spot inconnu ou une date mal tapée est refusé (422) avec le motif. Répond par la décision reçue ; la page
-    recharge ensuite sa liste (plan de #186, 2.1).
+    {"objet": "service", "objet_ids": [2686], "file": "fermetures", "decision": "retirer", "pertinence": "a_corriger",
+     "raison": "nom_adresse"}
+    {"objet": "service", "objet_ids": [32498], "decision": "autre_nom", "nom": "Cave de Keruzas"}   (depuis Modifier)
+    Un spot ou un service inconnu, une action non permise, une date ou un lien mal tapé est refusé (422) avec le motif.
+    Répond par la décision reçue ; la page recharge ensuite sa liste (plan de #186, 2.1).
     """
     try:
         if body.objet == "spot":
             decide_spot(body, admin["username"])
-        else:
+        elif body.objet == "ouverture":
             decide_opening(body, admin["username"])
+        else:
+            decide_service(body, admin["username"])
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
     return body.model_dump()

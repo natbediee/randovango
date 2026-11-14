@@ -17,7 +17,7 @@ Fonctionnalité: La supervision est réservée aux admins
       | absent   | POST    | /api/supervision/decisions     |
       | invalide | DELETE  | /api/supervision/decisions/1   |
       | absent   | GET     | /api/supervision/reviews/summary |
-      | absent   | POST    | /api/supervision/edit/services/decisions |
+      | absent   | PUT     | /api/supervision/services/1    |
 
   Scénario: Le jeton n'est lu que dans le cookie de connexion
     Étant donné un admin qui envoie son jeton valide dans l'en-tête Authorization, sans cookie
@@ -44,13 +44,11 @@ Fonctionnalité: La supervision est réservée aux admins
       | contributor | PUT     | /api/supervision/decisions/1            |
       | contributor | DELETE  | /api/supervision/decisions/1            |
       | contributor | GET     | /api/supervision/reviews/services       |
-      | contributor | POST    | /api/supervision/services/decisions     |
       | contributor | POST    | /api/supervision/decisions/1/audit      |
       | contributor | GET     | /api/supervision/reviews/summary        |
       | contributor | GET     | /api/supervision/search/services         |
       | contributor | GET     | /api/supervision/services/1              |
       | contributor | PUT     | /api/supervision/services/1              |
-      | contributor | POST    | /api/supervision/edit/services/decisions |
       | contributor | GET     | /api/supervision/search/spots            |
 
   Scénario: Un admin enregistre une décision à son nom

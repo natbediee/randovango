@@ -35,19 +35,6 @@ function filterQuery() {
     return params.toString();
 }
 
-// Un appel à /api/supervision/edit/services… ou /edit/spots…, selon le mode affiché : le préfixe de cette page
-// devant l'appel commun (supervision_common.js).
-function editFetch(path, options = {}) {
-    return supervisionCall(`/edit/${mode}${path}`, options);
-}
-
-// Ce que la page envoie avec une décision sur un service : la recherche affichée, pour la renvoyer telle quelle.
-function searchBody() {
-    const values = filters();
-    const city = values.ville ? Number(values.ville) : null;
-    return { ville: city, service: values.service, type: values.type, nom_recherche: values.nom };
-}
-
 // --- Services ---
 
 function placeRow(card) {
@@ -112,9 +99,12 @@ async function saveSheet(poiId) {
     }
 }
 
+// « Retirer le lieu » ou « Remettre le lieu » : une décision sur le service, sans file (elle vient de Modifier).
+// La liste et la fiche ouverte se rechargent ensuite (refresh).
 function decidePlace(poiId, action) {
     const key = `edit-${poiId}`;
-    send('/decisions', 'POST', { poi_id: poiId, action, note: ficheElement(key) ? ficheNote(key) : '', ...searchBody() });
+    return postDecision({ objet: 'service', objet_ids: [poiId], decision: action,
+                          note: ficheElement(key) ? ficheNote(key) : '' });
 }
 
 function renderServiceFilters(data) {
@@ -291,17 +281,6 @@ function render(data) {
            ${decision.note ? `· « ${escapeHtml(decision.note)} »` : ''} · ${escapeHtml(decision.par)}, le ${escapeHtml(decision.le)}
            · <a href="#" onclick="cancelDecision(${decision.id}); return false;">annuler</a></p>`;
     }).join('');
-}
-
-// Après une correction, la fiche ouverte se recharge : elle montre ce que voit maintenant le voyageur.
-async function send(path, method, body = null) {
-    try {
-        showMessage('');
-        render(await editFetch(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) }));
-        if (mode === 'services' && openId) showSheet(openId);
-    } catch (error) {
-        showMessage(error.message);
-    }
 }
 
 // Redessine la liste avec la recherche affichée, sans fermer la fiche ouverte : après une annulation
