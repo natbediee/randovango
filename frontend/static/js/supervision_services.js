@@ -28,6 +28,13 @@ function filters() {
 let allCities = [];
 let allTowns = [];
 
+// Les filtres pour la relecture (GET /reviews/services) : la file s'appelle « file », comme dans la page.
+function reviewsQuery() {
+    return new URLSearchParams({ file: currentTab, ...filters() }).toString();
+}
+
+// Les mêmes filtres pour les routes de décision, qui renvoient encore la liste et appellent la file « tab ».
+// Disparaît quand ces routes ne renvoient plus la liste (plan de #186, 2.1).
 function filterQuery() {
     const params = new URLSearchParams({ tab: currentTab, ...filters() });
     return params.toString();
@@ -305,7 +312,7 @@ function render(data) {
 async function load() {
     try {
         showMessage('');
-        render(await servicesFetch(`?${filterQuery()}`));
+        render(await supervisionCall(`/reviews/services?${reviewsQuery()}`));
     } catch (error) {
         showMessage(error.message);
     }

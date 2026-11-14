@@ -3,15 +3,13 @@ import logging
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api.dependencies import require_admin
+# Les routes de décision renvoient encore la liste de leur page : elles la lisent comme les routes de relecture.
+# Ce renvoi disparaît quand une décision ne répond plus que par elle-même (plan de #186, 2.1).
+from api.routers.supervision_reviews import service_reviews, spot_reviews
 from services.supervision import decisions, rating, services_edit, services_review, spots_edit, spots_review
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-@router.get("/reviews", summary="Agents' proposals awaiting a human decision.")
-def get_reviews(_admin=Depends(require_admin)):
-    return spots_review.get_reviews()
 
 
 def _rating(data: dict) -> tuple:
@@ -51,7 +49,7 @@ def post_decision(data: dict = Body(...), admin=Depends(require_admin)):
     pertinence, raison = _rating(data)
     spots_review.decide(data["objet_id"], data["decision"], data.get("note") or "", admin["username"],
                                data.get("a_savoir"), pertinence, raison)
-    return spots_review.get_reviews()
+    return spot_reviews()
 
 
 @router.put("/decisions/{decision_id}", summary="Corrects the text kept by a decision.")
@@ -60,37 +58,19 @@ def put_decision(decision_id: int, data: dict = Body(...), _admin=Depends(requir
     if not isinstance(data.get("a_savoir"), str):
         raise HTTPException(status_code=422, detail="Texte invalide")
     spots_review.correct_a_savoir(decision_id, data["a_savoir"])
-    return spots_review.get_reviews()
+    return spot_reviews()
 
 
 @router.delete("/decisions/{decision_id}", summary="Cancels a decision; it stays recorded.")
 def delete_decision(decision_id: int, _admin=Depends(require_admin)):
     _cancel(decision_id)
-    return spots_review.get_reviews()
+    return spot_reviews()
 
 
 @router.delete("/openings/{decision_id}", summary="Cancels an opening decision and restores the previous values.")
 def delete_opening_decision(decision_id: int, _admin=Depends(require_admin)):
     _cancel(decision_id)
-    return spots_review.get_reviews()
-
-
-def _service_reviews(tab: str, service: str | None = None, city: str | None = None, kind: str | None = None,
-                     town: str | None = None) -> dict:
-    """
-    Une file de relecture, chaque lieu avec sa fiche complète (services_edit.attach_sheets). town (paramètre
-    « commune ») : une commune d'adresse qui n'est pas une ville de l'appli, comme dans « Modifier ».
-    """
-    return services_edit.attach_sheets(services_review.get_reviews(tab, service, city, kind, town))
-
-
-@router.get("/services", summary="Service checks awaiting a human decision, one queue at a time.")
-def get_service_reviews(tab: str = "liens", service: str | None = None, ville: str | None = None, type: str | None = None,
-                        commune: str | None = None, _admin=Depends(require_admin)):
-    try:
-        return _service_reviews(tab, service or None, ville or None, type or None, commune or None)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error))
+    return spot_reviews()
 
 
 @router.post("/services/decisions", summary="Records and applies a decision on one place or a batch of checked links.")
@@ -115,7 +95,7 @@ def post_service_decision(data: dict = Body(...), admin=Depends(require_admin)):
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
     # La page peut montrer toutes les files (« vue ») : on la renvoie telle qu'elle était.
-    return _service_reviews(data.get("vue") or data["tab"], data.get("service") or None,
+    return service_reviews(data.get("vue") or data["tab"], data.get("service") or None,
                             data.get("ville") or None, data.get("type") or None, data.get("commune") or None)
 
 
@@ -130,7 +110,7 @@ def post_service_sheet(data: dict = Body(...), admin=Depends(require_admin)):
     try:
         services_edit.decide_sheet(data["poi_id"], data.get("changes"), data.get("note") or "", admin["username"],
                                       data.get("tab"))
-        return _service_reviews(data.get("vue") or data.get("tab"), data.get("service") or None,
+        return service_reviews(data.get("vue") or data.get("tab"), data.get("service") or None,
                                 data.get("ville") or None, data.get("type") or None, data.get("commune") or None)
     except ValueError as error:
         # Le motif du refus dans le journal : la page ne le montrait qu'en haut, hors de vue (8 novembre 2026).
@@ -143,7 +123,7 @@ def post_service_sheet(data: dict = Body(...), admin=Depends(require_admin)):
 def post_service_audit(decision_id: int, tab: str = "liens", service: str | None = None, ville: str | None = None,
                        type: str | None = None, commune: str | None = None, _admin=Depends(require_admin)):
     services_review.confirm_audit(decision_id)
-    return _service_reviews(tab, service or None, ville or None, type or None, commune or None)
+    return service_reviews(tab, service or None, ville or None, type or None, commune or None)
 
 
 @router.delete("/services/decisions/{decision_id}", summary="Cancels a service decision and restores the place.")
@@ -151,7 +131,7 @@ def delete_service_decision(decision_id: int, tab: str = "liens", service: str |
                             ville: str | None = None, type: str | None = None, commune: str | None = None,
                             _admin=Depends(require_admin)):
     _cancel(decision_id)
-    return _service_reviews(tab, service or None, ville or None, type or None, commune or None)
+    return service_reviews(tab, service or None, ville or None, type or None, commune or None)
 
 
 # Onglet « Modifier » : corriger n'importe quel lieu ou spot, même sans signal (services_edit, spots_edit).

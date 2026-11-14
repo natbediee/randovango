@@ -26,7 +26,7 @@ def api(monkeypatch):
     monkeypatch.setattr(supervision.spots_review, "decide", record)
     monkeypatch.setattr(supervision.spots_review, "get_reviews", lambda: {})
     monkeypatch.setattr(supervision.services_review, "decide", record)
-    monkeypatch.setattr(supervision, "_service_reviews", lambda *args: {})
+    monkeypatch.setattr(supervision, "service_reviews", lambda *args: {})
     app = FastAPI()
     app.include_router(supervision.router, prefix="/api/supervision")
     app.dependency_overrides[require_admin] = lambda: {"username": "camille"}

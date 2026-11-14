@@ -31,7 +31,7 @@ def api(monkeypatch):
 
     monkeypatch.setattr(supervision.decisions, "cancel_decision", cancel)
     monkeypatch.setattr(supervision.spots_review, "get_reviews", lambda: {})
-    monkeypatch.setattr(supervision, "_service_reviews", lambda *args: {})
+    monkeypatch.setattr(supervision, "service_reviews", lambda *args: {})
     monkeypatch.setattr(supervision, "_edit_services", lambda data: {})
     monkeypatch.setattr(supervision, "_edit_spots", lambda data: {})
     app = FastAPI()

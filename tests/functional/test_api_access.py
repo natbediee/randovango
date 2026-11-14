@@ -48,12 +48,10 @@ ACCESS = {
     ("POST", "/api/etl/upload_gpx"): ACCOUNT,
     # Les admins.
     ("DELETE", "/api/etl/delete_gpx/{filename}"): ADMIN,
-    ("GET", "/api/supervision/reviews"): ADMIN,
     ("POST", "/api/supervision/decisions"): ADMIN,
     ("PUT", "/api/supervision/decisions/{decision_id}"): ADMIN,
     ("DELETE", "/api/supervision/decisions/{decision_id}"): ADMIN,
     ("DELETE", "/api/supervision/openings/{decision_id}"): ADMIN,
-    ("GET", "/api/supervision/services"): ADMIN,
     ("POST", "/api/supervision/services/decisions"): ADMIN,
     ("POST", "/api/supervision/services/fiche"): ADMIN,
     ("POST", "/api/supervision/services/audit/{decision_id}"): ADMIN,
@@ -69,6 +67,8 @@ ACCESS = {
     ("DELETE", "/api/supervision/edit/spots/decisions/{decision_id}"): ADMIN,
     ("POST", "/api/supervision/edit/spots/openings"): ADMIN,
     ("DELETE", "/api/supervision/edit/spots/openings/{decision_id}"): ADMIN,
+    ("GET", "/api/supervision/reviews/spots"): ADMIN,
+    ("GET", "/api/supervision/reviews/services"): ADMIN,
     ("GET", "/api/supervision/reviews/summary"): ADMIN,
 }
 

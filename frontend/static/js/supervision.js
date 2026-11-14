@@ -136,7 +136,7 @@ async function cancelOpening(decisionId) {
 document.addEventListener('DOMContentLoaded', async () => {
     if (redirectIfLoggedOut()) return;
     try {
-        render(await supervisionCall('/reviews'));
+        render(await supervisionCall('/reviews/spots'));
     } catch (error) {
         showMessage(error.message);
     }
