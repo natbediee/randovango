@@ -18,49 +18,24 @@ const requestedTab = new URLSearchParams(window.location.search).get('tab');
 let currentTab = requestedTab in TABS ? requestedTab : 'tous';
 let currentCards = [];
 
-function showMessage(text) {
-    const box = document.getElementById('supervisionMsg');
-    box.textContent = text;
-    box.style.display = text ? '' : 'none';
-}
-
 function filters() {
     return { service: document.getElementById('filterService').value, type: document.getElementById('filterType').value,
              ville: document.getElementById('filterCity').value, commune: document.getElementById('filterTown').value };
 }
 
 // La recherche de ville (supervision_ville.js) : les villes qui ont des lieux à relire, et les communes de leurs adresses.
+// Le choix d'une ville passe par chooseCity (supervision_common.js).
 let allCities = [];
 let allTowns = [];
-
-function chooseCity({ ville, commune }) {
-    document.getElementById('filterCity').value = ville;
-    document.getElementById('filterTown').value = commune;
-    load();
-}
 
 function filterQuery() {
     const params = new URLSearchParams({ tab: currentTab, ...filters() });
     return params.toString();
 }
 
-async function servicesFetch(path, options = {}) {
-    const response = await window.RVG.apiFetch(`/api/supervision/services${path}`, {
-        ...options,
-        headers: { 'Content-Type': 'application/json' },
-    });
-    if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi, ta décision n\'a pas été enregistrée.');
-    if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
-    if (response.status === 422) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(typeof body.detail === 'string' ? body.detail : 'Décision refusée.');
-    }
-    if (!response.ok) throw new Error(`Erreur du serveur (HTTP ${response.status}) : décision non enregistrée.`);
-    return response.json();
-}
-
-function safeLink(url) {
-    return /^https?:\/\//.test(url || '') ? escapeHtml(url) : null;
+// Un appel à /api/supervision/services… : le préfixe de cette page devant l'appel commun (supervision_common.js).
+function servicesFetch(path, options = {}) {
+    return supervisionCall(`/services${path}`, options);
 }
 
 // Une recherche Google sur le nom et l'adresse : pour l'admin seulement, nos agents n'ouvrent jamais Google.
@@ -476,10 +451,7 @@ async function cancelDecision(decisionId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.RVG.isLoggedIn()) {
-        window.location.href = window.APP_URLS.contributorLogin;
-        return;
-    }
+    if (redirectIfLoggedOut()) return;
     document.getElementById('filterService').addEventListener('change', () => {
         // Un autre onglet n'a pas les mêmes types : le sous-filtre repart de « Tous ».
         document.getElementById('filterType').innerHTML = '<option value="">Tous</option>';

@@ -1,24 +1,7 @@
 // Supervision (admin) : la file de relecture. L'agent propose de retirer un spot, avec ses
 // preuves ; l'admin tranche (services/supervision/spots_review.py). La sécurité est côté API :
-// cette page ne fait que renvoyer à la connexion quand l'API refuse.
-
-function showMessage(text) {
-    const box = document.getElementById('supervisionMsg');
-    box.textContent = text;
-    box.style.display = text ? '' : 'none';
-}
-
-// Session expirée : la fiche reste à l'écran, rien n'est perdu ; on se reconnecte et on recommence.
-async function supervisionFetch(path, options = {}) {
-    const response = await window.RVG.apiFetch(`/api/supervision${path}`, {
-        ...options,
-        headers: { 'Content-Type': 'application/json' },
-    });
-    if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi, ta décision n\'a pas été enregistrée.');
-    if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
-    if (!response.ok) throw new Error(`Erreur du serveur (HTTP ${response.status}) : décision non enregistrée.`);
-    return response.json();
-}
+// cette page ne fait que renvoyer à la connexion quand l'API refuse. Les fonctions communes aux pages de la
+// supervision (showMessage, supervisionCall…) sont dans supervision_common.js.
 
 // La clé de la note d'un spot (supervision_notation.js) : distincte de celles des services.
 function spotKey(spotId) {
@@ -110,7 +93,7 @@ async function decide(spotId, decision) {
     const aSavoir = text.value !== text.dataset.agent ? text.value : null;
     try {
         showMessage('');
-        const data = await supervisionFetch('/decisions', {
+        const data = await supervisionCall('/decisions', {
             method: 'POST', body: JSON.stringify({ objet_id: spotId, decision, note, a_savoir: aSavoir, ...ratingOf(spotKey(spotId)) }),
         });
         forgetRating(spotKey(spotId));
@@ -124,7 +107,7 @@ async function correctText(decisionId) {
     const text = document.getElementById(`correct-${decisionId}`).value;
     try {
         showMessage('');
-        render(await supervisionFetch(`/decisions/${decisionId}`, {
+        render(await supervisionCall(`/decisions/${decisionId}`, {
             method: 'PUT', body: JSON.stringify({ a_savoir: text }),
         }));
     } catch (error) {
@@ -135,7 +118,7 @@ async function correctText(decisionId) {
 async function cancelDecision(decisionId) {
     try {
         showMessage('');
-        render(await supervisionFetch(`/decisions/${decisionId}`, { method: 'DELETE' }));
+        render(await supervisionCall(`/decisions/${decisionId}`, { method: 'DELETE' }));
     } catch (error) {
         showMessage(error.message);
     }
@@ -144,19 +127,16 @@ async function cancelDecision(decisionId) {
 async function cancelOpening(decisionId) {
     try {
         showMessage('');
-        render(await supervisionFetch(`/openings/${decisionId}`, { method: 'DELETE' }));
+        render(await supervisionCall(`/openings/${decisionId}`, { method: 'DELETE' }));
     } catch (error) {
         showMessage(error.message);
     }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!window.RVG.isLoggedIn()) {
-        window.location.href = window.APP_URLS.contributorLogin;
-        return;
-    }
+    if (redirectIfLoggedOut()) return;
     try {
-        render(await supervisionFetch('/reviews'));
+        render(await supervisionCall('/reviews'));
     } catch (error) {
         showMessage(error.message);
     }

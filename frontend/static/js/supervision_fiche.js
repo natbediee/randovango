@@ -5,6 +5,7 @@
 // annulable (services/supervision/services_edit.py, decide_sheet).
 // Une station-service a sa fiche à elle (view.station, station_selection_service.station_view) : la carte de l'étape 4
 // avec ses prix, ce que dit l'État, et seulement le nom, l'adresse et le lien Google Maps à corriger.
+// safeLink vient de supervision_common.js, chargé avant ce fichier.
 
 const FICHE_MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 const FICHE_FRENCH_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre',
@@ -33,14 +34,10 @@ function ficheSeasonLabel(status, months) {
     return status ? "Saisonnier, vérifie l'ouverture" : '';
 }
 
-function ficheSafeLink(url) {
-    return /^https?:\/\//.test(url || '') ? escapeHtml(url) : null;
-}
-
 function ficheMapsLink(values) {
-    if (ficheSafeLink(values.maps_url)) return ficheSafeLink(values.maps_url);
+    if (safeLink(values.maps_url)) return safeLink(values.maps_url);
     // Une station : le lien construit avec sa marque, celui de l'étape 4 (station_selection_service.station_maps_url).
-    if (values.station && ficheSafeLink(values.station.maps_url)) return ficheSafeLink(values.station.maps_url);
+    if (values.station && safeLink(values.station.maps_url)) return safeLink(values.station.maps_url);
     return values.position ? `https://www.google.com/maps/search/?api=1&query=${values.position[0]},${values.position[1]}` : null;
 }
 
@@ -60,7 +57,7 @@ function ficheStationPrices(station) {
 
 // Ce que dit l'État d'une station : de quoi juger une station douteuse (etl/transform/transform_carburants.py).
 function ficheStationState(station) {
-    const osm = ficheSafeLink(station.osm_url);
+    const osm = safeLink(station.osm_url);
     const silence = station.jours_sans_nouvelles === null ? 'jamais'
         : `${station.derniere_declaration} (il y a ${station.jours_sans_nouvelles} jour${station.jours_sans_nouvelles > 1 ? 's' : ''})`;
     return `
@@ -95,7 +92,7 @@ function fichePreview(values) {
     if (values.station) return ficheStationPreview(values);
     const type = values.fiche.categories[values.categorie] || values.type_label;
     const season = ficheSeasonLabel(values.statut_saison, values.months);
-    const site = ficheSafeLink(values.url);
+    const site = safeLink(values.url);
     const maps = ficheMapsLink(values);
     return `
         <div class="spot-tags">
