@@ -1,5 +1,5 @@
 // Supervision (admin) : le bilan. Combien il reste à trancher, file par file, avec un lien
-// vers chaque file. Les chiffres viennent de services/supervision_summary_service.py, qui
+// vers chaque file. Les chiffres viennent de services/supervision/summary.py, qui
 // compte avec les mêmes règles que les pages Spots et Services.
 
 const CITIES_SHOWN = 12;

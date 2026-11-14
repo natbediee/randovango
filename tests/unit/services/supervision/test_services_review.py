@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services import poi_review_service as review
+from services.supervision import services_review as review
 
 
 def signal(kind, source="osm", **detail):
@@ -95,7 +95,7 @@ def test_only_links_can_be_decided_in_batch() -> None:
 
 
 def test_every_action_has_its_wording() -> None:
-    # La fiche corrigée à la main (poi_edit_service.decide_sheet) a son libellé, mais son propre formulaire, pas de bouton.
+    # La fiche corrigée à la main (services_edit.decide_sheet) a son libellé, mais son propre formulaire, pas de bouton.
     assert set(review.ACTIONS) == set(review.ACTION_LABELS) - {"modifier_fiche"} == set(review.ACTION_BUTTONS) | set(review.RULE_ACTIONS)
     assert set(review.APPLIED_COLUMNS) >= {"url", "name", "masque"}
 

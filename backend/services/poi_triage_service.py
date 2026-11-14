@@ -35,7 +35,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 from agents.find_service_links import commune_of, control_page, read_page
-from services import poi_review_service as review
+from services.supervision import services_review as review
 from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB, PROVEN_ONLY_TABS
 from etl.load.load_carburants import REMOVING_DECISIONS, SIGNALS_FROM_OSM, SIGNALS_FROM_STATE
 from etl.load.load_carburants import SOURCE_NAME as FUEL_SOURCE

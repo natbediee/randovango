@@ -1,6 +1,6 @@
 """Les doublons de services : un même lieu chargé deux fois, quel que soit son service."""
 from services import poi_duplicates_service as duplicates
-from services import poi_review_service as review
+from services.supervision import services_review as review
 
 # À Plougonvelin, 0,0001 degré de latitude fait environ 11 m.
 METRE = 0.0001 / 11.1

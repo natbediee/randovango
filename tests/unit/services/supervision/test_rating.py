@@ -1,5 +1,5 @@
 """
-La notation des propositions de l'agent (services/decision_rating.py, carte #201) : les valeurs permises, et
+La notation des propositions de l'agent (services/supervision/rating.py, carte #201) : les valeurs permises, et
 où la note s'enregistre quand la superviseuse tranche un spot ou un service.
 """
 import json
@@ -7,11 +7,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services import decision_rating
-from services import poi_review_service as review
-from services import supervision_service
+from services.supervision import rating
+from services.supervision import services_review as review
+from services.supervision import spots_review
 
-# Le doute de doublon des tests de poi_review_service : A l'Aise Breizh Café (1201), proposé comme doublon de Fraya (1187).
+# Le doute de doublon des tests de services_review : A l'Aise Breizh Café (1201), proposé comme doublon de Fraya (1187).
 BREIZH_DOUBT = {"id": 41, "poi_id": 1201, "source": "doublons", "signal_type": "doublon_service",
                 "detail": json.dumps({"autre_id": 1187, "autre_nom": "Fraya", "distance_m": 15})}
 
@@ -36,7 +36,7 @@ def _ratings(cursor) -> list:
 ])
 def test_a_known_rating_or_no_rating_is_accepted(pertinence, raison):
     """Une notation connue passe, et l'absence de notation aussi : noter une proposition reste facultatif."""
-    decision_rating.check_rating(pertinence, raison)
+    rating.check_rating(pertinence, raison)
 
 
 @pytest.mark.parametrize("pertinence, raison", [
@@ -45,12 +45,12 @@ def test_a_known_rating_or_no_rating_is_accepted(pertinence, raison):
 def test_an_unknown_or_inconsistent_rating_is_refused(pertinence, raison):
     """Une valeur inconnue, ou une raison sans proposition à corriger ou fausse, est refusée."""
     with pytest.raises(ValueError):
-        decision_rating.check_rating(pertinence, raison)
+        rating.check_rating(pertinence, raison)
 
 
 def test_the_page_receives_every_allowed_value():
     """La page reçoit les libellés du serveur : elle ne peut proposer que ce que la route accepte."""
-    labels = decision_rating.labels()
+    labels = rating.labels()
     assert list(labels["pertinences"]) == ["juste", "a_corriger", "fausse"]
     assert labels["raisons"]["pas_un_service"] == "pas un service pour le voyageur"
     assert labels["avec_raison"] == ["a_corriger", "fausse"]
@@ -61,9 +61,9 @@ def test_a_rated_spot_decision_records_its_rating(monkeypatch):
     connection = MagicMock()
     cursor = connection.cursor.return_value
     cursor.fetchone.side_effect = [{"id": 31}, {"verifie": 0}]
-    monkeypatch.setattr(supervision_service.MySQLUtils, "connect", lambda: connection)
-    monkeypatch.setattr(supervision_service.MySQLUtils, "disconnect", lambda connection: None)
-    supervision_service.decide(1368, "garder", "", "admin", None, "fausse", "preuve_faible")
+    monkeypatch.setattr(spots_review.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(spots_review.MySQLUtils, "disconnect", lambda connection: None)
+    spots_review.decide(1368, "garder", "", "admin", None, "fausse", "preuve_faible")
     assert _ratings(cursor) == [(1368, "garder", "fausse", "preuve_faible")]
 
 
@@ -72,9 +72,9 @@ def test_an_unrated_spot_decision_is_recorded_as_before(monkeypatch):
     connection = MagicMock()
     cursor = connection.cursor.return_value
     cursor.fetchone.side_effect = [{"id": 31}, {"verifie": 0}]
-    monkeypatch.setattr(supervision_service.MySQLUtils, "connect", lambda: connection)
-    monkeypatch.setattr(supervision_service.MySQLUtils, "disconnect", lambda connection: None)
-    supervision_service.decide(1368, "retirer", "", "admin")
+    monkeypatch.setattr(spots_review.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(spots_review.MySQLUtils, "disconnect", lambda connection: None)
+    spots_review.decide(1368, "retirer", "", "admin")
     assert _ratings(cursor) == [(1368, "retirer", None, None)]
 
 

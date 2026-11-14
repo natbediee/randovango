@@ -2,7 +2,7 @@
 // (supervision_modifier.js) et à la relecture (supervision_services.js).
 // À gauche, ce que voit le voyageur à l'étape 4 ; à droite, tout ce qui se corrige. L'aperçu suit la saisie.
 // La page n'envoie que les champs changés (ficheChanges) : l'API les contrôle et les enregistre en une décision
-// annulable (services/poi_edit_service.py, decide_sheet).
+// annulable (services/supervision/services_edit.py, decide_sheet).
 // Une station-service a sa fiche à elle (view.station, station_selection_service.station_view) : la carte de l'étape 4
 // avec ses prix, ce que dit l'État, et seulement le nom, l'adresse et le lien Google Maps à corriger.
 
@@ -180,7 +180,7 @@ function ficheElement(key) {
 function ficheValues(key) {
     const view = FICHES[key];
     const element = ficheElement(key);
-    // Comme l'API (poi_edit_service._plain) : le texte est rogné, les autres champs ont leurs espaces regroupés.
+    // Comme l'API (services_edit._plain) : le texte est rogné, les autres champs ont leurs espaces regroupés.
     const read = field => {
         const input = element.querySelector(`[data-field="${field}"]`);
         if (!input) return view[field];

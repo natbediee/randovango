@@ -39,7 +39,7 @@ REMOVING_DECISIONS = ("retirer", "fusionner")
 def human_fields(cursor, source_id: int) -> dict:
     """
     {poi_id: colonnes de poi corrigées par une décision non annulée} pour les stations de l'État. Une décision garde
-    les valeurs d'avant dans detail.avant (poi_review_service) : ce sont les colonnes qu'elle a changées.
+    les valeurs d'avant dans detail.avant (services_review) : ce sont les colonnes qu'elle a changées.
     """
     cursor.execute(
         """

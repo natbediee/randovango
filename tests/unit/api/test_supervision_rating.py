@@ -23,9 +23,9 @@ def api(monkeypatch):
     def record(*args):
         state.calls.append(args)
 
-    monkeypatch.setattr(supervision.supervision_service, "decide", record)
-    monkeypatch.setattr(supervision.supervision_service, "get_reviews", lambda: {})
-    monkeypatch.setattr(supervision.poi_review_service, "decide", record)
+    monkeypatch.setattr(supervision.spots_review, "decide", record)
+    monkeypatch.setattr(supervision.spots_review, "get_reviews", lambda: {})
+    monkeypatch.setattr(supervision.services_review, "decide", record)
     monkeypatch.setattr(supervision, "_service_reviews", lambda *args: {})
     app = FastAPI()
     app.include_router(supervision.router, prefix="/api/supervision")

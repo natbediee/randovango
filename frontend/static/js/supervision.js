@@ -1,5 +1,5 @@
 // Supervision (admin) : la file de relecture. L'agent propose de retirer un spot, avec ses
-// preuves ; l'admin tranche (services/supervision_service.py). La sécurité est côté API :
+// preuves ; l'admin tranche (services/supervision/spots_review.py). La sécurité est côté API :
 // cette page ne fait que renvoyer à la connexion quand l'API refuse.
 
 function showMessage(text) {

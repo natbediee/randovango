@@ -1,5 +1,5 @@
 // Supervision, onglet « Modifier » (admin) : retrouver un service ou un spot vu dans l'appli et le corriger,
-// même sans signal à relire (services/poi_edit_service.py, services/spot_edit_service.py).
+// même sans signal à relire (services/supervision/services_edit.py, services/supervision/spots_edit.py).
 // Une liste compacte, une ligne par lieu ; un clic ouvre sa fiche complète (supervision_fiche.js pour les services).
 // Chaque correction est une décision tracée : « Corrigé récemment » permet de l'annuler.
 // La sécurité est côté API : tout ce qui est tapé y est contrôlé.

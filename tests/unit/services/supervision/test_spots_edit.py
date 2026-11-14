@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services import spot_edit_service as edit
-from services import supervision_service as supervision
+from services.supervision import spots_edit as edit
+from services.supervision import spots_review as supervision
 
 SPOT = {"id": 1368, "name": "Parking du port", "type": "parking", "place_label": None, "city_label": "Le Conquet",
         "url": "https://p4n.fr/1368", "latitude": 48.36, "longitude": -4.77, "verifie": 1, "nuit_interdite": 0,

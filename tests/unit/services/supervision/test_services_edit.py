@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services import poi_edit_service as edit
+from services.supervision import services_edit as edit
 
 BEFORE = {"url": "https://ancien.fr", "name": "Cave Keruzas", "masque": 0, "ferme_moment": 0, "statut_saison": None,
           "mois_ouverture": None, "maps_url": None, "latitude": 48.34, "longitude": -4.71}

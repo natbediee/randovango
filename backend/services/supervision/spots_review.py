@@ -23,7 +23,7 @@ pas), le texte lu à ce moment et les valeurs d'avant, remises si on l'annule.
 import json
 from datetime import date
 
-from services import decision_rating
+from services.supervision import rating
 from utils.db_utils import MySQLUtils
 from utils.display_utils import a_savoir_on, spot_name_label
 
@@ -177,7 +177,7 @@ def get_reviews() -> dict:
         openings = _opening_decisions(cursor)
         cursor.close()
         return {"reviews": reviews,
-                "notation": decision_rating.labels(),
+                "notation": rating.labels(),
                 "ouvertures": openings,
                 "recent": [{"id": d["id"], "nom": _name(spots.get(d["objet_id"])), "decision": d["decision"],
                             "note": d["note"] or "", "par": d["decided_by"],
@@ -299,7 +299,7 @@ def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: st
     Enregistre la décision sur un spot, en réponse à sa dernière vérification. Le badge suit :
     un spot gardé par un humain est vérifié, un spot retiré ne l'est pas. `a_savoir` : le texte
     corrigé par le relecteur, None pour garder celui de l'agent. pertinence et raison : la note facultative
-    donnée à la proposition de l'agent (decision_rating), déjà vérifiée par la route ; None si elle n'est pas notée.
+    donnée à la proposition de l'agent (rating), déjà vérifiée par la route ; None si elle n'est pas notée.
     """
     if decision not in DECISIONS:
         raise ValueError(f"Décision inconnue : {decision}")

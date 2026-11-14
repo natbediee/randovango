@@ -39,7 +39,8 @@ import re
 
 from agents import find_services
 from agents.find_restaurants import RESTAURANTS
-from services import decision_rating, service_store
+from services import service_store
+from services.supervision import rating
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -166,7 +167,7 @@ CATEGORIES = {category.source: category for category in find_services.CATEGORIES
 # Les seules colonnes qu'une décision peut changer, et donc remettre.
 APPLIED_COLUMNS = ("url", "name", "masque", "ferme_moment", "statut_saison", "mois_ouverture", "maps_url", "latitude", "longitude",
                    "address", "description")
-# Les champs de fiche qu'une fiche corrigée à la main (poi_edit_service.decide_sheet) peut changer, table par table.
+# Les champs de fiche qu'une fiche corrigée à la main (services_edit.decide_sheet) peut changer, table par table.
 SHEET_COLUMNS = {"restaurants": ("genre", "pourquoi", "categorie", "distinction"),
                  "commerces": ("genre", "pourquoi", "categorie", "jours")}
 OSM_MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
@@ -529,7 +530,7 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
                   for row in cursor.fetchall()]
         audit = _audit_sample(cursor, tab, service, city)
         cursor.close()
-        return {"tab": tab, "counts": counts, "notation": decision_rating.labels(), "service_counts": dict(service_counts), "type_counts": dict(type_counts),
+        return {"tab": tab, "counts": counts, "notation": rating.labels(), "service_counts": dict(service_counts), "type_counts": dict(type_counts),
                 "total": len(cards), "cards": cards[:PAGE_SIZE],
                 "cities": cities, "towns": towns, "recent": recent, "audit": audit}
     finally:
@@ -641,7 +642,7 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
                raison: str | None = None) -> None:
     """
     Applique et enregistre la décision sur un lieu d'une file. pertinence et raison : la note facultative de l'humain
-    sur la proposition de l'agent (decision_rating, #201) ; None quand elle n'est pas notée, comme pour les règles.
+    sur la proposition de l'agent (rating, #201) ; None quand elle n'est pas notée, comme pour les règles.
     """
     cursor.execute("""
         SELECT sg.id, sg.poi_id, sg.source, sg.signal_type, sg.detail FROM poi_signals sg

@@ -1,7 +1,7 @@
 """
 Supervision, onglet « Modifier » : corriger n'importe quel service, même sans signal à relire (7 novembre 2026).
 
-La relecture (poi_review_service.py) ne montre que les lieux qu'une vérification a signalés. Une erreur vue sur
+La relecture (services_review.py) ne montre que les lieux qu'une vérification a signalés. Une erreur vue sur
 une carte de l'étape 4 (la Cave de Keruzas, sans aucun signal) ne pouvait pas y être corrigée. Ici, on retrouve
 le lieu comme le voyageur le voit, puis on le corrige.
 
@@ -11,14 +11,15 @@ pouvoir les remettre.
 
 LES MÊMES CORRECTIONS QUE LA RELECTURE, et le même code : applied_fields, typed_name, typed_link, typed_maps_link.
 Chaque correction est une décision (objet_type = 'poi', detail.file = 'modifier') qui garde les valeurs d'avant :
-poi_review_service.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
+services_review.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
 pas un nom ou un lien corrigé ici (service_store._decided_by_human).
 """
 import json
 import re
 from datetime import date
 
-from services import poi_review_service as review, service_store
+from services import service_store
+from services.supervision import services_review as review
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
 from services.station_selection_service import STATION_VIEW_SQL, station_view

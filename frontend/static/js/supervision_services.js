@@ -1,7 +1,7 @@
 // Supervision des services (admin) : les vérifications proposent, l'admin tranche
-// (services/poi_review_service.py). La sécurité est côté API : le lien ou le nom appliqués
+// (services/supervision/services_review.py). La sécurité est côté API : le lien ou le nom appliqués
 // viennent du signal enregistré, cette page n'envoie que le choix. Seule exception : la fiche complète
-// (supervision_fiche.js), corrigée par l'admin et contrôlée par l'API (poi_edit_service.decide_sheet).
+// (supervision_fiche.js), corrigée par l'admin et contrôlée par l'API (services_edit.decide_sheet).
 
 const TABS = { fermetures: 'Doute sur le nom', liens: 'Liens', saison: 'Saison', doublons: 'Doublons', confirmer: 'À confirmer' };
 // Les onglets de l'étape 4 (CATEGORY_META de step4_services.js), dans le même ordre, puis les services sans onglet :
@@ -97,16 +97,16 @@ function cardLinks(card) {
 
 // --- Onglet « Doublons » : les deux lieux côte à côte, on choisit celui qu'on garde (carte #202, 13 novembre 2026) ---
 // Avant, la carte ne donnait de l'autre lieu que son nom : « A l'Aise Breizh Café » proposé comme doublon de « Fraya »
-// ne pouvait pas être tranché. L'API joint maintenant l'autre lieu (card.autre_lieu, poi_edit_service.attach_sheets).
+// ne pouvait pas être tranché. L'API joint maintenant l'autre lieu (card.autre_lieu, services_edit.attach_sheets).
 
 // Les lieux cochés « Garder ce lieu », carte par carte (une liste de numéros) : cocher ne décide rien, seul « Valider »
 // tranche. Rien de coché tant qu'on n'a pas touché la carte (undefined) : « Valider » n'apparaît qu'ensuite.
 const keptPlaces = {};
 // Toutes les décisions d'un doublon passent par les cases et « Valider » (duplicateAction) : aucune n'est en bas.
-//   un seul lieu gardé   : garder_celui_ci (le lieu de la carte, l'autre est masqué, poi_review_service.keep_this_place)
+//   un seul lieu gardé   : garder_celui_ci (le lieu de la carte, l'autre est masqué, services_review.keep_this_place)
 //                          ou fusionner (l'autre lieu, celui de la carte est masqué) ;
 //   les deux gardés      : deux_lieux, ce ne sont pas les mêmes ;
-//   aucun des deux gardé : retirer_les_deux (poi_review_service.remove_both_places).
+//   aucun des deux gardé : retirer_les_deux (services_review.remove_both_places).
 const DUPLICATE_ACTIONS = ['garder_celui_ci', 'fusionner', 'deux_lieux', 'retirer_les_deux', 'retirer'];
 // Les décisions qui gardent un lieu : les corrections de sa fiche sont enregistrées avec elles.
 const KEEP_ACTIONS = ['garder_celui_ci', 'fusionner'];
@@ -206,9 +206,9 @@ function cardKey(card) {
     return `${card.tab}-${card.poi_id}`;
 }
 
-// Corriger ici le champ que la file met en doute la tranche (poi_edit_service.CLOSING_FIELDS).
+// Corriger ici le champ que la file met en doute la tranche (services_edit.CLOSING_FIELDS).
 // « Enregistrer mes corrections » corrige la fiche ; seuls les autres boutons tranchent la file, sauf quand on corrige
-// le champ qu'elle met en doute (poi_edit_service.CLOSING_FIELDS).
+// le champ qu'elle met en doute (services_edit.CLOSING_FIELDS).
 const CLOSING_HINTS = { fermetures: 'Corriger le nom dans la fiche tranche aussi ce doute.',
                         liens: 'Corriger le lien dans la fiche tranche aussi ce signal.',
                         saison: 'Corriger la saison dans la fiche la valide aussi.',

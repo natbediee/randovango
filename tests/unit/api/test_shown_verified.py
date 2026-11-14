@@ -1,5 +1,5 @@
 """Un doute en attente dans la supervision : le service s'affiche « non vérifié », à l'étape 4 comme dans sa fiche."""
-from services import poi_edit_service as edit
+from services.supervision import services_edit as edit
 from test_step4_restaurants import _get_poi, _row
 from utils.display_utils import shown_verified, verified_badge
 

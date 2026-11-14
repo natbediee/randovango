@@ -1,4 +1,4 @@
-from services import poi_review_service as review
+from services.supervision import services_review as review
 from services import restaurant_duplicates_service as duplicates
 
 

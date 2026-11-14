@@ -1,18 +1,18 @@
 """
 Supervision, onglet « Modifier » : corriger n'importe quel spot, même sans vérification à relire (7 novembre 2026).
 
-La relecture des spots (supervision_service.py) ne montre que ceux que verify_spots.py propose de retirer. Ici, on
+La relecture des spots (spots_review.py) ne montre que ceux que verify_spots.py propose de retirer. Ici, on
 retrouve un spot comme le voyageur le voit à l'étape 3 (la même zone autour de la ville, ZONE_KM), puis on le corrige
 avec les décisions qui existent déjà, sans en inventer :
-    retirer ou garder (supervision_service.decide), avec l'« À savoir » corrigé ;
-    les dates d'ouverture (supervision_service.decide_opening).
+    retirer ou garder (spots_review.decide), avec l'« À savoir » corrigé ;
+    les dates d'ouverture (spots_review.decide_opening).
 Chacune s'annule avec le code de la relecture (cancel_decision, cancel_opening_decision).
 """
 import re
 from datetime import date
 
-from services import supervision_service as supervision
-from services.poi_edit_service import address_town, in_city
+from services.supervision import spots_review as supervision
+from services.supervision.services_edit import address_town, in_city
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import city_commune, get_bounding_box
 
@@ -68,7 +68,7 @@ def _search_rows(cursor, city: dict | None, name: str, cities: list | None = Non
     filters, params = ["s.duplicate_of_spot_id IS NULL", "s.p4n_removed = 0"], []
     if city:
         min_lat, min_lon, max_lat, max_lon = get_bounding_box(city["latitude"], city["longitude"], ZONE_KM)
-        # Comme pour les services (poi_edit_service.in_city) : la commune du spot, sinon la ville la plus proche.
+        # Comme pour les services (services_edit.in_city) : la commune du spot, sinon la ville la plus proche.
         filters.append("((s.latitude BETWEEN %s AND %s AND s.longitude BETWEEN %s AND %s) OR s.address LIKE %s OR s.city_label IN (%s, %s))")
         params += [min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}", city["name"], city_commune(city)]
     if name:
@@ -148,7 +148,7 @@ def decide_opening(spot_id: int, status: str, start: str | None, end: str | None
                    convention: bool = False) -> None:
     """
     Les dates tapées « JJ/MM ». `convention` : l'admin les a choisies, la fiche ne les donne pas
-    (supervision_service.decide_opening). Hors d'une période, aucune date.
+    (spots_review.decide_opening). Hors d'une période, aucune date.
     """
     first, last = typed_day(start), typed_day(end)
     if status != "periode":
