@@ -589,10 +589,17 @@ def _audit_sample(cursor, tab: str, service: str | None = None, city: str | None
 
 
 def confirm_audit(decision_id: int) -> None:
-    """Une décision de la règle vue et jugée bonne : elle ne sera plus tirée au sort."""
+    """
+    Une décision de la règle vue et jugée bonne : elle ne sera plus tirée au sort. Refuse (ValueError) un numéro qui
+    n'est pas celui d'une décision prise par la règle sur un service.
+    """
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor()
+        cursor.execute("SELECT id FROM decisions WHERE id = %s AND objet_type = %s AND decided_by = %s",
+                       (decision_id, POI, RULE_AUTHOR))
+        if not cursor.fetchone():
+            raise ValueError("Décision de la règle introuvable")
         cursor.execute("UPDATE decisions SET note = %s WHERE id = %s AND objet_type = %s AND decided_by = %s",
                        (AUDIT_DONE, decision_id, POI, RULE_AUTHOR))
         connection.commit()

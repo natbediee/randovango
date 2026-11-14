@@ -313,10 +313,17 @@ def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: st
 
 
 def correct_a_savoir(decision_id: int, a_savoir: str) -> None:
-    """Corrige le texte d'une décision déjà prise, sans la refaire."""
+    """
+    Corrige le texte d'une décision déjà prise sur un spot, sans la refaire. Refuse (ValueError) un numéro qui n'est
+    pas celui d'une décision de spot encore valable : un service ou une décision annulée n'a pas de texte « À savoir ».
+    """
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor()
+        cursor.execute("SELECT id FROM decisions WHERE id = %s AND objet_type = %s AND annulee_at IS NULL",
+                       (decision_id, SPOT))
+        if not cursor.fetchone():
+            raise ValueError("Décision de spot introuvable ou annulée")
         cursor.execute("UPDATE decisions SET a_savoir_corrige = %s WHERE id = %s", (a_savoir, decision_id))
         connection.commit()
         cursor.close()

@@ -87,3 +87,13 @@ def test_the_spots_of_a_hamlet_are_asked_by_its_name_and_its_commune():
     rows = edit._search_rows(cursor, city, "", [city])
     assert cursor.execute.call_args[0][1][-3:] == ("%Plouarzel", "Trézien", "Plouarzel")
     assert len(rows) == 1
+
+
+def test_correcting_the_text_of_a_service_decision_is_refused():
+    """Corriger le « À savoir » d'un numéro qui n'est pas une décision de spot valable : refusé, rien n'est écrit."""
+    cursor = MagicMock()
+    cursor.fetchone.return_value = None
+    connect, disconnect = _connected(cursor)
+    with connect, disconnect, pytest.raises(ValueError):
+        supervision.correct_a_savoir(2915, "Barrière la nuit")
+    assert not any(call[0][0].startswith("UPDATE") for call in cursor.execute.call_args_list)

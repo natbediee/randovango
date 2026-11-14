@@ -54,13 +54,13 @@ function chooseCity({ ville, commune }) {
     load();
 }
 
-// Annule une décision, quelle qu'elle soit (spot, ouverture, service) : une seule route, DELETE /decisions/{id},
-// qui lit elle-même ce que vise la décision. Puis la page se redessine par refresh(), que chaque page définit.
-// Si l'annulation passe mais pas le rechargement, on le dit : la décision est bien annulée.
-async function cancelDecision(decisionId) {
+// Un geste sur une décision déjà prise (annuler, corriger son texte, la dire juste), puis la page se redessine par
+// refresh(), que chaque page définit. La route répond par la décision, pas par la page (plan de #186, 2.1).
+// Si le geste passe mais pas le rechargement, on le dit : le geste est bien enregistré.
+async function decisionGesture(path, options) {
     showMessage('');
     try {
-        await supervisionCall(`/decisions/${decisionId}`, { method: 'DELETE' });
+        await supervisionCall(path, options);
     } catch (error) {
         showMessage(error.message);
         return;
@@ -68,6 +68,17 @@ async function cancelDecision(decisionId) {
     try {
         await refresh();
     } catch (error) {
-        showMessage('Décision annulée, mais la liste n\'a pas pu être rechargée : recharge la page.');
+        showMessage('C\'est enregistré, mais la liste n\'a pas pu être rechargée : recharge la page.');
     }
+}
+
+// Annule une décision, quelle qu'elle soit (spot, ouverture, service) : une seule route, DELETE /decisions/{id},
+// qui lit elle-même ce que vise la décision.
+function cancelDecision(decisionId) {
+    return decisionGesture(`/decisions/${decisionId}`, { method: 'DELETE' });
+}
+
+// Corrige le texte « À savoir » d'une décision sur un spot, sans refaire la décision (PUT /decisions/{id}).
+function saveTextCorrection(decisionId, text) {
+    return decisionGesture(`/decisions/${decisionId}`, { method: 'PUT', body: JSON.stringify({ a_savoir: text }) });
 }

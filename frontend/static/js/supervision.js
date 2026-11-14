@@ -103,16 +103,9 @@ async function decide(spotId, decision) {
     }
 }
 
-async function correctText(decisionId) {
-    const text = document.getElementById(`correct-${decisionId}`).value;
-    try {
-        showMessage('');
-        render(await supervisionCall(`/decisions/${decisionId}`, {
-            method: 'PUT', body: JSON.stringify({ a_savoir: text }),
-        }));
-    } catch (error) {
-        showMessage(error.message);
-    }
+// Le texte corrigé sous « Dernières décisions » (saveTextCorrection de supervision_common.js).
+function correctText(decisionId) {
+    return saveTextCorrection(decisionId, document.getElementById(`correct-${decisionId}`).value);
 }
 
 // Redessine la page avec la liste à jour (après une annulation, cancelDecision de supervision_common.js).

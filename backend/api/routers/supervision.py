@@ -43,15 +43,6 @@ def post_decision(data: dict = Body(...), admin=Depends(require_admin)):
     return spot_reviews()
 
 
-@router.put("/decisions/{decision_id}", summary="Corrects the text kept by a decision.")
-def put_decision(decision_id: int, data: dict = Body(...), _admin=Depends(require_admin)):
-    """data = {"a_savoir": "..."} : une phrase par ligne, vide s'il n'y a plus rien à signaler."""
-    if not isinstance(data.get("a_savoir"), str):
-        raise HTTPException(status_code=422, detail="Texte invalide")
-    spots_review.correct_a_savoir(decision_id, data["a_savoir"])
-    return spot_reviews()
-
-
 @router.post("/services/decisions", summary="Records and applies a decision on one place or a batch of checked links.")
 def post_service_decision(data: dict = Body(...), admin=Depends(require_admin)):
     """
@@ -98,13 +89,6 @@ def post_service_sheet(data: dict = Body(...), admin=Depends(require_admin)):
         raise HTTPException(status_code=422, detail=str(error))
 
 
-@router.post("/services/audit/{decision_id}", summary="Marks a rule decision as checked by a human.")
-def post_service_audit(decision_id: int, tab: str = "liens", service: str | None = None, ville: str | None = None,
-                       type: str | None = None, commune: str | None = None, _admin=Depends(require_admin)):
-    services_review.confirm_audit(decision_id)
-    return service_reviews(tab, service or None, ville or None, type or None, commune or None)
-
-
 # Onglet « Modifier » : corriger n'importe quel lieu ou spot, même sans signal (services_edit, spots_edit).
 # Chaque réponse renvoie la recherche telle qu'elle était (supervision_search), avec la correction appliquée.
 
@@ -148,14 +132,6 @@ def post_edit_spot(data: dict = Body(...), admin=Depends(require_admin)):
         return spot_search(data)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
-
-
-@router.put("/edit/spots/decisions/{decision_id}", summary="Corrects the text kept by a spot decision.")
-def put_edit_spot(decision_id: int, data: dict = Body(...), _admin=Depends(require_admin)):
-    if not isinstance(data.get("a_savoir"), str):
-        raise HTTPException(status_code=422, detail="Texte invalide")
-    spots_review.correct_a_savoir(decision_id, data["a_savoir"])
-    return spot_search(data)
 
 
 @router.post("/edit/spots/openings", summary="Sets the opening dates of a spot.")

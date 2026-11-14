@@ -248,8 +248,9 @@ function decideSpot(spotId, decision) {
                                  a_savoir: text.value !== text.defaultValue ? text.value : null, ...searchBody() });
 }
 
+// Le texte du spot ouvert, enregistré sur sa décision (saveTextCorrection de supervision_common.js).
 function correctText(spotId, decisionId) {
-    send(`/decisions/${decisionId}`, 'PUT', { a_savoir: spotElement(spotId).querySelector('.spot-text').value, ...searchBody() });
+    return saveTextCorrection(decisionId, spotElement(spotId).querySelector('.spot-text').value);
 }
 
 function decideOpening(spotId) {

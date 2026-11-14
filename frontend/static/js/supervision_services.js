@@ -33,13 +33,6 @@ function reviewsQuery() {
     return new URLSearchParams({ file: currentTab, ...filters() }).toString();
 }
 
-// Les mêmes filtres pour les routes de décision, qui renvoient encore la liste et appellent la file « tab ».
-// Disparaît quand ces routes ne renvoient plus la liste (plan de #186, 2.1).
-function filterQuery() {
-    const params = new URLSearchParams({ tab: currentTab, ...filters() });
-    return params.toString();
-}
-
 // Un appel à /api/supervision/services… : le préfixe de cette page devant l'appel commun (supervision_common.js).
 function servicesFetch(path, options = {}) {
     return supervisionCall(`/services${path}`, options);
@@ -444,13 +437,9 @@ async function decide(key, action) {
     send(card.dataset.tab, [Number(card.dataset.poi)], action, cardNote(card), months);
 }
 
-async function confirmAudit(decisionId) {
-    try {
-        showMessage('');
-        render(await servicesFetch(`/audit/${decisionId}?${filterQuery()}`, { method: 'POST' }));
-    } catch (error) {
-        showMessage(error.message);
-    }
+// « C'est juste » sur une décision de la règle tirée au sort : elle ne le sera plus (decisionGesture, page commune).
+function confirmAudit(decisionId) {
+    return decisionGesture(`/decisions/${decisionId}/audit`, { method: 'POST' });
 }
 
 document.addEventListener('DOMContentLoaded', () => {

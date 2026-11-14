@@ -9,7 +9,8 @@ Toutes sont réservées aux admins (require_admin) ; les règles communes sont d
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import require_admin
-from services.supervision import decisions
+from api.models.supervision import TextCorrection
+from services.supervision import decisions, services_review, spots_review
 
 router = APIRouter()
 
@@ -25,3 +26,29 @@ def delete_decision(decision_id: int, _admin=Depends(require_admin)):
         return decisions.cancel_decision(decision_id)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
+
+
+@router.put("/decisions/{decision_id}", summary="Corrects the « À savoir » text kept by a spot decision.")
+def put_decision(decision_id: int, body: TextCorrection, _admin=Depends(require_admin)):
+    """
+    Corrige le texte « À savoir » d'une décision sur un spot, sans refaire la décision. Un numéro qui n'est pas celui
+    d'une décision de spot encore valable est refusé (422). Répond par la décision et son nouveau texte.
+    """
+    try:
+        spots_review.correct_a_savoir(decision_id, body.a_savoir)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    return {"id": decision_id, "a_savoir": body.a_savoir}
+
+
+@router.post("/decisions/{decision_id}/audit", summary="Marks a rule decision as checked by a human.")
+def post_decision_audit(decision_id: int, _admin=Depends(require_admin)):
+    """
+    « C'est juste » sur une décision prise par la règle (contrôle au hasard de la page Services) : elle ne sera plus
+    tirée au sort. Un numéro qui n'est pas celui d'une décision de la règle est refusé (422).
+    """
+    try:
+        services_review.confirm_audit(decision_id)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    return {"id": decision_id}
