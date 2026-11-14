@@ -8,14 +8,28 @@ function spotKey(spotId) {
     return `spot-${spotId}`;
 }
 
+// Deux liens sont la même page, à une barre finale près (« …/place/1368 » et « …/place/1368/ »).
+function sameLink(first, second) {
+    return first.replace(/\/+$/, '') === second.replace(/\/+$/, '');
+}
+
+// Les liens pour vérifier soi-même : la page park4night du spot, puis les autres pages que l'agent cite comme preuves.
+// L'agent cite souvent la page du spot elle-même : 80 spots sur 212 n'avaient qu'elle comme source, et la carte
+// montrait deux liens vers la même page (14 novembre 2026). Elle n'est montrée qu'une fois.
+function spotLinks(review) {
+    const others = review.sources.filter(url => !review.url || !sameLink(url, review.url));
+    const otherLabel = i => others.length > 1 ? `Autre source citée par l'agent (${i + 1})` : 'Autre source citée par l\'agent';
+    return [
+        review.url ? `<a href="${escapeHtml(review.url)}" target="_blank" rel="noopener">Page park4night du spot</a>` : '',
+        ...others.map((url, i) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${otherLabel(i)}</a>`),
+    ].filter(Boolean).join('');
+}
+
 function reviewCard(review) {
     const reopening = review.reouverture ? `<p><strong>Réouverture annoncée :</strong> ${escapeHtml(review.reouverture)}</p>` : '';
     const comments = review.commentaires.map(c =>
         `<li><strong>${escapeHtml(c.date)}</strong> : ${escapeHtml(c.texte)}</li>`).join('');
-    const links = [
-        review.url ? `<a href="${escapeHtml(review.url)}" target="_blank" rel="noopener">Voir plus de détails</a>` : '',
-        ...review.sources.map((url, i) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Source ${i + 1}</a>`),
-    ].filter(Boolean).join('');
+    const links = spotLinks(review);
     return `
         <article class="review-card" data-spot="${review.objet_id}">
             <div class="review-card__body">
@@ -91,16 +105,9 @@ async function decide(spotId, decision) {
     const text = card.querySelector('.review-card__a-savoir');
     // Texte inchangé : rien à enregistrer, celui de l'agent reste.
     const aSavoir = text.value !== text.dataset.agent ? text.value : null;
-    try {
-        showMessage('');
-        const data = await supervisionCall('/decisions', {
-            method: 'POST', body: JSON.stringify({ objet_id: spotId, decision, note, a_savoir: aSavoir, ...ratingOf(spotKey(spotId)) }),
-        });
-        forgetRating(spotKey(spotId));
-        render(data);
-    } catch (error) {
-        showMessage(error.message);
-    }
+    const recorded = await postDecision({ objet: 'spot', objet_id: spotId, decision, note, a_savoir: aSavoir,
+                                          ...ratingOf(spotKey(spotId)) });
+    if (recorded) forgetRating(spotKey(spotId));
 }
 
 // Le texte corrigé sous « Dernières décisions » (saveTextCorrection de supervision_common.js).
