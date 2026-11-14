@@ -2325,6 +2325,14 @@ a.bilan-total:hover { border-color: var(--teal); }
 .services-months > div { display: flex; flex-wrap: wrap; gap: 4px; }
 .services-chip { min-width: 44px; min-height: 44px; padding: 0 8px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--white); color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .services-chip.is-on { border-color: var(--teal-dark); background: var(--mint); color: var(--ink); font-weight: 700; }
+/* Supervision : la note de la proposition de l'agent (supervision_notation.js), des pastilles comme celles des mois,
+   mais une classe à part : les mois cochés sont lus par « .services-chip.is-on » dans la carte. */
+.rating { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.rating > span { font-size: 12px; font-weight: 700; color: var(--muted); }
+.rating-chip { min-height: 36px; padding: 0 10px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--white); color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.rating-chip.is-on { border-color: var(--teal-dark); background: var(--mint); color: var(--ink); font-weight: 700; }
+.rating__reason { display: flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 700; color: var(--muted); }
+.rating__reason select { font: inherit; font-size: 13px; font-weight: 400; }
 
 /* Supervision : la fiche complète d'un service (supervision_fiche.js), dans « Modifier » et dans la relecture.
    À gauche ce que voit le voyageur, à droite tout ce qui se corrige ; un champ mis en doute par le signal est encadré. */
