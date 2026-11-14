@@ -92,11 +92,16 @@ def count_ratings(rows: list) -> list:
     return counts
 
 
-def summarize(states: dict, spot_cities: dict, groups: dict, pois: dict, openings: int, decisions: int) -> dict:
-    """Assemble le bilan à partir de ce que la base a donné (sans y toucher : testable seul)."""
-    spots = count_spots(states)
+def summarize(states: dict, spot_cities: dict, groups: dict, pois: dict, openings: int, decisions: int,
+              unverified: list = ()) -> dict:
+    """
+    Assemble le bilan à partir de ce que la base a donné (sans y toucher : testable seul).
+    unverified : les spots proposés au voyageur avec le badge « non vérifié » (spots_review._unverified_ids), à
+    confirmer comme les retraits proposés sont à relire (page Spots, problème « Non vérifié »).
+    """
+    spots = {**count_spots(states), "non_verifies": len(unverified)}
     pending_spots = [spot_id for spot_id, (verification, decision) in states.items()
-                     if spots_review.spot_status(verification, decision) == "propose"]
+                     if spots_review.spot_status(verification, decision) == "propose"] + list(unverified)
 
     files = Counter(tab for tab, _ in groups)
     by_type = Counter((pois.get(poi_id) or {}).get("service") or NO_TYPE for _, poi_id in groups)
@@ -105,7 +110,7 @@ def summarize(states: dict, spot_cities: dict, groups: dict, pois: dict, opening
 
     services_pending = sum(files.values())
     return {
-        "total": spots["a_relire"] + services_pending,
+        "total": spots["a_relire"] + spots["non_verifies"] + services_pending,
         "decisions": decisions,
         "spots": {**spots, "ouvertures": openings},
         "services": {
@@ -258,15 +263,18 @@ def get_summary(city_id: int | None = None, town: str | None = None) -> dict:
         if city_id is not None and not city:
             raise ValueError(f"Ville inconnue : {city_id}")
         all_states = spots_review._spot_states(cursor)
-        places = spot_places(spots_review._spot_labels(cursor, list(all_states)), cities)
+        all_unverified = spots_review._unverified_ids(cursor, all_states)
+        places = spot_places(spots_review._spot_labels(cursor, list({*all_states, *all_unverified})), cities)
         all_groups, all_pois = services_review._pending(cursor, None, None)
         pending_spots = [spot_id for spot_id, (verification, decision) in all_states.items()
-                         if spots_review.spot_status(verification, decision) == "propose"]
+                         if spots_review.spot_status(verification, decision) == "propose"] + all_unverified
         choices = city_search_choices(places, pending_spots, all_pois, cities)
 
         states = {spot_id: state for spot_id, state in all_states.items()
                   if spot_in_place(places.get(spot_id, (None, None)), city, town)}
-        spot_cities = {spot_id: places.get(spot_id, (None, None))[1] for spot_id in states}
+        unverified = [spot_id for spot_id in all_unverified
+                      if spot_in_place(places.get(spot_id, (None, None)), city, town)]
+        spot_cities = {spot_id: places.get(spot_id, (None, None))[1] for spot_id in [*states, *unverified]}
         groups, pois = services_review._pending(cursor, None, city["name"] if city else None, town=town)
         cursor.execute("SELECT objet_id FROM decisions WHERE objet_type = %s AND annulee_at IS NULL",
                        (spots_review.OPENING_OBJECT,))
@@ -281,7 +289,7 @@ def get_summary(city_id: int | None = None, town: str | None = None) -> dict:
         place = city_inventory(cursor, city, town, cities, hidden_ids)
         cursor.close()
         cities_offered, towns = choices
-        return {**summarize(states, spot_cities, groups, pois, openings, decisions), "notation": ratings,
+        return {**summarize(states, spot_cities, groups, pois, openings, decisions, unverified), "notation": ratings,
                 "cities": cities_offered, "towns": towns, "ville": place}
     finally:
         MySQLUtils.disconnect(connection)

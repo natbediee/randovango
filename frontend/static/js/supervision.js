@@ -176,6 +176,15 @@ async function refresh() {
     render(await supervisionCall(`/reviews/spots?${filterQuery()}`));
 }
 
+// Le problème venu d'un lien du Bilan (?probleme=non_verifie) : le menu n'a pas encore ses choix, on lui met celui-là
+// pour que le premier chargement soit déjà filtré ; renderProblems le garde ensuite.
+function problemFromUrl() {
+    const problem = new URLSearchParams(window.location.search).get('probleme');
+    if (['retrait', 'non_verifie'].includes(problem)) {
+        document.getElementById('filterProblem').innerHTML += `<option value="${problem}" selected></option>`;
+    }
+}
+
 // Un filtre changé : la liste se recharge (chooseCity de supervision_common.js l'appelle aussi).
 async function load() {
     try {
@@ -191,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('filterCategory').addEventListener('change', load);
     document.getElementById('filterProblem').addEventListener('change', load);
     placeFromUrl();
+    problemFromUrl();
     citySearch({ inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
                  sources: () => ({ cities: allCities, towns: allTowns }), onChoose: chooseCity });
     load();

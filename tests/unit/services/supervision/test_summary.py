@@ -26,7 +26,7 @@ def test_only_unanswered_removal_proposals_are_left_to_review() -> None:
 
     spots = build(states=states, openings=4)["spots"]
 
-    assert spots == {"a_relire": 2, "gardes": 1, "retires": 1, "ouvertures": 4}
+    assert spots == {"a_relire": 2, "gardes": 1, "retires": 1, "non_verifies": 0, "ouvertures": 4}
 
 
 def test_a_place_counts_once_in_each_queue_like_the_tabs() -> None:
@@ -155,3 +155,12 @@ def test_a_service_outside_step_4_counts_as_masked() -> None:
                     {"service_category": "drinking_water", "masque": 0, "statut_saison": None}]
     services = summary.inventory([], service_rows, "Le Conquet", set())["services"]
     assert (services["affiches"], services["masques"]) == (1, 1)
+
+
+def test_unverified_spots_are_counted_as_left_to_settle() -> None:
+    """Deux spots non vérifiés au Conquet s'ajoutent à ce qui reste à trancher, et à la ligne de leur ville."""
+    data = summary.summarize({}, {7: "Le Conquet", 8: "Le Conquet"}, {}, {}, 0, 0, unverified=[7, 8])
+    assert data["spots"]["non_verifies"] == 2
+    assert data["total"] == 2
+    assert data["par_ville"] == [{"label": "Le Conquet", "n": 2}]
+

@@ -119,14 +119,17 @@ function render(data) {
 
     document.getElementById('bilanTotals').innerHTML = [
         totalCard(data.total, 'à trancher en tout'),
-        totalCard(data.spots.a_relire, 'spots à relire', withPlace(urls.supervision, 'spots')),
+        totalCard(data.spots.a_relire + data.spots.non_verifies, 'spots à trancher', withPlace(urls.supervision, 'spots')),
         totalCard(data.services.a_relire, 'services à relire', withPlace(urls.supervisionServices, 'services')),
         totalCard(data.decisions, `décisions déjà prises${everywhere}`),
     ].join('');
 
     const spots = data.spots;
     showBlock('spotsBlock', 'spotsRows', rows([
-        { label: 'Retraits proposés par l\'agent, à relire', n: spots.a_relire, href: withPlace(urls.supervision, 'spots') },
+        { label: 'Retraits proposés par l\'agent, à relire', n: spots.a_relire,
+          href: withPlace(`${urls.supervision}?probleme=retrait`, 'spots') },
+        { label: 'Non vérifiés, à confirmer', n: spots.non_verifies,
+          href: withPlace(`${urls.supervision}?probleme=non_verifie`, 'spots') },
         { label: 'Gardés par l\'administrateur', n: spots.gardes },
         { label: 'Retirés par l\'administrateur', n: spots.retires },
         { label: 'Ouvertures tranchées par l\'administrateur', n: spots.ouvertures },
