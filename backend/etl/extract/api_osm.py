@@ -59,6 +59,9 @@ def extract_osm(city: str) -> dict:
     # Récupère un large éventail de POI, le filtrage se fera en transformation.
     # Plus d'abris, de parkings ni de poubelles (8 novembre 2026) : l'étape 4 ne les montre jamais
     # (utils/service_utils.POI_FRONTEND_CATEGORY_MAP), ils n'encombraient que la supervision (3 435 lieux, sans nom).
+    # Plus de campings ni d'aires de camping-car non plus (14 novembre 2026, carte #196) : même cas, l'étape 4 ne les
+    # montre jamais et les spots sont la bonne source pour dormir (228 campings et 98 aires visibles n'encombraient que la
+    # supervision). Le badge « Caravaneige » des spots vient de P4N, pas d'ici : il n'est pas touché.
     overpass_query = f"""
                 [out:json][timeout:45];
                 (
@@ -72,8 +75,6 @@ def extract_osm(city: str) -> dict:
                     nwr["amenity"="restaurant"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="cafe"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="pharmacy"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
-                    nwr["tourism"="camp_site"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
-                    nwr["tourism"="caravan_site"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["tourism"="information"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["shop"="supermarket"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["shop"="convenience"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});

@@ -127,3 +127,26 @@ def test_unknown_city_position_sends_no_query(overpass, monkeypatch) -> None:
 
     assert api_osm.extract_osm("Nulle-Part") is None
     assert overpass.calls == []
+
+
+@pytest.mark.parametrize("tag", ['"tourism"="camp_site"', '"tourism"="caravan_site"'])
+def test_campings_and_motorhome_areas_are_no_longer_asked(overpass, tag) -> None:
+    """Les campings et les aires de camping-car ne sont plus demandés à OSM : les spots sont la bonne source (carte #196)."""
+    overpass.script = [_response(200, ANSWER)]
+
+    api_osm.extract_osm("Plougonvelin")
+
+    query = overpass.calls[0][1]
+    assert tag not in query
+
+
+def test_public_equipments_are_still_asked(overpass) -> None:
+    """Les équipements publics (toilettes, douches, eau, vidange) restent demandés à OSM, seule source pour eux."""
+    overpass.script = [_response(200, ANSWER)]
+
+    api_osm.extract_osm("Plougonvelin")
+
+    query = overpass.calls[0][1]
+    for tag in ('"amenity"="toilets"', '"amenity"="shower"', '"amenity"="drinking_water"',
+                '"amenity"="sanitary_dump_station"'):
+        assert tag in query
