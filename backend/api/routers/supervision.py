@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api.dependencies import require_admin
@@ -11,7 +9,6 @@ from api.routers.supervision_search import service_search, spot_search
 from services.supervision import rating, services_edit, services_review, spots_edit, spots_review
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 
 def _rating(data: dict) -> tuple:
@@ -69,26 +66,6 @@ def post_service_decision(data: dict = Body(...), admin=Depends(require_admin)):
                             data.get("ville") or None, data.get("type") or None, data.get("commune") or None)
 
 
-@router.post("/services/fiche", summary="Saves a corrected sheet from a review card.")
-def post_service_sheet(data: dict = Body(...), admin=Depends(require_admin)):
-    """
-    data = {"tab": "confirmer", "poi_id": 12, "changes": {"texte": "...", "genre": "crêperie"}, "note": "",
-    "vue": "tous", "service": "", "ville": "", "type": ""}. Corriger le champ que la file met en doute la tranche.
-    """
-    if not isinstance(data.get("poi_id"), int):
-        raise HTTPException(status_code=422, detail="Lieu invalide")
-    try:
-        services_edit.decide_sheet(data["poi_id"], data.get("changes"), data.get("note") or "", admin["username"],
-                                      data.get("tab"))
-        return service_reviews(data.get("vue") or data.get("tab"), data.get("service") or None,
-                                data.get("ville") or None, data.get("type") or None, data.get("commune") or None)
-    except ValueError as error:
-        # Le motif du refus dans le journal : la page ne le montrait qu'en haut, hors de vue (8 novembre 2026).
-        logger.warning("Fiche refusée (lieu %s, file %s, champs %s) : %s", data["poi_id"], data.get("tab"),
-                       sorted(data.get("changes") or {}), error)
-        raise HTTPException(status_code=422, detail=str(error))
-
-
 # Onglet « Modifier » : corriger n'importe quel lieu ou spot, même sans signal (services_edit, spots_edit).
 # Chaque réponse renvoie la recherche telle qu'elle était (supervision_search), avec la correction appliquée.
 
@@ -102,19 +79,6 @@ def post_edit_service(data: dict = Body(...), admin=Depends(require_admin)):
         services_edit.decide(data["poi_id"], data.get("action"), data.get("note") or "", admin["username"],
                                 data.get("mois"), data.get("url"), data.get("nom"))
         return service_search({**data, "nom": data.get("nom_recherche")})
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error))
-
-
-@router.post("/edit/services/fiche", summary="Saves a corrected sheet: every field the traveller sees, at once.")
-def post_edit_sheet(data: dict = Body(...), admin=Depends(require_admin)):
-    """data = {"poi_id": 32498, "changes": {"name": "...", "texte": "...", "mois": [3, 4]}, "note": "", "ville": 12,
-    "service": "commerce", "type": "", "nom_recherche": "keruzas"}. Renvoie la recherche et la fiche à jour."""
-    if not isinstance(data.get("poi_id"), int):
-        raise HTTPException(status_code=422, detail="Lieu invalide")
-    try:
-        services_edit.decide_sheet(data["poi_id"], data.get("changes"), data.get("note") or "", admin["username"])
-        return {**service_search({**data, "nom": data.get("nom_recherche")}), "fiche": services_edit.get_sheet(data["poi_id"])}
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 

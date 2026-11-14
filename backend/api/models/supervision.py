@@ -14,3 +14,17 @@ class TextCorrection(BaseModel):
     n'y a plus rien à signaler. La décision elle-même (garder ou retirer) ne change pas.
     """
     a_savoir: str
+
+
+class SheetCorrection(BaseModel):
+    """
+    Les champs corrigés de la fiche d'un service (PUT /services/{poi_id}) : seuls les champs changés sont envoyés,
+    par exemple {"name": "Chez Sylvain", "maps_url": "https://maps.app.goo.gl/..."}. La valeur de chaque champ est
+    contrôlée par le service (services_edit.decide_sheet), qui refuse une fiche sans changement.
+
+    note : facultative, gardée avec la décision. file : la file de relecture d'où vient la correction (« liens »,
+    « fermetures »…) ; corriger le champ que cette file met en doute la tranche. Absente, la correction vient de Modifier.
+    """
+    changes: dict
+    note: str = ""
+    file: str | None = None

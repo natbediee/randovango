@@ -48,9 +48,8 @@ Fonctionnalité: La supervision est réservée aux admins
       | contributor | POST    | /api/supervision/decisions/1/audit      |
       | contributor | GET     | /api/supervision/reviews/summary        |
       | contributor | GET     | /api/supervision/search/services         |
-      | contributor | POST    | /api/supervision/services/fiche          |
       | contributor | GET     | /api/supervision/services/1              |
-      | contributor | POST    | /api/supervision/edit/services/fiche     |
+      | contributor | PUT     | /api/supervision/services/1              |
       | contributor | POST    | /api/supervision/edit/services/decisions |
       | contributor | GET     | /api/supervision/search/spots            |
       | contributor | POST    | /api/supervision/edit/spots/decisions    |

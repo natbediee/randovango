@@ -50,7 +50,7 @@ def world(monkeypatch):
     monkeypatch.setattr(supervision_reviews.summary, "get_summary", review_calls)
     monkeypatch.setattr(supervision.services_edit, "search", review_calls)
     monkeypatch.setattr(supervision.services_edit, "decide", record)
-    monkeypatch.setattr(supervision.services_edit, "decide_sheet", record)
+    monkeypatch.setattr(supervision_sheets.services_edit, "decide_sheet", record)
     monkeypatch.setattr(supervision.services_edit, "get_sheet", review_calls)
     monkeypatch.setattr(supervision.services_edit, "attach_sheets", lambda reviews: reviews)
     monkeypatch.setattr(supervision.spots_edit, "search", review_calls)

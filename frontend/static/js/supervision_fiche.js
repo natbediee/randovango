@@ -152,8 +152,8 @@ function ficheHtml(view, key, doubt = [], collapsible = false) {
                 </div>` : ''}
                 ${ficheInput(key, 'address', 'Adresse', view.adresse, doubt, 'maxlength="255"')}
                 <div class="fiche__pair">
-                    ${has('url') ? ficheInput(key, 'url', 'Lien du site', view.url, doubt, 'maxlength="490" placeholder="https://"') : ''}
-                    ${ficheInput(key, 'maps_url', 'Lien Google Maps', view.maps_url, doubt, 'maxlength="490" placeholder="https://maps.app.goo.gl/..."')}
+                    ${has('url') ? ficheInput(key, 'url', 'Lien du site', view.url, doubt, 'placeholder="https://"') : ''}
+                    ${ficheInput(key, 'maps_url', 'Lien Google Maps', view.maps_url, doubt, 'placeholder="https://maps.app.goo.gl/..."')}
                 </div>
                 ${has('distinction') ? ficheInput(key, 'distinction', 'Distinction (restaurant)', view.distinction, doubt, 'maxlength="100" placeholder="Guide Michelin"') : ''}
                 ${has('jours') ? ficheInput(key, 'jours', 'Jours (marché)', view.jours, doubt, 'maxlength="150" placeholder="Dimanche matin"') : ''}

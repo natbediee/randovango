@@ -378,21 +378,19 @@ function cardMessage(card, text) {
 
 const NOTHING_CHANGED = "Rien n'a changé";
 
-// Une fiche corrigée va au lieu qu'elle décrit : dans « Doublons », ce peut être l'autre lieu, celui qu'on garde.
-async function saveSheetRequest(card, sheet) {
-    return servicesFetch('/fiche', {
-        method: 'POST',
-        body: JSON.stringify({ tab: card.dataset.tab, vue: currentTab, poi_id: FICHES[sheet.key].poi_id,
-                               changes: sheet.changes, note: ficheNote(sheet.key), ...filters() }),
+// Une fiche corrigée va au service qu'elle décrit : dans « Doublons », ce peut être l'autre lieu, celui qu'on garde.
+// file : la file de la carte ; corriger le champ qu'elle met en doute la tranche.
+function saveSheetRequest(card, sheet) {
+    return supervisionCall(`/services/${FICHES[sheet.key].poi_id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ changes: sheet.changes, note: ficheNote(sheet.key), file: card.dataset.tab }),
     });
 }
 
 // Enregistre les fiches corrigées l'une après l'autre ; la page n'est redessinée qu'à la fin, sans quoi la seconde
-// fiche perdrait sa saisie. Rend la dernière réponse de l'API.
+// fiche perdrait sa saisie.
 async function saveSheets(card, sheets) {
-    let data = null;
-    for (const sheet of sheets) data = await saveSheetRequest(card, sheet);
-    return data;
+    for (const sheet of sheets) await saveSheetRequest(card, sheet);
 }
 
 async function saveReviewSheet(key) {
@@ -404,7 +402,8 @@ async function saveReviewSheet(key) {
     }
     try {
         cardMessage(card, '');
-        render(await saveSheets(card, sheets));
+        await saveSheets(card, sheets);
+        await refresh();
     } catch (error) {
         cardMessage(card, error.message);
     }

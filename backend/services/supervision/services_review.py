@@ -342,6 +342,10 @@ def offer_mixed_place(card: dict) -> None:
                          " avec ses deux fiches, dans les deux onglets.")
 
 
+# La longueur d'un lien tapé par l'admin : la colonne en garde 512, on laisse une marge.
+LINK_MAX_LENGTH = 490
+
+
 def typed_link(url: str | None) -> str:
     """
     Le lien qu'un admin a trouvé lui-même : une adresse web complète, et rien d'autre. Une apostrophe ou un guillemet sont
@@ -349,7 +353,12 @@ def typed_link(url: str | None) -> str:
     Encodés, ils ne peuvent plus sortir d'un attribut href. Une espace reste refusée : ce n'est pas une adresse.
     """
     url = (url or "").strip().replace("'", "%27").replace('"', "%22")
-    if not re.fullmatch(r"https?://[^\s\"'<>]{4,490}", url):
+    # Un lien trop long a son propre message : la page le coupait en silence à 490 caractères, et le lien enregistré
+    # ne menait plus au lieu (boucherie Chez Sylvain, n° 48016, 14 novembre 2026). Les liens de partage sont courts.
+    if len(url) > LINK_MAX_LENGTH:
+        raise ValueError(f"Lien trop long ({len(url)} caractères, {LINK_MAX_LENGTH} au plus) : colle un lien plus "
+                         "court ; dans Google Maps, « Partager » puis « Copier le lien » en donne un")
+    if not re.fullmatch(r"https?://[^\s\"'<>]{4,}", url):
         raise ValueError("Lien invalide : colle une adresse complète, qui commence par https://")
     return url
 

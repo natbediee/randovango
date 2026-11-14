@@ -53,9 +53,7 @@ ACCESS = {
     ("PUT", "/api/supervision/decisions/{decision_id}"): ADMIN,
     ("POST", "/api/supervision/decisions/{decision_id}/audit"): ADMIN,
     ("POST", "/api/supervision/services/decisions"): ADMIN,
-    ("POST", "/api/supervision/services/fiche"): ADMIN,
     ("POST", "/api/supervision/edit/services/decisions"): ADMIN,
-    ("POST", "/api/supervision/edit/services/fiche"): ADMIN,
     ("POST", "/api/supervision/edit/spots/decisions"): ADMIN,
     ("POST", "/api/supervision/edit/spots/openings"): ADMIN,
     ("GET", "/api/supervision/reviews/spots"): ADMIN,
@@ -64,6 +62,7 @@ ACCESS = {
     ("GET", "/api/supervision/search/services"): ADMIN,
     ("GET", "/api/supervision/search/spots"): ADMIN,
     ("GET", "/api/supervision/services/{poi_id}"): ADMIN,
+    ("PUT", "/api/supervision/services/{poi_id}"): ADMIN,
 }
 
 # Les paramètres de chemin et de requête des routes, pour les appeler vraiment.

@@ -137,6 +137,20 @@ def test_a_typed_link_must_be_a_full_web_address(url):
         review.typed_link(url)
 
 
+def test_a_too_long_link_is_refused_with_its_own_message():
+    """Un lien Street View de plus de 490 caractères est refusé avec un message qui conseille le lien de partage : la page
+    le coupait en silence (boucherie Chez Sylvain, n° 48016, 14 novembre 2026)."""
+    url = "https://www.google.com/maps/@48.35,-4.77,3a,75y/data=" + "x" * 500
+    with pytest.raises(ValueError, match="Lien trop long .* Copier le lien"):
+        review.typed_link(url)
+
+
+def test_a_link_of_490_characters_is_kept():
+    """Un lien de 490 caractères tout juste passe : seul ce qui dépasse est refusé."""
+    url = "https://a.fr/" + "x" * (490 - len("https://a.fr/"))
+    assert review.typed_link(url) == url
+
+
 def test_a_name_found_by_hand_renames_the_place_and_shows_it():
     card = review.build_card("fermetures", POI, [signal("fermeture_agent", "agent", type="reprise", autre_nom="Le Triskell")])
     assert "autre_nom" in card["actions"]

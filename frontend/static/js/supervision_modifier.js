@@ -80,11 +80,11 @@ function sheetBlock(view) {
         </div>`;
 }
 
-async function showSheet(poiId, view = null) {
+async function showSheet(poiId) {
     const box = document.getElementById('openSheet');
     if (!box) return;
     try {
-        box.innerHTML = sheetBlock(view || await supervisionCall(`/services/${poiId}`));
+        box.innerHTML = sheetBlock(await supervisionCall(`/services/${poiId}`));
     } catch (error) {
         box.innerHTML = `<p class="supervision-msg">${escapeHtml(error.message)}</p>`;
     }
@@ -105,9 +105,9 @@ async function saveSheet(poiId) {
     }
     try {
         showMessage('');
-        const data = await editFetch('/fiche', { method: 'POST', body: JSON.stringify({ poi_id: poiId, changes, note: ficheNote(key), ...searchBody() }) });
-        render(data);
-        showSheet(poiId, data.fiche);
+        await supervisionCall(`/services/${poiId}`, { method: 'PUT', body: JSON.stringify({ changes, note: ficheNote(key) }) });
+        // La liste et la fiche ouverte se rechargent : elles montrent ce que voit maintenant le voyageur.
+        await refresh();
     } catch (error) {
         showMessage(error.message);
     }
