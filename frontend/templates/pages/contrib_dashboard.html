@@ -12,8 +12,9 @@
       <p class="muted" style="font-size:14.5px;">Contributeur RandoVanGo · Merci pour tes partages</p>
     </div>
     <div class="dash-cta">
-      {# Réservé aux admins : révélé par common.js (l'API vérifie le rôle de son côté). #}
-      <a href="{{ url_for('supervision') }}" class="btn btn--dark btn--sm" data-admin-only style="display:none;">Supervision</a>
+      {# Réservé aux admins : révélé par common.js (l'API vérifie le rôle de son côté). On entre par le Bilan, qui résume
+         ce qui reste à trancher et mène à chaque file. #}
+      <a href="{{ url_for('supervision_bilan') }}" class="btn btn--dark btn--sm" data-admin-only style="display:none;">Supervision</a>
       <a href="{{ url_for('contributor_add_spot') }}" class="btn btn--primary btn--sm">+ Ajouter un spot</a>
       <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--outline btn--sm">+ Ajouter une randonnée</a>
     </div>
