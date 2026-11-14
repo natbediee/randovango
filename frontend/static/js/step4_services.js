@@ -48,12 +48,16 @@ let activeType = null;
 // Les onglets dont les agents écrivent les fiches, avec une catégorie par lieu : le filtre par type n'y apparaît
 // que s'il y a au moins deux types à choisir.
 const TYPE_FILTER_CATEGORIES = ['commerce', 'restauration', 'cafe'];
-// L'onglet carburant a son propre filtre : par carburant vendu (le gazole par défaut, celui des vans), qui ne laisse que
-// le prix de ce carburant sur chaque station, puis le tri par prix de ce carburant ou par distance du spot (du centre de
-// la commune sans spot choisi). Les pastilles de prix arrivent prêtes de l'API (poi.prix).
+// L'onglet carburant a son propre filtre : par carburant vendu, qui ne laisse que le prix de ce carburant sur chaque
+// station, puis le tri par prix de ce carburant ou par distance du spot (du centre de la commune sans spot choisi).
+// Les pastilles de prix arrivent prêtes de l'API (poi.prix).
+// Le dernier carburant choisi par le voyageur est retenu par l'API (carte #188) : l'onglet se rouvre dessus, d'une étape
+// et d'un voyage à l'autre. Sans choix enregistré, c'est « Tout ».
 const FUEL_CATEGORY = 'gasoil';
-const DEFAULT_FUEL = 'Gazole';
-let activeFuel = DEFAULT_FUEL;      // null = « Tout »
+// Sur « Tout », les stations sont rangées par le prix du gazole, le carburant le plus vendu.
+const SORT_FUEL_FOR_ALL = 'Gazole';
+let savedFuel = null;               // le carburant retenu pour le voyageur, null = « Tout »
+let activeFuel = null;              // le carburant affiché, null = « Tout »
 let fuelSort = 'prix';              // 'prix' ou 'distance'
 // Services retenus les jours précédents, pour le rappel lecture seule (vue tuiles).
 // Purement informatif : ces POI ne sont JAMAIS ajoutés à selectedPoiIds.
@@ -158,6 +162,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             renderPreviousServices();
         } catch (e) { /* pas bloquant */ }
     }
+
+    // Le carburant retenu pour le voyageur, lu pendant que les services se chargent (sans les attendre).
+    loadSavedFuel();
 
     // --- 4. Chargement API : POI au plus près du spot choisi si disponible ---
     try {
@@ -370,9 +377,9 @@ function renderPreviousServices() {
 function openCategory(category) {
     activeCategory = category;
     activeType = null;
-    // L'onglet carburant rouvert repart sur le gazole, trié par prix.
+    // L'onglet carburant rouvert repart sur le carburant retenu pour le voyageur, trié par prix.
     if (category === FUEL_CATEGORY) {
-        activeFuel = DEFAULT_FUEL;
+        activeFuel = savedFuel;
         fuelSort = 'prix';
     }
     document.getElementById('categoryTilesView').style.display = 'none';
@@ -506,7 +513,7 @@ function renderFuelFilter(filter) {
     if (activeFuel !== null && !fuels.some(([fuel]) => fuel === activeFuel)) activeFuel = null;
     const chip = (active, label, attrs) =>
         `<button type="button" class="chip${active ? ' is-active' : ''}" aria-pressed="${active}" ${attrs}>${escapeHtml(label)}</button>`;
-    const sortLabel = `Prix ${activeFuel === null ? 'du gazole' : 'du ' + fuels.find(([fuel]) => fuel === activeFuel)[1].label}`;
+    const sortLabel = fuelSortLabel(activeFuel === null ? null : fuels.find(([fuel]) => fuel === activeFuel)[1].label);
     filter.innerHTML =
         `<div class="fuel-filter" role="group" aria-label="Filtrer par carburant">
             <span class="fuel-filter__label">Carburant</span>
@@ -520,6 +527,7 @@ function renderFuelFilter(filter) {
         </div>`;
     filter.querySelectorAll('[data-fuel]').forEach(button => button.addEventListener('click', () => {
         activeFuel = button.dataset.fuel || null;
+        saveFuelChoice(activeFuel);
         filterByType(FUEL_CATEGORY, null);
     }));
     filter.querySelectorAll('[data-sort]').forEach(button => button.addEventListener('click', () => {
@@ -530,13 +538,42 @@ function renderFuelFilter(filter) {
     filter.style.flexDirection = 'column';
 }
 
+// Le libellé du tri par prix, qui suit le carburant affiché : « Prix du gazole », « Prix du SP95-E10 », « Prix du GPL ».
+// label est le libellé de pompe du carburant (« Gazole », « SP95-E10 »), null pour « Tout » : le tri se fait alors sur
+// le prix du gazole (voir applyFuelView), et le libellé le dit. Le gazole s'écrit en minuscules, c'est un nom commun ;
+// devant une voyelle, « du » devient « de l' » (« Prix de l'E85 »).
+function fuelSortLabel(label) {
+    if (label === null || label === 'Gazole') return 'Prix du gazole';
+    if (/^[AEIOUY]/i.test(label)) return `Prix de l'${label}`;
+    return `Prix du ${label}`;
+}
+
+// Lit le carburant retenu pour le voyageur (sa clé, ou null pour « Tout », y compris sans choix). En cas d'échec, on
+// garde « Tout » : toutes les stations restent visibles.
+async function loadSavedFuel() {
+    try {
+        const data = await apiGet('/api/step4/fuel_choice');
+        savedFuel = data.fuel;
+    } catch (err) {
+        console.error('Erreur lecture du carburant retenu:', err);
+    }
+}
+
+// Retient le carburant choisi (null pour « Tout ») pour les prochaines ouvertures de l'onglet. L'envoi part en
+// arrière-plan : l'écran n'attend pas la réponse, et un échec ne gêne que la prochaine ouverture.
+function saveFuelChoice(fuel) {
+    savedFuel = fuel;
+    apiPut('/api/step4/fuel_choice', { fuel })
+        .catch(err => console.error('Erreur enregistrement du carburant:', err));
+}
+
 // Range les cartes (prix du carburant choisi, ou distance), cache celles qui ne le vendent pas, met ce carburant
 // devant sur chaque carte et marque le moins cher. Les cartes ne sont pas refaites : leurs marqueurs restent liés.
 function applyFuelView() {
     const grid = document.getElementById(FUEL_CATEGORY);
     const stations = poisByCategory[FUEL_CATEGORY] || [];
     if (!grid) return;
-    const priceFuel = activeFuel || DEFAULT_FUEL;
+    const priceFuel = activeFuel || SORT_FUEL_FOR_ALL;
     const shown = stations.filter(poi => sellsFuel(poi, activeFuel));
     const prices = shown.map(poi => fuelPrice(poi, priceFuel)).filter(price => price !== null);
     const cheapest = prices.length > 1 ? Math.min(...prices) : null;

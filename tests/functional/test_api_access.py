@@ -34,6 +34,9 @@ ACCESS = {
     # Le voyage : un jeton, puis le plan doit être à ce voyageur.
     ("POST", "/api/step1/create_plan"): TRAVELLER,
     ("GET", "/api/pepites/trail-tips"): TRAVELLER,
+    # Le carburant retenu dans l'onglet Carburant (carte #188) : rattaché au voyageur, pas à un voyage.
+    ("GET", "/api/step4/fuel_choice"): TRAVELLER,
+    ("PUT", "/api/step4/fuel_choice"): TRAVELLER,
     ("PUT", "/api/step1/update_day_city/{plan_id}"): PLAN_OWNER,
     ("PUT", "/api/step2/update_plan/{plan_id}"): PLAN_OWNER,
     ("PUT", "/api/step3/update_plan/{plan_id}"): PLAN_OWNER,

@@ -628,6 +628,21 @@ def init_database():
                 INDEX idx_llm_calls_passage (passage_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
+            # 20. fuel_choices : le dernier carburant choisi par un voyageur dans l'onglet Carburant de l'étape 4 (carte #188).
+            # Une ligne par voyageur, rangée comme ses voyages (trip_plans) : un compte sur user_id (user_token vide),
+            # un invité sur user_id = 0 et son identifiant invité dans user_token. Jamais le jeton lui-même, qui change
+            # à chaque connexion. user_token vaut '' et non NULL pour un compte : une clé primaire n'accepte pas NULL.
+            # fuel : la clé du carburant (Gazole, E10, SP95, SP98, E85, GPLc), NULL pour « Tout ».
+            # Sans ligne, rien n'a été choisi : l'onglet s'ouvre sur « Tout ».
+            """
+            CREATE TABLE IF NOT EXISTS fuel_choices (
+                user_id INT NOT NULL,
+                user_token VARCHAR(64) NOT NULL DEFAULT '',
+                fuel VARCHAR(10),
+                chosen_at DATETIME NOT NULL,
+                PRIMARY KEY (user_id, user_token)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
         ]
         ("- Création des tables :")
         user_cnx = MySQLUtils.connect()

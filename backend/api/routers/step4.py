@@ -6,8 +6,10 @@ from datetime import date
 from fastapi import APIRouter, Query, Body
 from services.commerce_selection_service import (COMMERCE_SERVICES, OWN_TAB, PROVEN_ONLY_TABS, SHOP_CATEGORY_LABELS,
                                                  SHOPS_SHOWN)
-from fastapi import APIRouter, Query, Body, Depends
-from api.dependencies import require_plan_owner
+from fastapi import APIRouter, Query, Body, Depends, HTTPException
+from api.dependencies import get_current_traveller, require_plan_owner
+from api.models.fuel_choices import FuelChoice
+from services.fuel_choice_service import ALLOWED_FUELS, get_fuel_choice, save_fuel_choice
 from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB, SHOP_CATEGORY_LABELS, SHOPS_SHOWN
 from services.plan_service import insert_or_update_plan
 from services.station_selection_service import (closure_label, is_closed_for_good, is_motorway, price_badges,
@@ -419,3 +421,24 @@ def get_poi(
 def update_plan(plan_id: int, data: dict = Body(...)):
     plan_id = insert_or_update_plan(plan_id, data)
     return {"status": "updated", "plan_id": plan_id, "recap": data}
+
+
+@router.get("/fuel_choice", summary="Le dernier carburant choisi par le voyageur dans l'onglet Carburant.")
+def read_fuel_choice(traveller: dict = Depends(get_current_traveller)):
+    """
+    Le carburant sur lequel rouvrir l'onglet (carte #188) : sa clé, ou None pour « Tout », y compris sans choix enregistré.
+    Le voyageur est lu dans le jeton : chacun ne lit que son propre choix.
+    """
+    return {"fuel": get_fuel_choice(traveller)}
+
+
+@router.put("/fuel_choice", summary="Retient le carburant choisi par le voyageur dans l'onglet Carburant.")
+def update_fuel_choice(choice: FuelChoice, traveller: dict = Depends(get_current_traveller)):
+    """
+    Retient le carburant choisi (ou « Tout », envoyé comme null) pour le voyageur du jeton (carte #188).
+    Un carburant inconnu est refusé (422) : la colonne ne garde que les clés des pastilles de prix.
+    """
+    if choice.fuel is not None and choice.fuel not in ALLOWED_FUELS:
+        raise HTTPException(status_code=422, detail=f"Carburant inconnu : {choice.fuel}")
+    save_fuel_choice(traveller, choice.fuel)
+    return {"fuel": choice.fuel}
