@@ -41,12 +41,11 @@ function editFetch(path, options = {}) {
     return supervisionCall(`/edit/${mode}${path}`, options);
 }
 
-// Ce que la page envoie avec chaque correction : la recherche affichée, pour la renvoyer telle quelle.
+// Ce que la page envoie avec une décision sur un service : la recherche affichée, pour la renvoyer telle quelle.
 function searchBody() {
     const values = filters();
     const city = values.ville ? Number(values.ville) : null;
-    return mode === 'services' ? { ville: city, service: values.service, type: values.type, nom_recherche: values.nom }
-                               : { ville: city, nom: values.nom };
+    return { ville: city, service: values.service, type: values.type, nom_recherche: values.nom };
 }
 
 // --- Services ---
@@ -244,8 +243,8 @@ function decideSpot(spotId, decision) {
     const card = spotElement(spotId);
     const text = card.querySelector('.spot-text');
     // Le texte n'est envoyé que s'il a été touché : sinon celui de l'agent reste.
-    send('/decisions', 'POST', { spot_id: spotId, decision, note: card.querySelector('.spot-note').value,
-                                 a_savoir: text.value !== text.defaultValue ? text.value : null, ...searchBody() });
+    return postDecision({ objet: 'spot', objet_id: spotId, decision, note: card.querySelector('.spot-note').value,
+                          a_savoir: text.value !== text.defaultValue ? text.value : null });
 }
 
 // Le texte du spot ouvert, enregistré sur sa décision (saveTextCorrection de supervision_common.js).
@@ -255,10 +254,10 @@ function correctText(spotId, decisionId) {
 
 function decideOpening(spotId) {
     const card = spotElement(spotId);
-    send('/openings', 'POST', { spot_id: spotId, statut: card.querySelector('.spot-opening').value,
-                                debut: card.querySelector('.spot-start').value, fin: card.querySelector('.spot-end').value,
-                                convention: card.querySelector('.spot-convention').checked,
-                                note: card.querySelector('.spot-note').value, ...searchBody() });
+    return postDecision({ objet: 'ouverture', objet_id: spotId, statut: card.querySelector('.spot-opening').value,
+                          debut: card.querySelector('.spot-start').value, fin: card.querySelector('.spot-end').value,
+                          convention: card.querySelector('.spot-convention').checked,
+                          note: card.querySelector('.spot-note').value });
 }
 
 // --- Commun ---

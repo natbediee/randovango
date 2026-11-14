@@ -5,7 +5,9 @@ Un champ manquant ou d'un mauvais type est refusé (422) avec un message qui nom
 vérifier à la main. Ce qui reste vérifié par les services, ce sont les règles du métier (une décision permise, une
 note connue), pas les types. Les modèles arrivent avec la route qui les utilise.
 """
-from pydantic import BaseModel
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Field
 
 
 class TextCorrection(BaseModel):
@@ -28,3 +30,38 @@ class SheetCorrection(BaseModel):
     changes: dict
     note: str = ""
     file: str | None = None
+
+
+class SpotDecision(BaseModel):
+    """
+    Décider sur un spot remonté par les agents (POST /decisions, "objet": "spot") : le garder ou le retirer.
+    a_savoir : le texte corrigé, une phrase par ligne ; absent, celui de l'agent reste.
+    pertinence et raison : la note facultative de la proposition de l'agent (carte #201) ; vides, pas de note.
+    """
+    objet: Literal["spot"]
+    objet_id: int
+    decision: Literal["garder", "retirer"]
+    note: str = ""
+    a_savoir: str | None = None
+    pertinence: str | None = None
+    raison: str | None = None
+
+
+class OpeningDecision(BaseModel):
+    """
+    Les dates d'ouverture d'un spot (POST /decisions, "objet": "ouverture"), tapées dans Modifier.
+    statut : toute l'année, une période, la saison, ou inconnue ; debut et fin (« JJ/MM ») ne servent qu'à une période.
+    convention : l'admin a choisi ces dates, la fiche du spot ne les donne pas.
+    """
+    objet: Literal["ouverture"]
+    objet_id: int
+    statut: str
+    debut: str | None = None
+    fin: str | None = None
+    convention: bool = False
+    note: str = ""
+
+
+# Le corps de POST /decisions : le champ « objet » dit lequel des modèles s'applique (un « discriminant »).
+# Pydantic lit d'abord « objet », puis vérifie les champs du bon modèle ; /docs montre les formes possibles.
+Decision = Annotated[SpotDecision | OpeningDecision, Field(discriminator="objet")]

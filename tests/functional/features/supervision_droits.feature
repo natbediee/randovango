@@ -52,8 +52,6 @@ Fonctionnalité: La supervision est réservée aux admins
       | contributor | PUT     | /api/supervision/services/1              |
       | contributor | POST    | /api/supervision/edit/services/decisions |
       | contributor | GET     | /api/supervision/search/spots            |
-      | contributor | POST    | /api/supervision/edit/spots/decisions    |
-      | contributor | POST    | /api/supervision/edit/spots/openings     |
 
   Scénario: Un admin enregistre une décision à son nom
     Étant donné un utilisateur connecté avec le rôle "admin"

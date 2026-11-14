@@ -54,22 +54,29 @@ function chooseCity({ ville, commune }) {
     load();
 }
 
-// Un geste sur une décision déjà prise (annuler, corriger son texte, la dire juste), puis la page se redessine par
-// refresh(), que chaque page définit. La route répond par la décision, pas par la page (plan de #186, 2.1).
+// Un geste de décision (décider, annuler, corriger un texte, dire juste une décision de la règle), puis la page se
+// redessine par refresh(), que chaque page définit. La route répond par la décision, pas par la page (plan de #186, 2.1).
 // Si le geste passe mais pas le rechargement, on le dit : le geste est bien enregistré.
+// Rend true quand le geste est enregistré, false quand il est refusé (le message est alors affiché).
 async function decisionGesture(path, options) {
     showMessage('');
     try {
         await supervisionCall(path, options);
     } catch (error) {
         showMessage(error.message);
-        return;
+        return false;
     }
     try {
         await refresh();
     } catch (error) {
         showMessage('C\'est enregistré, mais la liste n\'a pas pu être rechargée : recharge la page.');
     }
+    return true;
+}
+
+// Une nouvelle décision, sur un spot ou ses dates d'ouverture : body.objet dit laquelle (POST /decisions).
+function postDecision(body) {
+    return decisionGesture('/decisions', { method: 'POST', body: JSON.stringify(body) });
 }
 
 // Annule une décision, quelle qu'elle soit (spot, ouverture, service) : une seule route, DELETE /decisions/{id},

@@ -40,8 +40,8 @@ def world(monkeypatch):
         state.decisions.append(args)
 
     monkeypatch.setattr(dependencies, "get_roles_for_user", lambda user_id: state.roles)
-    monkeypatch.setattr(supervision.spots_review, "get_reviews", review_calls)
-    monkeypatch.setattr(supervision.spots_review, "decide", record)
+    monkeypatch.setattr(supervision_reviews.spots_review, "get_reviews", review_calls)
+    monkeypatch.setattr(supervision_decisions.spots_review, "decide", record)
     monkeypatch.setattr(supervision_decisions.spots_review, "correct_a_savoir", record)
     monkeypatch.setattr(supervision_decisions.decisions, "cancel_decision", record)
     monkeypatch.setattr(supervision.services_review, "get_reviews", review_calls)
@@ -53,8 +53,8 @@ def world(monkeypatch):
     monkeypatch.setattr(supervision_sheets.services_edit, "decide_sheet", record)
     monkeypatch.setattr(supervision.services_edit, "get_sheet", review_calls)
     monkeypatch.setattr(supervision.services_edit, "attach_sheets", lambda reviews: reviews)
-    monkeypatch.setattr(supervision.spots_edit, "search", review_calls)
-    monkeypatch.setattr(supervision.spots_edit, "decide_opening", record)
+    monkeypatch.setattr(supervision_search.spots_edit, "search", review_calls)
+    monkeypatch.setattr(supervision_decisions.spots_edit, "decide_opening", record)
 
     app = FastAPI()
     app.include_router(supervision.router, prefix="/api/supervision")
@@ -111,7 +111,7 @@ def call(world, methode, route):
 @when(parsers.parse('il décide de "{decision}" le spot {spot:d}'))
 def decide(world, decision, spot):
     world.response = world.client.post("/api/supervision/decisions", headers=world.headers,
-                                       json={"objet_id": spot, "decision": decision})
+                                       json={"objet": "spot", "objet_id": spot, "decision": decision})
 
 
 @then(parsers.parse("la réponse est {status:d}"))

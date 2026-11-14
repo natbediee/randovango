@@ -9,10 +9,55 @@ Toutes sont réservées aux admins (require_admin) ; les règles communes sont d
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import require_admin
-from api.models.supervision import TextCorrection
-from services.supervision import decisions, services_review, spots_review
+from api.models.supervision import Decision, OpeningDecision, SpotDecision, TextCorrection
+from services.supervision import decisions, rating, services_review, spots_edit, spots_review
 
 router = APIRouter()
+
+
+def checked_rating(pertinence: str | None, raison: str | None) -> tuple:
+    """
+    La note facultative de la proposition de l'agent (#201) : (pertinence, raison), None pour ce qui n'est pas noté
+    (une liste laissée vide sur la page envoie une chaîne vide). Une valeur que rating ne connaît pas est refusée (400) :
+    rien n'est enregistré.
+    """
+    pertinence, raison = pertinence or None, raison or None
+    try:
+        rating.check_rating(pertinence, raison)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return pertinence, raison
+
+
+def decide_spot(body: SpotDecision, decided_by: str) -> None:
+    """Garde ou retire un spot, avec son texte corrigé et la note de la proposition de l'agent."""
+    pertinence, raison = checked_rating(body.pertinence, body.raison)
+    spots_review.decide(body.objet_id, body.decision, body.note, decided_by, body.a_savoir, pertinence, raison)
+
+
+def decide_opening(body: OpeningDecision, decided_by: str) -> None:
+    """Enregistre les dates d'ouverture d'un spot."""
+    spots_edit.decide_opening(body.objet_id, body.statut, body.debut, body.fin, body.note, decided_by, body.convention)
+
+
+@router.post("/decisions", summary="Records a decision on a spot or on its opening dates.")
+def post_decision(body: Decision, admin=Depends(require_admin)):
+    """
+    Une seule route pour décider, depuis Spots comme depuis Modifier : le champ « objet » dit sur quoi.
+    {"objet": "spot", "objet_id": 1368, "decision": "garder", "note": "Vu sur Street View", "pertinence": "fausse",
+     "raison": "preuve_faible"}
+    {"objet": "ouverture", "objet_id": 1368, "statut": "periode", "debut": "01/04", "fin": "31/10", "convention": false}
+    Un spot inconnu ou une date mal tapée est refusé (422) avec le motif. Répond par la décision reçue ; la page
+    recharge ensuite sa liste (plan de #186, 2.1).
+    """
+    try:
+        if body.objet == "spot":
+            decide_spot(body, admin["username"])
+        else:
+            decide_opening(body, admin["username"])
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    return body.model_dump()
 
 
 @router.delete("/decisions/{decision_id}", summary="Cancels any decision (spot, opening, service); it stays recorded.")

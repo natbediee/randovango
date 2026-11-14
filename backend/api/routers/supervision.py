@@ -4,40 +4,13 @@ from api.dependencies import require_admin
 # Les routes de décision renvoient encore la liste de leur page : elles la lisent comme les routes de relecture
 # et de recherche.
 # Ce renvoi disparaît quand une décision ne répond plus que par elle-même (plan de #186, 2.1).
-from api.routers.supervision_reviews import service_reviews, spot_reviews
-from api.routers.supervision_search import service_search, spot_search
-from services.supervision import rating, services_edit, services_review, spots_edit, spots_review
+from api.routers.supervision_reviews import service_reviews
+from api.routers.supervision_search import service_search
+# La note de la proposition se vérifie comme pour un spot ; ce fichier disparaît au commit suivant (plan de #186).
+from api.routers.supervision_decisions import checked_rating
+from services.supervision import services_edit, services_review
 
 router = APIRouter()
-
-
-def _rating(data: dict) -> tuple:
-    """
-    La note facultative de la proposition de l'agent (#201) : (pertinence, raison), None pour ce qui n'est pas noté.
-    Une valeur que rating ne connaît pas est refusée (400) : rien n'est enregistré.
-    """
-    pertinence, raison = data.get("pertinence") or None, data.get("raison") or None
-    try:
-        rating.check_rating(pertinence, raison)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
-    return pertinence, raison
-
-
-@router.post("/decisions", summary="Records a human decision on a proposal.")
-def post_decision(data: dict = Body(...), admin=Depends(require_admin)):
-    """
-    data = {"objet_id": 1368, "decision": "garder", "note": "Vu sur Street View", "a_savoir": "...",
-            "pertinence": "fausse", "raison": "preuve_faible"}
-    "a_savoir" (facultatif) : le texte corrigé, une phrase par ligne ; absent, celui de l'agent reste.
-    "pertinence" et "raison" (facultatives) : la note de la proposition de l'agent (rating).
-    """
-    if data.get("decision") not in spots_review.DECISIONS or not isinstance(data.get("objet_id"), int):
-        raise HTTPException(status_code=422, detail="Décision invalide")
-    pertinence, raison = _rating(data)
-    spots_review.decide(data["objet_id"], data["decision"], data.get("note") or "", admin["username"],
-                               data.get("a_savoir"), pertinence, raison)
-    return spot_reviews()
 
 
 @router.post("/services/decisions", summary="Records and applies a decision on one place or a batch of checked links.")
@@ -51,7 +24,7 @@ def post_service_decision(data: dict = Body(...), admin=Depends(require_admin)):
     poi_ids = data.get("poi_ids")
     if not isinstance(poi_ids, list) or not poi_ids or not all(isinstance(poi_id, int) for poi_id in poi_ids):
         raise HTTPException(status_code=422, detail="Lieux invalides")
-    pertinence, raison = _rating(data)
+    pertinence, raison = checked_rating(data.get("pertinence"), data.get("raison"))
     if pertinence and len(poi_ids) > 1:
         # Une décision par lot (liens cochés) n'est pas notée : la note juge une proposition, pas un lot.
         raise HTTPException(status_code=400, detail="Une décision par lot ne se note pas")
@@ -66,7 +39,7 @@ def post_service_decision(data: dict = Body(...), admin=Depends(require_admin)):
                             data.get("ville") or None, data.get("type") or None, data.get("commune") or None)
 
 
-# Onglet « Modifier » : corriger n'importe quel lieu ou spot, même sans signal (services_edit, spots_edit).
+# Onglet « Modifier » : corriger n'importe quel lieu, même sans signal (services_edit).
 # Chaque réponse renvoie la recherche telle qu'elle était (supervision_search), avec la correction appliquée.
 
 @router.post("/edit/services/decisions", summary="Applies and records a correction on one place.")
@@ -79,33 +52,5 @@ def post_edit_service(data: dict = Body(...), admin=Depends(require_admin)):
         services_edit.decide(data["poi_id"], data.get("action"), data.get("note") or "", admin["username"],
                                 data.get("mois"), data.get("url"), data.get("nom"))
         return service_search({**data, "nom": data.get("nom_recherche")})
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error))
-
-
-@router.post("/edit/spots/decisions", summary="Removes or keeps a spot, with its corrected text.")
-def post_edit_spot(data: dict = Body(...), admin=Depends(require_admin)):
-    """data = {"spot_id": 1368, "decision": "retirer", "note": "", "a_savoir": None, "ville": 12, "nom": ""}"""
-    if data.get("decision") not in spots_review.DECISIONS or not isinstance(data.get("spot_id"), int):
-        raise HTTPException(status_code=422, detail="Décision invalide")
-    a_savoir = data.get("a_savoir")
-    if a_savoir is not None and not isinstance(a_savoir, str):
-        raise HTTPException(status_code=422, detail="Texte invalide")
-    try:
-        spots_review.decide(data["spot_id"], data["decision"], data.get("note") or "", admin["username"], a_savoir)
-        return spot_search(data)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error))
-
-
-@router.post("/edit/spots/openings", summary="Sets the opening dates of a spot.")
-def post_edit_opening(data: dict = Body(...), admin=Depends(require_admin)):
-    """data = {"spot_id": 1368, "statut": "periode", "debut": "01/04", "fin": "31/10", "convention": False, "note": ""}"""
-    if not isinstance(data.get("spot_id"), int):
-        raise HTTPException(status_code=422, detail="Spot invalide")
-    try:
-        spots_edit.decide_opening(data["spot_id"], data.get("statut"), data.get("debut"), data.get("fin"),
-                                         data.get("note") or "", admin["username"], bool(data.get("convention")))
-        return spot_search(data)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
