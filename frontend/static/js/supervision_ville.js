@@ -1,4 +1,5 @@
-// La recherche de ville de la supervision, commune aux onglets « Services » (supervision_services.js) et « Modifier »
+// La recherche de ville de la supervision, commune aux onglets « Spots » (supervision.js), « Services »
+// (supervision_services.js) et « Modifier »
 // (supervision_modifier.js), comme à l'étape 1 (step1_city.js) : un nom ou le début d'un code postal, deux lettres
 // ou deux chiffres, puis au plus 8 propositions dans l'ordre alphabétique.
 // Les propositions : les villes de l'appli, et les communes des adresses des services qui n'en sont pas (Guilvinec).

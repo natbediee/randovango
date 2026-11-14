@@ -7,9 +7,27 @@
 
   {% with active='spots' %}{% include 'partials/supervision_nav.html' %}{% endwith %}
 
+  {# Les filtres, comme sur Services : la catégorie de l'étape 3 (gratuit, payant, autres) et la recherche de ville
+     (supervision_ville.js). filterCity garde l'identifiant de la ville, filterTown le nom de la commune. #}
+  <div class="services-toolbar">
+    <div class="services-filters">
+      <label class="label">Catégorie
+        <select id="filterCategory"><option value="">Toutes</option></select>
+      </label>
+      <label class="label search-wrap">Ville
+        <input type="search" id="filterCitySearch" maxlength="80" placeholder="Ville ou code postal…" autocomplete="off"
+               style="min-height:44px; padding:0 10px; border:1px solid var(--card-border); border-radius:10px; background:var(--white); color:var(--ink); font:inherit; font-size:14px;">
+        <input type="hidden" id="filterCity" value="">
+        <input type="hidden" id="filterTown" value="">
+        <div id="filterCitySuggestions" class="city-suggestions" style="display:none;"></div>
+      </label>
+    </div>
+  </div>
+
   <p class="supervision-msg" id="supervisionMsg" style="display:none;"></p>
 
   <div id="reviewsList" class="stack" style="gap:14px;"></div>
+  <p class="services-empty" id="emptyNote" style="display:none;">Aucun spot à relire avec ces filtres.</p>
 
   <section id="recentSection" class="supervision-recent" style="display:none;">
     <h2>Décidé récemment</h2>
@@ -27,5 +45,6 @@
 <script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision_common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision_notation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/supervision_ville.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision.js') }}"></script>
 {% endblock %}

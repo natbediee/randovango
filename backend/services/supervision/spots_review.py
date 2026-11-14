@@ -21,12 +21,14 @@ lecture. Sa décision garde les dates choisies, si elles sont une convention (la
 pas), le texte lu à ce moment et les valeurs d'avant, remises si on l'annule.
 """
 import json
+from collections import Counter
 from datetime import date
 
 from services.supervision import rating
 from services.supervision.decisions import record_decision
 from utils.db_utils import MySQLUtils
-from utils.display_utils import a_savoir_on, spot_name_label
+from utils.display_utils import a_savoir_on, spot_category, spot_name_label
+from utils.geo_utils import address_town, town_key
 
 DECISIONS = ("retirer", "garder")
 SPOT = "spot"
@@ -122,7 +124,7 @@ def _spot_labels(cursor, spot_ids: list) -> dict:
         return {}
     placeholders = ",".join(["%s"] * len(spot_ids))
     cursor.execute(f"""
-        SELECT s.id, s.name, s.type, s.place_label, s.city_label, s.url, s.postal_code
+        SELECT s.id, s.name, s.type, s.place_label, s.city_label, s.url, s.postal_code, s.address, s.latitude, s.longitude
         FROM spots s WHERE s.id IN ({placeholders})
     """, tuple(spot_ids))
     return {row["id"]: row for row in cursor.fetchall()}
@@ -139,14 +141,73 @@ def _a_savoir_text(stored: str | None) -> str:
     return "\n".join(item["texte"] for item in json.loads(stored or "[]"))
 
 
-def get_reviews() -> dict:
-    """La file de relecture et les dernières décisions."""
+# LES FILTRES DE LA PAGE SPOTS (carte #186, 14 novembre 2026), comme ceux de Services et de Modifier :
+# - ville : une ville de l'étape 1, par son identifiant. Un spot s'y range comme dans la recherche de Modifier
+#   (services_edit.in_city) : par la commune de son adresse, sinon par la ville de l'appli la plus proche ;
+# - commune : la commune de l'adresse d'un spot quand ce n'est pas une ville de l'appli ;
+# - catégorie : gratuit, payant ou autres, le même classement que le filtre de l'étape 3 (display_utils.spot_category).
+# Il n'y a pas de filtre « problème » : chaque spot de la file a le même, l'agent propose de le retirer.
+SPOT_CATEGORIES = ("gratuit", "payant", "autres")
+
+
+def spot_town(spot: dict) -> str | None:
+    """La commune d'un spot : celle de son adresse, sinon celle que park4night lui donne."""
+    return address_town(spot.get("address")) or spot.get("city_label")
+
+
+def spot_city(spot: dict, cities: list) -> dict | None:
+    """La ville de l'appli où se range le spot, None s'il est dans une commune qui n'en est pas une."""
+    # Import ici : services_edit charge la relecture des services et les agents, inutiles au reste de ce module.
+    from services.supervision.services_edit import in_city
+    town = spot_town(spot)
+    return next((city for city in cities
+                 if in_city(town, spot.get("latitude"), spot.get("longitude"), city, cities)), None)
+
+
+def _place_fields(spot: dict, cities: list) -> dict:
+    """Ce que les filtres lisent sur une carte : sa catégorie, sa ville de l'appli, ou sinon sa commune."""
+    city = spot_city(spot, cities) if spot else None
+    return {"categorie": spot_category(spot.get("type")), "ville_id": city["id"] if city else None,
+            "commune": None if city else spot_town(spot), "code_postal": spot.get("postal_code")}
+
+
+def filter_reviews(reviews: list, city_id: int | None, town: str | None, category: str | None) -> list:
+    """Les cartes qui passent les filtres choisis ; un filtre vide (None) laisse tout passer."""
+    return [review for review in reviews
+            if (city_id is None or review["ville_id"] == city_id)
+            and (not town or town_key(review["commune"]) == town_key(town))
+            and (not category or review["categorie"] == category)]
+
+
+def city_choices(reviews: list, cities: list) -> tuple:
+    """
+    Ce que la recherche de ville propose (supervision_ville.js) : les villes qui ont des spots à relire, puis les
+    communes qui n'en sont pas, chacune avec les codes postaux de ses spots.
+    """
+    city_codes, towns = {}, {}
+    for review in reviews:
+        codes = {review["code_postal"]} if review["code_postal"] else set()
+        if review["ville_id"] is not None:
+            city_codes.setdefault(review["ville_id"], set()).update(codes)
+        elif review["commune"]:
+            towns.setdefault(town_key(review["commune"]), {"nom": review["commune"], "codes": set()})["codes"].update(codes)
+    offered = [{"id": city["id"], "name": city["name"], "codes": sorted(city_codes[city["id"]])}
+               for city in cities if city["id"] in city_codes]
+    return offered, [{"nom": town["nom"], "codes": sorted(town["codes"])} for _, town in sorted(towns.items())]
+
+
+def get_reviews(city_id: int | None = None, town: str | None = None, category: str | None = None) -> dict:
+    """La file de relecture, avec les filtres de la page (une catégorie inconnue est refusée), et les dernières décisions."""
+    if category and category not in SPOT_CATEGORIES:
+        raise ValueError(f"Catégorie inconnue : {category}")
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
         pending = [verification for verification, decision in _spot_states(cursor).values()
                    if spot_status(verification, decision) == "propose"]
         spots = _spot_labels(cursor, [v["spot_id"] for v in pending])
+        cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities ORDER BY name")
+        cities = cursor.fetchall()
         reviews = []
         for verification in pending:
             spot = spots.get(verification["spot_id"]) or {}
@@ -166,8 +227,14 @@ def get_reviews() -> dict:
                 "sources": json.loads(verification["sources"] or "[]"),
                 "commentaires": [{"date": row["review_date"].strftime("%d/%m/%Y") if row["review_date"] else "",
                                   "texte": row["text"] or ""} for row in cursor.fetchall()],
+                **_place_fields(spot, cities),
             })
         reviews.sort(key=lambda review: review["objet_id"])
+        # Les choix des filtres viennent de toute la file ; le nombre par catégorie suit la ville choisie.
+        offered_cities, towns = city_choices(reviews, cities)
+        in_place = filter_reviews(reviews, city_id, town, None)
+        category_counts = Counter(review["categorie"] for review in in_place)
+        reviews = filter_reviews(in_place, None, None, category)
 
         cursor.execute("""
             SELECT d.*, (SELECT v.a_savoir FROM spot_verifications v WHERE v.id = d.verification_id) AS a_savoir_agent
@@ -178,6 +245,8 @@ def get_reviews() -> dict:
         openings = _opening_decisions(cursor)
         cursor.close()
         return {"reviews": reviews,
+                "cities": offered_cities, "towns": towns,
+                "categories": [{"code": code, "nombre": category_counts[code]} for code in SPOT_CATEGORIES],
                 "notation": rating.labels(),
                 "ouvertures": openings,
                 "recent": [{"id": d["id"], "nom": _name(spots.get(d["objet_id"])), "decision": d["decision"],

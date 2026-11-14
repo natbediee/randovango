@@ -13,15 +13,15 @@ function sameLink(first, second) {
     return first.replace(/\/+$/, '') === second.replace(/\/+$/, '');
 }
 
-// Les liens pour vérifier soi-même : la page park4night du spot, puis les autres pages que l'agent cite comme preuves.
+// Les liens pour vérifier soi-même : la page du spot (« Voir plus de détails »), puis les autres pages que l'agent cite
+// comme preuves (« Source 1 », « Source 2 »…). Le nom du site d'où viennent les spots n'est jamais écrit sur le site.
 // L'agent cite souvent la page du spot elle-même : 80 spots sur 212 n'avaient qu'elle comme source, et la carte
 // montrait deux liens vers la même page (14 novembre 2026). Elle n'est montrée qu'une fois.
 function spotLinks(review) {
     const others = review.sources.filter(url => !review.url || !sameLink(url, review.url));
-    const otherLabel = i => others.length > 1 ? `Autre source citée par l'agent (${i + 1})` : 'Autre source citée par l\'agent';
     return [
-        review.url ? `<a href="${escapeHtml(review.url)}" target="_blank" rel="noopener">Page park4night du spot</a>` : '',
-        ...others.map((url, i) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${otherLabel(i)}</a>`),
+        review.url ? `<a href="${escapeHtml(review.url)}" target="_blank" rel="noopener">Voir plus de détails</a>` : '',
+        ...others.map((url, i) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Source ${i + 1}</a>`),
     ].filter(Boolean).join('');
 }
 
@@ -76,12 +76,41 @@ function openingLine(opening) {
            · <a href="#" onclick="cancelDecision(${opening.id}); return false;">annuler</a>${changed}</p>`;
 }
 
+// --- Les filtres : catégorie (gratuit, payant, autres, comme à l'étape 3) et ville ou commune ---
+
+const CATEGORY_LABELS = { gratuit: 'Gratuit', payant: 'Payant', autres: 'Autres' };
+let allCities = [];   // les villes de l'appli qui ont des spots à relire, pour la recherche de ville
+let allTowns = [];    // les communes des spots qui ne sont pas des villes de l'appli
+
+// Les filtres choisis, à mettre dans l'adresse de GET /reviews/spots (seuls ceux qui ont une valeur).
+function filterQuery() {
+    const params = new URLSearchParams();
+    const values = { ville: document.getElementById('filterCity').value, commune: document.getElementById('filterTown').value,
+                     categorie: document.getElementById('filterCategory').value };
+    Object.entries(values).forEach(([key, value]) => { if (value) params.set(key, value); });
+    return params.toString();
+}
+
+// Le menu des catégories, avec le nombre de spots à relire dans la ville choisie ; le choix affiché reste.
+function renderCategories(categories) {
+    const select = document.getElementById('filterCategory');
+    const chosen = select.value;
+    const total = categories.reduce((sum, category) => sum + category.nombre, 0);
+    select.innerHTML = `<option value="">Toutes (${total})</option>` + categories.map(category =>
+        `<option value="${category.code}" ${category.code === chosen ? 'selected' : ''}>${CATEGORY_LABELS[category.code]} (${category.nombre})</option>`).join('');
+}
+
 function render(data) {
     setRatingLabels(data.notation);
+    allCities = data.cities;
+    allTowns = data.towns;
+    renderCategories(data.categories);
     const count = data.reviews.length;
     document.getElementById('reviewsCount').textContent =
         count === 0 ? 'Rien à relire' : `${count} décision${count > 1 ? 's' : ''} en attente`;
     document.getElementById('reviewsList').innerHTML = data.reviews.map(reviewCard).join('');
+    // Rien avec ces filtres, alors qu'il reste des spots ailleurs : on le dit, pour ne pas croire la file vide.
+    document.getElementById('emptyNote').style.display = !count && filterQuery() ? '' : 'none';
 
     document.getElementById('recentSection').style.display = data.recent.length ? '' : 'none';
     document.getElementById('recentList').innerHTML = data.recent.map(d => `
@@ -115,16 +144,25 @@ function correctText(decisionId) {
     return saveTextCorrection(decisionId, document.getElementById(`correct-${decisionId}`).value);
 }
 
-// Redessine la page avec la liste à jour (après une annulation, cancelDecision de supervision_common.js).
+// Redessine la page avec la liste à jour et ses filtres (au chargement, après une décision ou une annulation).
 async function refresh() {
-    render(await supervisionCall('/reviews/spots'));
+    render(await supervisionCall(`/reviews/spots?${filterQuery()}`));
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    if (redirectIfLoggedOut()) return;
+// Un filtre changé : la liste se recharge (chooseCity de supervision_common.js l'appelle aussi).
+async function load() {
     try {
+        showMessage('');
         await refresh();
     } catch (error) {
         showMessage(error.message);
     }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (redirectIfLoggedOut()) return;
+    document.getElementById('filterCategory').addEventListener('change', load);
+    citySearch({ inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
+                 sources: () => ({ cities: allCities, towns: allTowns }), onChoose: chooseCity });
+    load();
 });

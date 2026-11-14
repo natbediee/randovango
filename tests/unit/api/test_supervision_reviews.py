@@ -33,7 +33,7 @@ def test_the_summary_answers_an_admin(client):
 @pytest.fixture
 def reviews(monkeypatch):
     """Un client connecté en admin dont les relectures rendent ce qu'on leur a demandé, pour lire les filtres reçus."""
-    monkeypatch.setattr(supervision_reviews.spots_review, "get_reviews", lambda: {"reviews": []})
+    monkeypatch.setattr(supervision_reviews.spots_review, "get_reviews", lambda *args: {"demande": list(args)})
     monkeypatch.setattr(supervision_reviews.services_review, "get_reviews",
                         lambda *args: {"demande": list(args)})
     monkeypatch.setattr(supervision_reviews.services_edit, "attach_sheets", lambda reviews: reviews)
@@ -44,10 +44,32 @@ def reviews(monkeypatch):
 
 
 def test_the_spot_reviews_answer_an_admin(reviews):
-    """La page Spots reçoit les spots que l'agent propose de retirer."""
+    """La page Spots sans filtre reçoit tous les spots que l'agent propose de retirer."""
     response = reviews.get("/api/supervision/reviews/spots")
     assert response.status_code == 200
-    assert response.json() == {"reviews": []}
+    assert response.json() == {"demande": [None, None, None]}
+
+
+def test_the_spot_reviews_pass_the_city_and_the_category(reviews):
+    """Les spots gratuits de la ville n° 12 : la ville et la catégorie arrivent telles quelles au service."""
+    response = reviews.get("/api/supervision/reviews/spots?ville=12&categorie=gratuit")
+    assert response.json() == {"demande": [12, None, "gratuit"]}
+
+
+def test_the_spot_reviews_pass_a_town(reviews):
+    """Une commune qui n'est pas une ville de l'appli (Guilvinec) arrive au service par « commune »."""
+    response = reviews.get("/api/supervision/reviews/spots?commune=Guilvinec")
+    assert response.json() == {"demande": [None, "Guilvinec", None]}
+
+
+def test_an_unknown_spot_category_is_refused(monkeypatch, reviews):
+    """Une catégorie que l'étape 3 ne connaît pas est refusée (422), avec le motif du service."""
+    def refuse(*args):
+        raise ValueError("Catégorie inconnue : luxe")
+    monkeypatch.setattr(supervision_reviews.spots_review, "get_reviews", refuse)
+    response = reviews.get("/api/supervision/reviews/spots?categorie=luxe")
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Catégorie inconnue : luxe"
 
 
 def test_the_service_reviews_pass_the_queue_and_the_filters(reviews):

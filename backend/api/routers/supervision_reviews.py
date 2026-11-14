@@ -13,14 +13,17 @@ router = APIRouter()
 
 
 @router.get("/reviews/spots", summary="Spots the agents propose to remove, and the latest decisions.")
-def get_spot_reviews(_admin=Depends(require_admin)):
-    """Les spots que l'agent propose de retirer, avec ses preuves, les dernières décisions et les ouvertures décidées."""
-    return spot_reviews()
-
-
-def spot_reviews() -> dict:
-    """Ce que montre la page Spots : aussi la réponse des routes de décision sur un spot, tant qu'elles la renvoient."""
-    return spots_review.get_reviews()
+def get_spot_reviews(ville: int | None = None, commune: str | None = None, categorie: str | None = None,
+                     _admin=Depends(require_admin)):
+    """
+    Les spots que l'agent propose de retirer, avec ses preuves, les dernières décisions et les ouvertures décidées.
+    Filtres de la page : ville de l'appli (son identifiant), commune d'adresse qui n'en est pas une, catégorie
+    (gratuit, payant, autres). Une catégorie inconnue est refusée (422).
+    """
+    try:
+        return spots_review.get_reviews(ville, commune or None, categorie or None)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
 
 
 @router.get("/reviews/services", summary="Service checks awaiting a human decision, one queue at a time.")
