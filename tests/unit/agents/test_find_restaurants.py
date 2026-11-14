@@ -355,6 +355,35 @@ def test_in_a_zone_only_the_nearby_hints_are_given_without_their_position():
     assert seen["en_base"] == [{"nom": "Laverie", "adresse": None, "lat_lon": "48.38100, -4.49000"}]
 
 
+def _cabins():
+    """Trois réponses de recherche au même nom : deux cabines dans deux rues, et la première redite sans adresse."""
+    row = {"genre": "laverie", "categorie": "laverie", "pourquoi": "", "lien": "", "type_lien": "site", "preuve_url": "",
+           "type_preuve": "site", "preuve_citation": None, "preuve_date": None, "ancien_nom": None}
+    return {"restaurants": [{**row, "nom": "Revolution Laundry", "adresse": "Leclerc Express, rue de Toubalan, 29100 Douarnenez"},
+                            {**row, "nom": "Revolution Laundry", "adresse": "Weldom, rue Breizh Izel, 29100 Douarnenez"},
+                            {**row, "nom": "Revolution Laundry", "adresse": None}], "ecartes": []}
+
+
+def test_an_enseigne_in_two_streets_stays_two_places():
+    """Une enseigne à plusieurs lieux : deux réponses au même nom dans deux rues restent deux lieux ; sans adresse, la réponse rejoint la première (trois cabines Revolution Laundry à Douarnenez, 14 novembre 2026)."""
+    import dataclasses
+    merged = service_chain.merge_answers(dataclasses.replace(RESTAURANTS, several_per_name=True), _cabins())
+    assert [row["adresse"] for row in merged["restaurants"]] == ["Leclerc Express, rue de Toubalan, 29100 Douarnenez",
+                                                               "Weldom, rue Breizh Izel, 29100 Douarnenez"]
+
+
+def test_without_several_places_per_name_the_same_name_is_one_place():
+    """Pour les restaurants, le même nom rendu par plusieurs recherches reste un seul lieu, quelle que soit l'adresse donnée."""
+    assert len(service_chain.merge_answers(RESTAURANTS, _cabins())["restaurants"]) == 1
+
+
+def test_two_streets_needs_two_known_addresses_without_a_common_word():
+    """Deux rues différentes : deux adresses connues sans mot de rue commun ; une adresse absente ou la même rue ne concluent pas."""
+    assert service_chain.two_streets("rue de Toubalan, 29100 Douarnenez", "rue Breizh Izel, 29100 Douarnenez")
+    assert not service_chain.two_streets("12 rue de Toubalan", "Leclerc Express, rue de Toubalan")
+    assert not service_chain.two_streets(None, "rue Breizh Izel")
+
+
 def test_what_was_paid_stays_readable_when_a_step_fails(monkeypatch, tmp_path):
     """Si l'analyse échoue, le fichier de trace garde quand même les recherches déjà payées."""
     _chain(monkeypatch, tmp_path, _Agent(fail_on_analysis=True))

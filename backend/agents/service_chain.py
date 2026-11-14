@@ -169,23 +169,40 @@ def unique_pages(pages: list) -> list:
     return list(by_url.values())
 
 
-def _same_among(name: str, rows: list) -> dict | None:
-    """Le premier lieu de la liste qui porte ce nom (service_store.same_name), ou None."""
-    return next((row for row in rows if service_store.same_name(row["nom"], name)), None)
+def two_streets(first: str | None, second: str | None) -> bool:
+    """
+    Deux adresses connues qui ne partagent aucun mot de rue : deux endroits différents (« Weldom, rue Breizh Izel » et
+    « Leclerc Express, rue de Toubalan »). Sans adresse, ou avec un mot commun, on ne conclut pas.
+    """
+    words = {word for word in service_store.street_words(first) if not word.isdigit()}
+    others = {word for word in service_store.street_words(second) if not word.isdigit()}
+    return bool(words) and bool(others) and not words & others
+
+
+def _same_among(name: str, rows: list, address: str | None = None, by_street: bool = False) -> dict | None:
+    """
+    Le premier lieu de la liste qui porte ce nom (service_store.same_name), ou None.
+    by_street (ServiceCategory.several_per_name) : un lieu du même nom dans une autre rue n'est pas celui-là. Au pilote
+    de Douarnenez (14 novembre 2026), la recherche a rendu trois cabines Revolution Laundry, à trois adresses ; réunies
+    par le nom seul, il n'en restait qu'une.
+    """
+    return next((row for row in rows if service_store.same_name(row["nom"], name)
+                 and not (by_street and two_streets(row.get("adresse"), address))), None)
 
 
 def merge_answers(category, *answers: dict) -> dict:
     """
-    Les recherches, sans doublon : à nom égal, la première fiche est gardée, avec les pages de toutes. Un lieu retenu par
+    Les recherches, sans doublon : à nom égal, la première fiche est gardée, avec les pages de toutes. Pour une catégorie
+    dont une enseigne a plusieurs lieux (several_per_name), deux réponses au même nom dans deux rues restent deux lieux. Un lieu retenu par
     une recherche et dit fermé par une autre porte "dit_ferme" pour que l'analyste tranche. Seule une fermeture compte :
     la recherche d'été écarte aussi les lieux ouverts toute l'année, qui restent de bonnes adresses.
     """
     closed = [row for answer in answers for row in answer["ecartes"] if row["ferme"]]
     places = []
     for row in (row for answer in answers for row in answer[category.key]):
-        place = _same_among(row["nom"], places)
+        place = _same_among(row["nom"], places, row.get("adresse"), category.several_per_name)
         if place is None:
-            said_closed = _same_among(row["nom"], closed)
+            said_closed = _same_among(row["nom"], closed, row.get("adresse"), category.several_per_name)
             place = {**row, "pages_vues": [], **({"dit_ferme": said_closed} if said_closed else {})}
             places.append(place)
         place["pages_vues"] += found_pages(row)
@@ -196,7 +213,7 @@ def merge_zones(category, answers: list) -> dict:
     """Un lieu vu depuis deux zones voisines n'est gardé qu'une fois, avec la fiche de la première."""
     places = []
     for row in (row for answer in answers for row in answer[category.key]):
-        if _same_among(row["nom"], places) is None:
+        if _same_among(row["nom"], places, row.get("adresse"), category.several_per_name) is None:
             places.append(row)
     return {category.key: places, "ecartes": [row for answer in answers for row in answer["ecartes"]]}
 

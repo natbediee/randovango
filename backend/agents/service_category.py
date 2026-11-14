@@ -56,6 +56,7 @@ class ServiceCategory:
     zone_from: int = 100                        # au-delà de ce nombre de lignes actives au registre, la commune est cherchée par zones
     notice_words: tuple = ()                    # les mots cherchés dans l'activité déclarée des annonces du BODACC (« laverie »)
     hint_services: tuple = ()                   # les services déjà en base (souvent d'OSM) donnés à l'agent comme indice
+    several_per_name: bool = False              # une enseigne a plusieurs lieux dans la commune : à nom égal, deux rues font deux lieux
     same_name_km: float = 1                     # un nom ne retrouve un service déjà en base qu'à cette distance (service_store.find_in)
     sends_category: bool = False                # la catégorie du lieu est-elle donnée à l'analyste ?
     detail_only_for: dict = field(default_factory=dict)     # {détail : seule catégorie qui le garde}
