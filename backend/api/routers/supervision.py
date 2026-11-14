@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api.dependencies import require_admin
-from services.supervision import rating, services_edit, services_review, spots_edit, spots_review
+from services.supervision import decisions, rating, services_edit, services_review, spots_edit, spots_review
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -25,6 +25,17 @@ def _rating(data: dict) -> tuple:
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     return pertinence, raison
+
+
+def _cancel(decision_id: int) -> None:
+    """
+    Annule une décision, quel que soit l'onglet d'où vient le clic : decisions.cancel_decision lit son type.
+    Une décision inconnue ou déjà annulée (double clic) est refusée (422) : rien n'est changé.
+    """
+    try:
+        decisions.cancel_decision(decision_id)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
 
 
 @router.post("/decisions", summary="Records a human decision on a proposal.")
@@ -54,13 +65,13 @@ def put_decision(decision_id: int, data: dict = Body(...), _admin=Depends(requir
 
 @router.delete("/decisions/{decision_id}", summary="Cancels a decision; it stays recorded.")
 def delete_decision(decision_id: int, _admin=Depends(require_admin)):
-    spots_review.cancel_decision(decision_id)
+    _cancel(decision_id)
     return spots_review.get_reviews()
 
 
 @router.delete("/openings/{decision_id}", summary="Cancels an opening decision and restores the previous values.")
 def delete_opening_decision(decision_id: int, _admin=Depends(require_admin)):
-    spots_review.cancel_opening_decision(decision_id)
+    _cancel(decision_id)
     return spots_review.get_reviews()
 
 
@@ -139,11 +150,8 @@ def post_service_audit(decision_id: int, tab: str = "liens", service: str | None
 def delete_service_decision(decision_id: int, tab: str = "liens", service: str | None = None,
                             ville: str | None = None, type: str | None = None, commune: str | None = None,
                             _admin=Depends(require_admin)):
-    try:
-        services_review.cancel_decision(decision_id)
-        return _service_reviews(tab, service or None, ville or None, type or None, commune or None)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error))
+    _cancel(decision_id)
+    return _service_reviews(tab, service or None, ville or None, type or None, commune or None)
 
 
 # Onglet « Modifier » : corriger n'importe quel lieu ou spot, même sans signal (services_edit, spots_edit).
@@ -207,11 +215,8 @@ def post_edit_sheet(data: dict = Body(...), admin=Depends(require_admin)):
 def delete_edit_service(decision_id: int, ville: int | None = None, service: str | None = None,
                         type: str | None = None, nom: str | None = None, commune: str | None = None,
                         _admin=Depends(require_admin)):
-    try:
-        services_review.cancel_decision(decision_id)
-        return _edit_services({"ville": ville, "service": service, "type": type, "nom": nom, "commune": commune})
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error))
+    _cancel(decision_id)
+    return _edit_services({"ville": ville, "service": service, "type": type, "nom": nom, "commune": commune})
 
 
 @router.get("/edit/spots", summary="Finds any spot to correct, verification or not.")
@@ -247,7 +252,7 @@ def put_edit_spot(decision_id: int, data: dict = Body(...), _admin=Depends(requi
 
 @router.delete("/edit/spots/decisions/{decision_id}", summary="Cancels a spot decision; it stays recorded.")
 def delete_edit_spot(decision_id: int, ville: int | None = None, nom: str | None = None, _admin=Depends(require_admin)):
-    spots_review.cancel_decision(decision_id)
+    _cancel(decision_id)
     return _edit_spots({"ville": ville, "nom": nom})
 
 
@@ -267,5 +272,5 @@ def post_edit_opening(data: dict = Body(...), admin=Depends(require_admin)):
 @router.delete("/edit/spots/openings/{decision_id}", summary="Cancels an opening decision and restores the previous values.")
 def delete_edit_opening(decision_id: int, ville: int | None = None, nom: str | None = None,
                         _admin=Depends(require_admin)):
-    spots_review.cancel_opening_decision(decision_id)
+    _cancel(decision_id)
     return _edit_spots({"ville": ville, "nom": nom})

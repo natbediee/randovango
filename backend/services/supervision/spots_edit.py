@@ -6,7 +6,7 @@ retrouve un spot comme le voyageur le voit à l'étape 3 (la même zone autour d
 avec les décisions qui existent déjà, sans en inventer :
     retirer ou garder (spots_review.decide), avec l'« À savoir » corrigé ;
     les dates d'ouverture (spots_review.decide_opening).
-Chacune s'annule avec le code de la relecture (cancel_decision, cancel_opening_decision).
+Chacune s'annule par decisions.cancel_decision, comme toute décision de la supervision.
 """
 import re
 from datetime import date

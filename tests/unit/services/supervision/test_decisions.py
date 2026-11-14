@@ -56,3 +56,59 @@ def test_accents_dates_and_decimals_in_the_detail_are_written_as_they_are():
     detail = _inserted(cursor)["detail"]
     assert "Crêperie" in detail
     assert json.loads(detail)["avant"] == {"name": "Crêperie", "updated": "2026-11-14", "lat": "48.3"}
+
+
+def _stored(objet_type: str, objet_id: int, detail) -> MagicMock:
+    """Une connexion dont la base rend cette décision encore active (ou aucune si objet_type vaut None)."""
+    connection = MagicMock()
+    row = None if objet_type is None else {"objet_type": objet_type, "objet_id": objet_id, "detail": detail}
+    connection.cursor.return_value.fetchone.return_value = row
+    return connection
+
+
+def _cancel(monkeypatch, connection, decision_id: int = 55) -> list:
+    """Lance l'annulation sur cette connexion et rend les requêtes passées, sans retours à la ligne."""
+    monkeypatch.setattr(decisions.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(decisions.MySQLUtils, "disconnect", lambda connection: None)
+    decisions.cancel_decision(decision_id)
+    return [" ".join(call[0][0].split()) for call in connection.cursor.return_value.execute.call_args_list]
+
+
+def test_a_service_decision_cancelled_from_the_spots_page_puts_the_service_back(monkeypatch):
+    """
+    Un numéro de décision de service reçu par l'annulation des spots (bascule de mode dans « Modifier ») : le service
+    est remis comme avant et ses signaux rouverts, aucun spot n'est touché. Avant #186, la décision était seulement
+    marquée annulée.
+    """
+    detail = json.dumps({"file": "fermes", "signal_ids": [31], "avant": {"masque": 0}})
+    connection = _stored("poi", 48147, detail)
+    queries = _cancel(monkeypatch, connection)
+    assert "UPDATE poi SET masque = %s WHERE id = %s" in queries
+    assert any(query.startswith("UPDATE poi_signals SET statut = 'a_relire'") for query in queries)
+    assert not any(query.startswith("UPDATE spots") for query in queries)
+    assert queries[-1] == "UPDATE decisions SET annulee_at = NOW() WHERE id = %s"
+    connection.commit.assert_called_once()
+
+
+def test_an_opening_decision_is_cancelled_by_the_same_function(monkeypatch):
+    """Annuler une ouverture décidée remet les dates d'avant du spot, par la même fonction que les autres décisions."""
+    detail = json.dumps({"avant": {"statut": "saison", "debut": None, "fin": None}})
+    queries = _cancel(monkeypatch, _stored("ouverture", 1368, detail))
+    assert any(query.startswith("UPDATE spots SET ouverture_statut") for query in queries)
+
+
+def test_an_unknown_or_already_cancelled_decision_is_refused(monkeypatch):
+    """Un double clic sur « annuler » : la décision déjà annulée est refusée, rien n'est changé ni validé."""
+    connection = _stored(None, 0, None)
+    with pytest.raises(ValueError):
+        _cancel(monkeypatch, connection)
+    connection.commit.assert_not_called()
+
+
+def test_a_decision_of_an_unknown_type_is_refused_and_nothing_is_written(monkeypatch):
+    """Une décision d'un type que la supervision ne sait pas défaire est refusée : rien n'est validé, tout est annulé."""
+    connection = _stored("restaurant", 7, "{}")
+    with pytest.raises(ValueError):
+        _cancel(monkeypatch, connection)
+    connection.commit.assert_not_called()
+    connection.rollback.assert_called_once()

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from services.supervision import decisions
 from services.supervision import spots_edit as edit
 from services.supervision import spots_review as supervision
 
@@ -69,11 +70,12 @@ def test_a_spot_decision_keeps_the_badge_it_had():
 
 @pytest.mark.parametrize("detail, badge", [(json.dumps({"avant": {"verifie": True}}), True), (None, False)])
 def test_cancelling_a_spot_decision_gives_back_the_badge_it_had(detail, badge):
+    """Annuler une décision sur un spot lui rend son badge d'avant ; une décision ancienne, sans détail, le lui retire."""
     cursor = MagicMock()
-    cursor.fetchone.return_value = {"objet_id": 1368, "detail": detail}
+    cursor.fetchone.return_value = {"objet_type": "spot", "objet_id": 1368, "detail": detail}
     connect, disconnect = _connected(cursor)
     with connect, disconnect:
-        supervision.cancel_decision(55)
+        decisions.cancel_decision(55)
     update = next(call[0][1] for call in cursor.execute.call_args_list if call[0][0].startswith("UPDATE spots"))
     assert update == (badge, 1368)
 

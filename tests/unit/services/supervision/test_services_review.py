@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from services.supervision import decisions
 from services.supervision import services_review as review
 
 
@@ -337,10 +338,10 @@ def test_cancelling_a_mixed_place_gives_back_the_sheet_and_the_services(monkeypa
     cursor = connection.cursor.return_value
     detail = {"file": "doublons", "signal_ids": [31], "avant": {"masque": 0},
               "lieu_mixte": {"vers": 30745, "table": "commerces", "services": [12]}}
-    cursor.fetchone.return_value = {"objet_id": 32496, "detail": json.dumps(detail)}
+    cursor.fetchone.return_value = {"objet_type": "poi", "objet_id": 32496, "detail": json.dumps(detail)}
     monkeypatch.setattr(review.MySQLUtils, "connect", lambda: connection)
     monkeypatch.setattr(review.MySQLUtils, "disconnect", lambda connection: None)
-    review.cancel_decision(5)
+    decisions.cancel_decision(5)
     calls = [(" ".join(call[0][0].split()), call[0][1] if len(call[0]) > 1 else None) for call in cursor.execute.call_args_list]
     assert ("UPDATE poi SET masque = %s WHERE id = %s", (0, 32496)) in calls
     assert ("UPDATE commerces SET poi_id = %s WHERE poi_id = %s", (32496, 30745)) in calls
@@ -428,10 +429,10 @@ def test_cancelling_keep_this_place_puts_both_places_back(monkeypatch):
     connection = MagicMock()
     cursor = connection.cursor.return_value
     detail = {"file": "doublons", "signal_ids": [42], "avant": {"masque": 0}, "garde": {"poi_id": 48528, "avant": {"masque": 1}}}
-    cursor.fetchone.return_value = {"objet_id": 48527, "detail": json.dumps(detail)}
+    cursor.fetchone.return_value = {"objet_type": "poi", "objet_id": 48527, "detail": json.dumps(detail)}
     monkeypatch.setattr(review.MySQLUtils, "connect", lambda: connection)
     monkeypatch.setattr(review.MySQLUtils, "disconnect", lambda connection: None)
-    review.cancel_decision(9)
+    decisions.cancel_decision(9)
     calls = _calls(cursor)
     assert ("UPDATE poi SET masque = %s WHERE id = %s", (0, 48527)) in calls
     assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 48528)) in calls

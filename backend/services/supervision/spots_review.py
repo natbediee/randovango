@@ -269,25 +269,16 @@ def decide_opening(spot_id: int, status: str, start: str | None, end: str | None
         MySQLUtils.disconnect(connection)
 
 
-def cancel_opening_decision(decision_id: int) -> None:
-    """Annule une ouverture décidée : les valeurs d'avant reviennent, et read_openings relira le spot."""
-    connection = MySQLUtils.connect()
-    try:
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT objet_id, detail FROM decisions WHERE id = %s AND objet_type = %s"
-                       " AND annulee_at IS NULL", (decision_id, OPENING_OBJECT))
-        decision = cursor.fetchone()
-        if decision:
-            before = json.loads(decision["detail"])["avant"]
-            cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
-            cursor.execute("""
-                UPDATE spots SET ouverture_statut = %s, ouverture_debut = %s, ouverture_fin = %s, ouverture_lue = NULL
-                WHERE id = %s
-            """, (before["statut"], before["debut"], before["fin"], decision["objet_id"]))
-            connection.commit()
-        cursor.close()
-    finally:
-        MySQLUtils.disconnect(connection)
+def undo_opening_decision(cursor, spot_id: int, detail: dict) -> None:
+    """
+    Défait une ouverture décidée (appelée par decisions.cancel_decision) : les valeurs d'avant reviennent, et
+    read_openings relira le spot.
+    """
+    before = detail["avant"]
+    cursor.execute("""
+        UPDATE spots SET ouverture_statut = %s, ouverture_debut = %s, ouverture_fin = %s, ouverture_lue = NULL
+        WHERE id = %s
+    """, (before["statut"], before["debut"], before["fin"], spot_id))
 
 
 def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: str | None = None,
@@ -333,23 +324,11 @@ def correct_a_savoir(decision_id: int, a_savoir: str) -> None:
         MySQLUtils.disconnect(connection)
 
 
-def cancel_decision(decision_id: int) -> None:
+def undo_spot_decision(cursor, spot_id: int, detail: dict) -> None:
     """
-    Annule une décision (erreur de clic) : elle reste tracée, et le spot revient à la relecture. Le badge reprend sa
-    valeur d'avant la décision ; une décision plus ancienne ne l'a pas gardée : le doute revient, le badge part.
+    Défait une décision sur un spot (appelée par decisions.cancel_decision) : le spot revient à la relecture et son
+    badge reprend sa valeur d'avant. Une décision plus ancienne n'a pas gardé cette valeur : le doute revient, le
+    badge part.
     """
-    connection = MySQLUtils.connect()
-    try:
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT objet_id, detail FROM decisions WHERE id = %s AND objet_type = %s", (decision_id, SPOT))
-        decision = cursor.fetchone()
-        cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
-        if decision:
-            detail = decision["detail"]
-            before = (json.loads(detail) if isinstance(detail, str) else detail or {}).get("avant", {})
-            cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s",
-                           (bool(before.get("verifie", False)), decision["objet_id"]))
-        connection.commit()
-        cursor.close()
-    finally:
-        MySQLUtils.disconnect(connection)
+    before = detail.get("avant", {})
+    cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s", (bool(before.get("verifie", False)), spot_id))

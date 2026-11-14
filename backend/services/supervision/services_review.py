@@ -707,7 +707,7 @@ def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, d
     carburants (poi_triage_service, load_carburants) pour ne jamais le réafficher. Une décision « fusionner » veut donc
     toujours dire « ce lieu est masqué comme doublon d'un autre », quel que soit le bouton cliqué.
     Une station figée (doublon_station) était masquée en attendant : la garder la réaffiche. detail.garde retient le
-    lieu gardé et son état d'avant, pour que l'annulation remette les deux lieux comme avant (cancel_decision).
+    lieu gardé et son état d'avant, pour que l'annulation remette les deux lieux comme avant (undo_service_decision).
     La note de la proposition (pertinence, raison) va sur cette unique décision : une carte, une note.
     """
     other_id = card["autre_id"]
@@ -807,36 +807,26 @@ def decide(tab: str, poi_ids: list, action: str, note: str, decided_by: str, mon
         MySQLUtils.disconnect(connection)
 
 
-def cancel_decision(decision_id: int) -> None:
-    """Annule une décision : le lieu reprend ses valeurs d'avant et revient à la relecture. Elle reste tracée."""
-    connection = MySQLUtils.connect()
-    try:
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT objet_id, detail FROM decisions WHERE id = %s AND objet_type = %s AND annulee_at IS NULL",
-                       (decision_id, POI))
-        row = cursor.fetchone()
-        if not row:
-            raise ValueError("Décision introuvable")
-        detail = json.loads(row["detail"]) if isinstance(row["detail"], str) else row["detail"]
-        before = {column: value for column, value in detail["avant"].items() if column in APPLIED_COLUMNS}
-        if before:
-            assignments = ", ".join(f"{column} = %s" for column in before)
-            cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*before.values(), row["objet_id"]))
-        if detail.get("avant_fiche"):
-            restore_sheet(cursor, row["objet_id"], detail["avant_fiche"])
-        if detail.get("lieu_mixte"):
-            split_mixed_place(cursor, row["objet_id"], detail["lieu_mixte"])
-        if detail.get("garde"):
-            restore_kept_place(cursor, detail["garde"])
-        signal_ids = detail["signal_ids"]
-        if signal_ids:
-            marks = ",".join(["%s"] * len(signal_ids))
-            cursor.execute(f"UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL WHERE id IN ({marks})", tuple(signal_ids))
-        cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
-        connection.commit()
-        cursor.close()
-    finally:
-        MySQLUtils.disconnect(connection)
+def undo_service_decision(cursor, poi_id: int, detail: dict) -> None:
+    """
+    Défait une décision sur un service (appelée par decisions.cancel_decision) : le lieu reprend ses valeurs d'avant,
+    sa fiche aussi si elle a été corrigée, un lieu mixte est séparé, un lieu gardé reprend son état, et les signaux
+    tranchés reviennent à la relecture.
+    """
+    before = {column: value for column, value in detail["avant"].items() if column in APPLIED_COLUMNS}
+    if before:
+        assignments = ", ".join(f"{column} = %s" for column in before)
+        cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*before.values(), poi_id))
+    if detail.get("avant_fiche"):
+        restore_sheet(cursor, poi_id, detail["avant_fiche"])
+    if detail.get("lieu_mixte"):
+        split_mixed_place(cursor, poi_id, detail["lieu_mixte"])
+    if detail.get("garde"):
+        restore_kept_place(cursor, detail["garde"])
+    signal_ids = detail["signal_ids"]
+    if signal_ids:
+        marks = ",".join(["%s"] * len(signal_ids))
+        cursor.execute(f"UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL WHERE id IN ({marks})", tuple(signal_ids))
 
 
 def restore_kept_place(cursor, kept: dict) -> None:

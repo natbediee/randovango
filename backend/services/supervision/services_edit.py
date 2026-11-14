@@ -11,7 +11,7 @@ pouvoir les remettre.
 
 LES MÊMES CORRECTIONS QUE LA RELECTURE, et le même code : applied_fields, typed_name, typed_link, typed_maps_link.
 Chaque correction est une décision (objet_type = 'poi', detail.file = 'modifier') qui garde les valeurs d'avant :
-services_review.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
+decisions.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
 pas un nom ou un lien corrigé ici (service_store._decided_by_human).
 """
 import json
