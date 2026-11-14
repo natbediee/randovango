@@ -4,6 +4,7 @@ import pytest
 
 from agents import find_services, service_chain
 from agents.find_commerces import COMMERCES
+from agents.find_laveries import LAVERIES
 from agents.find_restaurants import RESTAURANTS
 from agents.find_supermarches import SUPERMARCHES
 from agents.llm_service import passage_courant
@@ -65,9 +66,9 @@ def test_a_passage_runs_every_category_under_one_identifier(monkeypatch):
     """Un passage cherche puis enregistre chaque catégorie de la commune, toutes sous le même identifiant."""
     calls = _passage(monkeypatch)
     results = find_services.run_passage(CITY)
-    assert [key for key, _, _ in calls["searched"]] == ["restaurants", "commerces", "supermarches"] == calls["saved"]
+    assert [key for key, _, _ in calls["searched"]] == ["restaurants", "commerces", "supermarches", "laveries"] == calls["saved"]
     assert {passage for _, _, passage in calls["searched"]} == {results["passage"]} and len(results["passage"]) == 32
-    assert results["restaurants"] == results["commerces"] == results["supermarches"] == {"fiches": 1}
+    assert results["restaurants"] == results["commerces"] == results["supermarches"] == results["laveries"] == {"fiches": 1}
     assert passage_courant() is None
 
 
@@ -109,7 +110,8 @@ def test_a_commune_asked_twice_is_searched_once(monkeypatch):
 def test_every_category_of_the_chain_is_known_to_the_supervision():
     """La supervision connaît toutes les catégories de la chaîne, pour écrire la fiche d'un service confirmé."""
     from services import poi_review_service as review
-    assert review.CATEGORIES == {RESTAURANTS.source: RESTAURANTS, COMMERCES.source: COMMERCES, SUPERMARCHES.source: SUPERMARCHES}
+    assert review.CATEGORIES == {RESTAURANTS.source: RESTAURANTS, COMMERCES.source: COMMERCES, SUPERMARCHES.source: SUPERMARCHES,
+                                 LAVERIES.source: LAVERIES}
 
 
 # --- Reprendre un passage arrêté en route ---
@@ -160,7 +162,7 @@ def test_a_replay_saves_again_without_any_agent(monkeypatch):
     saved, _ = _replay(monkeypatch, lambda category: category.prompt_version)
     monkeypatch.setattr(sys, "argv", ["find_services", "--rejouer"])
     find_services.main()
-    assert saved == [("restaurants", False), ("commerces", False), ("supermarches", False)]
+    assert saved == [("restaurants", False), ("commerces", False), ("supermarches", False), ("laveries", False)]
 
 
 def test_a_file_of_older_instructions_is_replayed_only_as_a_trial(monkeypatch):
@@ -169,14 +171,15 @@ def test_a_file_of_older_instructions_is_replayed_only_as_a_trial(monkeypatch):
     results = find_services.replay_passage(CITY, files)
     assert saved == [] and "à l'essai seulement" in results["restaurants"]["passe"]
     find_services.replay_passage(CITY, files, trial=True)
-    assert saved == [("restaurants", True), ("commerces", True), ("supermarches", True)]
+    assert saved == [("restaurants", True), ("commerces", True), ("supermarches", True), ("laveries", True)]
 
 
 def test_a_category_without_file_is_passed(monkeypatch):
     """Une catégorie qui n'a jamais cherché cette commune n'a pas de fichier : le rejeu la passe, les autres sont rejouées."""
     saved, files = _replay(monkeypatch, lambda category: category.prompt_version)
     results = find_services.replay_passage(CITY, {**files, "commerces": None})
-    assert saved == [("restaurants", False), ("supermarches", False)] and results["commerces"] == {"passe": "aucun fichier"}
+    assert saved == [("restaurants", False), ("supermarches", False), ("laveries", False)]
+    assert results["commerces"] == {"passe": "aucun fichier"}
 
 
 def test_a_passage_made_under_a_town_name_is_replayed_under_that_name(monkeypatch):
