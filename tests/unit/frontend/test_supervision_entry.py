@@ -15,3 +15,9 @@ def test_the_supervision_address_of_the_app_is_the_summary():
     """L'adresse « supervision » que connaissent les scripts de l'appli (APP_URLS) est celle du Bilan."""
     page = load_front().test_client().get("/contributor").get_data(as_text=True)
     assert 'supervision: "/supervision/bilan"' in page
+
+
+def test_the_app_knows_the_address_of_modifier():
+    """La page Services renvoie vers Modifier quand une ville n'a plus rien à relire : l'appli connaît son adresse."""
+    page = load_front().test_client().get("/contributor").get_data(as_text=True)
+    assert 'supervisionModifier: "/supervision/modifier"' in page

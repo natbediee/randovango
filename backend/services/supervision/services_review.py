@@ -539,10 +539,17 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
                    "note": row["note"] or "", "par": row["decided_by"], "le": row["decided_at"].strftime("%d/%m/%Y")}
                   for row in cursor.fetchall()]
         audit = _audit_sample(cursor, tab, service, city)
+        # L'identifiant de la ville choisie, pour le lien « voir Modifier » quand elle n'a plus rien à relire : elle
+        # n'est alors plus dans la liste des villes proposées.
+        city_id = None
+        if city:
+            cursor.execute("SELECT id FROM cities WHERE name = %s", (city,))
+            row = cursor.fetchone()
+            city_id = row["id"] if row else None
         cursor.close()
         return {"tab": tab, "counts": counts, "notation": rating.labels(), "service_counts": dict(service_counts), "type_counts": dict(type_counts),
                 "total": len(cards), "cards": cards[:PAGE_SIZE],
-                "cities": cities, "towns": towns, "recent": recent, "audit": audit}
+                "cities": cities, "towns": towns, "recent": recent, "audit": audit, "ville_id": city_id}
     finally:
         MySQLUtils.disconnect(connection)
 

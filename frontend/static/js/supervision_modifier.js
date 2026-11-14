@@ -339,6 +339,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (redirectIfLoggedOut()) return;
     document.getElementById('modeServices').addEventListener('click', () => setMode('services'));
     document.getElementById('modeSpots').addEventListener('click', () => setMode('spots'));
+    // Une ville venue d'un lien (« voir Modifier » de la page Services) : la recherche part déjà filtrée.
+    placeFromUrl();
     cityField = citySearch({
         inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
         sources: () => ({ cities: allCities, towns: mode === 'services' ? allTowns : [] }), onChoose: chooseCity,

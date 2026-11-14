@@ -270,7 +270,7 @@ function render(data) {
 
     // Un lien à la fois : chaque fiche a son bouton Valider (le lot « à valider d'un coup » est retiré, 7 novembre 2026).
     document.getElementById('cardsList').innerHTML = data.cards.map(reviewCard).join('');
-    document.getElementById('emptyNote').style.display = data.cards.length ? 'none' : '';
+    renderEmptyNote(data);
 
     const more = document.getElementById('moreNote');
     more.textContent = `${data.cards.length} lieux affichés sur ${data.total} : les suivants apparaîtront une fois ceux-ci traités.`;
@@ -282,6 +282,24 @@ function render(data) {
         <p>${escapeHtml(decision.nom)} : <strong>${escapeHtml(decision.action)}</strong>
            ${decision.note ? `· « ${escapeHtml(decision.note)} »` : ''} · ${escapeHtml(decision.par)}, le ${escapeHtml(decision.le)}
            · <a href="#" onclick="cancelDecision(${decision.id}); return false;">annuler</a></p>`).join('');
+}
+
+// Rien à relire avec ces filtres. Une ville ou une commune choisie a pourtant des services : on le dit, avec un lien
+// qui ouvre Modifier sur elle, pour ne pas croire qu'elle n'en a aucun (carte #186).
+function renderEmptyNote(data) {
+    const note = document.getElementById('emptyNote');
+    note.style.display = data.cards.length ? 'none' : '';
+    const cityName = document.getElementById('filterCity').value;
+    const town = document.getElementById('filterTown').value;
+    if (!cityName && !town) {
+        note.textContent = 'Rien à relire ici pour l\'instant.';
+        return;
+    }
+    // Modifier attend l'identifiant de la ville (data.ville_id), la page Services filtre par son nom.
+    const place = town ? { commune: town } : { name: cityName };
+    const link = `${window.APP_URLS.supervisionModifier}?${placeParams(place, data.ville_id)}`;
+    note.innerHTML = `Rien à relire à ${escapeHtml(town || cityName)}. Ses services sont dans
+        <a href="${link}">Modifier</a>, pour les retrouver et les corriger.`;
 }
 
 // Redessine la page avec la file à jour et ses filtres (au chargement, et après une annulation : cancelDecision).
