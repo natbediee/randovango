@@ -285,6 +285,76 @@ def test_a_place_in_the_register_needs_no_proof_search(monkeypatch, tmp_path):
     assert "preuves" not in trace
 
 
+def test_a_category_with_notice_words_reads_the_bodacc_notices(monkeypatch, tmp_path):
+    """Une catégorie qui a des mots d'activité reçoit les annonces du BODACC avec son registre ; elles restent dans le fichier du passage."""
+    import dataclasses
+    _chain(monkeypatch, tmp_path, _Agent())
+    asked = []
+    notice = {"nom": "CIRCEA", "adresse": "6 rue Allende 29100 Douarnenez", "activite_declaree": "laverie", "annonce": "Créations"}
+    monkeypatch.setattr(service_chain.api_registre, "load_notices", lambda city, words: asked.append(words) or [notice])
+    service_chain.search_commune(dataclasses.replace(RESTAURANTS, notice_words=("laverie",)), CITY)
+    assert asked == [("laverie",)] and _trace(tmp_path)["registre"]["annonces"] == [notice]
+
+
+def test_a_category_without_notice_words_reads_no_notice(monkeypatch, tmp_path):
+    """Les restaurants n'ont pas de mots d'activité : aucune annonce n'est demandée au BODACC."""
+    _chain(monkeypatch, tmp_path, _Agent())
+    monkeypatch.setattr(service_chain.api_registre, "load_notices", lambda city, words: pytest.fail("aucune annonce attendue"))
+    service_chain.search_commune(RESTAURANTS, CITY)
+    assert "annonces" not in _trace(tmp_path)["registre"]
+
+
+def test_the_notices_are_given_whole_to_each_zone():
+    """Une annonce n'a pas de position : chaque zone d'une grande ville la reçoit, l'agent lit son adresse."""
+    zone = {"latitude": 48.38, "longitude": -4.49, "repere": "le port"}
+    register = {"actifs": [], "annonces": [{"nom": "SIAA", "adresse": "20 rue Thubaneau 13001 Marseille"}]}
+    assert service_chain.register_for_agent(RESTAURANTS, register, zone)["annonces"] == register["annonces"]
+
+
+def test_the_services_already_known_are_read_as_a_hint(monkeypatch):
+    """Les services déjà en base dans la commune deviennent des lignes d'indice ; un service masqué, sans position ou d'une commune voisine n'en fait pas partie (la cabine de l'Intermarché de Douarnenez jugée « hors commune »)."""
+    from unittest.mock import MagicMock
+    import dataclasses
+    rows = [{"name": "Laverie", "address": None, "latitude": 48.0749, "longitude": -4.30688, "masque": 0},
+            {"name": "Masquée", "address": None, "latitude": 48.07, "longitude": -4.30, "masque": 1},
+            {"name": "Sans position", "address": None, "latitude": None, "longitude": None, "masque": 0}]
+    monkeypatch.setattr(service_chain.MySQLUtils, "connect", lambda: MagicMock())
+    monkeypatch.setattr(service_chain.MySQLUtils, "disconnect", lambda connection: None)
+    rows.append({"name": "Voisine", "address": None, "latitude": 48.08, "longitude": -4.40, "masque": 0})
+    monkeypatch.setattr(service_chain.service_store, "known_services", lambda cursor, city, services: rows)
+    monkeypatch.setattr(service_chain.api_registre, "commune_code", lambda lat, lon: "29046" if lon > -4.35 else "29225")
+    city = {**CITY, "insee": "29046"}
+    hints = service_chain.known_hints(dataclasses.replace(RESTAURANTS, hint_services=("laundry",)), city)
+    assert hints == [{"nom": "Laverie", "adresse": None, "position": [48.0749, -4.30688], "lat_lon": "48.07490, -4.30688"}]
+
+
+def test_a_hint_is_kept_when_the_commune_service_does_not_answer(monkeypatch):
+    """Si le service de l'État ne dit pas dans quelle commune est un point, l'indice est gardé : ce n'est qu'un indice."""
+    def broken(lat, lon):
+        raise service_chain.api_registre.requests.ConnectionError("hors ligne")
+    monkeypatch.setattr(service_chain.api_registre, "commune_code", broken)
+    assert service_chain.in_commune(48.07, -4.30, "29046")
+
+
+def test_a_category_with_hint_services_gives_them_to_the_agent(monkeypatch, tmp_path):
+    """Une catégorie qui a des services d'indice les reçoit avec son registre ; les restaurants n'en demandent aucun."""
+    import dataclasses
+    _chain(monkeypatch, tmp_path, _Agent())
+    hint = {"nom": "Laverie", "adresse": None, "position": [48.07, -4.30], "lat_lon": "48.07000, -4.30000"}
+    monkeypatch.setattr(service_chain, "known_hints", lambda category, city: [hint])
+    service_chain.search_commune(dataclasses.replace(RESTAURANTS, hint_services=("laundry",)), CITY)
+    assert _trace(tmp_path)["registre"]["en_base"] == [hint]
+
+
+def test_in_a_zone_only_the_nearby_hints_are_given_without_their_position():
+    """Dans une zone d'une grande ville, l'agent ne reçoit que les services en base proches du repère, sans le champ « position » réservé au code."""
+    zone = {"latitude": 48.38, "longitude": -4.49, "repere": "le port"}
+    near = {"nom": "Laverie", "adresse": None, "position": [48.381, -4.49], "lat_lon": "48.38100, -4.49000"}
+    far = {"nom": "Loin", "adresse": None, "position": [48.50, -4.49], "lat_lon": "48.50000, -4.49000"}
+    seen = service_chain.register_for_agent(RESTAURANTS, {"actifs": [], "en_base": [near, far]}, zone)
+    assert seen["en_base"] == [{"nom": "Laverie", "adresse": None, "lat_lon": "48.38100, -4.49000"}]
+
+
 def test_what_was_paid_stays_readable_when_a_step_fails(monkeypatch, tmp_path):
     """Si l'analyse échoue, le fichier de trace garde quand même les recherches déjà payées."""
     _chain(monkeypatch, tmp_path, _Agent(fail_on_analysis=True))

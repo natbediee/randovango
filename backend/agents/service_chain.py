@@ -10,6 +10,10 @@ LA CHAÎNE, POUR UNE COMMUNE OU POUR UNE ZONE D'UNE GRANDE VILLE (search_zone)
     3. l'analyste relit tous les lieux : fermeture, doublon, lieu inutile au voyageur, détails ;
     4. seuls les lieux que ni une page ni le registre ne prouvent partent chercher une preuve, par petits lots ;
     5. le code contrôle les détails, puis lit la preuve et la date « nouveau » dans le registre entier.
+Une catégorie qui a des mots d'activité (ServiceCategory.notice_words) reçoit aussi, avec le registre, les annonces du
+BODACC qui les déclarent (api_registre.load_notices) : un indice de plus, jamais une preuve. Une catégorie qui a des
+services d'indice (ServiceCategory.hint_services) reçoit aussi ceux qui sont déjà en base autour de la commune
+(known_hints) : OSM sait souvent où est un lieu sans savoir son nom, l'agent le vérifie.
 Chaque étape est gardée dans un fichier JSON (write_trace) : la relire ne coûte aucun appel.
 Le lancement, pour toutes les catégories d'une commune, est dans find_services.py.
 
@@ -63,6 +67,7 @@ from agents.llm_service import (LLMTimeout, etape_courante, map_in_context, mesu
 from agents.pepite_common import is_excluded_site
 from etl.extract import api_registre
 from services import service_store
+from utils.db_utils import MySQLUtils
 from utils.geo_utils import city_commune, haversine_distance_km
 
 MAX_PLACES = 15
@@ -73,6 +78,8 @@ PROOF_PAGE_TYPES = ["site", "office_tourisme", "guide", "presse", "facebook", "i
 # dans la commande, et 15 lieux pour toute la ville auraient été pris au hasard. Le 6 novembre 2026, ses 44 spots
 # font 10 zones de 1,5 km ; trois comptent 178 à 270 restaurants au registre, d'où les 40 lignes les plus proches du spot.
 ZONE_KM = 1.5
+# La liste du registre où sont rangés les services déjà en base, donnés comme indice (known_hints).
+KNOWN_HINTS = "en_base"
 ZONE_LINES = 40
 PROOF_BATCH = 5
 PROOF_TIMED_OUT = "preuve : l'agent n'a pas répondu à temps"
@@ -277,16 +284,51 @@ def register_for_agent(category, register: dict | None, zone: dict | None = None
     if not register:
         return register
 
-    def kept(lines: list) -> list:
-        if zone is None:
+    def kept(kind: str, lines: list) -> list:
+        # Les annonces du BODACC n'ont pas de position : la zone ne les trie pas, l'agent lit leur adresse.
+        if zone is None or kind == api_registre.NOTICES:
             return lines
+        # Les services déjà en base n'ont pas de code d'activité : seule leur distance au repère compte.
         placed = sorted(((haversine_distance_km(zone["latitude"], zone["longitude"], *line["position"]), number, line)
                          for number, line in enumerate(lines)
-                         if line.get("position") and line.get("activite", "").startswith(category.zone_activity)))
+                         if line.get("position") and (kind == KNOWN_HINTS
+                                                      or line.get("activite", "").startswith(category.zone_activity))))
         return [line for distance, _, line in placed if distance <= ZONE_KM][:ZONE_LINES]
 
-    return {kind: [{key: value for key, value in line.items() if key != "position"} for line in kept(lines)]
+    return {kind: [{key: value for key, value in line.items() if key != "position"} for line in kept(kind, lines)]
             for kind, lines in register.items()}
+
+
+def known_hints(category, city: dict) -> list:
+    """
+    Les services de la catégorie déjà en base dans la commune (service_store.known_services), donnés à l'agent comme
+    indice, jamais comme preuve. À Douarnenez (14 novembre 2026), OSM plaçait les trois cabines Revolution Laundry sur le
+    bon parking, mais sans nom ; l'agent, sans cette liste, en avait trouvé une seule.
+    Seuls ceux de la commune sont gardés (in_commune) : avec ceux des communes voisines, l'agent a jugé « hors commune »
+    la cabine de l'Intermarché de Douarnenez, dont il ne savait lire que la position.
+    "position" sert au code (le tri par zone) ; l'agent lit "lat_lon", car il ne voit jamais les positions du registre.
+    """
+    connection = MySQLUtils.connect()
+    cursor = connection.cursor()
+    try:
+        rows = service_store.known_services(cursor, city, category.hint_services)
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(connection)
+    code = city.get("insee") or api_registre.commune_code(float(city["latitude"]), float(city["longitude"]))
+    return [{"nom": row["name"], "adresse": row["address"],
+             "position": [float(row["latitude"]), float(row["longitude"])],
+             "lat_lon": f"{float(row['latitude']):.5f}, {float(row['longitude']):.5f}"}
+            for row in rows if row["latitude"] is not None and not row["masque"]
+            and in_commune(float(row["latitude"]), float(row["longitude"]), code)]
+
+
+def in_commune(latitude: float, longitude: float, code: str | None) -> bool:
+    """Le point est-il dans cette commune ? Sans réponse du service de l'État, il est gardé : ce n'est qu'un indice."""
+    try:
+        return api_registre.commune_code(latitude, longitude) == code
+    except (api_registre.requests.RequestException, ValueError, KeyError):
+        return True
 
 
 # --- Les recherches d'une commune ---
@@ -423,6 +465,10 @@ def search_commune(category, city: dict, resume: dict | None = None) -> dict:
                                                                                 zones or (), ZONE_KM)
         if register is None and must_have_register(category, city):
             raise RegisterUnavailable(f"{name} : registre illisible, une grande ville n'est pas cherchée sans lui")
+        if register is not None and category.notice_words and not resume:
+            register[api_registre.NOTICES] = api_registre.load_notices(city, category.notice_words)
+        if register is not None and category.hint_services and not resume:
+            register[KNOWN_HINTS] = known_hints(category, city)
         trace = {"commune": name, "passage": passage_courant(), "version": category.prompt_version, "registre": register}
         if resume:
             trace["reprise_de"] = resume.get("passage")
