@@ -165,8 +165,8 @@ function keptSheet(card, poiId) {
     return ficheHtml(view, `rev-${cardKey(card)}-${poiId}`, poiId === card.poi_id ? card.a_verifier || [] : [], true);
 }
 
-// Sous les deux colonnes : la fiche de chaque lieu gardé, puis « Valider », qui tranche selon les cases cochées.
-// Rien de coché : il passe en rouge, les deux lieux seront retirés.
+// Sous les deux colonnes : la fiche de chaque lieu gardé, la note de la proposition (supervision_notation.js), puis
+// « Valider », qui tranche selon les cases cochées. Rien de coché : il passe en rouge, les deux lieux seront retirés.
 function duplicateDecision(card) {
     const kept = keptPlaces[cardKey(card)];
     if (!kept) return '<p class="muted">Coche le lieu à garder, les deux si ce sont deux lieux différents.</p>';
@@ -174,6 +174,7 @@ function duplicateDecision(card) {
     const sheets = kept.map(poiId => keptSheet(card, poiId)).join('');
     return `
         ${sheets}
+        ${ratingHtml(cardKey(card))}
         <div class="fiche-actions">
             <button class="btn ${action === 'retirer_les_deux' ? 'review-card__btn-remove' : 'btn--primary'}"
                     onclick="decide('${cardKey(card)}', '${action}')">Valider</button>
@@ -219,7 +220,8 @@ function sheetKey(card) {
 }
 
 // En haut, ce qu'il faut vérifier et ce que disent les sources ; dessous, la même fiche que l'onglet « Modifier »,
-// les champs mis en doute encadrés ; en bas, les décisions de la file.
+// les champs mis en doute encadrés ; en bas, la note de la proposition de l'agent, puis les décisions de la file
+// (dans une paire de doublons, la note est au-dessus de « Valider », dans duplicateDecision).
 function reviewCard(card) {
     // Dans une paire de doublons, les décisions passent par les cases et « Valider » (duplicatePair), pas par le bas.
     const hidden = ['autre_lien', 'autre_nom', 'autre_maps', ...(isDuplicatePair(card) ? DUPLICATE_ACTIONS : [])];
@@ -242,6 +244,7 @@ function reviewCard(card) {
             ${isDuplicatePair(card) ? duplicatePair(card)
               : card.fiche ? ficheHtml(card.fiche, sheetKey(card), card.a_verifier || [], true) : `<h2>${escapeHtml(card.nom)}</h2><p class="muted">${escapeHtml(where(card))}</p>`}
             <p class="supervision-msg fiche-msg" role="alert" style="display:none;"></p>
+            ${isDuplicatePair(card) ? '' : ratingHtml(cardKey(card))}
             <div class="fiche-actions">
                 ${buttons}
                 ${card.fiche && !isDuplicatePair(card) ? `<button class="btn btn--outline" onclick="saveReviewSheet('${cardKey(card)}')">Enregistrer mes corrections</button>` : ''}
@@ -272,6 +275,7 @@ function renderAudit(sample) {
 
 function render(data) {
     currentCards = data.cards;
+    setRatingLabels(data.notation);
     // « tous » est déjà la somme des files : l'ajouter aux autres compterait tout deux fois.
     const waiting = data.counts.tous;
     document.getElementById('reviewsCount').textContent =
@@ -337,14 +341,19 @@ function selectTab(tab) {
     load();
 }
 
+// Envoie la décision d'une carte, avec la note de la proposition de l'agent si elle a été donnée.
 async function send(tab, poiIds, action, note, months, url = null, name = null) {
-    const card = document.querySelector(`[data-key="${tab}-${poiIds[0]}"]`);
+    const key = `${tab}-${poiIds[0]}`;
+    const card = document.querySelector(`[data-key="${key}"]`);
     try {
         cardMessage(card, '');
-        render(await servicesFetch('/decisions', {
+        const data = await servicesFetch('/decisions', {
             method: 'POST',
-            body: JSON.stringify({ tab, vue: currentTab, poi_ids: poiIds, action, note, mois: months, url, nom: name, ...filters() }),
-        }));
+            body: JSON.stringify({ tab, vue: currentTab, poi_ids: poiIds, action, note, mois: months, url, nom: name,
+                                   ...ratingOf(key), ...filters() }),
+        });
+        forgetRating(key);
+        render(data);
     } catch (error) {
         cardMessage(card, error.message);
     }

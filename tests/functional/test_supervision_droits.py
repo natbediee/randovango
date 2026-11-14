@@ -125,4 +125,5 @@ def nothing_recorded(world):
 
 @then(parsers.parse('la décision "{decision}" sur le spot {spot:d} est enregistrée au nom de l\'utilisateur'))
 def recorded(world, decision, spot):
-    assert world.decisions == [(spot, decision, "", USER["username"], None)]
+    """La décision arrive au service au nom de l'admin connecté, sans note de pertinence (les deux None de la fin)."""
+    assert world.decisions == [(spot, decision, "", USER["username"], None, None, None)]

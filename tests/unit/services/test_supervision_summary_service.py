@@ -4,6 +4,7 @@ celui que la page montre.
 """
 from services import poi_review_service
 from services import supervision_summary_service as summary
+from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
 # Dernière vérification d'un spot : "non" = l'agent propose de le retirer.
 REMOVE = {"id": 1, "utilisable": "non"}
@@ -64,3 +65,29 @@ def test_nothing_to_review_gives_zeros_and_every_queue() -> None:
 def test_the_summary_has_every_queue_of_the_services_page() -> None:
     # Une file ajoutée ou renommée dans poi_review_service doit l'être aussi dans le bilan.
     assert set(summary.SERVICE_TABS) == set(poi_review_service.TAB_SIGNALS) - set(poi_review_service.HIDDEN_TABS)
+
+
+def test_ratings_are_counted_by_category_then_by_pertinence_and_reason() -> None:
+    """Les notes des propositions se comptent par catégorie (spots, puis onglets des services), puis par pertinence et raison."""
+    rows = [
+        {"objet_type": "poi", "pertinence": "fausse", "raison": "ferme_non_vu", "service_category": "restaurant"},
+        {"objet_type": "poi", "pertinence": "a_corriger", "raison": "ferme_non_vu", "service_category": "restaurant"},
+        {"objet_type": "poi", "pertinence": "juste", "raison": None, "service_category": "restaurant"},
+        {"objet_type": "spot", "pertinence": "fausse", "raison": "preuve_faible", "service_category": None},
+    ]
+    counts = summary.count_ratings(rows)
+    assert [(category["label"], category["n"]) for category in counts] == [("Spots", 1), ("Restauration", 3)]
+    restaurants = counts[1]
+    assert [(item["label"], item["n"]) for item in restaurants["pertinences"]] == [("juste", 1), ("à corriger", 1), ("fausse", 1)]
+    assert restaurants["raisons"] == [{"label": "fermé non vu", "n": 2}]
+
+
+def test_no_rating_gives_an_empty_count() -> None:
+    """Sans aucune décision notée, le compte est vide : la page Bilan n'affiche pas le bloc."""
+    assert summary.count_ratings([]) == []
+
+
+def test_every_service_tab_has_a_rating_category() -> None:
+    """Chaque onglet de l'étape 4 a son libellé dans le compte des notes : un nouvel onglet doit y être ajouté."""
+    tabs = set(POI_FRONTEND_CATEGORY_MAP.values()) | {poi_review_service.NO_TAB}
+    assert tabs <= set(summary.RATING_CATEGORIES)

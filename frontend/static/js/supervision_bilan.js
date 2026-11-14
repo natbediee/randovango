@@ -47,6 +47,25 @@ function showBlock(id, rowsId, html) {
     document.getElementById(id).style.display = html ? '' : 'none';
 }
 
+// Le tableau des notes des propositions (carte #201) : une ligne par catégorie, les trois pertinences en colonnes,
+// les raisons d'erreur à la suite, de la plus fréquente à la plus rare. Rien de noté : le bloc reste caché.
+function renderRatings(categories) {
+    const block = document.getElementById('ratingsBlock');
+    block.style.display = categories && categories.length ? '' : 'none';
+    if (!categories || !categories.length) return;
+    const head = categories[0].pertinences.map(item => `<th>${escapeHtml(item.label)}</th>`).join('');
+    const lines = categories.map(category => `
+        <tr>
+            <th scope="row">${escapeHtml(category.label)}</th>
+            <td>${category.n}</td>
+            ${category.pertinences.map(item => `<td>${item.n}</td>`).join('')}
+            <td>${category.raisons.map(item => `${escapeHtml(item.label)} (${item.n})`).join(' · ') || '—'}</td>
+        </tr>`).join('');
+    document.getElementById('ratingsTable').innerHTML = `
+        <thead><tr><th>Catégorie</th><th>Notées</th>${head}<th>Raisons des erreurs</th></tr></thead>
+        <tbody>${lines}</tbody>`;
+}
+
 function render(data) {
     const urls = window.APP_URLS;
     document.getElementById('reviewsCount').textContent =
@@ -78,6 +97,7 @@ function render(data) {
             ${rows(others)}
         </details>` : ''));
     showBlock('typesBlock', 'typesRows', rows(data.services.par_type));
+    renderRatings(data.notation);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
