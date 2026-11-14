@@ -27,7 +27,7 @@ from datetime import date
 from services.supervision import rating
 from services.supervision.decisions import record_decision
 from utils.db_utils import MySQLUtils
-from utils.display_utils import a_savoir_on, spot_category, spot_name_label
+from utils.display_utils import HIDDEN_SPOT_TYPES, a_savoir_on, spot_category, spot_name_label
 from utils.geo_utils import address_town, town_key
 
 DECISIONS = ("retirer", "garder")
@@ -145,9 +145,31 @@ def _a_savoir_text(stored: str | None) -> str:
 # - ville : une ville de l'étape 1, par son identifiant. Un spot s'y range comme dans la recherche de Modifier
 #   (services_edit.in_city) : par la commune de son adresse, sinon par la ville de l'appli la plus proche ;
 # - commune : la commune de l'adresse d'un spot quand ce n'est pas une ville de l'appli ;
-# - catégorie : gratuit, payant ou autres, le même classement que le filtre de l'étape 3 (display_utils.spot_category).
-# Il n'y a pas de filtre « problème » : chaque spot de la file a le même, l'agent propose de le retirer.
+# - catégorie : gratuit, payant ou autres, le même classement que le filtre de l'étape 3 (display_utils.spot_category) ;
+# - problème : les deux raisons pour lesquelles un spot attend l'administratrice (SPOT_PROBLEMS).
 SPOT_CATEGORIES = ("gratuit", "payant", "autres")
+
+# LES DEUX PROBLÈMES D'UN SPOT (14 novembre 2026) :
+# - « retrait » : l'agent propose de le retirer ; le spot est masqué au voyageur en attendant la décision ;
+# - « non_verifie » : le spot est proposé au voyageur avec le badge « non vérifié », le plus souvent parce que l'agent
+#   doute (« incertain ») : 103 spots ce jour-là, que la page ne montrait pas. « Garder » le rend vérifié.
+SPOT_PROBLEMS = {"retrait": "Retrait proposé", "non_verifie": "Non vérifié"}
+
+# Les spots non vérifiés que l'étape 3 propose quand même : les mêmes conditions que proposable_spots
+# (spot_selection_service), sans la zone d'une ville.
+UNVERIFIED_SPOTS = """
+    SELECT s.id FROM spots s
+    WHERE s.verifie = 0 AND s.type IS NOT NULL AND s.type NOT IN ({marks})
+      AND s.duplicate_of_spot_id IS NULL AND s.p4n_removed = 0
+      AND (s.nuit_interdite IS NULL OR s.nuit_interdite = 0)
+"""
+
+
+def _unverified_ids(cursor, states: dict) -> list:
+    """Les spots proposés au voyageur avec le badge « non vérifié » ; un spot retiré ou à relire n'en est pas."""
+    cursor.execute(UNVERIFIED_SPOTS.format(marks=",".join(["%s"] * len(HIDDEN_SPOT_TYPES))), HIDDEN_SPOT_TYPES)
+    return [row["id"] for row in cursor.fetchall()
+            if spot_status(*states.get(row["id"], (None, None))) not in ("retire", "propose")]
 
 
 def spot_town(spot: dict) -> str | None:
@@ -171,12 +193,14 @@ def _place_fields(spot: dict, cities: list) -> dict:
             "commune": None if city else spot_town(spot), "code_postal": spot.get("postal_code")}
 
 
-def filter_reviews(reviews: list, city_id: int | None, town: str | None, category: str | None) -> list:
+def filter_reviews(reviews: list, city_id: int | None, town: str | None, category: str | None,
+                   problem: str | None = None) -> list:
     """Les cartes qui passent les filtres choisis ; un filtre vide (None) laisse tout passer."""
     return [review for review in reviews
             if (city_id is None or review["ville_id"] == city_id)
             and (not town or town_key(review["commune"]) == town_key(town))
-            and (not category or review["categorie"] == category)]
+            and (not category or review["categorie"] == category)
+            and (not problem or review["probleme"] == problem)]
 
 
 def city_choices(reviews: list, cities: list) -> tuple:
@@ -196,45 +220,63 @@ def city_choices(reviews: list, cities: list) -> tuple:
     return offered, [{"nom": town["nom"], "codes": sorted(town["codes"])} for _, town in sorted(towns.items())]
 
 
-def get_reviews(city_id: int | None = None, town: str | None = None, category: str | None = None) -> dict:
-    """La file de relecture, avec les filtres de la page (une catégorie inconnue est refusée), et les dernières décisions."""
+def _review_card(cursor, spot_id: int, verification: dict | None, spot: dict, cities: list, problem: str) -> dict:
+    """
+    La carte d'un spot à trancher : ce que l'agent a trouvé (sa dernière vérification, s'il y en a une), les derniers
+    commentaires des voyageurs, et ce que lisent les filtres.
+    """
+    verification = verification or {}
+    cursor.execute("SELECT review_date, text FROM spot_reviews WHERE spot_id = %s"
+                   " ORDER BY review_date DESC LIMIT %s", (spot_id, PROOF_REVIEWS))
+    reopening = verification.get("utilisable_a_partir")
+    return {
+        "objet_type": SPOT,
+        "objet_id": spot_id,
+        "probleme": problem,
+        "verification_id": verification.get("id"),
+        "nom": _name(spot),
+        "url": spot.get("url"),
+        "raison": verification.get("raison") or "",
+        "resume": verification.get("resume") or "",
+        "a_savoir": _a_savoir_text(verification.get("a_savoir")),
+        "reouverture": reopening.strftime("%d/%m/%Y") if reopening else None,
+        "sources": json.loads(verification.get("sources") or "[]"),
+        "commentaires": [{"date": row["review_date"].strftime("%d/%m/%Y") if row["review_date"] else "",
+                          "texte": row["text"] or ""} for row in cursor.fetchall()],
+        **_place_fields(spot, cities),
+    }
+
+
+def get_reviews(city_id: int | None = None, town: str | None = None, category: str | None = None,
+                problem: str | None = None) -> dict:
+    """
+    Les spots à trancher, avec les filtres de la page (une catégorie ou un problème inconnu est refusé), et les
+    dernières décisions.
+    """
     if category and category not in SPOT_CATEGORIES:
         raise ValueError(f"Catégorie inconnue : {category}")
+    if problem and problem not in SPOT_PROBLEMS:
+        raise ValueError(f"Problème inconnu : {problem}")
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        pending = [verification for verification, decision in _spot_states(cursor).values()
-                   if spot_status(verification, decision) == "propose"]
-        spots = _spot_labels(cursor, [v["spot_id"] for v in pending])
+        states = _spot_states(cursor)
+        removals = [spot_id for spot_id, (verification, decision) in states.items()
+                    if spot_status(verification, decision) == "propose"]
+        unverified = _unverified_ids(cursor, states)
+        spots = _spot_labels(cursor, removals + unverified)
         cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities ORDER BY name")
         cities = cursor.fetchall()
-        reviews = []
-        for verification in pending:
-            spot = spots.get(verification["spot_id"]) or {}
-            cursor.execute("SELECT review_date, text FROM spot_reviews WHERE spot_id = %s"
-                           " ORDER BY review_date DESC LIMIT %s", (verification["spot_id"], PROOF_REVIEWS))
-            reopening = verification["utilisable_a_partir"]
-            reviews.append({
-                "objet_type": SPOT,
-                "objet_id": verification["spot_id"],
-                "verification_id": verification["id"],
-                "nom": _name(spot),
-                "url": spot.get("url"),
-                "raison": verification["raison"] or "",
-                "resume": verification["resume"] or "",
-                "a_savoir": _a_savoir_text(verification["a_savoir"]),
-                "reouverture": reopening.strftime("%d/%m/%Y") if reopening else None,
-                "sources": json.loads(verification["sources"] or "[]"),
-                "commentaires": [{"date": row["review_date"].strftime("%d/%m/%Y") if row["review_date"] else "",
-                                  "texte": row["text"] or ""} for row in cursor.fetchall()],
-                **_place_fields(spot, cities),
-            })
+        reviews = [_review_card(cursor, spot_id, states.get(spot_id, (None, None))[0], spots.get(spot_id) or {},
+                                cities, file)
+                   for file, spot_ids in (("retrait", removals), ("non_verifie", unverified)) for spot_id in spot_ids]
         reviews.sort(key=lambda review: review["objet_id"])
-        # Les choix des filtres viennent de toute la file ; le nombre par catégorie suit la ville choisie.
+        # Les choix des filtres viennent de toute la file ; les nombres d'un menu suivent la ville et l'autre menu.
         offered_cities, towns = city_choices(reviews, cities)
         in_place = filter_reviews(reviews, city_id, town, None)
-        category_counts = Counter(review["categorie"] for review in in_place)
-        reviews = filter_reviews(in_place, None, None, category)
+        category_counts = Counter(review["categorie"] for review in filter_reviews(in_place, None, None, None, problem))
+        problem_counts = Counter(review["probleme"] for review in filter_reviews(in_place, None, None, category))
+        reviews = filter_reviews(in_place, None, None, category, problem)
 
         cursor.execute("""
             SELECT d.*, (SELECT v.a_savoir FROM spot_verifications v WHERE v.id = d.verification_id) AS a_savoir_agent
@@ -247,6 +289,8 @@ def get_reviews(city_id: int | None = None, town: str | None = None, category: s
         return {"reviews": reviews,
                 "cities": offered_cities, "towns": towns,
                 "categories": [{"code": code, "nombre": category_counts[code]} for code in SPOT_CATEGORIES],
+                "problemes": [{"code": code, "label": label, "nombre": problem_counts[code]}
+                              for code, label in SPOT_PROBLEMS.items()],
                 "notation": rating.labels(),
                 "ouvertures": openings,
                 "recent": [{"id": d["id"], "nom": _name(spots.get(d["objet_id"])), "decision": d["decision"],

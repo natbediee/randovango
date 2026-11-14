@@ -7,12 +7,16 @@
 
   {% with active='spots' %}{% include 'partials/supervision_nav.html' %}{% endwith %}
 
-  {# Les filtres, comme sur Services : la catégorie de l'étape 3 (gratuit, payant, autres) et la recherche de ville
+  {# Les filtres, comme sur Services : la catégorie de l'étape 3 (gratuit, payant, autres), le problème (retrait
+     proposé, non vérifié) et la recherche de ville
      (supervision_ville.js). filterCity garde l'identifiant de la ville, filterTown le nom de la commune. #}
   <div class="services-toolbar">
     <div class="services-filters">
       <label class="label">Catégorie
         <select id="filterCategory"><option value="">Toutes</option></select>
+      </label>
+      <label class="label">Type de problème
+        <select id="filterProblem"><option value="">Tous</option></select>
       </label>
       <label class="label search-wrap">Ville
         <input type="search" id="filterCitySearch" maxlength="80" placeholder="Ville ou code postal…" autocomplete="off"

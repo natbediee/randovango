@@ -62,19 +62,25 @@ def test_the_spot_reviews_answer_an_admin(reviews):
     """La page Spots sans filtre reçoit tous les spots que l'agent propose de retirer."""
     response = reviews.get("/api/supervision/reviews/spots")
     assert response.status_code == 200
-    assert response.json() == {"demande": [None, None, None]}
+    assert response.json() == {"demande": [None, None, None, None]}
 
 
 def test_the_spot_reviews_pass_the_city_and_the_category(reviews):
     """Les spots gratuits de la ville n° 12 : la ville et la catégorie arrivent telles quelles au service."""
     response = reviews.get("/api/supervision/reviews/spots?ville=12&categorie=gratuit")
-    assert response.json() == {"demande": [12, None, "gratuit"]}
+    assert response.json() == {"demande": [12, None, "gratuit", None]}
 
 
 def test_the_spot_reviews_pass_a_town(reviews):
     """Une commune qui n'est pas une ville de l'appli (Guilvinec) arrive au service par « commune »."""
     response = reviews.get("/api/supervision/reviews/spots?commune=Guilvinec")
-    assert response.json() == {"demande": [None, "Guilvinec", None]}
+    assert response.json() == {"demande": [None, "Guilvinec", None, None]}
+
+
+def test_the_spot_reviews_pass_the_problem(reviews):
+    """Les spots non vérifiés seulement : le problème arrive tel quel au service."""
+    response = reviews.get("/api/supervision/reviews/spots?probleme=non_verifie")
+    assert response.json() == {"demande": [None, None, None, "non_verifie"]}
 
 
 def test_an_unknown_spot_category_is_refused(monkeypatch, reviews):

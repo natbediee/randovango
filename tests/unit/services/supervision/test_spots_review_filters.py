@@ -63,3 +63,37 @@ def test_an_unknown_category_is_refused():
     """Une catégorie qui n'est pas gratuit, payant ou autres est refusée, avant de lire la base."""
     with pytest.raises(ValueError, match="Catégorie inconnue"):
         spots_review.get_reviews(category="luxe")
+
+
+def test_the_problem_filter_separates_removals_from_unverified_spots():
+    """« Non vérifié » ne garde que les spots au badge « non vérifié », pas les retraits proposés par l'agent."""
+    reviews = [{**card(), "probleme": "retrait"}, {**card(), "probleme": "non_verifie"}]
+    assert spots_review.filter_reviews(reviews, None, None, None, "non_verifie") == [reviews[1]]
+
+
+def test_an_unknown_problem_is_refused():
+    """Un problème qui n'est ni un retrait proposé ni un spot non vérifié est refusé, avant de lire la base."""
+    with pytest.raises(ValueError, match="Problème inconnu"):
+        spots_review.get_reviews(problem="fermé")
+
+
+class FakeCursor:
+    """Un curseur qui rend les spots non vérifiés donnés, et garde la requête reçue."""
+    def __init__(self, ids):
+        self.ids, self.params = ids, None
+
+    def execute(self, query, params=()):
+        self.params = params
+
+    def fetchall(self):
+        return [{"id": spot_id} for spot_id in self.ids]
+
+
+def test_an_unverified_spot_already_waiting_for_removal_is_not_counted_twice():
+    """Un spot non vérifié dont l'agent propose le retrait reste dans « Retrait proposé », pas dans « Non vérifié »."""
+    removal = {"id": 9, "utilisable": "non"}
+    states = {2: (removal, None)}
+    cursor = FakeCursor([1, 2])
+    assert spots_review._unverified_ids(cursor, states) == [1]
+    assert "SERVICES D'APPOINT" in cursor.params
+

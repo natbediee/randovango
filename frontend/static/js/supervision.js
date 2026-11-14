@@ -25,6 +25,22 @@ function spotLinks(review) {
     ].filter(Boolean).join('');
 }
 
+// L'en-tête d'une carte selon son problème : un retrait proposé par l'agent, ou un spot non vérifié à confirmer.
+function problemBadge(problem) {
+    return problem === 'non_verifie'
+        ? '<span class="status-badge services-tag--teal">Non vérifié : à confirmer</span>'
+        : '<span class="status-badge review-card__remove">Proposé : retirer</span>';
+}
+
+// Pourquoi le spot attend une décision. Un spot non vérifié n'a pas de raison de retrait : on montre le résumé de
+// l'agent, qui dit ce qu'il n'a pas pu confirmer.
+function whyText(review) {
+    if (review.probleme === 'non_verifie') {
+        return review.resume ? `<p><strong>Ce que l'agent n'a pas pu confirmer :</strong> ${escapeHtml(review.resume)}</p>` : '';
+    }
+    return `<p><strong>Pourquoi :</strong> ${escapeHtml(review.raison)}</p>`;
+}
+
 function reviewCard(review) {
     const reopening = review.reouverture ? `<p><strong>Réouverture annoncée :</strong> ${escapeHtml(review.reouverture)}</p>` : '';
     const comments = review.commentaires.map(c =>
@@ -35,10 +51,10 @@ function reviewCard(review) {
             <div class="review-card__body">
                 <div class="spot-tags">
                     <span class="spot-type">Spot n° ${review.objet_id}</span>
-                    <span class="status-badge review-card__remove">Proposé : retirer</span>
+                    ${problemBadge(review.probleme)}
                 </div>
                 <h2>${escapeHtml(review.nom)}</h2>
-                <p><strong>Pourquoi :</strong> ${escapeHtml(review.raison)}</p>
+                ${whyText(review)}
                 ${reopening}
                 ${comments ? `<div class="review-card__proofs"><span>Derniers commentaires en base</span><ul>${comments}</ul></div>` : ''}
                 <div class="review-card__links">${links}</div>
@@ -86,7 +102,8 @@ let allTowns = [];    // les communes des spots qui ne sont pas des villes de l'
 function filterQuery() {
     const params = new URLSearchParams();
     const values = { ville: document.getElementById('filterCity').value, commune: document.getElementById('filterTown').value,
-                     categorie: document.getElementById('filterCategory').value };
+                     categorie: document.getElementById('filterCategory').value,
+                     probleme: document.getElementById('filterProblem').value };
     Object.entries(values).forEach(([key, value]) => { if (value) params.set(key, value); });
     return params.toString();
 }
@@ -100,11 +117,21 @@ function renderCategories(categories) {
         `<option value="${category.code}" ${category.code === chosen ? 'selected' : ''}>${CATEGORY_LABELS[category.code]} (${category.nombre})</option>`).join('');
 }
 
+// Le menu des problèmes (retrait proposé, non vérifié), avec leur nombre ; le choix affiché reste.
+function renderProblems(problems) {
+    const select = document.getElementById('filterProblem');
+    const chosen = select.value;
+    const total = problems.reduce((sum, problem) => sum + problem.nombre, 0);
+    select.innerHTML = `<option value="">Tous (${total})</option>` + problems.map(problem =>
+        `<option value="${problem.code}" ${problem.code === chosen ? 'selected' : ''}>${escapeHtml(problem.label)} (${problem.nombre})</option>`).join('');
+}
+
 function render(data) {
     setRatingLabels(data.notation);
     allCities = data.cities;
     allTowns = data.towns;
     renderCategories(data.categories);
+    renderProblems(data.problemes);
     const count = data.reviews.length;
     document.getElementById('reviewsCount').textContent =
         count === 0 ? 'Rien à relire' : `${count} décision${count > 1 ? 's' : ''} en attente`;
@@ -162,6 +189,7 @@ async function load() {
 document.addEventListener('DOMContentLoaded', () => {
     if (redirectIfLoggedOut()) return;
     document.getElementById('filterCategory').addEventListener('change', load);
+    document.getElementById('filterProblem').addEventListener('change', load);
     placeFromUrl();
     citySearch({ inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
                  sources: () => ({ cities: allCities, towns: allTowns }), onChoose: chooseCity });

@@ -12,16 +12,17 @@ from services.supervision import services_edit, services_review, spots_review, s
 router = APIRouter()
 
 
-@router.get("/reviews/spots", summary="Spots the agents propose to remove, and the latest decisions.")
+@router.get("/reviews/spots", summary="Spots awaiting a human decision (removal proposed, or unverified).")
 def get_spot_reviews(ville: int | None = None, commune: str | None = None, categorie: str | None = None,
-                     _admin=Depends(require_admin)):
+                     probleme: str | None = None, _admin=Depends(require_admin)):
     """
-    Les spots que l'agent propose de retirer, avec ses preuves, les dernières décisions et les ouvertures décidées.
-    Filtres de la page : ville de l'appli (son identifiant), commune d'adresse qui n'en est pas une, catégorie
-    (gratuit, payant, autres). Une catégorie inconnue est refusée (422).
+    Les spots à trancher (retrait proposé par l'agent, ou non vérifié), avec les preuves de l'agent, les dernières
+    décisions et les ouvertures décidées. Filtres de la page : ville de l'appli (son identifiant), commune d'adresse
+    qui n'en est pas une, catégorie (gratuit, payant, autres), problème (retrait, non_verifie). Une catégorie ou un
+    problème inconnu est refusé (422).
     """
     try:
-        return spots_review.get_reviews(ville, commune or None, categorie or None)
+        return spots_review.get_reviews(ville, commune or None, categorie or None, probleme or None)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 
