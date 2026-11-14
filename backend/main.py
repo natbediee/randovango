@@ -71,10 +71,11 @@ app.include_router(step4.router, prefix="/api/step4", tags=["Step 4 Services"])
 app.include_router(result.router, prefix="/api/result", tags=["Result Plan"])
 app.include_router(pepites.router, prefix="/api/pepites", tags=["Pépites de Vany"])
 app.include_router(etl.router, prefix="/api/etl", tags=["GPX Files"])
-app.include_router(supervision_reviews.router, prefix="/api/supervision", tags=["Supervision"])
-app.include_router(supervision_search.router, prefix="/api/supervision", tags=["Supervision"])
-app.include_router(supervision_sheets.router, prefix="/api/supervision", tags=["Supervision"])
-app.include_router(supervision_decisions.router, prefix="/api/supervision", tags=["Supervision"])
+# La supervision (admin) : une section de /docs par ressource (carte #186), dans l'ordre où l'admin s'en sert.
+app.include_router(supervision_reviews.router, prefix="/api/supervision", tags=["Supervision · Relectures"])
+app.include_router(supervision_decisions.router, prefix="/api/supervision", tags=["Supervision · Décisions"])
+app.include_router(supervision_search.router, prefix="/api/supervision", tags=["Supervision · Recherche"])
+app.include_router(supervision_sheets.router, prefix="/api/supervision", tags=["Supervision · Services"])
 
 # Le niveau d'accès de chaque route, écrit dans la doc OpenAPI (api/access.py) : après tous les routers.
 document_access(app)
