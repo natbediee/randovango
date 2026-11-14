@@ -15,7 +15,7 @@ from datetime import date
 from services.supervision import rating, services_edit, services_review, spots_edit, spots_review
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, spot_category
-from utils.geo_utils import town_choices, town_key
+from utils.geo_utils import address_town, town_choices, town_key
 
 # Les files des services (services_review.TAB_SIGNALS), avec le libellé et l'ordre du filtre
 # « Problème » de la page Services (TABS dans supervision_services.js).
@@ -37,6 +37,30 @@ RATING_CATEGORIES = {
     "hygiene": "Hygiène", "laverie": "Laverie", "culture": "Culture & Loisirs", "urgence": "Urgences",
     "hors_etape4": "Hors étape 4",
 }
+
+# LE GARDE-FOU DES SERVICES MASQUÉS SANS TRACE (carte #186, plan 5.2) : un service masqué doit l'être par une décision
+# (d'un humain ou de la règle), ou attendre une relecture (un signal « à relire »). Le 5 novembre 2026, six services ont
+# été masqués par un passage qui n'a rien laissé : on ne les a découverts que par hasard. Le bilan les compte, pour
+# qu'un tel masquage se voie le jour même. city : le nom d'une ville de l'appli, comme sur la page Services.
+MASKED_WITHOUT_TRACE = """
+    SELECT p.id, p.name, p.address FROM poi p
+    WHERE p.masque = 1
+      AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.objet_type = %s AND d.objet_id = p.id AND d.annulee_at IS NULL)
+      AND NOT EXISTS (SELECT 1 FROM poi_signals s WHERE s.poi_id = p.id AND s.statut = 'a_relire')
+      AND (%s IS NULL OR EXISTS (SELECT 1 FROM histo_poi h JOIN cities c ON c.id = h.city_id
+                                 WHERE h.poi_id = p.id AND c.name = %s))
+    ORDER BY p.id
+"""
+
+
+def masked_without_trace(cursor, city: str | None, town: str | None) -> list:
+    """Les services masqués sans décision ni signal à relire, dans la ville ou la commune choisie : [{id, nom}]."""
+    cursor.execute(MASKED_WITHOUT_TRACE, (services_review.POI, city, city))
+    rows = cursor.fetchall()
+    if town:
+        rows = [row for row in rows if town_key(address_town(row["address"])) == town_key(town)]
+    return [{"id": row["id"], "nom": row["name"]} for row in rows]
+
 
 # Les décisions notées et encore valables, avec la catégorie de leur lieu : un spot, ou le service d'un lieu.
 RATED_DECISIONS = """
@@ -276,6 +300,7 @@ def get_summary(city_id: int | None = None, town: str | None = None) -> dict:
                       if spot_in_place(places.get(spot_id, (None, None)), city, town)]
         spot_cities = {spot_id: places.get(spot_id, (None, None))[1] for spot_id in [*states, *unverified]}
         groups, pois = services_review._pending(cursor, None, city["name"] if city else None, town=town)
+        untraced = masked_without_trace(cursor, city["name"] if city else None, town)
         cursor.execute("SELECT objet_id FROM decisions WHERE objet_type = %s AND annulee_at IS NULL",
                        (spots_review.OPENING_OBJECT,))
         openings = sum(1 for row in cursor.fetchall()
@@ -290,6 +315,6 @@ def get_summary(city_id: int | None = None, town: str | None = None) -> dict:
         cursor.close()
         cities_offered, towns = choices
         return {**summarize(states, spot_cities, groups, pois, openings, decisions, unverified), "notation": ratings,
-                "cities": cities_offered, "towns": towns, "ville": place}
+                "cities": cities_offered, "towns": towns, "ville": place, "masques_sans_trace": untraced}
     finally:
         MySQLUtils.disconnect(connection)

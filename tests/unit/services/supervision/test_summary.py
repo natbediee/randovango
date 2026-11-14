@@ -164,3 +164,25 @@ def test_unverified_spots_are_counted_as_left_to_settle() -> None:
     assert data["total"] == 2
     assert data["par_ville"] == [{"label": "Le Conquet", "n": 2}]
 
+
+
+class UntracedCursor:
+    """Un curseur qui rend les services masqués donnés, et garde les paramètres de la requête."""
+    def __init__(self, rows):
+        self.rows, self.params = rows, None
+
+    def execute(self, query, params=()):
+        self.params = params
+
+    def fetchall(self):
+        return self.rows
+
+
+def test_masked_services_without_trace_are_listed_for_the_guard() -> None:
+    """Les services masqués sans décision ni signal (les six du 5 novembre 2026) sont listés, filtrés par commune."""
+    rows = [{"id": 32010, "name": "L'Univers", "address": "Le Bourg, 29217 Plougonvelin"},
+            {"id": 48147, "name": "La Ferme de Kerdalar", "address": "Kerdalar, 29810 Plouarzel"}]
+    cursor = UntracedCursor(rows)
+    assert summary.masked_without_trace(cursor, None, "Plougonvelin") == [{"id": 32010, "nom": "L'Univers"}]
+    assert cursor.params == ("poi", None, None)
+    assert len(summary.masked_without_trace(UntracedCursor(rows), "Plougonvelin", None)) == 2

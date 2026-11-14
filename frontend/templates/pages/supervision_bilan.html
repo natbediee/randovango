@@ -63,6 +63,14 @@
     <div id="servicesRows"></div>
   </section>
 
+  {# Le garde-fou : des services masqués sans décision ni signal, que personne ne peut retrouver dans une file.
+     Montré seulement s'il y en a. #}
+  <section class="bilan-block" id="untracedBlock" style="display:none;">
+    <h2 class="services-title">Services masqués sans décision ni signal</h2>
+    <p class="muted">Masqués sans laisser de trace : ils ne sont dans aucune file. À remettre en relecture.</p>
+    <div id="untracedRows"></div>
+  </section>
+
   <div class="bilan-split">
     <section class="bilan-block" id="citiesBlock" style="display:none;">
       <h2 class="services-title">À trancher, par ville</h2>

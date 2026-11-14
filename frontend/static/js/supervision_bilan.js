@@ -108,6 +108,14 @@ function renderPlace(place) {
     ]) + rows(services.par_type);
 }
 
+// Le garde-fou (plan de #186, 5.2) : les services masqués sans décision ni signal, un par ligne, avec leur numéro
+// pour les retrouver dans Modifier. Aucun : le bloc reste caché.
+function renderUntraced(untraced) {
+    const html = untraced.map(service =>
+        `<p>${escapeHtml(service.nom)} <span class="muted">(n° ${service.id})</span></p>`).join('');
+    showBlock('untracedBlock', 'untracedRows', html);
+}
+
 function render(data) {
     const urls = window.APP_URLS;
     allCities = data.cities;
@@ -141,6 +149,7 @@ function render(data) {
     showBlock('citiesBlock', 'citiesRows', foldedRows(data.par_ville, 'autres villes', 'l\'autre ville'));
     showBlock('typesBlock', 'typesRows', foldedRows(data.services.par_type, 'autres types de service', 'l\'autre type de service'));
     renderPlace(data.ville);
+    renderUntraced(data.masques_sans_trace);
     renderRatings(data.notation);
     document.getElementById('ratingsScope').textContent = everywhere;
 }
