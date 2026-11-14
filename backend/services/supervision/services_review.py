@@ -41,6 +41,7 @@ from agents import find_services
 from agents.find_restaurants import RESTAURANTS
 from services import service_store
 from services.supervision import rating
+from services.supervision.decisions import record_decision
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -692,11 +693,8 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     detail = {"file": tab, "signal_ids": signal_ids, "avant": {column: before[column] for column in fields}}
     if mixed:
         detail["lieu_mixte"] = mixed
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, pertinence, raison, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s)
-    """, (POI, poi_id, action, (note or "").strip()[:255] or None, decided_by, pertinence, raison,
-          json.dumps(detail, ensure_ascii=False)))
+    record_decision(cursor, POI, poi_id, action, note, decided_by, detail,
+                    pertinence=pertinence, raison=raison)
     if action == "autre_maps":
         confirm_located(cursor, poi_id, fields, decided_by)
 
@@ -728,11 +726,8 @@ def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, d
     cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
                    (ACTIONS[KEEP_THIS], *signal_ids))
     detail = {"file": "doublons", "signal_ids": signal_ids, "avant": {"masque": masked_before[other_id]}, "garde": kept}
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, pertinence, raison, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s)
-    """, (POI, other_id, "fusionner", (note or "").strip()[:255] or None, decided_by, pertinence, raison,
-          json.dumps(detail, ensure_ascii=False)))
+    record_decision(cursor, POI, other_id, "fusionner", note, decided_by, detail,
+                    pertinence=pertinence, raison=raison)
 
 
 def remove_both_places(cursor, poi_id: int, card: dict, note: str, decided_by: str,
@@ -765,10 +760,7 @@ def remove_other_place(cursor, other_id: int, note: str, decided_by: str) -> Non
         cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
                        (ACTIONS["retirer"], *signal_ids))
     detail = {"file": "doublons", "signal_ids": signal_ids, "avant": {"masque": before["masque"]}}
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-    """, (POI, other_id, "retirer", (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
+    record_decision(cursor, POI, other_id, "retirer", note, decided_by, detail)
 
 
 def confirm_located(cursor, poi_id: int, fields: dict, decided_by: str) -> bool:

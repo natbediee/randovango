@@ -24,6 +24,7 @@ import json
 from datetime import date
 
 from services.supervision import rating
+from services.supervision.decisions import record_decision
 from utils.db_utils import MySQLUtils
 from utils.display_utils import a_savoir_on, spot_name_label
 
@@ -257,11 +258,7 @@ def decide_opening(spot_id: int, status: str, start: str | None, end: str | None
                        " AND annulee_at IS NULL", (OPENING_OBJECT, spot_id))
         detail = {"debut": start, "fin": end, "convention": convention, "texte": spot["opening_period"],
                   "avant": before}
-        cursor.execute("""
-            INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-            VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-        """, (OPENING_OBJECT, spot_id, status, (note or "").strip()[:255] or None, decided_by,
-              json.dumps(detail, ensure_ascii=False)))
+        record_decision(cursor, OPENING_OBJECT, spot_id, status, note, decided_by, detail)
         cursor.execute("""
             UPDATE spots SET ouverture_statut = %s, ouverture_debut = %s, ouverture_fin = %s, ouverture_lue = %s
             WHERE id = %s
@@ -314,12 +311,9 @@ def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: st
         if not spot:
             raise ValueError(f"Spot inconnu : {spot_id}")
         detail = {"avant": {"verifie": bool(spot["verifie"])}}
-        cursor.execute("""
-            INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, verification_id,
-                                   a_savoir_corrige, pertinence, raison, detail)
-            VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s)
-        """, (SPOT, spot_id, decision, (note or "").strip()[:255] or None, decided_by, verification_id, a_savoir,
-              pertinence, raison, json.dumps(detail)))
+        record_decision(cursor, SPOT, spot_id, decision, note, decided_by, detail,
+                        verification_id=verification_id, a_savoir_corrige=a_savoir,
+                        pertinence=pertinence, raison=raison)
         cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s", (decision == "garder", spot_id))
         connection.commit()
         cursor.close()
