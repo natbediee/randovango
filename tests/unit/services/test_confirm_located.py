@@ -1,5 +1,5 @@
 """Un lien Google Maps saisi à la main, avec sa position, confirme le service qui n'attendait que sa position."""
-from services import poi_review_service as review
+from services.supervision import services_review as review
 
 
 class _Cursor:

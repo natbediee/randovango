@@ -2,8 +2,8 @@
 Le bilan compte avec les règles des pages Spots et Services : un chiffre du bilan doit être
 celui que la page montre.
 """
-from services import poi_review_service
-from services import supervision_summary_service as summary
+from services.supervision import services_review
+from services.supervision import summary as summary
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
 # Dernière vérification d'un spot : "non" = l'agent propose de le retirer.
@@ -63,8 +63,8 @@ def test_nothing_to_review_gives_zeros_and_every_queue() -> None:
 
 
 def test_the_summary_has_every_queue_of_the_services_page() -> None:
-    # Une file ajoutée ou renommée dans poi_review_service doit l'être aussi dans le bilan.
-    assert set(summary.SERVICE_TABS) == set(poi_review_service.TAB_SIGNALS) - set(poi_review_service.HIDDEN_TABS)
+    # Une file ajoutée ou renommée dans services_review doit l'être aussi dans le bilan.
+    assert set(summary.SERVICE_TABS) == set(services_review.TAB_SIGNALS) - set(services_review.HIDDEN_TABS)
 
 
 def test_ratings_are_counted_by_category_then_by_pertinence_and_reason() -> None:
@@ -89,5 +89,5 @@ def test_no_rating_gives_an_empty_count() -> None:
 
 def test_every_service_tab_has_a_rating_category() -> None:
     """Chaque onglet de l'étape 4 a son libellé dans le compte des notes : un nouvel onglet doit y être ajouté."""
-    tabs = set(POI_FRONTEND_CATEGORY_MAP.values()) | {poi_review_service.NO_TAB}
+    tabs = set(POI_FRONTEND_CATEGORY_MAP.values()) | {services_review.NO_TAB}
     assert tabs <= set(summary.RATING_CATEGORIES)

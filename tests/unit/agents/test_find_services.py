@@ -108,7 +108,7 @@ def test_a_commune_asked_twice_is_searched_once(monkeypatch):
 
 def test_every_category_of_the_chain_is_known_to_the_supervision():
     """La supervision connaît toutes les catégories de la chaîne, pour écrire la fiche d'un service confirmé."""
-    from services import poi_review_service as review
+    from services.supervision import services_review as review
     assert review.CATEGORIES == {RESTAURANTS.source: RESTAURANTS, COMMERCES.source: COMMERCES, SUPERMARCHES.source: SUPERMARCHES}
 
 

@@ -1,6 +1,6 @@
 from datetime import date
 
-from services import supervision_service as supervision
+from services.supervision import spots_review as supervision
 
 TODAY = date(2026, 11, 2)
 CLOSED = {"id": 10, "utilisable": "non"}

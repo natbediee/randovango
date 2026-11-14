@@ -1,5 +1,5 @@
 // Supervision, onglet « Modifier » (admin) : retrouver un service ou un spot vu dans l'appli et le corriger,
-// même sans signal à relire (services/poi_edit_service.py, services/spot_edit_service.py).
+// même sans signal à relire (services/supervision/services_edit.py, services/supervision/spots_edit.py).
 // Une liste compacte, une ligne par lieu ; un clic ouvre sa fiche complète (supervision_fiche.js pour les services).
 // Chaque correction est une décision tracée : « Corrigé récemment » permet de l'annuler.
 // La sécurité est côté API : tout ce qui est tapé y est contrôlé.
@@ -19,19 +19,6 @@ let allCities = [];       // les villes de l'étape 1, pour la recherche de vill
 let allTowns = [];        // les communes des adresses qui ne sont pas des villes de l'étape 1 : {nom, codes}
 let cityField = null;
 
-// La ville choisie : l'identifiant d'une ville de l'étape 1, ou une commune d'adresse (services seulement).
-function chooseCity({ ville, commune }) {
-    document.getElementById('filterCity').value = ville;
-    document.getElementById('filterTown').value = commune;
-    load();
-}
-
-function showMessage(text) {
-    const box = document.getElementById('supervisionMsg');
-    box.textContent = text;
-    box.style.display = text ? '' : 'none';
-}
-
 function filters() {
     const values = { ville: document.getElementById('filterCity').value, nom: document.getElementById('filterName').value.trim() };
     if (mode === 'services') {
@@ -48,19 +35,10 @@ function filterQuery() {
     return params.toString();
 }
 
-async function editFetch(path, options = {}) {
-    const response = await window.RVG.apiFetch(`/api/supervision/edit/${mode}${path}`, {
-        ...options,
-        headers: { 'Content-Type': 'application/json' },
-    });
-    if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi, ta correction n\'a pas été enregistrée.');
-    if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
-    if (response.status === 422 || response.status === 404) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(typeof body.detail === 'string' ? body.detail : 'Correction refusée.');
-    }
-    if (!response.ok) throw new Error(`Erreur du serveur (HTTP ${response.status}) : correction non enregistrée.`);
-    return response.json();
+// Un appel à /api/supervision/edit/services… ou /edit/spots…, selon le mode affiché : le préfixe de cette page
+// devant l'appel commun (supervision_common.js).
+function editFetch(path, options = {}) {
+    return supervisionCall(`/edit/${mode}${path}`, options);
 }
 
 // Ce que la page envoie avec chaque correction : la recherche affichée, pour la renvoyer telle quelle.
@@ -69,10 +47,6 @@ function searchBody() {
     const city = values.ville ? Number(values.ville) : null;
     return mode === 'services' ? { ville: city, service: values.service, type: values.type, nom_recherche: values.nom }
                                : { ville: city, nom: values.nom };
-}
-
-function safeLink(url) {
-    return /^https?:\/\//.test(url || '') ? escapeHtml(url) : null;
 }
 
 // --- Services ---
@@ -110,7 +84,7 @@ async function showSheet(poiId, view = null) {
     const box = document.getElementById('openSheet');
     if (!box) return;
     try {
-        box.innerHTML = sheetBlock(view || await editFetch(`/fiche/${poiId}`));
+        box.innerHTML = sheetBlock(view || await supervisionCall(`/services/${poiId}`));
     } catch (error) {
         box.innerHTML = `<p class="supervision-msg">${escapeHtml(error.message)}</p>`;
     }
@@ -348,7 +322,7 @@ async function load() {
     try {
         showMessage('');
         openId = null;
-        render(await editFetch(`?${filterQuery()}`));
+        render(await supervisionCall(`/search/${mode}?${filterQuery()}`));
     } catch (error) {
         showMessage(error.message);
     }
@@ -374,10 +348,7 @@ function setMode(next) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.RVG.isLoggedIn()) {
-        window.location.href = window.APP_URLS.contributorLogin;
-        return;
-    }
+    if (redirectIfLoggedOut()) return;
     document.getElementById('modeServices').addEventListener('click', () => setMode('services'));
     document.getElementById('modeSpots').addEventListener('click', () => setMode('spots'));
     cityField = citySearch({

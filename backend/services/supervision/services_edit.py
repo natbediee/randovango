@@ -1,7 +1,7 @@
 """
 Supervision, onglet « Modifier » : corriger n'importe quel service, même sans signal à relire (7 novembre 2026).
 
-La relecture (poi_review_service.py) ne montre que les lieux qu'une vérification a signalés. Une erreur vue sur
+La relecture (services_review.py) ne montre que les lieux qu'une vérification a signalés. Une erreur vue sur
 une carte de l'étape 4 (la Cave de Keruzas, sans aucun signal) ne pouvait pas y être corrigée. Ici, on retrouve
 le lieu comme le voyageur le voit, puis on le corrige.
 
@@ -11,14 +11,16 @@ pouvoir les remettre.
 
 LES MÊMES CORRECTIONS QUE LA RELECTURE, et le même code : applied_fields, typed_name, typed_link, typed_maps_link.
 Chaque correction est une décision (objet_type = 'poi', detail.file = 'modifier') qui garde les valeurs d'avant :
-poi_review_service.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
+decisions.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
 pas un nom ou un lien corrigé ici (service_store._decided_by_human).
 """
 import json
 import re
 from datetime import date
 
-from services import poi_review_service as review, service_store
+from services import service_store
+from services.supervision import services_review as review
+from services.supervision.decisions import record_decision
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
 from services.station_selection_service import STATION_VIEW_SQL, station_view
@@ -237,11 +239,7 @@ def decide_one(cursor, poi_id: int, action: str, note: str, decided_by: str, mon
             cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
                            (review.ACTIONS[action], *signal_ids))
     detail = {"file": EDIT_FILE, "signal_ids": signal_ids, "avant": {column: before[column] for column in fields}}
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-    """, (review.POI, poi_id, action, (note or "").strip()[:255] or None, decided_by,
-          json.dumps(detail, ensure_ascii=False, default=str)))
+    record_decision(cursor, review.POI, poi_id, action, note, decided_by, detail)
     if action == "autre_maps":
         review.confirm_located(cursor, poi_id, fields, decided_by)
 
@@ -477,11 +475,7 @@ def decide_sheet_one(cursor, poi_id: int, changes: dict, note: str, decided_by: 
     if sheet_fields:
         detail["avant_fiche"] = {"origine": sheet["origine"], "table": sheet["table"], "signal_id": sheet.get("signal_id"),
                                  "values": {column: old_sheet.get(column) for column in sheet_fields}}
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-    """, (review.POI, poi_id, SHEET_DECISION, (note or "").strip()[:255] or None, decided_by,
-          json.dumps(detail, ensure_ascii=False, default=str)))
+    record_decision(cursor, review.POI, poi_id, SHEET_DECISION, note, decided_by, detail)
     review.confirm_located(cursor, poi_id, poi_fields, decided_by)
     return changed
 

@@ -5,16 +5,16 @@ Il compte aussi les notes données aux propositions des agents (count_ratings, c
 notation sert au jeu d'évaluation (#114).
 
 Les chiffres sont comptés avec les règles mêmes des pages Spots et Services
-(supervision_service.spot_status, poi_review_service._pending) : le bilan ne peut pas
+(spots_review.spot_status, services_review._pending) : le bilan ne peut pas
 annoncer ce que ces pages ne montreraient pas. Un lieu présent dans deux files compte
 une fois dans chacune, comme le filtre « Problème » de la page Services, dont « Tous » fait la somme.
 """
 from collections import Counter
 
-from services import decision_rating, poi_review_service, supervision_service
+from services.supervision import rating, services_review, spots_review
 from utils.db_utils import MySQLUtils
 
-# Les files des services (poi_review_service.TAB_SIGNALS), avec le libellé et l'ordre du filtre
+# Les files des services (services_review.TAB_SIGNALS), avec le libellé et l'ordre du filtre
 # « Problème » de la page Services (TABS dans supervision_services.js).
 SERVICE_TABS = {
     "fermetures": "Doute sur le nom",
@@ -26,7 +26,7 @@ SERVICE_TABS = {
 NO_CITY = "Ville inconnue"
 NO_TYPE = "Type inconnu"
 
-# Les catégories des notes : les spots, puis les onglets de l'étape 4 (poi_review_service.step4_tab), avec les libellés
+# Les catégories des notes : les spots, puis les onglets de l'étape 4 (services_review.step4_tab), avec les libellés
 # du filtre « Type » de la page Services (SERVICE_TABS dans supervision_services.js).
 RATING_CATEGORIES = {
     "spot": "Spots", "eau": "Eau", "vidange": "Vidange", "gasoil": "Carburant", "supermarche": "Supermarché",
@@ -47,7 +47,7 @@ RATED_DECISIONS = """
 
 def count_spots(states: dict) -> dict:
     """{statut: nombre} pour les spots qui ont une vérification ou une décision."""
-    statuses = Counter(supervision_service.spot_status(verification, decision)
+    statuses = Counter(spots_review.spot_status(verification, decision)
                        for verification, decision in states.values())
     return {"a_relire": statuses["propose"], "gardes": statuses["garde"], "retires": statuses["retire"]}
 
@@ -59,9 +59,9 @@ def ranked(counter: Counter) -> list:
 
 def rating_category(row: dict) -> str:
     """La catégorie d'une décision notée : « spot », ou l'onglet de l'étape 4 du lieu (« restauration »)."""
-    if row["objet_type"] == supervision_service.SPOT:
+    if row["objet_type"] == spots_review.SPOT:
         return "spot"
-    return poi_review_service.step4_tab(row.get("service_category"))
+    return services_review.step4_tab(row.get("service_category"))
 
 
 def count_ratings(rows: list) -> list:
@@ -79,11 +79,11 @@ def count_ratings(rows: list) -> list:
         if not rated:
             continue
         pertinences = Counter(row["pertinence"] for row in rated)
-        reasons = Counter(decision_rating.RAISONS.get(row["raison"], row["raison"]) for row in rated if row["raison"])
+        reasons = Counter(rating.RAISONS.get(row["raison"], row["raison"]) for row in rated if row["raison"])
         counts.append({
             "label": label,
             "n": len(rated),
-            "pertinences": [{"label": name, "n": pertinences[value]} for value, name in decision_rating.PERTINENCES.items()],
+            "pertinences": [{"label": name, "n": pertinences[value]} for value, name in rating.PERTINENCES.items()],
             "raisons": ranked(reasons),
         })
     return counts
@@ -93,7 +93,7 @@ def summarize(states: dict, spot_cities: dict, groups: dict, pois: dict, opening
     """Assemble le bilan à partir de ce que la base a donné (sans y toucher : testable seul)."""
     spots = count_spots(states)
     pending_spots = [spot_id for spot_id, (verification, decision) in states.items()
-                     if supervision_service.spot_status(verification, decision) == "propose"]
+                     if spots_review.spot_status(verification, decision) == "propose"]
 
     files = Counter(tab for tab, _ in groups)
     by_type = Counter((pois.get(poi_id) or {}).get("service") or NO_TYPE for _, poi_id in groups)
@@ -119,17 +119,17 @@ def get_summary() -> dict:
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        states = supervision_service._spot_states(cursor)
-        spot_labels = supervision_service._spot_labels(cursor, list(states))
+        states = spots_review._spot_states(cursor)
+        spot_labels = spots_review._spot_labels(cursor, list(states))
         spot_cities = {spot_id: label.get("city_label") for spot_id, label in spot_labels.items()}
-        groups, pois = poi_review_service._pending(cursor, None, None)
+        groups, pois = services_review._pending(cursor, None, None)
         cursor.execute("SELECT COUNT(*) AS n FROM decisions WHERE objet_type = %s AND annulee_at IS NULL",
-                       (supervision_service.OPENING_OBJECT,))
+                       (spots_review.OPENING_OBJECT,))
         openings = cursor.fetchone()["n"]
         cursor.execute("SELECT COUNT(*) AS n FROM decisions WHERE annulee_at IS NULL")
         decisions = cursor.fetchone()["n"]
         # Le service n'est cherché que pour un lieu (poi) : un numéro de spot n'est pas un numéro de lieu.
-        cursor.execute(RATED_DECISIONS, (poi_review_service.POI, supervision_service.SPOT, poi_review_service.POI))
+        cursor.execute(RATED_DECISIONS, (services_review.POI, spots_review.SPOT, services_review.POI))
         ratings = count_ratings(cursor.fetchall())
         cursor.close()
         return {**summarize(states, spot_cities, groups, pois, openings, decisions), "notation": ratings}

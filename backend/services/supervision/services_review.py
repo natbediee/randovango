@@ -39,7 +39,9 @@ import re
 
 from agents import find_services
 from agents.find_restaurants import RESTAURANTS
-from services import decision_rating, service_store
+from services import service_store
+from services.supervision import rating
+from services.supervision.decisions import record_decision
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -166,7 +168,7 @@ CATEGORIES = {category.source: category for category in find_services.CATEGORIES
 # Les seules colonnes qu'une décision peut changer, et donc remettre.
 APPLIED_COLUMNS = ("url", "name", "masque", "ferme_moment", "statut_saison", "mois_ouverture", "maps_url", "latitude", "longitude",
                    "address", "description")
-# Les champs de fiche qu'une fiche corrigée à la main (poi_edit_service.decide_sheet) peut changer, table par table.
+# Les champs de fiche qu'une fiche corrigée à la main (services_edit.decide_sheet) peut changer, table par table.
 SHEET_COLUMNS = {"restaurants": ("genre", "pourquoi", "categorie", "distinction"),
                  "commerces": ("genre", "pourquoi", "categorie", "jours")}
 OSM_MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
@@ -529,7 +531,7 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
                   for row in cursor.fetchall()]
         audit = _audit_sample(cursor, tab, service, city)
         cursor.close()
-        return {"tab": tab, "counts": counts, "notation": decision_rating.labels(), "service_counts": dict(service_counts), "type_counts": dict(type_counts),
+        return {"tab": tab, "counts": counts, "notation": rating.labels(), "service_counts": dict(service_counts), "type_counts": dict(type_counts),
                 "total": len(cards), "cards": cards[:PAGE_SIZE],
                 "cities": cities, "towns": towns, "recent": recent, "audit": audit}
     finally:
@@ -641,7 +643,7 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
                raison: str | None = None) -> None:
     """
     Applique et enregistre la décision sur un lieu d'une file. pertinence et raison : la note facultative de l'humain
-    sur la proposition de l'agent (decision_rating, #201) ; None quand elle n'est pas notée, comme pour les règles.
+    sur la proposition de l'agent (rating, #201) ; None quand elle n'est pas notée, comme pour les règles.
     """
     cursor.execute("""
         SELECT sg.id, sg.poi_id, sg.source, sg.signal_type, sg.detail FROM poi_signals sg
@@ -691,11 +693,8 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     detail = {"file": tab, "signal_ids": signal_ids, "avant": {column: before[column] for column in fields}}
     if mixed:
         detail["lieu_mixte"] = mixed
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, pertinence, raison, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s)
-    """, (POI, poi_id, action, (note or "").strip()[:255] or None, decided_by, pertinence, raison,
-          json.dumps(detail, ensure_ascii=False)))
+    record_decision(cursor, POI, poi_id, action, note, decided_by, detail,
+                    pertinence=pertinence, raison=raison)
     if action == "autre_maps":
         confirm_located(cursor, poi_id, fields, decided_by)
 
@@ -708,7 +707,7 @@ def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, d
     carburants (poi_triage_service, load_carburants) pour ne jamais le réafficher. Une décision « fusionner » veut donc
     toujours dire « ce lieu est masqué comme doublon d'un autre », quel que soit le bouton cliqué.
     Une station figée (doublon_station) était masquée en attendant : la garder la réaffiche. detail.garde retient le
-    lieu gardé et son état d'avant, pour que l'annulation remette les deux lieux comme avant (cancel_decision).
+    lieu gardé et son état d'avant, pour que l'annulation remette les deux lieux comme avant (undo_service_decision).
     La note de la proposition (pertinence, raison) va sur cette unique décision : une carte, une note.
     """
     other_id = card["autre_id"]
@@ -727,11 +726,8 @@ def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, d
     cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
                    (ACTIONS[KEEP_THIS], *signal_ids))
     detail = {"file": "doublons", "signal_ids": signal_ids, "avant": {"masque": masked_before[other_id]}, "garde": kept}
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, pertinence, raison, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s)
-    """, (POI, other_id, "fusionner", (note or "").strip()[:255] or None, decided_by, pertinence, raison,
-          json.dumps(detail, ensure_ascii=False)))
+    record_decision(cursor, POI, other_id, "fusionner", note, decided_by, detail,
+                    pertinence=pertinence, raison=raison)
 
 
 def remove_both_places(cursor, poi_id: int, card: dict, note: str, decided_by: str,
@@ -764,10 +760,7 @@ def remove_other_place(cursor, other_id: int, note: str, decided_by: str) -> Non
         cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
                        (ACTIONS["retirer"], *signal_ids))
     detail = {"file": "doublons", "signal_ids": signal_ids, "avant": {"masque": before["masque"]}}
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-    """, (POI, other_id, "retirer", (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
+    record_decision(cursor, POI, other_id, "retirer", note, decided_by, detail)
 
 
 def confirm_located(cursor, poi_id: int, fields: dict, decided_by: str) -> bool:
@@ -814,36 +807,26 @@ def decide(tab: str, poi_ids: list, action: str, note: str, decided_by: str, mon
         MySQLUtils.disconnect(connection)
 
 
-def cancel_decision(decision_id: int) -> None:
-    """Annule une décision : le lieu reprend ses valeurs d'avant et revient à la relecture. Elle reste tracée."""
-    connection = MySQLUtils.connect()
-    try:
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT objet_id, detail FROM decisions WHERE id = %s AND objet_type = %s AND annulee_at IS NULL",
-                       (decision_id, POI))
-        row = cursor.fetchone()
-        if not row:
-            raise ValueError("Décision introuvable")
-        detail = json.loads(row["detail"]) if isinstance(row["detail"], str) else row["detail"]
-        before = {column: value for column, value in detail["avant"].items() if column in APPLIED_COLUMNS}
-        if before:
-            assignments = ", ".join(f"{column} = %s" for column in before)
-            cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*before.values(), row["objet_id"]))
-        if detail.get("avant_fiche"):
-            restore_sheet(cursor, row["objet_id"], detail["avant_fiche"])
-        if detail.get("lieu_mixte"):
-            split_mixed_place(cursor, row["objet_id"], detail["lieu_mixte"])
-        if detail.get("garde"):
-            restore_kept_place(cursor, detail["garde"])
-        signal_ids = detail["signal_ids"]
-        if signal_ids:
-            marks = ",".join(["%s"] * len(signal_ids))
-            cursor.execute(f"UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL WHERE id IN ({marks})", tuple(signal_ids))
-        cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
-        connection.commit()
-        cursor.close()
-    finally:
-        MySQLUtils.disconnect(connection)
+def undo_service_decision(cursor, poi_id: int, detail: dict) -> None:
+    """
+    Défait une décision sur un service (appelée par decisions.cancel_decision) : le lieu reprend ses valeurs d'avant,
+    sa fiche aussi si elle a été corrigée, un lieu mixte est séparé, un lieu gardé reprend son état, et les signaux
+    tranchés reviennent à la relecture.
+    """
+    before = {column: value for column, value in detail["avant"].items() if column in APPLIED_COLUMNS}
+    if before:
+        assignments = ", ".join(f"{column} = %s" for column in before)
+        cursor.execute(f"UPDATE poi SET {assignments} WHERE id = %s", (*before.values(), poi_id))
+    if detail.get("avant_fiche"):
+        restore_sheet(cursor, poi_id, detail["avant_fiche"])
+    if detail.get("lieu_mixte"):
+        split_mixed_place(cursor, poi_id, detail["lieu_mixte"])
+    if detail.get("garde"):
+        restore_kept_place(cursor, detail["garde"])
+    signal_ids = detail["signal_ids"]
+    if signal_ids:
+        marks = ",".join(["%s"] * len(signal_ids))
+        cursor.execute(f"UPDATE poi_signals SET statut = 'a_relire', reviewed_at = NULL WHERE id IN ({marks})", tuple(signal_ids))
 
 
 def restore_kept_place(cursor, kept: dict) -> None:
