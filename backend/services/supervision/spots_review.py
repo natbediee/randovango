@@ -21,11 +21,14 @@ lecture. Sa décision garde les dates choisies, si elles sont une convention (la
 pas), le texte lu à ce moment et les valeurs d'avant, remises si on l'annule.
 """
 import json
+from collections import Counter
 from datetime import date
 
-from services import decision_rating
+from services.supervision import rating
+from services.supervision.decisions import record_decision
 from utils.db_utils import MySQLUtils
-from utils.display_utils import a_savoir_on, spot_name_label
+from utils.display_utils import HIDDEN_SPOT_TYPES, a_savoir_on, spot_category, spot_name_label
+from utils.geo_utils import address_town, town_key
 
 DECISIONS = ("retirer", "garder")
 SPOT = "spot"
@@ -121,7 +124,7 @@ def _spot_labels(cursor, spot_ids: list) -> dict:
         return {}
     placeholders = ",".join(["%s"] * len(spot_ids))
     cursor.execute(f"""
-        SELECT s.id, s.name, s.type, s.place_label, s.city_label, s.url, s.postal_code
+        SELECT s.id, s.name, s.type, s.place_label, s.city_label, s.url, s.postal_code, s.address, s.latitude, s.longitude
         FROM spots s WHERE s.id IN ({placeholders})
     """, tuple(spot_ids))
     return {row["id"]: row for row in cursor.fetchall()}
@@ -138,35 +141,142 @@ def _a_savoir_text(stored: str | None) -> str:
     return "\n".join(item["texte"] for item in json.loads(stored or "[]"))
 
 
-def get_reviews() -> dict:
-    """La file de relecture et les dernières décisions."""
+# LES FILTRES DE LA PAGE SPOTS (carte #186, 14 novembre 2026), comme ceux de Services et de Modifier :
+# - ville : une ville de l'étape 1, par son identifiant. Un spot s'y range comme dans la recherche de Modifier
+#   (services_edit.in_city) : par la commune de son adresse, sinon par la ville de l'appli la plus proche ;
+# - commune : la commune de l'adresse d'un spot quand ce n'est pas une ville de l'appli ;
+# - catégorie : gratuit, payant ou autres, le même classement que le filtre de l'étape 3 (display_utils.spot_category) ;
+# - problème : les deux raisons pour lesquelles un spot attend l'administratrice (SPOT_PROBLEMS).
+SPOT_CATEGORIES = ("gratuit", "payant", "autres")
+
+# LES DEUX PROBLÈMES D'UN SPOT (14 novembre 2026) :
+# - « retrait » : l'agent propose de le retirer ; le spot est masqué au voyageur en attendant la décision ;
+# - « non_verifie » : le spot est proposé au voyageur avec le badge « non vérifié », le plus souvent parce que l'agent
+#   doute (« incertain ») : 103 spots ce jour-là, que la page ne montrait pas. « Garder » le rend vérifié.
+SPOT_PROBLEMS = {"retrait": "Retrait proposé", "non_verifie": "Non vérifié"}
+
+# Les spots non vérifiés que l'étape 3 propose quand même : les mêmes conditions que proposable_spots
+# (spot_selection_service), sans la zone d'une ville.
+UNVERIFIED_SPOTS = """
+    SELECT s.id FROM spots s
+    WHERE s.verifie = 0 AND s.type IS NOT NULL AND s.type NOT IN ({marks})
+      AND s.duplicate_of_spot_id IS NULL AND s.p4n_removed = 0
+      AND (s.nuit_interdite IS NULL OR s.nuit_interdite = 0)
+"""
+
+
+def _unverified_ids(cursor, states: dict) -> list:
+    """Les spots proposés au voyageur avec le badge « non vérifié » ; un spot retiré ou à relire n'en est pas."""
+    cursor.execute(UNVERIFIED_SPOTS.format(marks=",".join(["%s"] * len(HIDDEN_SPOT_TYPES))), HIDDEN_SPOT_TYPES)
+    return [row["id"] for row in cursor.fetchall()
+            if spot_status(*states.get(row["id"], (None, None))) not in ("retire", "propose")]
+
+
+def spot_town(spot: dict) -> str | None:
+    """La commune d'un spot : celle de son adresse, sinon celle que park4night lui donne."""
+    return address_town(spot.get("address")) or spot.get("city_label")
+
+
+def spot_city(spot: dict, cities: list) -> dict | None:
+    """La ville de l'appli où se range le spot, None s'il est dans une commune qui n'en est pas une."""
+    # Import ici : services_edit charge la relecture des services et les agents, inutiles au reste de ce module.
+    from services.supervision.services_edit import in_city
+    town = spot_town(spot)
+    return next((city for city in cities
+                 if in_city(town, spot.get("latitude"), spot.get("longitude"), city, cities)), None)
+
+
+def _place_fields(spot: dict, cities: list) -> dict:
+    """Ce que les filtres lisent sur une carte : sa catégorie, sa ville de l'appli, ou sinon sa commune."""
+    city = spot_city(spot, cities) if spot else None
+    return {"categorie": spot_category(spot.get("type")), "ville_id": city["id"] if city else None,
+            "commune": None if city else spot_town(spot), "code_postal": spot.get("postal_code")}
+
+
+def filter_reviews(reviews: list, city_id: int | None, town: str | None, category: str | None,
+                   problem: str | None = None) -> list:
+    """Les cartes qui passent les filtres choisis ; un filtre vide (None) laisse tout passer."""
+    return [review for review in reviews
+            if (city_id is None or review["ville_id"] == city_id)
+            and (not town or town_key(review["commune"]) == town_key(town))
+            and (not category or review["categorie"] == category)
+            and (not problem or review["probleme"] == problem)]
+
+
+def city_choices(reviews: list, cities: list) -> tuple:
+    """
+    Ce que la recherche de ville propose (supervision_ville.js) : les villes qui ont des spots à relire, puis les
+    communes qui n'en sont pas, chacune avec les codes postaux de ses spots.
+    """
+    city_codes, towns = {}, {}
+    for review in reviews:
+        codes = {review["code_postal"]} if review["code_postal"] else set()
+        if review["ville_id"] is not None:
+            city_codes.setdefault(review["ville_id"], set()).update(codes)
+        elif review["commune"]:
+            towns.setdefault(town_key(review["commune"]), {"nom": review["commune"], "codes": set()})["codes"].update(codes)
+    offered = [{"id": city["id"], "name": city["name"], "codes": sorted(city_codes[city["id"]])}
+               for city in cities if city["id"] in city_codes]
+    return offered, [{"nom": town["nom"], "codes": sorted(town["codes"])} for _, town in sorted(towns.items())]
+
+
+def _review_card(cursor, spot_id: int, verification: dict | None, spot: dict, cities: list, problem: str) -> dict:
+    """
+    La carte d'un spot à trancher : ce que l'agent a trouvé (sa dernière vérification, s'il y en a une), les derniers
+    commentaires des voyageurs, et ce que lisent les filtres.
+    """
+    verification = verification or {}
+    cursor.execute("SELECT review_date, text FROM spot_reviews WHERE spot_id = %s"
+                   " ORDER BY review_date DESC LIMIT %s", (spot_id, PROOF_REVIEWS))
+    reopening = verification.get("utilisable_a_partir")
+    return {
+        "objet_type": SPOT,
+        "objet_id": spot_id,
+        "probleme": problem,
+        "verification_id": verification.get("id"),
+        "nom": _name(spot),
+        "url": spot.get("url"),
+        "raison": verification.get("raison") or "",
+        "resume": verification.get("resume") or "",
+        "a_savoir": _a_savoir_text(verification.get("a_savoir")),
+        "reouverture": reopening.strftime("%d/%m/%Y") if reopening else None,
+        "sources": json.loads(verification.get("sources") or "[]"),
+        "commentaires": [{"date": row["review_date"].strftime("%d/%m/%Y") if row["review_date"] else "",
+                          "texte": row["text"] or ""} for row in cursor.fetchall()],
+        **_place_fields(spot, cities),
+    }
+
+
+def get_reviews(city_id: int | None = None, town: str | None = None, category: str | None = None,
+                problem: str | None = None) -> dict:
+    """
+    Les spots à trancher, avec les filtres de la page (une catégorie ou un problème inconnu est refusé), et les
+    dernières décisions.
+    """
+    if category and category not in SPOT_CATEGORIES:
+        raise ValueError(f"Catégorie inconnue : {category}")
+    if problem and problem not in SPOT_PROBLEMS:
+        raise ValueError(f"Problème inconnu : {problem}")
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        pending = [verification for verification, decision in _spot_states(cursor).values()
-                   if spot_status(verification, decision) == "propose"]
-        spots = _spot_labels(cursor, [v["spot_id"] for v in pending])
-        reviews = []
-        for verification in pending:
-            spot = spots.get(verification["spot_id"]) or {}
-            cursor.execute("SELECT review_date, text FROM spot_reviews WHERE spot_id = %s"
-                           " ORDER BY review_date DESC LIMIT %s", (verification["spot_id"], PROOF_REVIEWS))
-            reopening = verification["utilisable_a_partir"]
-            reviews.append({
-                "objet_type": SPOT,
-                "objet_id": verification["spot_id"],
-                "verification_id": verification["id"],
-                "nom": _name(spot),
-                "url": spot.get("url"),
-                "raison": verification["raison"] or "",
-                "resume": verification["resume"] or "",
-                "a_savoir": _a_savoir_text(verification["a_savoir"]),
-                "reouverture": reopening.strftime("%d/%m/%Y") if reopening else None,
-                "sources": json.loads(verification["sources"] or "[]"),
-                "commentaires": [{"date": row["review_date"].strftime("%d/%m/%Y") if row["review_date"] else "",
-                                  "texte": row["text"] or ""} for row in cursor.fetchall()],
-            })
+        states = _spot_states(cursor)
+        removals = [spot_id for spot_id, (verification, decision) in states.items()
+                    if spot_status(verification, decision) == "propose"]
+        unverified = _unverified_ids(cursor, states)
+        spots = _spot_labels(cursor, removals + unverified)
+        cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities ORDER BY name")
+        cities = cursor.fetchall()
+        reviews = [_review_card(cursor, spot_id, states.get(spot_id, (None, None))[0], spots.get(spot_id) or {},
+                                cities, file)
+                   for file, spot_ids in (("retrait", removals), ("non_verifie", unverified)) for spot_id in spot_ids]
         reviews.sort(key=lambda review: review["objet_id"])
+        # Les choix des filtres viennent de toute la file ; les nombres d'un menu suivent la ville et l'autre menu.
+        offered_cities, towns = city_choices(reviews, cities)
+        in_place = filter_reviews(reviews, city_id, town, None)
+        category_counts = Counter(review["categorie"] for review in filter_reviews(in_place, None, None, None, problem))
+        problem_counts = Counter(review["probleme"] for review in filter_reviews(in_place, None, None, category))
+        reviews = filter_reviews(in_place, None, None, category, problem)
 
         cursor.execute("""
             SELECT d.*, (SELECT v.a_savoir FROM spot_verifications v WHERE v.id = d.verification_id) AS a_savoir_agent
@@ -177,7 +287,11 @@ def get_reviews() -> dict:
         openings = _opening_decisions(cursor)
         cursor.close()
         return {"reviews": reviews,
-                "notation": decision_rating.labels(),
+                "cities": offered_cities, "towns": towns,
+                "categories": [{"code": code, "nombre": category_counts[code]} for code in SPOT_CATEGORIES],
+                "problemes": [{"code": code, "label": label, "nombre": problem_counts[code]}
+                              for code, label in SPOT_PROBLEMS.items()],
+                "notation": rating.labels(),
                 "ouvertures": openings,
                 "recent": [{"id": d["id"], "nom": _name(spots.get(d["objet_id"])), "decision": d["decision"],
                             "note": d["note"] or "", "par": d["decided_by"],
@@ -257,11 +371,7 @@ def decide_opening(spot_id: int, status: str, start: str | None, end: str | None
                        " AND annulee_at IS NULL", (OPENING_OBJECT, spot_id))
         detail = {"debut": start, "fin": end, "convention": convention, "texte": spot["opening_period"],
                   "avant": before}
-        cursor.execute("""
-            INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-            VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-        """, (OPENING_OBJECT, spot_id, status, (note or "").strip()[:255] or None, decided_by,
-              json.dumps(detail, ensure_ascii=False)))
+        record_decision(cursor, OPENING_OBJECT, spot_id, status, note, decided_by, detail)
         cursor.execute("""
             UPDATE spots SET ouverture_statut = %s, ouverture_debut = %s, ouverture_fin = %s, ouverture_lue = %s
             WHERE id = %s
@@ -272,25 +382,16 @@ def decide_opening(spot_id: int, status: str, start: str | None, end: str | None
         MySQLUtils.disconnect(connection)
 
 
-def cancel_opening_decision(decision_id: int) -> None:
-    """Annule une ouverture décidée : les valeurs d'avant reviennent, et read_openings relira le spot."""
-    connection = MySQLUtils.connect()
-    try:
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT objet_id, detail FROM decisions WHERE id = %s AND objet_type = %s"
-                       " AND annulee_at IS NULL", (decision_id, OPENING_OBJECT))
-        decision = cursor.fetchone()
-        if decision:
-            before = json.loads(decision["detail"])["avant"]
-            cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
-            cursor.execute("""
-                UPDATE spots SET ouverture_statut = %s, ouverture_debut = %s, ouverture_fin = %s, ouverture_lue = NULL
-                WHERE id = %s
-            """, (before["statut"], before["debut"], before["fin"], decision["objet_id"]))
-            connection.commit()
-        cursor.close()
-    finally:
-        MySQLUtils.disconnect(connection)
+def undo_opening_decision(cursor, spot_id: int, detail: dict) -> None:
+    """
+    Défait une ouverture décidée (appelée par decisions.cancel_decision) : les valeurs d'avant reviennent, et
+    read_openings relira le spot.
+    """
+    before = detail["avant"]
+    cursor.execute("""
+        UPDATE spots SET ouverture_statut = %s, ouverture_debut = %s, ouverture_fin = %s, ouverture_lue = NULL
+        WHERE id = %s
+    """, (before["statut"], before["debut"], before["fin"], spot_id))
 
 
 def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: str | None = None,
@@ -299,7 +400,7 @@ def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: st
     Enregistre la décision sur un spot, en réponse à sa dernière vérification. Le badge suit :
     un spot gardé par un humain est vérifié, un spot retiré ne l'est pas. `a_savoir` : le texte
     corrigé par le relecteur, None pour garder celui de l'agent. pertinence et raison : la note facultative
-    donnée à la proposition de l'agent (decision_rating), déjà vérifiée par la route ; None si elle n'est pas notée.
+    donnée à la proposition de l'agent (rating), déjà vérifiée par la route ; None si elle n'est pas notée.
     """
     if decision not in DECISIONS:
         raise ValueError(f"Décision inconnue : {decision}")
@@ -314,12 +415,9 @@ def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: st
         if not spot:
             raise ValueError(f"Spot inconnu : {spot_id}")
         detail = {"avant": {"verifie": bool(spot["verifie"])}}
-        cursor.execute("""
-            INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, verification_id,
-                                   a_savoir_corrige, pertinence, raison, detail)
-            VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s)
-        """, (SPOT, spot_id, decision, (note or "").strip()[:255] or None, decided_by, verification_id, a_savoir,
-              pertinence, raison, json.dumps(detail)))
+        record_decision(cursor, SPOT, spot_id, decision, note, decided_by, detail,
+                        verification_id=verification_id, a_savoir_corrige=a_savoir,
+                        pertinence=pertinence, raison=raison)
         cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s", (decision == "garder", spot_id))
         connection.commit()
         cursor.close()
@@ -328,10 +426,17 @@ def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: st
 
 
 def correct_a_savoir(decision_id: int, a_savoir: str) -> None:
-    """Corrige le texte d'une décision déjà prise, sans la refaire."""
+    """
+    Corrige le texte d'une décision déjà prise sur un spot, sans la refaire. Refuse (ValueError) un numéro qui n'est
+    pas celui d'une décision de spot encore valable : un service ou une décision annulée n'a pas de texte « À savoir ».
+    """
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor()
+        cursor.execute("SELECT id FROM decisions WHERE id = %s AND objet_type = %s AND annulee_at IS NULL",
+                       (decision_id, SPOT))
+        if not cursor.fetchone():
+            raise ValueError("Décision de spot introuvable ou annulée")
         cursor.execute("UPDATE decisions SET a_savoir_corrige = %s WHERE id = %s", (a_savoir, decision_id))
         connection.commit()
         cursor.close()
@@ -339,23 +444,11 @@ def correct_a_savoir(decision_id: int, a_savoir: str) -> None:
         MySQLUtils.disconnect(connection)
 
 
-def cancel_decision(decision_id: int) -> None:
+def undo_spot_decision(cursor, spot_id: int, detail: dict) -> None:
     """
-    Annule une décision (erreur de clic) : elle reste tracée, et le spot revient à la relecture. Le badge reprend sa
-    valeur d'avant la décision ; une décision plus ancienne ne l'a pas gardée : le doute revient, le badge part.
+    Défait une décision sur un spot (appelée par decisions.cancel_decision) : le spot revient à la relecture et son
+    badge reprend sa valeur d'avant. Une décision plus ancienne n'a pas gardé cette valeur : le doute revient, le
+    badge part.
     """
-    connection = MySQLUtils.connect()
-    try:
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT objet_id, detail FROM decisions WHERE id = %s AND objet_type = %s", (decision_id, SPOT))
-        decision = cursor.fetchone()
-        cursor.execute("UPDATE decisions SET annulee_at = NOW() WHERE id = %s", (decision_id,))
-        if decision:
-            detail = decision["detail"]
-            before = (json.loads(detail) if isinstance(detail, str) else detail or {}).get("avant", {})
-            cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s",
-                           (bool(before.get("verifie", False)), decision["objet_id"]))
-        connection.commit()
-        cursor.close()
-    finally:
-        MySQLUtils.disconnect(connection)
+    before = detail.get("avant", {})
+    cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s", (bool(before.get("verifie", False)), spot_id))

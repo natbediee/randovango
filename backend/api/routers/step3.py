@@ -6,7 +6,7 @@ from api.rate_limit import DAY_CHOICE_MESSAGE, DAY_SPOT_LIMIT, limiter
 from services.pepite_service import start_preparation
 from services.plan_service import insert_or_update_plan
 from services.spot_selection_service import proposable_spots
-from services.supervision_service import reworked_a_savoir
+from services.supervision.spots_review import reworked_a_savoir
 from utils.display_utils import SPOT_ON_HIKE_KM, enrich_spot
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils

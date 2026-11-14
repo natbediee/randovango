@@ -2,7 +2,7 @@
 // Une ligne sous chaque carte : « La proposition de l'agent : juste · à corriger · fausse », puis la raison d'une
 // erreur, proposée seulement pour « à corriger » ou « fausse ». C'est facultatif : sans note, la décision vaut comme avant.
 // Les notes forment le jeu d'évaluation des agents (#114). Utilisé par supervision.js (spots) et
-// supervision_services.js (services) ; les valeurs permises viennent du serveur (services/decision_rating.py).
+// supervision_services.js (services) ; les valeurs permises viennent du serveur (services/supervision/rating.py).
 
 // Les libellés reçus de l'API (data.notation) : { pertinences: {valeur: libellé}, raisons: {...}, avec_raison: [...] }.
 let ratingLabels = null;

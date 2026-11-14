@@ -358,9 +358,9 @@ def test_a_namesake_of_another_commune_makes_no_doubt(monkeypatch):
 
 def _superseded(monkeypatch, waiting):
     """Hippocampe vient d'être enregistré sur le service visible 850 ; 32023, masqué et sans position, porte le même nom."""
-    from services import poi_review_service
+    from services.supervision import services_review
     decided = []
-    monkeypatch.setattr(poi_review_service, "decide_one",
+    monkeypatch.setattr(services_review, "decide_one",
                         lambda cursor, tab, poi_id, action, note, author, months: decided.append((tab, poi_id, action, author)))
     row = {"nom": "Hippocampe", "adresse": "Lampaul, 29830 Ploudalmézeau"}
     visible = _poi("Hippocampe", "Lampaul, 29830 Ploudalmézeau", GALION_SPOT, poi_id=850)

@@ -574,7 +574,7 @@ def init_database():
             # 18. decisions : ce qu'un humain a tranché (qui, quand, quoi, pourquoi)
             # pertinence et raison (facultatives, #201) : la note que l'humain donne à la proposition de l'agent
             # (juste, à corriger, fausse) et la cause d'une erreur. Elles forment le jeu d'évaluation des agents (#114) ;
-            # les valeurs permises sont dans services/decision_rating.py. NULL : décision non notée.
+            # les valeurs permises sont dans services/supervision/rating.py. NULL : décision non notée.
             """
             CREATE TABLE IF NOT EXISTS decisions (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,

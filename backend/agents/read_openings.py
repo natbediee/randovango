@@ -30,7 +30,7 @@ from datetime import date
 
 from agents.llm_config import make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet
-from services.supervision_service import OPENING_OBJECT
+from services.supervision.spots_review import OPENING_OBJECT
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
