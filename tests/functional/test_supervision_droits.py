@@ -14,7 +14,7 @@ from jose import jwt
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from api import dependencies
-from api.routers import supervision, supervision_reviews
+from api.routers import supervision, supervision_reviews, supervision_search, supervision_sheets
 from services.authentification import ALGORITHM, AUTH_COOKIE_NAME, SECRET_KEY, create_guest_token
 
 scenarios("features/supervision_droits.feature")
@@ -59,6 +59,8 @@ def world(monkeypatch):
     app = FastAPI()
     app.include_router(supervision.router, prefix="/api/supervision")
     app.include_router(supervision_reviews.router, prefix="/api/supervision")
+    app.include_router(supervision_search.router, prefix="/api/supervision")
+    app.include_router(supervision_sheets.router, prefix="/api/supervision")
     state.client = TestClient(app)
     return state
 

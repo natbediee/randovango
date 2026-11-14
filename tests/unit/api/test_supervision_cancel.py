@@ -32,8 +32,8 @@ def api(monkeypatch):
     monkeypatch.setattr(supervision.decisions, "cancel_decision", cancel)
     monkeypatch.setattr(supervision.spots_review, "get_reviews", lambda: {})
     monkeypatch.setattr(supervision, "service_reviews", lambda *args: {})
-    monkeypatch.setattr(supervision, "_edit_services", lambda data: {})
-    monkeypatch.setattr(supervision, "_edit_spots", lambda data: {})
+    monkeypatch.setattr(supervision, "service_search", lambda data: {})
+    monkeypatch.setattr(supervision, "spot_search", lambda data: {})
     app = FastAPI()
     app.include_router(supervision.router, prefix="/api/supervision")
     app.dependency_overrides[require_admin] = lambda: {"username": "camille"}

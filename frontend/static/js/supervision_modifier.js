@@ -84,7 +84,7 @@ async function showSheet(poiId, view = null) {
     const box = document.getElementById('openSheet');
     if (!box) return;
     try {
-        box.innerHTML = sheetBlock(view || await editFetch(`/fiche/${poiId}`));
+        box.innerHTML = sheetBlock(view || await supervisionCall(`/services/${poiId}`));
     } catch (error) {
         box.innerHTML = `<p class="supervision-msg">${escapeHtml(error.message)}</p>`;
     }
@@ -322,7 +322,7 @@ async function load() {
     try {
         showMessage('');
         openId = null;
-        render(await editFetch(`?${filterQuery()}`));
+        render(await supervisionCall(`/search/${mode}?${filterQuery()}`));
     } catch (error) {
         showMessage(error.message);
     }
