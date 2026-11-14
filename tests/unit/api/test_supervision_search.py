@@ -29,7 +29,13 @@ def test_the_service_search_passes_its_filters(client):
     """Les crêperies de Guilvinec, commune d'adresse sans ville de l'appli : filtres transmis, les vides comptent absents."""
     response = client.get("/api/supervision/search/services?service=restauration&type=Crêperie&nom=&commune=Guilvinec")
     assert response.status_code == 200
-    assert response.json() == {"services": [None, "restauration", "Crêperie", None, "Guilvinec"]}
+    assert response.json() == {"services": [None, "restauration", "Crêperie", None, "Guilvinec", 1]}
+
+
+def test_the_service_search_passes_the_page(client):
+    """La page 3 de toutes les boulangeries : le numéro de page arrive au service."""
+    response = client.get("/api/supervision/search/services?service=commerce&type=Boulangerie&page=3")
+    assert response.json() == {"services": [None, "commerce", "Boulangerie", None, None, 3]}
 
 
 def test_the_spot_search_passes_the_city_and_the_name(client):

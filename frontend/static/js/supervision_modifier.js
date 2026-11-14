@@ -9,6 +9,7 @@ const OPENINGS = [['toute_annee', "Toute l'année"], ['periode', 'Sur une pério
 
 let mode = 'services';
 let nameTimer = null;
+let currentPage = 1;       // la page de la liste des services (une catégorie seule en donne beaucoup)
 let openId = null;        // le lieu ou le spot dont la fiche est ouverte
 let lastData = null;
 let allCities = [];       // les villes de l'étape 1, pour la recherche de ville (supervision_ville.js)
@@ -28,7 +29,26 @@ function filters() {
 function filterQuery() {
     const params = new URLSearchParams();
     Object.entries(filters()).forEach(([key, value]) => { if (value) params.set(key, value); });
+    if (mode === 'services' && currentPage > 1) params.set('page', currentPage);
     return params.toString();
+}
+
+// Va à une autre page de la liste des services (boutons sous la liste) ; la fiche ouverte se ferme.
+function goToPage(page) {
+    currentPage = page;
+    load(false);
+    document.getElementById('cardsList').scrollIntoView({ block: 'start' });
+}
+
+// Sous la liste : où on en est, et les boutons pour changer de page. Les spots ne viennent pas en pages : la liste
+// dit seulement combien sont cachés.
+function pagesHtml(data) {
+    if (!data.pages) {
+        return `${data.cards.length} affichés sur ${data.total} : précise le nom pour voir les autres.`;
+    }
+    const previous = data.page > 1 ? `<button class="btn btn--outline btn--sm" onclick="goToPage(${data.page - 1})">← Précédente</button>` : '';
+    const next = data.page < data.pages ? `<button class="btn btn--outline btn--sm" onclick="goToPage(${data.page + 1})">Suivante →</button>` : '';
+    return `${previous} Page ${data.page} sur ${data.pages} (${data.total} services) ${next}`;
 }
 
 // --- Services ---
@@ -258,10 +278,12 @@ function render(data) {
 
     renderCards(data);
     const empty = document.getElementById('emptyNote');
-    empty.textContent = data.searched ? 'Aucun lieu ne correspond.' : 'Choisis une ville, ou tape au moins deux lettres du nom.';
+    empty.textContent = data.searched ? 'Aucun lieu ne correspond.'
+        : mode === 'services' ? 'Choisis une ville, une catégorie, ou tape au moins deux lettres du nom.'
+        : 'Choisis une ville, ou tape au moins deux lettres du nom.';
     empty.style.display = data.cards.length ? 'none' : '';
     const more = document.getElementById('moreNote');
-    more.textContent = `${data.cards.length} affichés sur ${data.total} : précise le nom ou le type pour voir les autres.`;
+    more.innerHTML = pagesHtml(data);
     more.style.display = data.total > data.cards.length ? '' : 'none';
     document.getElementById('reviewsCount').textContent = data.searched ? `${data.total} trouvé${data.total > 1 ? 's' : ''}` : '';
 
@@ -281,11 +303,13 @@ async function refresh() {
     if (mode === 'services' && openId) showSheet(openId);
 }
 
-// Une nouvelle recherche : la fiche ouverte se ferme.
-async function load() {
+// Une nouvelle recherche : la fiche ouverte se ferme, et la liste repart de sa première page (sauf quand on change
+// de page : newSearch vaut alors false).
+async function load(newSearch = true) {
     try {
         showMessage('');
         openId = null;
+        if (newSearch !== false) currentPage = 1;
         await refresh();
     } catch (error) {
         showMessage(error.message);

@@ -184,12 +184,23 @@ def _recent(cursor) -> list:
             for row in cursor.fetchall()]
 
 
+def page_of(cards: list, page: int) -> tuple:
+    """
+    Une page de la liste : (ses cartes, le numéro de la page, le nombre de pages). Un numéro trop grand ou trop petit
+    ramène à la dernière ou à la première page : la liste a pu raccourcir depuis le clic.
+    """
+    pages = max(1, -(-len(cards) // PAGE_SIZE))
+    page = min(max(1, page), pages)
+    return cards[(page - 1) * PAGE_SIZE:page * PAGE_SIZE], page, pages
+
+
 def search(city_id: int | None = None, service: str | None = None, kind: str | None = None, name: str | None = None,
-           town: str | None = None) -> dict:
+           town: str | None = None, page: int = 1) -> dict:
     """
     Les lieux d'une ville, d'un onglet de l'étape 4, d'un type précis, et dont le nom contient `name`. town : une commune
-    des adresses qui n'est pas une ville de l'appli (address_towns). Il faut une ville, une commune ou un bout de nom :
-    sans eux, toute la table viendrait.
+    des adresses qui n'est pas une ville de l'appli (address_towns). Il faut une ville, une commune, une catégorie ou un
+    bout de nom : sans aucun, toute la table viendrait. Une catégorie seule suffit (carte #186) : « toutes les
+    boulangeries » ; la liste vient alors en pages de PAGE_SIZE (page : le numéro de la page).
     """
     town = " ".join((town or "").split()) or None
     name = " ".join((name or "").split())
@@ -201,14 +212,15 @@ def search(city_id: int | None = None, service: str | None = None, kind: str | N
         city_codes, towns = address_towns(cursor, all_cities)
         cities = [{"id": row["id"], "name": row["name"], "codes": city_codes.get(row["id"], [])} for row in all_cities]
         city = _city(cursor, city_id)
-        searched = bool(city or town or len(name) >= MIN_NAME_SEARCH)
+        searched = bool(city or town or service or len(name) >= MIN_NAME_SEARCH)
         cards, service_counts, type_counts = [], {}, {}
         if searched:
             cards, service_counts, type_counts = filter_cards(_search_rows(cursor, city, name, all_cities, town),
                                                               service, kind)
         recent = _recent(cursor)
         cursor.close()
-        return {"cities": cities, "towns": towns, "cards": cards[:PAGE_SIZE], "total": len(cards),
+        shown, page, pages = page_of(cards, page)
+        return {"cities": cities, "towns": towns, "cards": shown, "total": len(cards), "page": page, "pages": pages,
                 "service_counts": service_counts, "type_counts": type_counts, "recent": recent, "buttons": EDIT_BUTTONS,
                 "searched": searched}
     finally:

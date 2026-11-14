@@ -14,14 +14,16 @@ router = APIRouter()
 
 @router.get("/search/services", summary="Finds any service place to correct, signal or not.")
 def get_service_search(ville: int | None = None, service: str | None = None, type: str | None = None,
-                       nom: str | None = None, commune: str | None = None, _admin=Depends(require_admin)):
+                       nom: str | None = None, commune: str | None = None, page: int = 1,
+                       _admin=Depends(require_admin)):
     """
     Les services qui répondent aux filtres : ville de l'appli (ville) ou commune d'adresse qui n'en est pas une
-    (commune, par exemple « Guilvinec »), catégorie (service), sous-catégorie (type), nom. Une recherche que le service
-    refuse (par exemple sans ville ni nom) répond 422 avec son message.
+    (commune, par exemple « Guilvinec »), catégorie (service), sous-catégorie (type), nom ; la liste vient en pages
+    (page). Une recherche que le service refuse (par exemple une ville inconnue) répond 422 avec son message.
     """
     try:
-        return service_search({"ville": ville, "service": service, "type": type, "nom": nom, "commune": commune})
+        return service_search({"ville": ville, "service": service, "type": type, "nom": nom, "commune": commune,
+                               "page": page})
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 
@@ -37,11 +39,10 @@ def get_spot_search(ville: int | None = None, nom: str | None = None, _admin=Dep
 
 def service_search(data: dict) -> dict:
     """
-    La recherche de services de l'onglet « Modifier » : aussi la réponse des routes de correction, tant qu'elles
-    renvoient la liste. Un filtre vide ("") compte comme absent.
+    La recherche de services de l'onglet « Modifier ». Un filtre vide ("") compte comme absent.
     """
     return services_edit.search(data.get("ville"), data.get("service") or None, data.get("type") or None,
-                                data.get("nom") or None, data.get("commune") or None)
+                                data.get("nom") or None, data.get("commune") or None, data.get("page") or 1)
 
 
 def spot_search(data: dict) -> dict:
