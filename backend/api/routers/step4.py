@@ -17,6 +17,7 @@ from services.station_selection_service import (closure_label, is_closed_for_goo
 from services.restaurant_selection_service import (TABLE_CATEGORY_LABELS, TABLES_SHOWN, is_new, is_out_of_season, maps_url,
                                                    season_label)
 from etl.load.load_carburants import FUEL_SERVICE, SOURCE_NAME as FUEL_SOURCE
+from etl.load.load_pharmacies import PHARMACY_SERVICE, SOURCE_NAME as PHARMACY_SOURCE
 from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
 from utils.db_utils import MySQLUtils
 from utils import display_utils
@@ -72,6 +73,21 @@ def keep_state_stations(poi_list: list) -> list:
     données de l'État, ne l'est jamais : ni doublon, ni station qui ne déclare pas ses prix (Total de Portsall).
     """
     return [poi for poi in poi_list if poi["service_category"] != FUEL_SERVICE or poi.get("source_name") == FUEL_SOURCE]
+
+
+def is_state_pharmacy(poi: dict) -> bool:
+    """Une pharmacie du registre FINESS de l'État (etl/etl_pharmacies.py)."""
+    return poi.get("source_name") == PHARMACY_SOURCE
+
+
+def keep_state_pharmacies(poi_list: list) -> list:
+    """
+    Les pharmacies : FINESS est la référence (carte #194). Là où il est passé (une de ses pharmacies a ce code postal),
+    les pharmacies d'OSM ne sont plus montrées : celles qui existent sont déjà là par FINESS, les autres ont fermé
+    (la Pharmacie de Kérinou à Brest). Ailleurs, elles restent montrées tant que FINESS n'y est pas passé : une
+    pharmacie, c'est l'urgence du voyageur, un onglet vide serait pire qu'une adresse un peu ancienne.
+    """
+    return keep_checked(poi_list, (PHARMACY_SERVICE,), is_state_pharmacy)
 
 
 def station_fields(poi: dict) -> dict:
@@ -324,7 +340,8 @@ def get_poi(
 
     # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
     cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
-    poi_list = keep_state_stations(keep_checked_commerces(keep_checked_restaurants(cursor.fetchall())))
+    poi_list = keep_state_pharmacies(
+        keep_state_stations(keep_checked_commerces(keep_checked_restaurants(cursor.fetchall()))))
 
     cursor.close()
     MySQLUtils.disconnect(cnx)
@@ -399,7 +416,9 @@ def get_poi(
                                  poi.get('station_ville'), poi['latitude'], poi['longitude'])
                 if frontend_category == FUEL_CATEGORY else maps_url(
                     poi['name'], poi['address'], poi['latitude'], poi['longitude'], generic=is_generic_name(poi['name']),
-                    several=names[" ".join((poi['name'] or "").lower().split())] > 1)),
+                    # Une pharmacie de FINESS garde toujours son adresse entière : avec le nom seul, « Pharmacie
+                    # Kerros 29200 Brest » donnait une liste, avec la rue la bonne pharmacie (essai du 14 novembre 2026).
+                    several=is_state_pharmacy(poi) or names[" ".join((poi['name'] or "").lower().split())] > 1)),
             "statut_saison": poi['statut_saison'],
             "saison_label": season_label(poi['statut_saison'], poi['mois_ouverture']),
             "mois_ouverture": poi['mois_ouverture'],
