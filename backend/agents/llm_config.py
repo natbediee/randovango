@@ -65,6 +65,10 @@ AGENTS = {
     "find_supermarches": AgentConfig(RAPIDE, "medium", 900, web=True),
     "analyze_supermarches": AgentConfig(RAPIDE, "medium", 900, web=True),
     "prove_supermarches": AgentConfig(RAPIDE, "medium", 300, web=True),
+    # Laveries (14 novembre 2026, carte #195) : les réglages des supermarchés, une seule recherche par commune.
+    "find_laveries": AgentConfig(RAPIDE, "medium", 900, web=True),
+    "analyze_laveries": AgentConfig(RAPIDE, "medium", 900, web=True),
+    "prove_laveries": AgentConfig(RAPIDE, "medium", 300, web=True),
     # Opus plutôt que Sonnet : comparaison sur 10 spots (rapport/comparaison_modeles.md).
     "harmonize_spots": AgentConfig(QUALITE, "low", 180),
     "dedupe_spots": AgentConfig(QUALITE, "low", 180),

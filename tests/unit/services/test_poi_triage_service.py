@@ -98,11 +98,12 @@ def test_a_domain_that_no_longer_exists_is_a_dead_link(monkeypatch) -> None:
 
 
 def test_every_family_of_shop_sheets_is_a_chain_of_its_own() -> None:
-    """Le tri connaît les supermarchés : leurs fiches font une chaîne à part, comme les cafés, et ne comptent pas pour les commerces."""
+    """Le tri connaît les supermarchés et les laveries : leurs fiches font chacune une chaîne à part, comme les cafés, et ne comptent pas pour les commerces."""
     by_services = {services: sql for services, sql in triage.CHAINS}
     assert "c.categorie = 'supermarche'" in by_services[triage.OWN_TAB["supermarche"]] and "supermarket" in triage.OWN_TAB["supermarche"]
     assert "c.categorie = 'cafe'" in by_services[triage.OWN_TAB["cafe"]]
-    assert "NOT IN ('cafe', 'supermarche')" in by_services[triage.COMMERCE_SERVICES]
+    assert "c.categorie = 'laverie'" in by_services[triage.OWN_TAB["laverie"]] and "laundry" in triage.OWN_TAB["laverie"]
+    assert "NOT IN ('cafe', 'supermarche', 'laverie')" in by_services[triage.COMMERCE_SERVICES]
 
 
 def test_a_supermarket_without_a_sheet_has_no_follow_up_anywhere() -> None:
@@ -114,6 +115,13 @@ def test_a_supermarket_without_a_sheet_has_no_follow_up_anywhere() -> None:
     assert triage.without_follow_up("fermetures", guilers, chains, categories)
     assert triage.without_follow_up("liens", lidl, chains, categories)
     assert not triage.without_follow_up("fermetures", lidl, chains, categories)
+
+
+def test_a_laundry_without_a_sheet_has_no_follow_up_anywhere() -> None:
+    """Les signaux d'une laverie d'OSM sans fiche sont classés sans suite partout : l'étape 4 ne la montre plus (carte #195)."""
+    lannilis = {"poi_id": 7881, "address": "6 Rue de la Mairie, 29870 Lannilis"}
+    chains = [({"convenience"}, {10}, {"29217"}), ({"laundry"}, {12}, {"29100"})]
+    assert triage.without_follow_up("fermetures", lannilis, chains, {7881: {"laundry"}})
 
 
 def _sort_stations(monkeypatch, trial=False):

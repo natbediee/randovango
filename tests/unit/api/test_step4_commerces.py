@@ -49,6 +49,24 @@ def test_only_the_supermarkets_with_a_sheet_are_shown_everywhere(monkeypatch):
     assert [poi["name"] for poi in result["commerce"]] == ["Boulangerie d'OSM"]
 
 
+def test_only_the_laundries_with_a_sheet_are_shown_everywhere(monkeypatch):
+    """Seules les laveries qui ont leur fiche sont montrées, même là où l'agent n'est jamais passé : le pressing d'OSM de Lannilis, fermé au registre depuis le 31 mars 2026, ne l'est plus ; celle qui a sa fiche affiche « Laverie »."""
+    rows = [_shop(1, "Laver'Ys", "laundry", "laverie automatique", "28 rue Pont-Neuf, 29100 Douarnenez", "laverie"),
+            _shop(2, "Armor Pressing", "laundry", None, "6 rue de la Mairie, 29870 Lannilis"),
+            _shop(3, "Laverie", "laundry", None, "Rue du Port, 29100 Douarnenez")]
+    result, _ = _get_poi(monkeypatch, rows)
+    assert [poi["name"] for poi in result["laverie"]] == ["Laver'Ys"]
+    assert result["laverie"][0]["service_type_label"] == "Laverie" and result["laverie"][0]["verifie"] == 1
+
+
+def test_a_laundry_sheet_does_not_hide_the_shops_of_osm(monkeypatch):
+    """Une fiche de laverie ne compte pas pour l'agent des commerces : la boulangerie d'OSM de la même commune reste montrée."""
+    rows = [_shop(1, "Laver'Ys", "laundry", "laverie automatique", "28 rue Pont-Neuf, 29100 Douarnenez", "laverie"),
+            _shop(2, "Boulangerie d'OSM", "bakery", None, "2 rue, 29100 Douarnenez")]
+    result, _ = _get_poi(monkeypatch, rows)
+    assert [poi["name"] for poi in result["commerce"]] == ["Boulangerie d'OSM"]
+
+
 def test_a_mixed_place_shows_the_right_sheet_in_each_tab(monkeypatch):
     """La Maison du Phare, boulangerie qui fait snack, a une fiche restaurant et une fiche commerce : elle apparaît dans les deux onglets, chacun avec sa fiche (Plougonvelin)."""
     both = {**_row(30745, "La Maison du Phare", "restaurant", "bistrot", "1 rue Antre Kear, 29217 Plougonvelin"),
@@ -127,9 +145,9 @@ def test_without_a_trip_date_today_is_used(monkeypatch):
 
 
 def test_cafes_and_laundries_have_their_own_tab(monkeypatch):
-    """Les cafés et les laveries ont chacun leur onglet."""
+    """Les cafés et les laveries ont chacun leur onglet ; une laverie y est montrée avec sa fiche (carte #195)."""
     rows = [_shop(1, "Le Café du Port", "cafe", "café", "1 quai, 29217 Plougonvelin", "cafe"),
-            _row(2, "Laverie du Trez-Hir", "laundry", None, "2 bd, 29217 Plougonvelin")]
+            _shop(2, "Laverie du Trez-Hir", "laundry", "laverie automatique", "2 bd, 29217 Plougonvelin", "laverie")]
     result, _ = _get_poi(monkeypatch, rows)
     assert [poi["name"] for poi in result["cafe"]] == ["Le Café du Port"] and result["cafe"][0]["service_type_label"] == "Café, bar"
     assert [poi["name"] for poi in result["laverie"]] == ["Laverie du Trez-Hir"]
@@ -149,7 +167,7 @@ def test_shop_sheets_without_cafes_do_not_hide_the_osm_cafes(monkeypatch):
 
 def test_every_service_card_has_a_maps_link(monkeypatch):
     """Chaque carte de service a son lien Google Maps : la position pour un nom générique ou sans adresse, sinon le nom et la commune."""
-    rows = [{**_row(1, "Laverie", "laundry", None, None), "latitude": 48.3424, "longitude": -4.72313},
+    rows = [{**_shop(1, "Laverie", "laundry", "laverie automatique", None, "laverie"), "latitude": 48.3424, "longitude": -4.72313},
             _row(2, "Toilettes publiques", "toilets", None, "Place, 29217 Plougonvelin"),
             _row(3, "Musée", "museum", None, "1 rue, 29217 Plougonvelin"),
             {**_row(4, "Station Total", "fuel", None, "Route, 29217 Plougonvelin"), "source_name": "prix-carburants"}]
@@ -171,6 +189,6 @@ def test_a_place_without_a_position_is_left_out(monkeypatch):
 
 def test_a_google_maps_link_typed_by_an_admin_wins(monkeypatch):
     """Le lien Google Maps saisi par un admin passe avant celui que le code fabrique."""
-    rows = [{**_row(1, "Laverie", "laundry", None, None), "maps_saisi": "https://maps.app.goo.gl/AbCdEf123"}]
+    rows = [{**_row(1, "Toilettes publiques", "toilets", None, None), "maps_saisi": "https://maps.app.goo.gl/AbCdEf123"}]
     result, _ = _get_poi(monkeypatch, rows)
-    assert result["laverie"][0]["maps_url"] == "https://maps.app.goo.gl/AbCdEf123"
+    assert result["toilettes"][0]["maps_url"] == "https://maps.app.goo.gl/AbCdEf123"

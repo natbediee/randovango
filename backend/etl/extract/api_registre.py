@@ -35,6 +35,15 @@ Le registre d'une grande ville, ce sont des milliers d'appels (une annonce du BO
 faisait abandonner tout le registre. Un appel sans réponse, ou refusé pour le moment (429, 5xx), est repris après une
 attente de plus en plus longue (RETRY_PAUSES).
 
+LES ANNONCES DU BODACC, POUR UNE ACTIVITÉ QUE LE CODE NE DIT PAS (load_notices)
+Le code d'activité d'une société ne dit pas tout ce qu'elle fait. Pour une catégorie qui le demande (les laveries, carte
+#195), on lit aussi les annonces de création, d'immatriculation et de vente de la commune dont l'activité déclarée
+contient un mot de la catégorie (« laverie »). Essai du 14 novembre 2026 : à Douarnenez, CIRCEA déclare
+« l'exploitation de laveries automatiques » (repreneur de Laver'Ys, 2025) ; à Crozon, une « Laverie libre-service »
+est créée en septembre 2026. Ces lignes sont un indice de plus pour l'agent, jamais une preuve : une société peut
+annoncer une laverie et ne jamais l'ouvrir. La recherche du BODACC est large (« laverie » ramène aussi « Lavergne » ou
+« Lavage du Cap ») : c'est le code qui garde seulement les activités où le mot est écrit en entier.
+
 Le nom d'un entrepreneur individuel n'est jamais gardé : c'est celui d'une personne.
 Si un registre ne répond toujours pas, une petite commune est cherchée sans lui ; une grande ville ne l'est pas
 (service_chain.must_have_register).
@@ -66,6 +75,11 @@ MIN_RADIUS_KM = 0.2             # en dessous, on ne réduit plus : il faut encor
 COLLECTIVE_NOTICES = "Procédures collectives"
 SALE_NOTICES = "Ventes et cessions"
 STRIKE_OFF_NOTICES = "Radiations"
+# Les annonces qui disent qu'un établissement s'ouvre ou change de mains, avec son activité et son adresse (load_notices).
+OPENING_NOTICES = ("Créations", "Immatriculations", SALE_NOTICES)
+NOTICES = "annonces"            # la liste du registre où ces lignes sont rangées, à côté des « actifs »
+NOTICES_READ = 100              # les annonces les plus récentes lues par mot : une commune n'en a que quelques-unes
+NOTICE_ACTIVITY_SHOWN = 150     # l'activité déclarée est souvent longue : l'agent n'en lit que le début
 # Les trois communes à arrondissements : {code de la commune : codes de ses arrondissements}.
 BOROUGHS = {"75056": tuple(f"751{number:02d}" for number in range(1, 21)),
             "69123": tuple(f"6938{number}" for number in range(1, 10)),
@@ -260,3 +274,94 @@ def load_register(city: dict, activities: tuple = ACTIVITIES, zones: list | tupl
     except (requests.RequestException, ValueError, KeyError) as error:
         logger.warning(f"[registre] {city['name']} : registre illisible ({error})")
         return None
+
+
+# --- Les annonces du BODACC qui déclarent une activité (load_notices) ---
+
+def commune_postcodes(code: str) -> list:
+    """Les codes postaux d'une commune : le BODACC range ses annonces par code postal, pas par code INSEE."""
+    return _get(f"{COMMUNE_URL}/{code}", {"fields": "codesPostaux"}).get("codesPostaux") or []
+
+
+def _json_field(notice: dict, field: str) -> dict:
+    """Un champ du BODACC écrit en texte JSON (listepersonnes, listeetablissements), lu en dictionnaire."""
+    try:
+        return json.loads(notice.get(field) or "{}")
+    except ValueError:
+        return {}
+
+
+def notice_establishments(notice: dict) -> list:
+    """Les établissements d'une annonce : un seul le plus souvent, parfois une liste."""
+    found = _json_field(notice, "listeetablissements").get("etablissement") or []
+    return found if isinstance(found, list) else [found]
+
+
+def notice_name(notice: dict, establishment: dict) -> str | None:
+    """
+    L'enseigne, sinon le nom commercial, sinon la dénomination de la société. Jamais le nom d'une personne : pour un
+    entrepreneur individuel (personne physique, « pp »), sans enseigne, la ligne reste sans nom.
+    """
+    name = establishment.get("enseigne") or establishment.get("nomCommercial")
+    person = _json_field(notice, "listepersonnes").get("personne") or {}
+    if isinstance(person, list):
+        person = person[0] if person else {}
+    if name or person.get("typePersonne") == "pp":
+        return name
+    return person.get("denomination")
+
+
+def notice_address(establishment: dict) -> str | None:
+    """L'adresse de l'établissement, en une ligne, comme celles du registre (« 2 Rue du Centre 29100 Douarnenez »)."""
+    address = establishment.get("adresse") or {}
+    parts = [address.get(key) for key in ("numeroVoie", "typeVoie", "nomVoie", "complGeographique", "codePostal", "ville")]
+    return " ".join(part for part in parts if part) or None
+
+
+def declares(activity: str, words: tuple) -> bool:
+    """L'activité déclarée contient-elle l'un de ces mots, écrit en entier, au singulier ou au pluriel ?"""
+    return any(re.search(rf"\b{word}s?\b", activity, re.IGNORECASE) for word in words)
+
+
+def notice_lines(notice: dict, words: tuple) -> list:
+    """Les établissements d'une annonce dont l'activité déclarée contient un des mots, en lignes pour l'agent."""
+    lines = []
+    for establishment in notice_establishments(notice):
+        activity = establishment.get("activite") or ""
+        if declares(activity, words):
+            lines.append({"nom": notice_name(notice, establishment), "adresse": notice_address(establishment),
+                          "activite_declaree": activity[:NOTICE_ACTIVITY_SHOWN],
+                          "annonce": f"{notice['familleavis_lib']} ({notice['dateparution']})"})
+    return lines
+
+
+def read_notices(postcodes: list, words: tuple) -> list:
+    """
+    Les annonces récentes de création, d'immatriculation et de vente à ces codes postaux, dont l'activité déclarée
+    contient un des mots. La plus récente d'abord ; un établissement annoncé deux fois (création, puis vente) garde
+    ses deux lignes : la vente dit qui l'exploite aujourd'hui.
+    """
+    oldest = f"{time.gmtime().tm_year - CLOSED_YEARS_KEPT}-01-01"
+    places = " OR ".join(f'cp="{postcode}"' for postcode in postcodes)
+    families = " OR ".join(f'familleavis_lib="{family}"' for family in OPENING_NOTICES)
+    lines = []
+    for word in words:
+        where = f'({places}) AND ({families}) AND dateparution >= date\'{oldest}\' AND search("{word}")'
+        notices = _get(BODACC_URL, {"where": where, "limit": NOTICES_READ, "order_by": "dateparution desc",
+                                    "select": "dateparution,familleavis_lib,listepersonnes,listeetablissements"})["results"]
+        for notice in notices:
+            lines += [line for line in notice_lines(notice, words) if line not in lines]
+    return lines
+
+
+def load_notices(city: dict, words: tuple) -> list:
+    """
+    Les annonces du BODACC de la commune pour ces mots, ou une liste vide si elles n'ont pas pu être lues : elles ne
+    sont qu'un indice, la recherche se fait sans elles.
+    """
+    try:
+        code = city.get("insee") or commune_code(city["latitude"], city["longitude"])
+        return read_notices(commune_postcodes(code), words) if code else []
+    except (requests.RequestException, ValueError, KeyError) as error:
+        logger.warning(f"[registre] {city['name']} : annonces du BODACC illisibles ({error})")
+        return []

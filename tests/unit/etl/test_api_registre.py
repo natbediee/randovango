@@ -281,3 +281,60 @@ def test_the_reading_radius_never_goes_under_its_floor(monkeypatch):
     """Même dans une zone où le registre déborde toujours, le rayon de lecture ne descend pas sous son plancher : il faut encore de quoi lire les lignes proches du spot."""
     monkeypatch.setattr(api_registre, "_get", lambda url, params: {"total_results": 99999})
     assert api_registre.MIN_RADIUS_KM / 2 < api_registre.near_radius({"latitude": 43.3, "longitude": 5.37}, ("56.10A",), 1.5) <= api_registre.MIN_RADIUS_KM
+
+
+# --- Les annonces du BODACC qui déclarent une activité ---
+
+def _notice(activity, person=None, **establishment):
+    """Une annonce du BODACC, avec ses champs écrits en texte JSON comme l'API les rend."""
+    import json
+    person = person or {"typePersonne": "pm", "denomination": "CIRCEA"}
+    place = {"activite": activity, "adresse": {"numeroVoie": "6", "typeVoie": "Rue", "nomVoie": "du Président Salvatore Allende",
+                                                "codePostal": "29100", "ville": "Douarnenez"}, **establishment}
+    return {"familleavis_lib": "Créations", "dateparution": "2025-09-12", "listepersonnes": json.dumps({"personne": person}),
+            "listeetablissements": json.dumps({"etablissement": place})}
+
+
+def test_a_notice_declaring_laundries_gives_a_line_for_the_agent():
+    """Une société qui déclare « l'exploitation de laveries automatiques » donne une ligne : son nom, l'adresse de l'établissement et l'annonce (CIRCEA, Douarnenez, 2025)."""
+    lines = api_registre.notice_lines(_notice("l'exploitation de laveries automatiques"), ("laverie",))
+    assert lines == [{"nom": "CIRCEA", "adresse": "6 Rue du Président Salvatore Allende 29100 Douarnenez",
+                      "activite_declaree": "l'exploitation de laveries automatiques", "annonce": "Créations (2025-09-12)"}]
+
+
+def test_a_word_inside_another_word_is_not_a_declared_activity():
+    """Le mot doit être écrit en entier : « Lavage du Cap » ou une étude de notaire « Lavergne » ne sont pas des laveries."""
+    assert not api_registre.declares("station de lavage de véhicules", ("laverie",))
+    assert not api_registre.declares("office notarial Lavergne", ("laverie",))
+    assert api_registre.declares("Laverie libre-service", ("laverie",))
+
+
+def test_the_sign_of_a_notice_comes_before_the_company_name():
+    """L'enseigne de l'établissement passe avant la dénomination de la société."""
+    lines = api_registre.notice_lines(_notice("laverie automatique", enseigne="Laver'Ys"), ("laverie",))
+    assert lines[0]["nom"] == "Laver'Ys"
+
+
+def test_a_person_name_from_a_notice_is_never_kept():
+    """Une laverie créée par un entrepreneur individuel, sans enseigne, reste sans nom : c'est celui d'une personne."""
+    person = {"typePersonne": "pp", "nom": "NOM", "prenom": "Prénom"}
+    assert api_registre.notice_lines(_notice("laverie automatique", person), ("laverie",))[0]["nom"] is None
+
+
+def test_the_notices_are_asked_by_postcode_among_the_opening_ones(monkeypatch):
+    """Les annonces sont demandées aux codes postaux de la commune, parmi les créations, immatriculations et ventes ; une même ligne n'est gardée qu'une fois."""
+    asked = []
+    notice = _notice("laverie automatique")
+    monkeypatch.setattr(api_registre, "_get", lambda url, params: asked.append(params) or {"results": [notice, notice]})
+    lines = api_registre.read_notices(["13001", "13002"], ("laverie",))
+    assert len(lines) == 1
+    where = asked[0]["where"]
+    assert 'cp="13001" OR cp="13002"' in where and 'familleavis_lib="Ventes et cessions"' in where and 'search("laverie")' in where
+
+
+def test_unreadable_notices_do_not_stop_the_search(monkeypatch):
+    """Si le BODACC ne répond pas, la commune est cherchée sans ses annonces : elles ne sont qu'un indice."""
+    def broken(*args):
+        raise api_registre.requests.ConnectionError("hors ligne")
+    monkeypatch.setattr(api_registre, "commune_postcodes", broken)
+    assert api_registre.load_notices({"name": "Douarnenez", "insee": "29046"}, ("laverie",)) == []
