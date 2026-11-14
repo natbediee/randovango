@@ -20,6 +20,11 @@ async function supervisionFetch(path, options = {}) {
     return response.json();
 }
 
+// La clé de la note d'un spot (supervision_notation.js) : distincte de celles des services.
+function spotKey(spotId) {
+    return `spot-${spotId}`;
+}
+
 function reviewCard(review) {
     const reopening = review.reouverture ? `<p><strong>Réouverture annoncée :</strong> ${escapeHtml(review.reouverture)}</p>` : '';
     const comments = review.commentaires.map(c =>
@@ -45,6 +50,7 @@ function reviewCard(review) {
                 </label>
             </div>
             <div class="review-card__actions">
+                ${ratingHtml(spotKey(review.objet_id))}
                 <button class="btn review-card__btn-remove" onclick="decide(${review.objet_id}, 'retirer')">Retirer</button>
                 <button class="btn btn--outline" onclick="decide(${review.objet_id}, 'garder')">Garder</button>
                 <label class="label">Note (facultative)
@@ -74,6 +80,7 @@ function openingLine(opening) {
 }
 
 function render(data) {
+    setRatingLabels(data.notation);
     const count = data.reviews.length;
     document.getElementById('reviewsCount').textContent =
         count === 0 ? 'Rien à relire' : `${count} décision${count > 1 ? 's' : ''} en attente`;
@@ -103,9 +110,11 @@ async function decide(spotId, decision) {
     const aSavoir = text.value !== text.dataset.agent ? text.value : null;
     try {
         showMessage('');
-        render(await supervisionFetch('/decisions', {
-            method: 'POST', body: JSON.stringify({ objet_id: spotId, decision, note, a_savoir: aSavoir }),
-        }));
+        const data = await supervisionFetch('/decisions', {
+            method: 'POST', body: JSON.stringify({ objet_id: spotId, decision, note, a_savoir: aSavoir, ...ratingOf(spotKey(spotId)) }),
+        });
+        forgetRating(spotKey(spotId));
+        render(data);
     } catch (error) {
         showMessage(error.message);
     }

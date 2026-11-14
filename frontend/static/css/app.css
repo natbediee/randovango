@@ -2282,6 +2282,12 @@ a.bilan-total:hover { border-color: var(--teal); }
 .bilan-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
 .bilan-row { display: grid; grid-template-columns: minmax(0, 1fr) 30% 44px; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--divider); font-size: 14px; }
 .bilan-row.is-empty { color: var(--muted); }
+/* Bilan : le tableau des notes des propositions ; il défile seul sur un écran étroit, la page ne déborde pas. */
+.bilan-table-wrap { overflow-x: auto; }
+.bilan-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.bilan-table th, .bilan-table td { padding: 7px 10px 7px 0; border-top: 1px solid var(--divider); text-align: left; }
+.bilan-table thead th { font-size: 12px; color: var(--muted); border-top: 0; }
+.bilan-table td:last-child { min-width: 200px; }
 .bilan-row__label { overflow-wrap: anywhere; }
 .bilan-row__bar { height: 8px; border-radius: 4px; background: var(--mint-2); overflow: hidden; }
 .bilan-row__bar span { display: block; height: 100%; background: var(--teal); border-radius: 4px; }
