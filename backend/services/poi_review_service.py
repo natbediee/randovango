@@ -39,7 +39,7 @@ import re
 
 from agents import find_services
 from agents.find_restaurants import RESTAURANTS
-from services import service_store
+from services import decision_rating, service_store
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -529,7 +529,7 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
                   for row in cursor.fetchall()]
         audit = _audit_sample(cursor, tab, service, city)
         cursor.close()
-        return {"tab": tab, "counts": counts, "service_counts": dict(service_counts), "type_counts": dict(type_counts),
+        return {"tab": tab, "counts": counts, "notation": decision_rating.labels(), "service_counts": dict(service_counts), "type_counts": dict(type_counts),
                 "total": len(cards), "cards": cards[:PAGE_SIZE],
                 "cities": cities, "towns": towns, "recent": recent, "audit": audit}
     finally:
@@ -637,7 +637,12 @@ def split_mixed_place(cursor, poi_id: int, mixed: dict) -> None:
 
 
 def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by: str, months: list | None,
-               url: str | None = None, name: str | None = None) -> None:
+               url: str | None = None, name: str | None = None, pertinence: str | None = None,
+               raison: str | None = None) -> None:
+    """
+    Applique et enregistre la décision sur un lieu d'une file. pertinence et raison : la note facultative de l'humain
+    sur la proposition de l'agent (decision_rating, #201) ; None quand elle n'est pas notée, comme pour les règles.
+    """
     cursor.execute("""
         SELECT sg.id, sg.poi_id, sg.source, sg.signal_type, sg.detail FROM poi_signals sg
         WHERE sg.poi_id = %s AND sg.statut = 'a_relire'
@@ -652,10 +657,10 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     if action not in card["actions"] and action not in RULE_ACTIONS and action != MIXED:
         raise ValueError(f"Décision impossible ici : {action}")
     if action == KEEP_THIS:
-        keep_this_place(cursor, poi_id, card, signals, note, decided_by)
+        keep_this_place(cursor, poi_id, card, signals, note, decided_by, pertinence, raison)
         return
     if action == REMOVE_BOTH:
-        remove_both_places(cursor, poi_id, card, note, decided_by)
+        remove_both_places(cursor, poi_id, card, note, decided_by, pertinence, raison)
         return
     fields = applied_fields(action, card, months, url, name)
     cursor.execute(f"SELECT {', '.join(APPLIED_COLUMNS)} FROM poi WHERE id = %s", (poi_id,))
@@ -687,14 +692,16 @@ def decide_one(cursor, tab: str, poi_id: int, action: str, note: str, decided_by
     if mixed:
         detail["lieu_mixte"] = mixed
     cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-    """, (POI, poi_id, action, (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
+        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, pertinence, raison, detail)
+        VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s)
+    """, (POI, poi_id, action, (note or "").strip()[:255] or None, decided_by, pertinence, raison,
+          json.dumps(detail, ensure_ascii=False)))
     if action == "autre_maps":
         confirm_located(cursor, poi_id, fields, decided_by)
 
 
-def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, decided_by: str) -> None:
+def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, decided_by: str,
+                    pertinence: str | None = None, raison: str | None = None) -> None:
     """
     « Garder ce lieu » sous le lieu de la carte : l'autre lieu (autre_id) est masqué, celui-ci reste. La décision est
     enregistrée sur le lieu masqué, sous le nom « fusionner » : c'est elle que lisent les règles, les agents et les
@@ -702,6 +709,7 @@ def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, d
     toujours dire « ce lieu est masqué comme doublon d'un autre », quel que soit le bouton cliqué.
     Une station figée (doublon_station) était masquée en attendant : la garder la réaffiche. detail.garde retient le
     lieu gardé et son état d'avant, pour que l'annulation remette les deux lieux comme avant (cancel_decision).
+    La note de la proposition (pertinence, raison) va sur cette unique décision : une carte, une note.
     """
     other_id = card["autre_id"]
     cursor.execute("SELECT id, masque FROM poi WHERE id IN (%s, %s)", (poi_id, other_id))
@@ -720,18 +728,22 @@ def keep_this_place(cursor, poi_id: int, card: dict, signals: list, note: str, d
                    (ACTIONS[KEEP_THIS], *signal_ids))
     detail = {"file": "doublons", "signal_ids": signal_ids, "avant": {"masque": masked_before[other_id]}, "garde": kept}
     cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-    """, (POI, other_id, "fusionner", (note or "").strip()[:255] or None, decided_by, json.dumps(detail, ensure_ascii=False)))
+        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, pertinence, raison, detail)
+        VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s)
+    """, (POI, other_id, "fusionner", (note or "").strip()[:255] or None, decided_by, pertinence, raison,
+          json.dumps(detail, ensure_ascii=False)))
 
 
-def remove_both_places(cursor, poi_id: int, card: dict, note: str, decided_by: str) -> None:
+def remove_both_places(cursor, poi_id: int, card: dict, note: str, decided_by: str,
+                       pertinence: str | None = None, raison: str | None = None) -> None:
     """
     « Aucun des deux » : ni ce lieu ni l'autre ne sont à garder (rare : deux lignes d'un restaurant qui a fermé).
     Ce lieu est retiré comme avec « Retirer le lieu », puis l'autre de la même façon. Chacun reçoit sa propre décision
     « retirer » : les agents et les carburants la lisent déjà pour ne pas le réafficher, et chaque retrait s'annule à part.
+    La note de la proposition ne va que sur la décision de ce lieu-ci, celui de la carte : une carte, une note
+    (la noter deux fois compterait double dans le bilan).
     """
-    decide_one(cursor, "doublons", poi_id, "retirer", note, decided_by, None)
+    decide_one(cursor, "doublons", poi_id, "retirer", note, decided_by, None, pertinence=pertinence, raison=raison)
     remove_other_place(cursor, card["autre_id"], note, decided_by)
 
 
@@ -778,8 +790,12 @@ def confirm_located(cursor, poi_id: int, fields: dict, decided_by: str) -> bool:
 
 
 def decide(tab: str, poi_ids: list, action: str, note: str, decided_by: str, months: list | None = None,
-           url: str | None = None, name: str | None = None) -> None:
-    """Enregistre et applique une décision, sur un lieu ou sur un lot de liens contrôlés, en une transaction."""
+           url: str | None = None, name: str | None = None, pertinence: str | None = None,
+           raison: str | None = None) -> None:
+    """
+    Enregistre et applique une décision, sur un lieu ou sur un lot de liens contrôlés, en une transaction.
+    pertinence et raison : la note facultative de la proposition, pour un seul lieu (un lot n'est pas noté, #201).
+    """
     if tab not in TAB_SIGNALS or action not in ACTIONS or action in RULE_ACTIONS:
         raise ValueError("Décision inconnue")
     if len(poi_ids) > 1 and (tab != "liens" or action != "valider_lien"):
@@ -788,7 +804,7 @@ def decide(tab: str, poi_ids: list, action: str, note: str, decided_by: str, mon
     try:
         cursor = connection.cursor(dictionary=True)
         for poi_id in poi_ids:
-            decide_one(cursor, tab, poi_id, action, note, decided_by, months, url, name)
+            decide_one(cursor, tab, poi_id, action, note, decided_by, months, url, name, pertinence, raison)
         connection.commit()
         cursor.close()
     except Exception:

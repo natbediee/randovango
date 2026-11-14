@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api.dependencies import require_admin
-from services import poi_edit_service, poi_review_service, spot_edit_service, supervision_service
+from services import decision_rating, poi_edit_service, poi_review_service, spot_edit_service, supervision_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -14,16 +14,32 @@ def get_reviews(_admin=Depends(require_admin)):
     return supervision_service.get_reviews()
 
 
+def _rating(data: dict) -> tuple:
+    """
+    La note facultative de la proposition de l'agent (#201) : (pertinence, raison), None pour ce qui n'est pas noté.
+    Une valeur que decision_rating ne connaît pas est refusée (400) : rien n'est enregistré.
+    """
+    pertinence, raison = data.get("pertinence") or None, data.get("raison") or None
+    try:
+        decision_rating.check_rating(pertinence, raison)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return pertinence, raison
+
+
 @router.post("/decisions", summary="Records a human decision on a proposal.")
 def post_decision(data: dict = Body(...), admin=Depends(require_admin)):
     """
-    data = {"objet_id": 1368, "decision": "garder", "note": "Vu sur Street View", "a_savoir": "..."}
+    data = {"objet_id": 1368, "decision": "garder", "note": "Vu sur Street View", "a_savoir": "...",
+            "pertinence": "fausse", "raison": "preuve_faible"}
     "a_savoir" (facultatif) : le texte corrigé, une phrase par ligne ; absent, celui de l'agent reste.
+    "pertinence" et "raison" (facultatives) : la note de la proposition de l'agent (decision_rating).
     """
     if data.get("decision") not in supervision_service.DECISIONS or not isinstance(data.get("objet_id"), int):
         raise HTTPException(status_code=422, detail="Décision invalide")
+    pertinence, raison = _rating(data)
     supervision_service.decide(data["objet_id"], data["decision"], data.get("note") or "", admin["username"],
-                               data.get("a_savoir"))
+                               data.get("a_savoir"), pertinence, raison)
     return supervision_service.get_reviews()
 
 
@@ -68,13 +84,23 @@ def get_service_reviews(tab: str = "liens", service: str | None = None, ville: s
 
 @router.post("/services/decisions", summary="Records and applies a decision on one place or a batch of checked links.")
 def post_service_decision(data: dict = Body(...), admin=Depends(require_admin)):
-    """data = {"tab": "liens", "poi_ids": [12, 13], "action": "valider_lien", "note": "", "mois": [3, 4], "url": None, "nom": None}"""
+    """
+    data = {"tab": "fermetures", "poi_ids": [2686], "action": "retirer", "note": "", "mois": None, "url": None,
+            "nom": None, "pertinence": "a_corriger", "raison": "nom_adresse"}
+    poi_ids : un seul lieu, ou un lot de liens contrôlés (« liens », « valider_lien »), qui n'est pas noté.
+    "pertinence" et "raison" (facultatives) : la note de la proposition de l'agent, pour un seul lieu.
+    """
     poi_ids = data.get("poi_ids")
     if not isinstance(poi_ids, list) or not poi_ids or not all(isinstance(poi_id, int) for poi_id in poi_ids):
         raise HTTPException(status_code=422, detail="Lieux invalides")
+    pertinence, raison = _rating(data)
+    if pertinence and len(poi_ids) > 1:
+        # Une décision par lot (liens cochés) n'est pas notée : la note juge une proposition, pas un lot.
+        raise HTTPException(status_code=400, detail="Une décision par lot ne se note pas")
     try:
         poi_review_service.decide(data.get("tab"), poi_ids, data.get("action"), data.get("note") or "",
-                                  admin["username"], data.get("mois"), data.get("url"), data.get("nom"))
+                                  admin["username"], data.get("mois"), data.get("url"), data.get("nom"),
+                                  pertinence, raison)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
     # La page peut montrer toutes les files (« vue ») : on la renvoie telle qu'elle était.

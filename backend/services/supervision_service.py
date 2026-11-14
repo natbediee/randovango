@@ -23,6 +23,7 @@ pas), le texte lu à ce moment et les valeurs d'avant, remises si on l'annule.
 import json
 from datetime import date
 
+from services import decision_rating
 from utils.db_utils import MySQLUtils
 from utils.display_utils import a_savoir_on, spot_name_label
 
@@ -176,6 +177,7 @@ def get_reviews() -> dict:
         openings = _opening_decisions(cursor)
         cursor.close()
         return {"reviews": reviews,
+                "notation": decision_rating.labels(),
                 "ouvertures": openings,
                 "recent": [{"id": d["id"], "nom": _name(spots.get(d["objet_id"])), "decision": d["decision"],
                             "note": d["note"] or "", "par": d["decided_by"],
@@ -291,11 +293,13 @@ def cancel_opening_decision(decision_id: int) -> None:
         MySQLUtils.disconnect(connection)
 
 
-def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: str | None = None) -> None:
+def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: str | None = None,
+           pertinence: str | None = None, raison: str | None = None) -> None:
     """
     Enregistre la décision sur un spot, en réponse à sa dernière vérification. Le badge suit :
     un spot gardé par un humain est vérifié, un spot retiré ne l'est pas. `a_savoir` : le texte
-    corrigé par le relecteur, None pour garder celui de l'agent.
+    corrigé par le relecteur, None pour garder celui de l'agent. pertinence et raison : la note facultative
+    donnée à la proposition de l'agent (decision_rating), déjà vérifiée par la route ; None si elle n'est pas notée.
     """
     if decision not in DECISIONS:
         raise ValueError(f"Décision inconnue : {decision}")
@@ -312,10 +316,10 @@ def decide(spot_id: int, decision: str, note: str, decided_by: str, a_savoir: st
         detail = {"avant": {"verifie": bool(spot["verifie"])}}
         cursor.execute("""
             INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, verification_id,
-                                   a_savoir_corrige, detail)
-            VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s)
+                                   a_savoir_corrige, pertinence, raison, detail)
+            VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s)
         """, (SPOT, spot_id, decision, (note or "").strip()[:255] or None, decided_by, verification_id, a_savoir,
-              json.dumps(detail)))
+              pertinence, raison, json.dumps(detail)))
         cursor.execute("UPDATE spots SET verifie = %s WHERE id = %s", (decision == "garder", spot_id))
         connection.commit()
         cursor.close()
