@@ -292,6 +292,12 @@ def test_day_only_parkings_are_excluded_and_hidden() -> None:
     assert set(EXCLUDED_SPOT_TYPES) <= set(HIDDEN_SPOT_TYPES)
 
 
+def test_picnic_areas_are_not_proposed_for_the_night() -> None:
+    """Une aire de pique-nique n'est pas proposée pour dormir (Crozon et Le Hézo, décision du 14 novembre 2026)."""
+    from utils.display_utils import HIDDEN_SPOT_TYPES
+    assert "AIRE DE PIQUE-NIQUE" in HIDDEN_SPOT_TYPES
+
+
 # --- Les pépites de Vany ----------------------------------------------------
 
 def _pepite(**fields) -> dict:
