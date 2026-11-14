@@ -10,9 +10,12 @@ annoncer ce que ces pages ne montreraient pas. Un lieu présent dans deux files 
 une fois dans chacune, comme le filtre « Problème » de la page Services, dont « Tous » fait la somme.
 """
 from collections import Counter
+from datetime import date
 
-from services.supervision import rating, services_review, spots_review
+from services.supervision import rating, services_edit, services_review, spots_edit, spots_review
 from utils.db_utils import MySQLUtils
+from utils.display_utils import HIDDEN_SPOT_TYPES, spot_category
+from utils.geo_utils import town_choices, town_key
 
 # Les files des services (services_review.TAB_SIGNALS), avec le libellé et l'ordre du filtre
 # « Problème » de la page Services (TABS dans supervision_services.js).
@@ -114,24 +117,171 @@ def summarize(states: dict, spot_cities: dict, groups: dict, pois: dict, opening
     }
 
 
-def get_summary() -> dict:
-    """Le bilan lu en base : ce qui reste à trancher, file par file, et le compte des notes des propositions."""
+# LE FILTRE DU BILAN (carte #186, 14 novembre 2026) : une ville de l'appli ou une commune, rien d'autre. La catégorie
+# et le problème sont déjà les lignes du bilan (par type, par file) : un filtre ne ferait que les répéter.
+# Une ville filtre ce qui reste à trancher et ce qui a été tranché sur ses spots ; le nombre total de décisions et
+# les notes des propositions restent ceux de toutes les villes (la page le dit).
+# Chaque page garde sa règle : un spot se range comme sur la page Spots (spots_review.spot_city), un service comme sur
+# la page Services (la ville de l'étape 1 qui l'a trouvé, ou la commune de son adresse).
+
+
+def spot_places(spot_labels: dict, cities: list) -> dict:
+    """{numéro de spot : (identifiant de sa ville de l'appli ou None, nom de sa ville ou de sa commune)}."""
+    names = {city["id"]: city["name"] for city in cities}
+    places = {}
+    for spot_id, spot in spot_labels.items():
+        fields = spots_review._place_fields(spot, cities)
+        places[spot_id] = (fields["ville_id"], names.get(fields["ville_id"]) or fields["commune"])
+    return places
+
+
+def spot_in_place(place: tuple, city: dict | None, town: str | None) -> bool:
+    """Le spot est-il dans la ville ou la commune choisie ? Sans filtre, oui."""
+    city_id, name = place
+    if city:
+        return city_id == city["id"]
+    if town:
+        return city_id is None and town_key(name) == town_key(town)
+    return True
+
+
+def city_search_choices(places: dict, pending_spots: list, pois: dict, cities: list) -> tuple:
+    """
+    Ce que la recherche de ville propose : les villes de l'appli et les communes qui ont quelque chose à trancher,
+    spots et services réunis, avec leurs codes postaux (supervision_ville.js).
+    """
+    by_name = {city["name"]: city for city in cities}
+    city_names = {places[spot_id][1] for spot_id in pending_spots if places.get(spot_id, (None,))[0] is not None}
+    city_names |= {poi["commune"] for poi in pois.values() if poi.get("commune")}
+    town_names = {places[spot_id][1] for spot_id in pending_spots
+                  if spot_id in places and places[spot_id][0] is None and places[spot_id][1]}
+    city_codes, address_towns = town_choices([poi["address"] for poi in pois.values() if poi.get("address")],
+                                             [{**city, "id": city["name"]} for city in cities])
+    offered = [{"id": by_name[name]["id"], "name": name, "codes": city_codes.get(name, [])}
+               for name in sorted(city_names) if name in by_name]
+    towns = {town_key(town["nom"]): town for town in address_towns}
+    for name in town_names:
+        towns.setdefault(town_key(name), {"nom": name, "codes": []})
+    return offered, [town for _, town in sorted(towns.items())]
+
+
+# LE BILAN DE CE QU'IL Y A (14 novembre 2026) : le bilan dit aussi ce que la base a, pas seulement ce qui reste à
+# trancher ; dans toute la base, ou dans la ville ou la commune choisie. Les spots et les services sont ceux que l'onglet « Modifier » trouve pour cette
+# ville (spots_edit._search_rows, services_edit._search_rows) : la commune de l'adresse, sinon la ville la plus proche.
+# Les catégories des spots proposés au voyageur. « Autres » n'y figure pas : depuis que les aires de pique-nique sont
+# masquées (14 novembre 2026), tous les spots de cette catégorie sont des lieux où l'on ne dort pas, donc masqués.
+SPOT_CATEGORY_LABELS = {"gratuit": "Gratuit", "payant": "Payant"}
+
+
+# Pourquoi un spot n'est pas proposé au voyageur, dans l'ordre où l'étape 3 l'écarte (proposable_spots) : son type
+# (on n'y dort pas : services d'appoint, aire de services sans stationnement, parking de jour, ou pas de type), la nuit
+# interdite, puis une décision (retiré par un humain, ou dont l'agent propose le retrait, à relire). Un spot dont
+# l'agent doute (« incertain ») reste proposé, avec le badge « non vérifié » : il compte dans les non vérifiés.
+HIDDEN_SPOT_REASONS = {"sans_nuit": "On n'y dort pas (services, parking de jour, pique-nique)",
+                       "nuit_interdite": "Nuit interdite", "decision": "Retirés ou à relire"}
+
+
+def spot_hidden_reason(row: dict, hidden_ids: set) -> str | None:
+    """La raison pour laquelle l'étape 3 ne propose pas ce spot (HIDDEN_SPOT_REASONS), None s'il est proposé."""
+    if not row.get("type") or row["type"] in HIDDEN_SPOT_TYPES:
+        return "sans_nuit"
+    if row.get("nuit_interdite"):
+        return "nuit_interdite"
+    if row["id"] in hidden_ids:
+        return "decision"
+    return None
+
+
+def inventory(spot_rows: list, service_rows: list, place: str, hidden_ids: set) -> dict:
+    """
+    Ce qu'il y a dans la ville choisie (ou toute la base), compté à partir des lignes lues en base (testable seul).
+    hidden_ids : les spots qu'une décision écarte aujourd'hui (spots_review.hidden_spot_ids). Les catégories et la
+    vérification ne comptent que les spots proposés au voyageur ; les dates d'ouverture, qui dépendent de la nuit du
+    voyage, ne sont pas comptées.
+    """
+    reasons = Counter(spot_hidden_reason(row, hidden_ids) for row in spot_rows)
+    proposed = [row for row in spot_rows if spot_hidden_reason(row, hidden_ids) is None]
+    categories = Counter(spot_category(row.get("type")) for row in proposed)
+    verified = sum(1 for row in proposed if row.get("verifie"))
+    tabs = Counter(services_review.step4_tab(row.get("service_category")) for row in service_rows)
+    # Un service masqué, ou rangé hors de l'étape 4 (lavoir, église, fortification : aucun onglet ne le montre),
+    # n'est pas vu du voyageur : les deux comptent dans les masqués.
+    masked = sum(1 for row in service_rows
+                 if row.get("masque") or services_review.step4_tab(row.get("service_category")) == services_review.NO_TAB)
+    return {
+        "lieu": place,
+        "spots": {
+            "total": len(spot_rows),
+            "proposes": len(proposed),
+            "par_categorie": [{"label": label, "n": categories[code]} for code, label in SPOT_CATEGORY_LABELS.items()],
+            "verifies": verified,
+            "non_verifies": len(proposed) - verified,
+            "masques": len(spot_rows) - len(proposed),
+            "masques_par_raison": [{"label": label, "n": reasons[code]} for code, label in HIDDEN_SPOT_REASONS.items()],
+        },
+        "services": {
+            "total": len(service_rows),
+            "affiches": len(service_rows) - masked,
+            "masques": masked,
+            "saisonniers": sum(1 for row in service_rows if row.get("statut_saison")),
+            "par_type": ranked(Counter({RATING_CATEGORIES.get(tab, tab): n for tab, n in tabs.items()})),
+        },
+    }
+
+
+ALL_PLACES = "toute la base"
+
+
+def city_inventory(cursor, city: dict | None, town: str | None, cities: list, hidden_ids: set) -> dict:
+    """Ce qu'il y a dans la ville ou la commune choisie ; sans filtre, dans toute la base."""
+    spot_rows = spots_edit._search_rows(cursor, city, "", cities)
+    if not city and not town:
+        return inventory(spot_rows, services_edit._search_rows(cursor, None, "", cities), ALL_PLACES, hidden_ids)
+    if not city:
+        # Une commune qui n'est pas une ville de l'appli : les spots dont c'est la commune.
+        spot_rows = [row for row in spot_rows if town_key(spots_review.spot_town(row)) == town_key(town)]
+    service_rows = services_edit._search_rows(cursor, city, "", cities, town)
+    return inventory(spot_rows, service_rows, city["name"] if city else town, hidden_ids)
+
+
+def get_summary(city_id: int | None = None, town: str | None = None) -> dict:
+    """
+    Le bilan lu en base : ce qui reste à trancher, file par file, et le compte des notes des propositions.
+    city_id : une ville de l'appli ; town : une commune qui n'en est pas une. Une ville inconnue est refusée.
+    """
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        states = spots_review._spot_states(cursor)
-        spot_labels = spots_review._spot_labels(cursor, list(states))
-        spot_cities = {spot_id: label.get("city_label") for spot_id, label in spot_labels.items()}
-        groups, pois = services_review._pending(cursor, None, None)
-        cursor.execute("SELECT COUNT(*) AS n FROM decisions WHERE objet_type = %s AND annulee_at IS NULL",
+        cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities ORDER BY name")
+        cities = cursor.fetchall()
+        city = next((row for row in cities if row["id"] == city_id), None)
+        if city_id is not None and not city:
+            raise ValueError(f"Ville inconnue : {city_id}")
+        all_states = spots_review._spot_states(cursor)
+        places = spot_places(spots_review._spot_labels(cursor, list(all_states)), cities)
+        all_groups, all_pois = services_review._pending(cursor, None, None)
+        pending_spots = [spot_id for spot_id, (verification, decision) in all_states.items()
+                         if spots_review.spot_status(verification, decision) == "propose"]
+        choices = city_search_choices(places, pending_spots, all_pois, cities)
+
+        states = {spot_id: state for spot_id, state in all_states.items()
+                  if spot_in_place(places.get(spot_id, (None, None)), city, town)}
+        spot_cities = {spot_id: places.get(spot_id, (None, None))[1] for spot_id in states}
+        groups, pois = services_review._pending(cursor, None, city["name"] if city else None, town=town)
+        cursor.execute("SELECT objet_id FROM decisions WHERE objet_type = %s AND annulee_at IS NULL",
                        (spots_review.OPENING_OBJECT,))
-        openings = cursor.fetchone()["n"]
+        openings = sum(1 for row in cursor.fetchall()
+                       if spot_in_place(places.get(row["objet_id"], (None, None)), city, town))
         cursor.execute("SELECT COUNT(*) AS n FROM decisions WHERE annulee_at IS NULL")
         decisions = cursor.fetchone()["n"]
         # Le service n'est cherché que pour un lieu (poi) : un numéro de spot n'est pas un numéro de lieu.
         cursor.execute(RATED_DECISIONS, (services_review.POI, spots_review.SPOT, services_review.POI))
         ratings = count_ratings(cursor.fetchall())
+        hidden_ids = spots_review.hidden_spot_ids(connection, cursor, date.today())
+        place = city_inventory(cursor, city, town, cities, hidden_ids)
         cursor.close()
-        return {**summarize(states, spot_cities, groups, pois, openings, decisions), "notation": ratings}
+        cities_offered, towns = choices
+        return {**summarize(states, spot_cities, groups, pois, openings, decisions), "notation": ratings,
+                "cities": cities_offered, "towns": towns, "ville": place}
     finally:
         MySQLUtils.disconnect(connection)

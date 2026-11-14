@@ -16,7 +16,7 @@ from api.routers import supervision_reviews
 @pytest.fixture
 def client(monkeypatch):
     """Un client de l'API des relectures, connecté en admin ; le bilan rend un chiffre fixe."""
-    monkeypatch.setattr(supervision_reviews.summary, "get_summary", lambda: {"spots": 3})
+    monkeypatch.setattr(supervision_reviews.summary, "get_summary", lambda *args: {"spots": 3, "demande": list(args)})
     app = FastAPI()
     app.include_router(supervision_reviews.router, prefix="/api/supervision")
     app.dependency_overrides[require_admin] = lambda: {"username": "camille"}
@@ -27,7 +27,22 @@ def test_the_summary_answers_an_admin(client):
     """Le bilan répond à un admin par les chiffres du service, sans rien changer en base."""
     response = client.get("/api/supervision/reviews/summary")
     assert response.status_code == 200
-    assert response.json() == {"spots": 3}
+    assert response.json() == {"spots": 3, "demande": [None, None]}
+
+
+def test_the_summary_passes_the_city_or_the_town(client):
+    """Le bilan de la ville n° 12, puis de la commune de Guilvinec : le filtre arrive tel quel au service."""
+    assert client.get("/api/supervision/reviews/summary?ville=12").json()["demande"] == [12, None]
+    assert client.get("/api/supervision/reviews/summary?commune=Guilvinec").json()["demande"] == [None, "Guilvinec"]
+
+
+def test_an_unknown_city_in_the_summary_is_refused(monkeypatch, client):
+    """Une ville qui n'existe pas est refusée (422), avec le motif du service."""
+    def refuse(*args):
+        raise ValueError("Ville inconnue : 999")
+    monkeypatch.setattr(supervision_reviews.summary, "get_summary", refuse)
+    response = client.get("/api/supervision/reviews/summary?ville=999")
+    assert response.status_code == 422
 
 
 @pytest.fixture

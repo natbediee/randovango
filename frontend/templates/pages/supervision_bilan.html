@@ -8,8 +8,49 @@
 
   {% with active='bilan' %}{% include 'partials/supervision_nav.html' %}{% endwith %}
 
+  {# Deux vues du bilan (setView de supervision_bilan.js) : ce qui reste à trancher, ou ce qu'il y a (données globales). #}
+  <div class="services-toolbar">
+    <div class="services-filters" role="group" aria-label="Quel bilan ?">
+      <button type="button" class="btn btn--primary" id="viewPendingButton" aria-pressed="true" onclick="setView('pending')">À trancher</button>
+      <button type="button" class="btn btn--outline" id="viewGlobalButton" aria-pressed="false" onclick="setView('global')">Données globales</button>
+    </div>
+  </div>
+
+  {# Un seul filtre : la ville ou la commune (supervision_ville.js). La catégorie et le problème sont déjà les lignes
+     du bilan. filterCity garde l'identifiant de la ville, filterTown le nom de la commune. #}
+  <div class="services-toolbar">
+    <div class="services-filters">
+      <label class="label search-wrap">Ville
+        <input type="search" id="filterCitySearch" maxlength="80" placeholder="Ville ou code postal…" autocomplete="off"
+               style="min-height:44px; padding:0 10px; border:1px solid var(--card-border); border-radius:10px; background:var(--white); color:var(--ink); font:inherit; font-size:14px;">
+        <input type="hidden" id="filterCity" value="">
+        <input type="hidden" id="filterTown" value="">
+        <div id="filterCitySuggestions" class="city-suggestions" style="display:none;"></div>
+      </label>
+    </div>
+  </div>
+
   <p class="supervision-msg" id="supervisionMsg" style="display:none;"></p>
 
+  {# Vue « Données globales » : ce qu'il y a, dans toute la base ou dans la ville ou la commune choisie. #}
+  <div id="viewGlobal" class="stack" style="gap:18px; display:none;">
+  <section class="bilan-block" id="placeBlock">
+    <h2 class="services-title" id="placeTitle"></h2>
+    <div class="bilan-split">
+      <div>
+        <h3>Spots</h3>
+        <div id="placeSpotsRows"></div>
+      </div>
+      <div>
+        <h3>Services</h3>
+        <div id="placeServicesRows"></div>
+      </div>
+    </div>
+  </section>
+  </div>
+
+  {# Vue « À trancher » : ce qui attend une décision, file par file. #}
+  <div id="viewPending" class="stack" style="gap:18px;">
   <div class="bilan-totals" id="bilanTotals"></div>
 
   <section class="bilan-block" id="spotsBlock" style="display:none;">
@@ -25,7 +66,6 @@
   <div class="bilan-split">
     <section class="bilan-block" id="citiesBlock" style="display:none;">
       <h2 class="services-title">À trancher, par ville</h2>
-      <p class="muted">Spots et services réunis, les villes les plus chargées d'abord.</p>
       <div id="citiesRows"></div>
     </section>
 
@@ -37,15 +77,16 @@
 
   {# Les notes données aux propositions des agents (carte #201) : le jeu d'évaluation de #114. #}
   <section class="bilan-block" id="ratingsBlock" style="display:none;">
-    <h2 class="services-title">Propositions des agents notées, par catégorie</h2>
-    <p class="muted">Ce que tu as noté en tranchant : juste, à corriger ou fausse, et la raison d'une erreur.</p>
+    <h2 class="services-title">Propositions des agents notées, par catégorie<span id="ratingsScope"></span></h2>
     <div class="bilan-table-wrap"><table class="bilan-table" id="ratingsTable"></table></div>
   </section>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/map-helpers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision_common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/supervision_ville.js') }}"></script>
 <script src="{{ url_for('static', filename='js/supervision_bilan.js') }}"></script>
 {% endblock %}

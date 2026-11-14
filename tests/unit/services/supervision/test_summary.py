@@ -91,3 +91,67 @@ def test_every_service_tab_has_a_rating_category() -> None:
     """Chaque onglet de l'étape 4 a son libellé dans le compte des notes : un nouvel onglet doit y être ajouté."""
     tabs = set(POI_FRONTEND_CATEGORY_MAP.values()) | {services_review.NO_TAB}
     assert tabs <= set(summary.RATING_CATEGORIES)
+
+
+# Le filtre du Bilan (carte #186) : une ville de l'appli ou une commune.
+CITIES = [{"id": 1, "name": "Le Conquet", "commune": "Le Conquet", "latitude": 48.36, "longitude": -4.77},
+          {"id": 2, "name": "Plougonvelin", "commune": "Plougonvelin", "latitude": 48.34, "longitude": -4.72}]
+
+
+def test_a_spot_takes_its_place_like_on_the_spots_page() -> None:
+    """Un spot se range comme sur la page Spots : la ville de son adresse, sinon sa commune quand ce n'en est pas une."""
+    labels = {7: {"type": "CAMPING", "address": "Rue du Port, 29217 Le Conquet", "latitude": 48.34, "longitude": -4.72},
+              8: {"type": "CAMPING", "address": "Port, 29730 Guilvinec", "latitude": 47.8, "longitude": -4.28}}
+    assert summary.spot_places(labels, CITIES) == {7: (1, "Le Conquet"), 8: (None, "Guilvinec")}
+
+
+def test_the_city_filter_keeps_the_spots_of_the_chosen_place() -> None:
+    """Choisir Le Conquet garde ses spots ; choisir Guilvinec garde les siens ; sans filtre, tout reste."""
+    conquet, guilvinec = (1, "Le Conquet"), (None, "Guilvinec")
+    assert summary.spot_in_place(conquet, CITIES[0], None)
+    assert not summary.spot_in_place(guilvinec, CITIES[0], None)
+    assert summary.spot_in_place(guilvinec, None, "guilvinec")
+    assert not summary.spot_in_place(conquet, None, "Guilvinec")
+    assert summary.spot_in_place(guilvinec, None, None)
+
+
+def test_the_city_search_offers_places_with_spots_or_services_to_settle() -> None:
+    """La recherche propose Le Conquet (un service à relire) et Guilvinec (un spot), pas Plougonvelin, sans rien à trancher."""
+    places = {8: (None, "Guilvinec")}
+    pois = {5: {"commune": "Le Conquet", "address": "Quai, 29217 Le Conquet"}}
+    cities, towns = summary.city_search_choices(places, [8], pois, CITIES)
+    assert cities == [{"id": 1, "name": "Le Conquet", "codes": ["29217"]}]
+    assert towns == [{"nom": "Guilvinec", "codes": []}]
+
+
+def test_the_city_summary_counts_what_the_city_has() -> None:
+    """Le bilan du Conquet compte ses spots proposés par catégorie, ses spots masqués par raison, ses services par état."""
+    spot_rows = [{"id": 1, "type": "PARKING JOUR ET NUIT", "verifie": 1, "nuit_interdite": 0},
+                 {"id": 2, "type": "CAMPING", "verifie": 0, "nuit_interdite": 0},
+                 {"id": 3, "type": "SERVICES D'APPOINT", "verifie": 1, "nuit_interdite": 0},
+                 {"id": 4, "type": "CAMPING", "verifie": 1, "nuit_interdite": 1},
+                 {"id": 5, "type": "CAMPING", "verifie": 0, "nuit_interdite": 0}]
+    service_rows = [{"service_category": "drinking_water", "masque": 0, "statut_saison": None},
+                    {"service_category": "drinking_water", "masque": 1, "statut_saison": "confirmee"}]
+    place = summary.inventory(spot_rows, service_rows, "Le Conquet", hidden_ids={5})
+    spots = place["spots"]
+    assert (spots["total"], spots["proposes"], spots["verifies"], spots["non_verifies"], spots["masques"]) == (5, 2, 1, 1, 3)
+    assert [item["n"] for item in spots["par_categorie"]] == [1, 1]
+    assert [item["n"] for item in spots["masques_par_raison"]] == [1, 1, 1]
+    assert {key: place["services"][key] for key in ("total", "affiches", "masques", "saisonniers")} == \
+        {"total": 2, "affiches": 1, "masques": 1, "saisonniers": 1}
+
+
+def test_a_service_point_is_a_spot_where_one_does_not_sleep() -> None:
+    """Un point de services d'appoint, ou un spot sans type, n'est pas proposé : on n'y dort pas (comme à l'étape 3)."""
+    assert summary.spot_hidden_reason({"id": 1, "type": "SERVICES D'APPOINT"}, set()) == "sans_nuit"
+    assert summary.spot_hidden_reason({"id": 1, "type": None}, set()) == "sans_nuit"
+    assert summary.spot_hidden_reason({"id": 1, "type": "PARKING JOUR ET NUIT"}, set()) is None
+
+
+def test_a_service_outside_step_4_counts_as_masked() -> None:
+    """Un lavoir, rangé hors de l'étape 4, n'est jamais montré au voyageur : il compte dans les services masqués."""
+    service_rows = [{"service_category": "lavoir", "masque": 0, "statut_saison": None},
+                    {"service_category": "drinking_water", "masque": 0, "statut_saison": None}]
+    services = summary.inventory([], service_rows, "Le Conquet", set())["services"]
+    assert (services["affiches"], services["masques"]) == (1, 1)

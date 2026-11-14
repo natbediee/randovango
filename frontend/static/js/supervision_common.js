@@ -54,6 +54,23 @@ function chooseCity({ ville, commune }) {
     load();
 }
 
+// La ville venue d'un lien du Bilan (?ville=…&lieu=…, ou ?commune=…&lieu=…) : elle remplit les champs de la recherche
+// de ville avant le premier chargement, pour que la page s'ouvre déjà filtrée. lieu est le nom affiché dans le champ.
+function placeFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    document.getElementById('filterCity').value = params.get('ville') || '';
+    document.getElementById('filterTown').value = params.get('commune') || '';
+    document.getElementById('filterCitySearch').value = params.get('lieu') || '';
+}
+
+// La partie d'un lien qui garde la ville choisie (placeFromUrl la relit) : ville est ce que la page visée attend
+// (l'identifiant pour Spots, le nom pour Services). Rien de choisi : rien à ajouter.
+function placeParams(place, ville) {
+    if (!place) return '';
+    const params = place.commune ? { commune: place.commune, lieu: place.commune } : { ville, lieu: place.name };
+    return new URLSearchParams(params).toString();
+}
+
 // Un geste de décision (décider, annuler, corriger un texte, dire juste une décision de la règle), puis la page se
 // redessine par refresh(), que chaque page définit. La route répond par la décision, pas par la page (plan de #186, 2.1).
 // Si le geste passe mais pas le rechargement, on le dit : le geste est bien enregistré.

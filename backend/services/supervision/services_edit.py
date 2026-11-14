@@ -140,8 +140,10 @@ def _search_rows(cursor, city: dict | None, name: str, cities: list | None = Non
                (SELECT r.categorie FROM restaurants r WHERE r.poi_id = p.id) AS table_categorie,
                (SELECT c.categorie FROM commerces c WHERE c.poi_id = p.id) AS shop_categorie,
                (SELECT MIN(c.name) FROM histo_poi h JOIN cities c ON c.id = h.city_id WHERE h.poi_id = p.id) AS commune
-        FROM poi p WHERE {' AND '.join(filters)}
+        FROM poi p WHERE {' AND '.join(filters) or 'TRUE'}
     """, tuple(params))
+    # Sans aucun filtre (TRUE), tous les services viennent : seul le bilan de toute la base le demande
+    # (summary.city_inventory) ; la recherche de Modifier exige une ville, une commune ou un nom.
     rows = cursor.fetchall()
     for row in rows:
         # La commune affichée : celle de l'adresse, pas la première des villes dont la zone contient le lieu.

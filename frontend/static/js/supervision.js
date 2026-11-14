@@ -162,6 +162,7 @@ async function load() {
 document.addEventListener('DOMContentLoaded', () => {
     if (redirectIfLoggedOut()) return;
     document.getElementById('filterCategory').addEventListener('change', load);
+    placeFromUrl();
     citySearch({ inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
                  sources: () => ({ cities: allCities, towns: allTowns }), onChoose: chooseCity });
     load();

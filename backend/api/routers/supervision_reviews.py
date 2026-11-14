@@ -50,6 +50,12 @@ def service_reviews(file: str, service: str | None = None, city: str | None = No
 
 
 @router.get("/reviews/summary", summary="How many decisions are left, queue by queue.")
-def get_summary(_admin=Depends(require_admin)):
-    """Le bilan : combien il reste à trancher, file par file, et les notes données aux propositions des agents."""
-    return summary.get_summary()
+def get_summary(ville: int | None = None, commune: str | None = None, _admin=Depends(require_admin)):
+    """
+    Le bilan : combien il reste à trancher, file par file, et les notes données aux propositions des agents.
+    Un seul filtre : une ville de l'appli (son identifiant) ou une commune d'adresse. Une ville inconnue est refusée (422).
+    """
+    try:
+        return summary.get_summary(ville, commune or None)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))

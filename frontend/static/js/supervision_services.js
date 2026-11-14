@@ -451,6 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
         load();
     });
     document.getElementById('filterType').addEventListener('change', load);
+    placeFromUrl();
     citySearch({ inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.name,
                  sources: () => ({ cities: allCities, towns: allTowns }), onChoose: chooseCity });
     document.getElementById('filterProblem').addEventListener('change', event => selectTab(event.target.value));
