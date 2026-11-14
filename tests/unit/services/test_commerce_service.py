@@ -107,7 +107,7 @@ def test_validating_a_shop_without_a_prepared_sheet_is_refused():
 
 def test_validating_a_shop_to_confirm_writes_its_sheet_in_the_commerces_table(monkeypatch):
     """Dans la supervision, confirmer un commerce écrit sa fiche avec le réglage des commerces."""
-    from services import poi_review_service as review
+    from services.supervision import services_review as review
     written = []
     monkeypatch.setattr(service_store, "save_validated_sheet", lambda category, cursor, poi_id, sheet: written.append((category.sheet_table, poi_id)))
     signal = {"id": 3, "poi_id": 8, "signal_type": "a_confirmer", "source": COMMERCES.source,
@@ -195,7 +195,7 @@ def test_a_possible_duplicate_goes_to_the_duplicates_queue(monkeypatch):
     assert service_store.flag_possible_duplicates(COMMERCES, MagicMock(), rows, saved) == 1
     poi_id, kind, detail = signals[0]
     assert (poi_id, kind, detail["autre_id"]) == (2, "doublon_commerce", 1) and 600 < detail["distance_m"] < 800
-    from services import poi_review_service as review
+    from services.supervision import services_review as review
     card = review.build_card("doublons", {"id": 2, "name": "Fumaison d'Iroise"}, [{"id": 9, "signal_type": kind, "source": "agent_commerces", "detail": detail}])
     assert card["actions"][:3] == ["garder_celui_ci", "fusionner", "deux_lieux"] and "Fumaisons d'Iroise" in card["preuves"][0]["texte"]
 

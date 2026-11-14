@@ -4,7 +4,7 @@ from api.dependencies import require_plan_owner
 from fastapi.responses import Response
 from utils.db_utils import MySQLUtils
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
-from services.supervision_service import reworked_a_savoir
+from services.supervision.spots_review import reworked_a_savoir
 from utils.display_utils import result_day_display, spot_description_label, spot_name_label, with_a_savoir
 from services.pepite_service import fetch_chosen_pepites, fetch_trail_tips
 from services.pdf_service import render_trip_pdf_html

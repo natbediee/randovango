@@ -1,36 +1,20 @@
 // Supervision, onglet « Modifier » (admin) : retrouver un service ou un spot vu dans l'appli et le corriger,
-// même sans signal à relire (services/poi_edit_service.py, services/spot_edit_service.py).
+// même sans signal à relire (services/supervision/services_edit.py, services/supervision/spots_edit.py).
 // Une liste compacte, une ligne par lieu ; un clic ouvre sa fiche complète (supervision_fiche.js pour les services).
 // Chaque correction est une décision tracée : « Corrigé récemment » permet de l'annuler.
 // La sécurité est côté API : tout ce qui est tapé y est contrôlé.
 
-const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Carburant'], ['supermarche', 'Supermarché'],
-                      ['commerce', 'Commerce'], ['restauration', 'Restauration'], ['cafe', 'Café, bar'], ['toilettes', 'Toilettes'],
-                      ['hygiene', 'Hygiène'], ['laverie', 'Laverie'], ['culture', 'Culture & Loisirs'], ['urgence', 'Urgences'],
-                      ['hors_etape4', 'Hors étape 4']];
 const OPENINGS = [['toute_annee', "Toute l'année"], ['periode', 'Sur une période'], ['saison', 'Saisonnier, dates inconnues'],
                   ['inconnue', 'Inconnue']];
 
 let mode = 'services';
 let nameTimer = null;
+let currentPage = 1;       // la page de la liste des services (une catégorie seule en donne beaucoup)
 let openId = null;        // le lieu ou le spot dont la fiche est ouverte
 let lastData = null;
 let allCities = [];       // les villes de l'étape 1, pour la recherche de ville (supervision_ville.js)
 let allTowns = [];        // les communes des adresses qui ne sont pas des villes de l'étape 1 : {nom, codes}
 let cityField = null;
-
-// La ville choisie : l'identifiant d'une ville de l'étape 1, ou une commune d'adresse (services seulement).
-function chooseCity({ ville, commune }) {
-    document.getElementById('filterCity').value = ville;
-    document.getElementById('filterTown').value = commune;
-    load();
-}
-
-function showMessage(text) {
-    const box = document.getElementById('supervisionMsg');
-    box.textContent = text;
-    box.style.display = text ? '' : 'none';
-}
 
 function filters() {
     const values = { ville: document.getElementById('filterCity').value, nom: document.getElementById('filterName').value.trim() };
@@ -45,34 +29,26 @@ function filters() {
 function filterQuery() {
     const params = new URLSearchParams();
     Object.entries(filters()).forEach(([key, value]) => { if (value) params.set(key, value); });
+    if (mode === 'services' && currentPage > 1) params.set('page', currentPage);
     return params.toString();
 }
 
-async function editFetch(path, options = {}) {
-    const response = await window.RVG.apiFetch(`/api/supervision/edit/${mode}${path}`, {
-        ...options,
-        headers: { 'Content-Type': 'application/json' },
-    });
-    if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi, ta correction n\'a pas été enregistrée.');
-    if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
-    if (response.status === 422 || response.status === 404) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(typeof body.detail === 'string' ? body.detail : 'Correction refusée.');
+// Va à une autre page de la liste des services (boutons sous la liste) ; la fiche ouverte se ferme.
+function goToPage(page) {
+    currentPage = page;
+    load(false);
+    document.getElementById('cardsList').scrollIntoView({ block: 'start' });
+}
+
+// Sous la liste : où on en est, et les boutons pour changer de page. Les spots ne viennent pas en pages : la liste
+// dit seulement combien sont cachés.
+function pagesHtml(data) {
+    if (!data.pages) {
+        return `${data.cards.length} affichés sur ${data.total} : précise le nom pour voir les autres.`;
     }
-    if (!response.ok) throw new Error(`Erreur du serveur (HTTP ${response.status}) : correction non enregistrée.`);
-    return response.json();
-}
-
-// Ce que la page envoie avec chaque correction : la recherche affichée, pour la renvoyer telle quelle.
-function searchBody() {
-    const values = filters();
-    const city = values.ville ? Number(values.ville) : null;
-    return mode === 'services' ? { ville: city, service: values.service, type: values.type, nom_recherche: values.nom }
-                               : { ville: city, nom: values.nom };
-}
-
-function safeLink(url) {
-    return /^https?:\/\//.test(url || '') ? escapeHtml(url) : null;
+    const previous = data.page > 1 ? `<button class="btn btn--outline btn--sm" onclick="goToPage(${data.page - 1})">← Précédente</button>` : '';
+    const next = data.page < data.pages ? `<button class="btn btn--outline btn--sm" onclick="goToPage(${data.page + 1})">Suivante →</button>` : '';
+    return `${previous} Page ${data.page} sur ${data.pages} (${data.total} services) ${next}`;
 }
 
 // --- Services ---
@@ -106,11 +82,11 @@ function sheetBlock(view) {
         </div>`;
 }
 
-async function showSheet(poiId, view = null) {
+async function showSheet(poiId) {
     const box = document.getElementById('openSheet');
     if (!box) return;
     try {
-        box.innerHTML = sheetBlock(view || await editFetch(`/fiche/${poiId}`));
+        box.innerHTML = sheetBlock(await supervisionCall(`/services/${poiId}`));
     } catch (error) {
         box.innerHTML = `<p class="supervision-msg">${escapeHtml(error.message)}</p>`;
     }
@@ -131,27 +107,25 @@ async function saveSheet(poiId) {
     }
     try {
         showMessage('');
-        const data = await editFetch('/fiche', { method: 'POST', body: JSON.stringify({ poi_id: poiId, changes, note: ficheNote(key), ...searchBody() }) });
-        render(data);
-        showSheet(poiId, data.fiche);
+        await supervisionCall(`/services/${poiId}`, { method: 'PUT', body: JSON.stringify({ changes, note: ficheNote(key) }) });
+        // La liste et la fiche ouverte se rechargent : elles montrent ce que voit maintenant le voyageur.
+        await refresh();
     } catch (error) {
         showMessage(error.message);
     }
 }
 
+// « Retirer le lieu » ou « Remettre le lieu » : une décision sur le service, sans file (elle vient de Modifier).
+// La liste et la fiche ouverte se rechargent ensuite (refresh).
 function decidePlace(poiId, action) {
     const key = `edit-${poiId}`;
-    send('/decisions', 'POST', { poi_id: poiId, action, note: ficheElement(key) ? ficheNote(key) : '', ...searchBody() });
+    return postDecision({ objet: 'service', objet_ids: [poiId], decision: action,
+                          note: ficheElement(key) ? ficheNote(key) : '' });
 }
 
 function renderServiceFilters(data) {
-    const serviceSelect = document.getElementById('filterService');
-    const chosen = serviceSelect.value;
-    const counts = data.service_counts || {};
-    const all = Object.values(counts).reduce((sum, count) => sum + count, 0);
-    serviceSelect.innerHTML = `<option value="">Tous (${all})</option>` + SERVICE_TABS
-        .filter(([key]) => counts[key] || key === chosen)
-        .map(([key, label]) => `<option value="${key}" ${key === chosen ? 'selected' : ''}>${escapeHtml(label)} (${counts[key] || 0})</option>`).join('');
+    // Avant toute recherche, les nombres ne sont pas connus : le menu montre les catégories sans nombre.
+    const chosen = renderCategoryMenu(data.service_counts, data.searched);
     const typeSelect = document.getElementById('filterType');
     const chosenType = typeSelect.value;
     const byType = data.type_counts || {};
@@ -200,7 +174,7 @@ function spotSheet(card) {
     const link = safeLink(card.url);
     const decided = card.decision_id
         ? `<p class="muted">Décision en vigueur : <strong>${card.decision === 'retirer' ? 'retiré' : 'gardé'}</strong>
-             · <a href="#" onclick="cancelSpot(${card.decision_id}); return false;">annuler</a>
+             · <a href="#" onclick="cancelDecision(${card.decision_id}); return false;">annuler</a>
              · <a href="#" onclick="correctText(${card.spot_id}, ${card.decision_id}); return false;">corriger seulement le texte</a></p>`
         : '';
     return `
@@ -242,7 +216,7 @@ function spotSheet(card) {
                 <label class="label" style="flex-direction:row; align-items:center; gap:6px;"><input type="checkbox" class="spot-convention" style="width:auto; height:auto;"> Dates choisies par moi, la fiche ne les donne pas</label>
                 <div>
                     <button class="btn btn--outline btn--sm" onclick="decideOpening(${card.spot_id})">Fixer l'ouverture</button>
-                    ${opening.decision_id ? `<a href="#" onclick="cancelOpening(${opening.decision_id}); return false;">annuler l'ouverture fixée</a>` : ''}
+                    ${opening.decision_id ? `<a href="#" onclick="cancelDecision(${opening.decision_id}); return false;">annuler l'ouverture fixée</a>` : ''}
                 </div>
                 <label class="label">Note (facultative)
                     <input type="text" class="spot-note" maxlength="255" placeholder="Vu sur place le 3 novembre">
@@ -270,28 +244,21 @@ function decideSpot(spotId, decision) {
     const card = spotElement(spotId);
     const text = card.querySelector('.spot-text');
     // Le texte n'est envoyé que s'il a été touché : sinon celui de l'agent reste.
-    send('/decisions', 'POST', { spot_id: spotId, decision, note: card.querySelector('.spot-note').value,
-                                 a_savoir: text.value !== text.defaultValue ? text.value : null, ...searchBody() });
+    return postDecision({ objet: 'spot', objet_id: spotId, decision, note: card.querySelector('.spot-note').value,
+                          a_savoir: text.value !== text.defaultValue ? text.value : null });
 }
 
+// Le texte du spot ouvert, enregistré sur sa décision (saveTextCorrection de supervision_common.js).
 function correctText(spotId, decisionId) {
-    send(`/decisions/${decisionId}`, 'PUT', { a_savoir: spotElement(spotId).querySelector('.spot-text').value, ...searchBody() });
+    return saveTextCorrection(decisionId, spotElement(spotId).querySelector('.spot-text').value);
 }
 
 function decideOpening(spotId) {
     const card = spotElement(spotId);
-    send('/openings', 'POST', { spot_id: spotId, statut: card.querySelector('.spot-opening').value,
-                                debut: card.querySelector('.spot-start').value, fin: card.querySelector('.spot-end').value,
-                                convention: card.querySelector('.spot-convention').checked,
-                                note: card.querySelector('.spot-note').value, ...searchBody() });
-}
-
-function cancelSpot(decisionId) {
-    send(`/decisions/${decisionId}?${filterQuery()}`, 'DELETE');
-}
-
-function cancelOpening(decisionId) {
-    send(`/openings/${decisionId}?${filterQuery()}`, 'DELETE');
+    return postDecision({ objet: 'ouverture', objet_id: spotId, statut: card.querySelector('.spot-opening').value,
+                          debut: card.querySelector('.spot-start').value, fin: card.querySelector('.spot-end').value,
+                          convention: card.querySelector('.spot-convention').checked,
+                          note: card.querySelector('.spot-note').value });
 }
 
 // --- Commun ---
@@ -311,44 +278,39 @@ function render(data) {
 
     renderCards(data);
     const empty = document.getElementById('emptyNote');
-    empty.textContent = data.searched ? 'Aucun lieu ne correspond.' : 'Choisis une ville, ou tape au moins deux lettres du nom.';
+    empty.textContent = data.searched ? 'Aucun lieu ne correspond.'
+        : mode === 'services' ? 'Choisis une ville, une catégorie, ou tape au moins deux lettres du nom.'
+        : 'Choisis une ville, ou tape au moins deux lettres du nom.';
     empty.style.display = data.cards.length ? 'none' : '';
     const more = document.getElementById('moreNote');
-    more.textContent = `${data.cards.length} affichés sur ${data.total} : précise le nom ou le type pour voir les autres.`;
+    more.innerHTML = pagesHtml(data);
     more.style.display = data.total > data.cards.length ? '' : 'none';
     document.getElementById('reviewsCount').textContent = data.searched ? `${data.total} trouvé${data.total > 1 ? 's' : ''}` : '';
 
     document.getElementById('recentSection').style.display = data.recent.length ? '' : 'none';
     document.getElementById('recentList').innerHTML = data.recent.map(decision => {
-        const cancel = mode === 'services' ? `cancelPlace(${decision.id})`
-                     : decision.ouverture ? `cancelOpening(${decision.id})` : `cancelSpot(${decision.id})`;
         return `<p>${escapeHtml(decision.nom)} : <strong>${escapeHtml(decision.action)}</strong>
            ${decision.champs ? `(${escapeHtml(decision.champs)})` : ''}
            ${decision.note ? `· « ${escapeHtml(decision.note)} »` : ''} · ${escapeHtml(decision.par)}, le ${escapeHtml(decision.le)}
-           · <a href="#" onclick="${cancel}; return false;">annuler</a></p>`;
+           · <a href="#" onclick="cancelDecision(${decision.id}); return false;">annuler</a></p>`;
     }).join('');
 }
 
-function cancelPlace(decisionId) {
-    send(`/decisions/${decisionId}?${filterQuery()}`, 'DELETE');
+// Redessine la liste avec la recherche affichée, sans fermer la fiche ouverte : après une annulation
+// (cancelDecision de supervision_common.js), elle montre ce que voit maintenant le voyageur.
+async function refresh() {
+    render(await supervisionCall(`/search/${mode}?${filterQuery()}`));
+    if (mode === 'services' && openId) showSheet(openId);
 }
 
-// Après une correction, la fiche ouverte se recharge : elle montre ce que voit maintenant le voyageur.
-async function send(path, method, body = null) {
-    try {
-        showMessage('');
-        render(await editFetch(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) }));
-        if (mode === 'services' && openId) showSheet(openId);
-    } catch (error) {
-        showMessage(error.message);
-    }
-}
-
-async function load() {
+// Une nouvelle recherche : la fiche ouverte se ferme, et la liste repart de sa première page (sauf quand on change
+// de page : newSearch vaut alors false).
+async function load(newSearch = true) {
     try {
         showMessage('');
         openId = null;
-        render(await editFetch(`?${filterQuery()}`));
+        if (newSearch !== false) currentPage = 1;
+        await refresh();
     } catch (error) {
         showMessage(error.message);
     }
@@ -374,12 +336,11 @@ function setMode(next) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.RVG.isLoggedIn()) {
-        window.location.href = window.APP_URLS.contributorLogin;
-        return;
-    }
+    if (redirectIfLoggedOut()) return;
     document.getElementById('modeServices').addEventListener('click', () => setMode('services'));
     document.getElementById('modeSpots').addEventListener('click', () => setMode('spots'));
+    // Une ville venue d'un lien (« voir Modifier » de la page Services) : la recherche part déjà filtrée.
+    placeFromUrl();
     cityField = citySearch({
         inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
         sources: () => ({ cities: allCities, towns: mode === 'services' ? allTowns : [] }), onChoose: chooseCity,

@@ -1,6 +1,7 @@
-// La recherche de ville de la supervision, commune aux onglets « Services » (supervision_services.js) et « Modifier »
-// (supervision_modifier.js), comme à l'étape 1 (step1_city.js) : un nom ou le début d'un code postal, deux lettres
-// ou deux chiffres, puis au plus 8 propositions dans l'ordre alphabétique.
+// La recherche de ville de la supervision, commune aux onglets « Bilan » (supervision_bilan.js), « Spots »
+// (supervision.js), « Services » (supervision_services.js) et « Modifier » (supervision_modifier.js), comme à
+// l'étape 1 (step1_city.js) : un nom ou le début d'un code postal, deux lettres ou deux chiffres, puis au plus
+// 8 propositions dans l'ordre alphabétique.
 // Les propositions : les villes de l'appli, et les communes des adresses des services qui n'en sont pas (Guilvinec).
 // Un service se range par la commune de son adresse (utils/geo_utils.town_choices) ; les codes postaux viennent aussi
 // des adresses.
@@ -13,7 +14,9 @@ const CITY_SEARCH_MAX = 8;
 function citySearch(options) {
     const input = document.getElementById(options.inputId);
     const box = document.getElementById(options.boxId);
-    let chosen = false;
+    // Une ville déjà écrite dans le champ (venue d'un lien du Bilan, placeFromUrl) compte comme choisie : vider le
+    // champ doit alors retirer le filtre.
+    let chosen = Boolean(input.value.trim());
 
     const codesText = codes => codes && codes.length ? ` <small class="muted">${escapeHtml(codes.join(', '))}</small>` : '';
 

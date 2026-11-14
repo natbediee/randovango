@@ -1,15 +1,9 @@
 // Supervision des services (admin) : les vérifications proposent, l'admin tranche
-// (services/poi_review_service.py). La sécurité est côté API : le lien ou le nom appliqués
+// (services/supervision/services_review.py). La sécurité est côté API : le lien ou le nom appliqués
 // viennent du signal enregistré, cette page n'envoie que le choix. Seule exception : la fiche complète
-// (supervision_fiche.js), corrigée par l'admin et contrôlée par l'API (poi_edit_service.decide_sheet).
+// (supervision_fiche.js), corrigée par l'admin et contrôlée par l'API (services_edit.decide_sheet).
 
 const TABS = { fermetures: 'Doute sur le nom', liens: 'Liens', saison: 'Saison', doublons: 'Doublons', confirmer: 'À confirmer' };
-// Les onglets de l'étape 4 (CATEGORY_META de step4_services.js), dans le même ordre, puis les services sans onglet :
-// le voyageur ne les voit jamais. Seuls les onglets qui ont des lieux à relire sont proposés.
-const SERVICE_TABS = [['eau', 'Eau'], ['vidange', 'Vidange'], ['gasoil', 'Carburant'], ['supermarche', 'Supermarché'],
-                      ['commerce', 'Commerce'], ['restauration', 'Restauration'], ['cafe', 'Café, bar'], ['toilettes', 'Toilettes'],
-                      ['hygiene', 'Hygiène'], ['laverie', 'Laverie'], ['culture', 'Culture & Loisirs'], ['urgence', 'Urgences'],
-                      ['hors_etape4', "Hors étape 4"]];
 // Hors du filtre : la règle tranche tous les liens morts, seule une décision annulée en ramène un, visible dans « Tous ».
 const HIDDEN_TABS = { morts: 'Liens morts' };
 
@@ -18,49 +12,19 @@ const requestedTab = new URLSearchParams(window.location.search).get('tab');
 let currentTab = requestedTab in TABS ? requestedTab : 'tous';
 let currentCards = [];
 
-function showMessage(text) {
-    const box = document.getElementById('supervisionMsg');
-    box.textContent = text;
-    box.style.display = text ? '' : 'none';
-}
-
 function filters() {
     return { service: document.getElementById('filterService').value, type: document.getElementById('filterType').value,
              ville: document.getElementById('filterCity').value, commune: document.getElementById('filterTown').value };
 }
 
 // La recherche de ville (supervision_ville.js) : les villes qui ont des lieux à relire, et les communes de leurs adresses.
+// Le choix d'une ville passe par chooseCity (supervision_common.js).
 let allCities = [];
 let allTowns = [];
 
-function chooseCity({ ville, commune }) {
-    document.getElementById('filterCity').value = ville;
-    document.getElementById('filterTown').value = commune;
-    load();
-}
-
-function filterQuery() {
-    const params = new URLSearchParams({ tab: currentTab, ...filters() });
-    return params.toString();
-}
-
-async function servicesFetch(path, options = {}) {
-    const response = await window.RVG.apiFetch(`/api/supervision/services${path}`, {
-        ...options,
-        headers: { 'Content-Type': 'application/json' },
-    });
-    if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi, ta décision n\'a pas été enregistrée.');
-    if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
-    if (response.status === 422) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(typeof body.detail === 'string' ? body.detail : 'Décision refusée.');
-    }
-    if (!response.ok) throw new Error(`Erreur du serveur (HTTP ${response.status}) : décision non enregistrée.`);
-    return response.json();
-}
-
-function safeLink(url) {
-    return /^https?:\/\//.test(url || '') ? escapeHtml(url) : null;
+// Les filtres pour la relecture (GET /reviews/services) : la file s'appelle « file », comme dans la page.
+function reviewsQuery() {
+    return new URLSearchParams({ file: currentTab, ...filters() }).toString();
 }
 
 // Une recherche Google sur le nom et l'adresse : pour l'admin seulement, nos agents n'ouvrent jamais Google.
@@ -97,16 +61,16 @@ function cardLinks(card) {
 
 // --- Onglet « Doublons » : les deux lieux côte à côte, on choisit celui qu'on garde (carte #202, 13 novembre 2026) ---
 // Avant, la carte ne donnait de l'autre lieu que son nom : « A l'Aise Breizh Café » proposé comme doublon de « Fraya »
-// ne pouvait pas être tranché. L'API joint maintenant l'autre lieu (card.autre_lieu, poi_edit_service.attach_sheets).
+// ne pouvait pas être tranché. L'API joint maintenant l'autre lieu (card.autre_lieu, services_edit.attach_sheets).
 
 // Les lieux cochés « Garder ce lieu », carte par carte (une liste de numéros) : cocher ne décide rien, seul « Valider »
 // tranche. Rien de coché tant qu'on n'a pas touché la carte (undefined) : « Valider » n'apparaît qu'ensuite.
 const keptPlaces = {};
 // Toutes les décisions d'un doublon passent par les cases et « Valider » (duplicateAction) : aucune n'est en bas.
-//   un seul lieu gardé   : garder_celui_ci (le lieu de la carte, l'autre est masqué, poi_review_service.keep_this_place)
+//   un seul lieu gardé   : garder_celui_ci (le lieu de la carte, l'autre est masqué, services_review.keep_this_place)
 //                          ou fusionner (l'autre lieu, celui de la carte est masqué) ;
 //   les deux gardés      : deux_lieux, ce ne sont pas les mêmes ;
-//   aucun des deux gardé : retirer_les_deux (poi_review_service.remove_both_places).
+//   aucun des deux gardé : retirer_les_deux (services_review.remove_both_places).
 const DUPLICATE_ACTIONS = ['garder_celui_ci', 'fusionner', 'deux_lieux', 'retirer_les_deux', 'retirer'];
 // Les décisions qui gardent un lieu : les corrections de sa fiche sont enregistrées avec elles.
 const KEEP_ACTIONS = ['garder_celui_ci', 'fusionner'];
@@ -206,9 +170,9 @@ function cardKey(card) {
     return `${card.tab}-${card.poi_id}`;
 }
 
-// Corriger ici le champ que la file met en doute la tranche (poi_edit_service.CLOSING_FIELDS).
+// Corriger ici le champ que la file met en doute la tranche (services_edit.CLOSING_FIELDS).
 // « Enregistrer mes corrections » corrige la fiche ; seuls les autres boutons tranchent la file, sauf quand on corrige
-// le champ qu'elle met en doute (poi_edit_service.CLOSING_FIELDS).
+// le champ qu'elle met en doute (services_edit.CLOSING_FIELDS).
 const CLOSING_HINTS = { fermetures: 'Corriger le nom dans la fiche tranche aussi ce doute.',
                         liens: 'Corriger le lien dans la fiche tranche aussi ce signal.',
                         saison: 'Corriger la saison dans la fiche la valide aussi.',
@@ -281,14 +245,7 @@ function render(data) {
     document.getElementById('reviewsCount').textContent =
         waiting === 0 ? 'Rien à relire' : `${waiting} décision${waiting > 1 ? 's' : ''} en attente`;
     // Le nombre de lieux par type, dans le problème et la ville choisis.
-    const serviceSelect = document.getElementById('filterService');
-    const chosenService = serviceSelect.value;
-    const byService = data.service_counts || {};
-    const allServices = Object.values(byService).reduce((sum, count) => sum + count, 0);
-    serviceSelect.innerHTML = `<option value="">Tous (${allServices})</option>` + SERVICE_TABS
-        .filter(([key]) => byService[key] || key === chosenService)
-        .map(([key, label]) =>
-            `<option value="${key}" ${key === chosenService ? 'selected' : ''}>${escapeHtml(label)} (${byService[key] || 0})</option>`).join('');
+    const chosenService = renderCategoryMenu(data.service_counts, true);
     // Le sous-filtre : les types précis de l'onglet choisi (Boulangerie, Marché...), seulement s'il y en a plusieurs.
     const typeSelect = document.getElementById('filterType');
     const chosenType = typeSelect.value;
@@ -313,7 +270,7 @@ function render(data) {
 
     // Un lien à la fois : chaque fiche a son bouton Valider (le lot « à valider d'un coup » est retiré, 7 novembre 2026).
     document.getElementById('cardsList').innerHTML = data.cards.map(reviewCard).join('');
-    document.getElementById('emptyNote').style.display = data.cards.length ? 'none' : '';
+    renderEmptyNote(data);
 
     const more = document.getElementById('moreNote');
     more.textContent = `${data.cards.length} lieux affichés sur ${data.total} : les suivants apparaîtront une fois ceux-ci traités.`;
@@ -327,10 +284,33 @@ function render(data) {
            · <a href="#" onclick="cancelDecision(${decision.id}); return false;">annuler</a></p>`).join('');
 }
 
+// Rien à relire avec ces filtres. Une ville ou une commune choisie a pourtant des services : on le dit, avec un lien
+// qui ouvre Modifier sur elle, pour ne pas croire qu'elle n'en a aucun (carte #186).
+function renderEmptyNote(data) {
+    const note = document.getElementById('emptyNote');
+    note.style.display = data.cards.length ? 'none' : '';
+    const cityName = document.getElementById('filterCity').value;
+    const town = document.getElementById('filterTown').value;
+    if (!cityName && !town) {
+        note.textContent = 'Rien à relire ici pour l\'instant.';
+        return;
+    }
+    // Modifier attend l'identifiant de la ville (data.ville_id), la page Services filtre par son nom.
+    const place = town ? { commune: town } : { name: cityName };
+    const link = `${window.APP_URLS.supervisionModifier}?${placeParams(place, data.ville_id)}`;
+    note.innerHTML = `Rien à relire à ${escapeHtml(town || cityName)}. Ses services sont dans
+        <a href="${link}">Modifier</a>, pour les retrouver et les corriger.`;
+}
+
+// Redessine la page avec la file à jour et ses filtres (au chargement, et après une annulation : cancelDecision).
+async function refresh() {
+    render(await supervisionCall(`/reviews/services?${reviewsQuery()}`));
+}
+
 async function load() {
     try {
         showMessage('');
-        render(await servicesFetch(`?${filterQuery()}`));
+        await refresh();
     } catch (error) {
         showMessage(error.message);
     }
@@ -341,21 +321,28 @@ function selectTab(tab) {
     load();
 }
 
-// Envoie la décision d'une carte, avec la note de la proposition de l'agent si elle a été donnée.
-async function send(tab, poiIds, action, note, months, url = null, name = null) {
-    const key = `${tab}-${poiIds[0]}`;
+// Envoie la décision d'une carte (POST /decisions), avec la note de la proposition de l'agent si elle a été donnée,
+// puis recharge la file. file : la file de la carte ; la décision tranche ses signaux.
+// Un refus s'affiche sous les boutons de la carte, là où on regarde.
+async function send(tab, poiId, action, note, months) {
+    const key = `${tab}-${poiId}`;
     const card = document.querySelector(`[data-key="${key}"]`);
     try {
         cardMessage(card, '');
-        const data = await servicesFetch('/decisions', {
+        await supervisionCall('/decisions', {
             method: 'POST',
-            body: JSON.stringify({ tab, vue: currentTab, poi_ids: poiIds, action, note, mois: months, url, nom: name,
-                                   ...ratingOf(key), ...filters() }),
+            body: JSON.stringify({ objet: 'service', objet_ids: [poiId], file: tab, decision: action, note, mois: months,
+                                   ...ratingOf(key) }),
         });
-        forgetRating(key);
-        render(data);
     } catch (error) {
         cardMessage(card, error.message);
+        return;
+    }
+    forgetRating(key);
+    try {
+        await refresh();
+    } catch (error) {
+        showMessage('C\'est enregistré, mais la liste n\'a pas pu être rechargée : recharge la page.');
     }
 }
 
@@ -398,21 +385,19 @@ function cardMessage(card, text) {
 
 const NOTHING_CHANGED = "Rien n'a changé";
 
-// Une fiche corrigée va au lieu qu'elle décrit : dans « Doublons », ce peut être l'autre lieu, celui qu'on garde.
-async function saveSheetRequest(card, sheet) {
-    return servicesFetch('/fiche', {
-        method: 'POST',
-        body: JSON.stringify({ tab: card.dataset.tab, vue: currentTab, poi_id: FICHES[sheet.key].poi_id,
-                               changes: sheet.changes, note: ficheNote(sheet.key), ...filters() }),
+// Une fiche corrigée va au service qu'elle décrit : dans « Doublons », ce peut être l'autre lieu, celui qu'on garde.
+// file : la file de la carte ; corriger le champ qu'elle met en doute la tranche.
+function saveSheetRequest(card, sheet) {
+    return supervisionCall(`/services/${FICHES[sheet.key].poi_id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ changes: sheet.changes, note: ficheNote(sheet.key), file: card.dataset.tab }),
     });
 }
 
 // Enregistre les fiches corrigées l'une après l'autre ; la page n'est redessinée qu'à la fin, sans quoi la seconde
-// fiche perdrait sa saisie. Rend la dernière réponse de l'API.
+// fiche perdrait sa saisie.
 async function saveSheets(card, sheets) {
-    let data = null;
-    for (const sheet of sheets) data = await saveSheetRequest(card, sheet);
-    return data;
+    for (const sheet of sheets) await saveSheetRequest(card, sheet);
 }
 
 async function saveReviewSheet(key) {
@@ -424,7 +409,8 @@ async function saveReviewSheet(key) {
     }
     try {
         cardMessage(card, '');
-        render(await saveSheets(card, sheets));
+        await saveSheets(card, sheets);
+        await refresh();
     } catch (error) {
         cardMessage(card, error.message);
     }
@@ -454,38 +440,23 @@ async function decide(key, action) {
             return;
         }
     }
-    send(card.dataset.tab, [Number(card.dataset.poi)], action, cardNote(card), months);
+    send(card.dataset.tab, Number(card.dataset.poi), action, cardNote(card), months);
 }
 
-async function confirmAudit(decisionId) {
-    try {
-        showMessage('');
-        render(await servicesFetch(`/audit/${decisionId}?${filterQuery()}`, { method: 'POST' }));
-    } catch (error) {
-        showMessage(error.message);
-    }
-}
-
-async function cancelDecision(decisionId) {
-    try {
-        showMessage('');
-        render(await servicesFetch(`/decisions/${decisionId}?${filterQuery()}`, { method: 'DELETE' }));
-    } catch (error) {
-        showMessage(error.message);
-    }
+// « C'est juste » sur une décision de la règle tirée au sort : elle ne le sera plus (decisionGesture, page commune).
+function confirmAudit(decisionId) {
+    return decisionGesture(`/decisions/${decisionId}/audit`, { method: 'POST' });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.RVG.isLoggedIn()) {
-        window.location.href = window.APP_URLS.contributorLogin;
-        return;
-    }
+    if (redirectIfLoggedOut()) return;
     document.getElementById('filterService').addEventListener('change', () => {
         // Un autre onglet n'a pas les mêmes types : le sous-filtre repart de « Tous ».
         document.getElementById('filterType').innerHTML = '<option value="">Tous</option>';
         load();
     });
     document.getElementById('filterType').addEventListener('change', load);
+    placeFromUrl();
     citySearch({ inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.name,
                  sources: () => ({ cities: allCities, towns: allTowns }), onChoose: chooseCity });
     document.getElementById('filterProblem').addEventListener('change', event => selectTab(event.target.value));

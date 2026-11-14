@@ -253,6 +253,9 @@ EXCLUDED_SPOT_TYPES = ("PARKING JOUR UNIQUEMENT",)
 HIDDEN_SPOT_TYPES = (
     "AIRE DE SERVICES SANS STAT.",
     "SERVICES D'APPOINT",
+    # Une aire de pique-nique n'est pas un lieu où dormir : masquée sur décision de l'administratrice
+    # (14 novembre 2026, Crozon et Le Hézo, les deux seules de la base).
+    "AIRE DE PIQUE-NIQUE",
     # Un spot déjà en base peut devenir "jour uniquement" sur p4n : il
     # reste en base (un carnet de voyage peut y faire référence) mais est masqué.
     *EXCLUDED_SPOT_TYPES,

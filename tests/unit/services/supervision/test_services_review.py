@@ -3,7 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services import poi_review_service as review
+from services.supervision import decisions
+from services.supervision import services_review as review
 
 
 def signal(kind, source="osm", **detail):
@@ -95,7 +96,7 @@ def test_only_links_can_be_decided_in_batch() -> None:
 
 
 def test_every_action_has_its_wording() -> None:
-    # La fiche corrigée à la main (poi_edit_service.decide_sheet) a son libellé, mais son propre formulaire, pas de bouton.
+    # La fiche corrigée à la main (services_edit.decide_sheet) a son libellé, mais son propre formulaire, pas de bouton.
     assert set(review.ACTIONS) == set(review.ACTION_LABELS) - {"modifier_fiche"} == set(review.ACTION_BUTTONS) | set(review.RULE_ACTIONS)
     assert set(review.APPLIED_COLUMNS) >= {"url", "name", "masque"}
 
@@ -134,6 +135,20 @@ def test_a_better_link_found_by_hand_replaces_the_proposed_one():
 def test_a_typed_link_must_be_a_full_web_address(url):
     with pytest.raises(ValueError):
         review.typed_link(url)
+
+
+def test_a_too_long_link_is_refused_with_its_own_message():
+    """Un lien Street View de plus de 490 caractères est refusé avec un message qui conseille le lien de partage : la page
+    le coupait en silence (boucherie Chez Sylvain, n° 48016, 14 novembre 2026)."""
+    url = "https://www.google.com/maps/@48.35,-4.77,3a,75y/data=" + "x" * 500
+    with pytest.raises(ValueError, match="Lien trop long .* Copier le lien"):
+        review.typed_link(url)
+
+
+def test_a_link_of_490_characters_is_kept():
+    """Un lien de 490 caractères tout juste passe : seul ce qui dépasse est refusé."""
+    url = "https://a.fr/" + "x" * (490 - len("https://a.fr/"))
+    assert review.typed_link(url) == url
 
 
 def test_a_name_found_by_hand_renames_the_place_and_shows_it():
@@ -337,10 +352,10 @@ def test_cancelling_a_mixed_place_gives_back_the_sheet_and_the_services(monkeypa
     cursor = connection.cursor.return_value
     detail = {"file": "doublons", "signal_ids": [31], "avant": {"masque": 0},
               "lieu_mixte": {"vers": 30745, "table": "commerces", "services": [12]}}
-    cursor.fetchone.return_value = {"objet_id": 32496, "detail": json.dumps(detail)}
+    cursor.fetchone.return_value = {"objet_type": "poi", "objet_id": 32496, "detail": json.dumps(detail)}
     monkeypatch.setattr(review.MySQLUtils, "connect", lambda: connection)
     monkeypatch.setattr(review.MySQLUtils, "disconnect", lambda connection: None)
-    review.cancel_decision(5)
+    decisions.cancel_decision(5)
     calls = [(" ".join(call[0][0].split()), call[0][1] if len(call[0]) > 1 else None) for call in cursor.execute.call_args_list]
     assert ("UPDATE poi SET masque = %s WHERE id = %s", (0, 32496)) in calls
     assert ("UPDATE commerces SET poi_id = %s WHERE poi_id = %s", (32496, 30745)) in calls
@@ -428,10 +443,10 @@ def test_cancelling_keep_this_place_puts_both_places_back(monkeypatch):
     connection = MagicMock()
     cursor = connection.cursor.return_value
     detail = {"file": "doublons", "signal_ids": [42], "avant": {"masque": 0}, "garde": {"poi_id": 48528, "avant": {"masque": 1}}}
-    cursor.fetchone.return_value = {"objet_id": 48527, "detail": json.dumps(detail)}
+    cursor.fetchone.return_value = {"objet_type": "poi", "objet_id": 48527, "detail": json.dumps(detail)}
     monkeypatch.setattr(review.MySQLUtils, "connect", lambda: connection)
     monkeypatch.setattr(review.MySQLUtils, "disconnect", lambda connection: None)
-    review.cancel_decision(9)
+    decisions.cancel_decision(9)
     calls = _calls(cursor)
     assert ("UPDATE poi SET masque = %s WHERE id = %s", (0, 48527)) in calls
     assert ("UPDATE poi SET masque = %s WHERE id = %s", (1, 48528)) in calls
