@@ -14,7 +14,7 @@ from jose import jwt
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from api import dependencies
-from api.routers import supervision, supervision_bilan
+from api.routers import supervision, supervision_reviews
 from services.authentification import ALGORITHM, AUTH_COOKIE_NAME, SECRET_KEY, create_guest_token
 
 scenarios("features/supervision_droits.feature")
@@ -47,7 +47,7 @@ def world(monkeypatch):
     monkeypatch.setattr(supervision.services_review, "get_reviews", review_calls)
     monkeypatch.setattr(supervision.services_review, "decide", record)
     monkeypatch.setattr(supervision.services_review, "confirm_audit", record)
-    monkeypatch.setattr(supervision_bilan.summary, "get_summary", review_calls)
+    monkeypatch.setattr(supervision_reviews.summary, "get_summary", review_calls)
     monkeypatch.setattr(supervision.services_edit, "search", review_calls)
     monkeypatch.setattr(supervision.services_edit, "decide", record)
     monkeypatch.setattr(supervision.services_edit, "decide_sheet", record)
@@ -58,7 +58,7 @@ def world(monkeypatch):
 
     app = FastAPI()
     app.include_router(supervision.router, prefix="/api/supervision")
-    app.include_router(supervision_bilan.router, prefix="/api/supervision")
+    app.include_router(supervision_reviews.router, prefix="/api/supervision")
     state.client = TestClient(app)
     return state
 

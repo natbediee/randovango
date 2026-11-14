@@ -16,7 +16,7 @@ Fonctionnalité: La supervision est réservée aux admins
       | expiré   | GET     | /api/supervision/reviews       |
       | absent   | POST    | /api/supervision/decisions     |
       | invalide | DELETE  | /api/supervision/decisions/1   |
-      | absent   | GET     | /api/supervision/bilan         |
+      | absent   | GET     | /api/supervision/reviews/summary |
       | absent   | POST    | /api/supervision/edit/services/decisions |
 
   Scénario: Le jeton n'est lu que dans le cookie de connexion
@@ -47,7 +47,7 @@ Fonctionnalité: La supervision est réservée aux admins
       | contributor | POST    | /api/supervision/services/decisions     |
       | contributor | POST    | /api/supervision/services/audit/1       |
       | contributor | DELETE  | /api/supervision/services/decisions/1   |
-      | contributor | GET     | /api/supervision/bilan                  |
+      | contributor | GET     | /api/supervision/reviews/summary        |
       | contributor | GET     | /api/supervision/edit/services           |
       | contributor | POST    | /api/supervision/services/fiche          |
       | contributor | GET     | /api/supervision/edit/services/fiche/1   |

@@ -1,6 +1,6 @@
 // Supervision (admin) : le bilan. Combien il reste à trancher, file par file, avec un lien
 // vers chaque file. Les chiffres viennent de services/supervision/summary.py, qui
-// compte avec les mêmes règles que les pages Spots et Services.
+// compte avec les mêmes règles que les pages Spots et Services. Route : GET /api/supervision/reviews/summary.
 
 const CITIES_SHOWN = 12;
 
@@ -89,7 +89,7 @@ function render(data) {
 document.addEventListener('DOMContentLoaded', async () => {
     if (redirectIfLoggedOut()) return;
     try {
-        render(await supervisionCall('/bilan'));
+        render(await supervisionCall('/reviews/summary'));
     } catch (error) {
         showMessage(error.message);
     }

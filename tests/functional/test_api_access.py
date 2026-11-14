@@ -69,7 +69,7 @@ ACCESS = {
     ("DELETE", "/api/supervision/edit/spots/decisions/{decision_id}"): ADMIN,
     ("POST", "/api/supervision/edit/spots/openings"): ADMIN,
     ("DELETE", "/api/supervision/edit/spots/openings/{decision_id}"): ADMIN,
-    ("GET", "/api/supervision/bilan"): ADMIN,
+    ("GET", "/api/supervision/reviews/summary"): ADMIN,
 }
 
 # Les paramètres de chemin et de requête des routes, pour les appeler vraiment.
