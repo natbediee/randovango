@@ -43,7 +43,7 @@ HUMAN_LINK_DECISIONS = ("valider_lien", "valider_lien_nom", "refuser_lien", "aut
 # UN AGENT ENRICHIT, IL NE RECRÉE PAS (11 novembre 2026). Le lieu déjà en base est cherché dans tous les services des
 # onglets que la chaîne remplit, quelle que soit la catégorie qui passe : Le Galion de Ploudalmézeau existait deux fois,
 # restaurant pour un agent et café pour l'autre, parce que chacun ne regardait que ses propres services.
-KNOWN_TABS = ("restauration", "cafe", "commerce", "supermarche")
+KNOWN_TABS = ("restauration", "cafe", "commerce", "supermarche", "laverie")
 KNOWN_SERVICES = tuple(service for service, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab in KNOWN_TABS)
 # Le signal d'un doublon possible, à trancher dans la file « Doublons » de /supervision (poi_duplicates_service.py).
 DUPLICATE_SOURCE, DUPLICATE_SIGNAL = "doublons", "doublon_service"

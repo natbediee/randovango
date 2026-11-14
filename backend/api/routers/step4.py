@@ -32,9 +32,10 @@ RESTAURATION_CATEGORY = "restauration"
 COMMERCE_CATEGORY = "commerce"
 CAFE_CATEGORY = "cafe"
 SUPERMARKET_CATEGORY = "supermarche"
+LAUNDRY_CATEGORY = "laverie"
 # Les onglets dont un agent écrit des fiches, et combien de fiches de la commune y sont montrées.
 SHEETS_SHOWN = {RESTAURATION_CATEGORY: TABLES_SHOWN, COMMERCE_CATEGORY: SHOPS_SHOWN, CAFE_CATEGORY: SHOPS_SHOWN,
-                SUPERMARKET_CATEGORY: SHOPS_SHOWN}
+                SUPERMARKET_CATEGORY: SHOPS_SHOWN, LAUNDRY_CATEGORY: SHOPS_SHOWN}
 # Toutes les cartes de services ont le bouton Google Maps (7 novembre 2026). Celui d'une station se construit à part,
 # avec la marque, pour tomber sur la station et non sur le supermarché voisin (services/station_selection_service.py).
 FUEL_CATEGORY = "gasoil"
@@ -94,13 +95,13 @@ def keep_checked_commerces(poi_list: list) -> list:
     d'OSM disparaissent là où l'agent des commerces a écrit des fiches. Les cafés, qui ont leur onglet
     (commerce_selection_service.OWN_TAB), suivent la même règle avec leurs seules fiches : une commune où les commerces
     sont passés sans les cafés garde ses cafés d'OSM.
-    Les supermarchés (PROVEN_ONLY_TABS) : seuls ceux qui ont leur fiche sont montrés, partout (keep_proven).
+    Les supermarchés et les laveries (PROVEN_ONLY_TABS) : seuls ceux qui ont leur fiche sont montrés, partout (keep_proven).
     """
     poi_list = keep_checked(poi_list, COMMERCE_SERVICES,
                             lambda poi: bool(poi.get("commerce_genre")) and poi.get("commerce_categorie") not in OWN_TAB)
     for sheet, services in OWN_TAB.items():
         def has_sheet(poi: dict, sheet: str = sheet) -> bool:
-            """Le lieu a sa fiche de cet onglet (café ou supermarché)."""
+            """Le lieu a sa fiche de cet onglet (café, supermarché ou laverie)."""
             return poi.get("commerce_categorie") == sheet
 
         if sheet in PROVEN_ONLY_TABS:
@@ -163,8 +164,8 @@ def order_category(pois: list, category: str, city_name: str) -> list:
 
 CATEGORY_LABELS = {**TABLE_CATEGORY_LABELS, **SHOP_CATEGORY_LABELS}
 SHEET_FIELDS = ("genre", "pourquoi", "categorie", "registre_depuis")
-# Les onglets dont la fiche vient de l'agent des commerces (table commerces).
-SHOP_TABS = {COMMERCE_CATEGORY, CAFE_CATEGORY, SUPERMARKET_CATEGORY}
+# Les onglets dont la fiche vient de la table commerces (agents des commerces, des supermarchés et des laveries).
+SHOP_TABS = {COMMERCE_CATEGORY, CAFE_CATEGORY, SUPERMARKET_CATEGORY, LAUNDRY_CATEGORY}
 
 
 def sheet_of(poi: dict, tab: str | None = None) -> dict:
