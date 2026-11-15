@@ -333,21 +333,50 @@ def same_spelling(town: str, commune: str) -> bool:
     return spelling_key(town) == spelling_key(commune)
 
 
+TOWN_IS_COMMUNE = {}        # {clé d'un nom : est-ce une commune de France ?}, gardé pour ne demander qu'une fois
+
+
+def is_commune_name(town: str, timeout=10) -> bool | None:
+    """
+    Ce nom est-il celui d'une commune de France, au besoin autrement écrit ? Séné l'est, Trézien non. None si l'API
+    ne répond pas : on ne sait pas.
+    """
+    key = spelling_key(town)
+    if key in TOWN_IS_COMMUNE:
+        return TOWN_IS_COMMUNE[key]
+    try:
+        response = requests.get(COMMUNE_URL, params={"nom": town, "fields": "nom", "limit": 5},
+                                timeout=timeout, headers={"User-Agent": "randovango"})
+        response.raise_for_status()
+        names = [row["nom"] for row in response.json()]
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"geo.api.gouv.fr injoignable pour le nom {town} : {e}")
+        return None
+    TOWN_IS_COMMUNE[key] = any(same_spelling(town, name) for name in names)
+    return TOWN_IS_COMMUNE[key]
+
+
 def commune_of_town(postcode: str, town: str, latitude=None, longitude=None) -> str | None:
     """
     Le nom officiel de la commune où se trouve `town`, écrit après le code postal d'une adresse :
         - `town` lui-même, s'il est une commune de ce code postal (au besoin, autrement écrit) ;
         - sinon la seule commune du code postal (29160 Morgat : Crozon et Lanvéoc, il faut la position) ;
         - sinon celle des communes du code postal qui contient la position du lieu.
-    None si on ne sait pas : l'adresse est alors laissée telle quelle.
+    None si on ne sait pas : l'adresse est alors laissée telle quelle. C'est aussi le cas d'une vraie commune écrite
+    avec le code postal d'une autre : « 56000 Séné » n'est pas un lieu-dit de Vannes, c'est le code qui est faux
+    (essai de la reprise, 15 novembre 2026 : Séné, Vannes, La Feuillée, Fouesnant).
     """
     communes = communes_of_postcode(postcode)
+    if not communes:
+        return None
     official = next((commune for commune in communes if same_spelling(town, commune)), None)
     if official:
         return official
+    if is_commune_name(town) is not False:
+        return None
     if len(communes) == 1:
         return communes[0]
-    if latitude is None or longitude is None or not communes:
+    if latitude is None or longitude is None:
         return None
     commune, _ = get_commune_from_coordinates(latitude, longitude)
     return commune if commune in communes else None

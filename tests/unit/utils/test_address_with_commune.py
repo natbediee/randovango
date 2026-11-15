@@ -8,6 +8,7 @@ from utils import geo_utils
 
 # La vraie fonction, gardée avant que le conftest ne la remplace pour tous les tests.
 REAL_COMMUNES_OF_POSTCODE = geo_utils.communes_of_postcode
+REAL_IS_COMMUNE_NAME = geo_utils.is_commune_name
 
 # Les communes que l'État donne pour ces codes postaux (geo.api.gouv.fr, 15 novembre 2026).
 COMMUNES = {
@@ -24,6 +25,7 @@ def fake_geo_api(monkeypatch):
     """geo.api.gouv.fr remplacé : les communes d'un code postal, et la commune qui contient un point."""
     monkeypatch.setattr(geo_utils, "communes_of_postcode", REAL_COMMUNES_OF_POSTCODE)
     monkeypatch.setattr(geo_utils, "POSTCODE_COMMUNES", dict(COMMUNES))
+    monkeypatch.setattr(geo_utils, "is_commune_name", lambda town: town in {"Séné", "Vannes"})
     points = {(48.42, -4.73): ("Plouarzel", "29177"), (48.60, -4.56): ("Landéda", "29101"),
               (48.23, -4.50): ("Crozon", "29042")}
     monkeypatch.setattr(geo_utils, "get_commune_from_coordinates", lambda lat, lon: points.get((lat, lon), (None, None)))
@@ -96,3 +98,28 @@ def test_geo_api_down_is_not_remembered(monkeypatch) -> None:
     monkeypatch.setattr(geo_utils.requests, "get", down)
     assert geo_utils.communes_of_postcode("29217") == []
     assert "29217" not in geo_utils.POSTCODE_COMMUNES
+
+
+def test_a_real_commune_with_the_postcode_of_another_is_left_alone(monkeypatch) -> None:
+    """« 56000 Séné » : Séné est une commune, c'est le code postal qui est faux ; l'adresse n'est pas rangée à Vannes."""
+    monkeypatch.setitem(geo_utils.POSTCODE_COMMUNES, "56000", ["Vannes"])
+    assert geo_utils.address_with_commune("Route de Nantes, 56000 Séné") == "Route de Nantes, 56000 Séné"
+
+
+def test_a_commune_name_is_asked_once(monkeypatch) -> None:
+    """Savoir si un nom est une commune ne coûte qu'une question à l'API ; Trézien n'en est pas une."""
+    calls = []
+
+    class Answer:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return []
+
+    monkeypatch.setattr(geo_utils, "is_commune_name", REAL_IS_COMMUNE_NAME)
+    monkeypatch.setattr(geo_utils, "TOWN_IS_COMMUNE", {})
+    monkeypatch.setattr(geo_utils.requests, "get", lambda *args, **kwargs: calls.append(1) or Answer())
+    assert geo_utils.is_commune_name("Trézien") is False
+    assert geo_utils.is_commune_name("TREZIEN") is False
+    assert len(calls) == 1

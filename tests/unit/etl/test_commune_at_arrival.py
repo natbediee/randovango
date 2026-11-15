@@ -18,6 +18,7 @@ def plouarzel_postcode(monkeypatch):
                         lambda postcode: ["Brélès", "Lampaul-Plouarzel", "Plouarzel", "Ploumoguer"]
                         if postcode == "29810" else [])
     monkeypatch.setattr(geo_utils, "get_commune_from_coordinates", lambda lat, lon: ("Plouarzel", "29177"))
+    monkeypatch.setattr(geo_utils, "is_commune_name", lambda town: False)
 
 
 def test_an_agent_address_is_stored_with_its_commune(plouarzel_postcode) -> None:
