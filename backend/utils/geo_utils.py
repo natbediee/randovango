@@ -210,6 +210,26 @@ def get_commune_from_coordinates(latitude, longitude, timeout=10):
     return rows[0]["nom"], rows[0]["code"]
 
 
+def get_commune_details(insee: str, timeout=10) -> dict | None:
+    """
+    Ce qu'il faut pour créer la ligne d'une commune dans cities, d'après geo.api.gouv.fr : son nom officiel, la position
+    de son centre, son département et sa région. Plouguerneau, que l'appli ne connaissait que par ses lieux-dits Lilia
+    et Tremenac'h (issue #184). Renvoie None si l'API ne répond pas.
+    """
+    try:
+        response = requests.get(f"{COMMUNE_URL}/{insee}", params={"fields": "nom,code,centre,departement,region"},
+                                timeout=timeout, headers={"User-Agent": "randovango"})
+        response.raise_for_status()
+        row = response.json()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"geo.api.gouv.fr injoignable pour la commune {insee} : {e}")
+        return None
+    # GeoJSON écrit la longitude d'abord : [-4.5104, 48.6046].
+    longitude, latitude = row["centre"]["coordinates"]
+    return {"name": row["nom"], "insee": row["code"], "latitude": latitude, "longitude": longitude,
+            "department": row["departement"]["nom"], "region": row["region"]["nom"]}
+
+
 # LA COMMUNE D'UNE ADRESSE (supervision, 8 et 12 novembre 2026) : ce qui suit le code postal, « 29730 Guilvinec ».
 # Un service se range par la commune de son adresse, même quand ce n'est pas une ville de l'appli (le Carrefour de
 # Guilvinec) : c'est aussi ce qu'un voyageur donnera en signalant un service.
