@@ -31,8 +31,8 @@ from etl.load.load_poi_checks import save_signal
 from services.pepite_service import is_generic, name_key
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
-from utils.geo_utils import (city_commune, geocode_address_ban, geocode_locality_ban, geocode_sure_address_ban, geocode_way_ban,
-                             get_bounding_box, haversine_distance_km)
+from utils.geo_utils import (address_with_commune, city_commune, geocode_address_ban, geocode_locality_ban,
+                             geocode_sure_address_ban, geocode_way_ban, get_bounding_box, haversine_distance_km)
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
 MAX_KM = 15                 # au-delà, l'adresse géocodée n'est pas celle de la commune cherchée
@@ -535,7 +535,7 @@ def _update_poi(cursor, poi: dict, row: dict, position: tuple | None) -> None:
     de ce qu'il a corrigé dans l'onglet « Modifier » (8 novembre 2026) : un lien Google Maps saisi fixe aussi la position.
     """
     human = human_fields(cursor, poi["id"])
-    fields = {} if "address" in human else {"address": row.get("adresse")}
+    fields = {} if "address" in human else {"address": stored_address(row, position)}
     if row.get("lien") and "url" not in human and not _decided_by_human(cursor, poi["id"], HUMAN_LINK_DECISIONS):
         fields["url"] = row["lien"]
     if position and "maps_url" not in human:
@@ -665,12 +665,21 @@ def review_reason(row: dict, located) -> str | None:
 
 # --- L'écriture d'un lieu, de sa fiche et de son signal ---
 
+def stored_address(row: dict, position: tuple | None) -> str | None:
+    """
+    L'adresse de l'agent telle qu'elle est écrite en base : avec la commune après le code postal, le lieu-dit sur sa
+    propre ligne (« ..., Trézien, 29810 Plouarzel », issue #184). La position départage un code postal à plusieurs communes.
+    """
+    latitude, longitude = position or (None, None)
+    return address_with_commune(row.get("adresse"), latitude, longitude)
+
+
 def create_poi(category, cursor, row: dict, position: tuple | None, city: dict, source_id: int, masked: bool) -> int:
     latitude, longitude = position or (None, None)
     cursor.execute(
         "INSERT INTO poi (name, latitude, longitude, url, address, source_id, verifie, masque)"
         " VALUES (%s, %s, %s, %s, %s, %s, 0, %s)",
-        (row["nom"], latitude, longitude, row.get("lien"), row.get("adresse"), source_id, int(masked)))
+        (row["nom"], latitude, longitude, row.get("lien"), stored_address(row, position), source_id, int(masked)))
     poi_id = cursor.lastrowid
     insert_histo_poi(cursor, poi_id, city["name"])
     insert_service_and_link(cursor, poi_id, category.new_service(row))

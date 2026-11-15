@@ -49,3 +49,16 @@ def rate_limit_counters():
     from api.rate_limit import limiter
 
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def no_postcode_api(monkeypatch):
+    """
+    Aucun test n'interroge geo.api.gouv.fr pour les communes d'un code postal (geo_utils.communes_of_postcode,
+    issue #184) : sans réponse, une adresse reste telle quelle. Les tests de la conversion remettent la vraie fonction
+    et remplacent l'API eux-mêmes (tests/unit/utils/test_address_with_commune.py).
+    """
+    from utils import geo_utils
+
+    monkeypatch.setattr(geo_utils, "communes_of_postcode", lambda postcode: [])
+    monkeypatch.setattr(geo_utils, "LOCALITY_COMMUNES", {})

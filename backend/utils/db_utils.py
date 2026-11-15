@@ -95,11 +95,16 @@ def p4n_id_exists(p4n_id: str) -> bool:
 
 def get_all_city_ids():
     """
-    Retourne la liste de tuples (id, name) pour toutes les villes.
+    Retourne la liste de tuples (id, name) de toutes les communes de la table cities, sans les lieux-dits (issue #184) :
+    les passages « --toutes » (pharmacies, carburants, rattrapage) repassaient sinon par Penmarc'h, Lochrist ou Lilia,
+    dont les services et les spots sont repris par leur commune.
     """
+    # Importée ici : geo_utils importe déjà ce module, un import en tête de fichier ferait une boucle.
+    from utils.geo_utils import communes_only
+
     # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
     with MySQLUtils.open_cursor() as (conn, cursor):
-        cursor.execute("SELECT id, name FROM cities")
+        cursor.execute(f"SELECT id, name FROM cities WHERE {communes_only()}")
         rows = cursor.fetchall()
     return [(row[0], row[1]) for row in rows]
 

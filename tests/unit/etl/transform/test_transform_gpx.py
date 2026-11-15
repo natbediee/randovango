@@ -46,14 +46,22 @@ def test_transform_gpx_returns_expected_payload(monkeypatch) -> None:
     assert result["start_lon"] == -4.4861
 
 
-def test_a_village_keeps_its_name_and_gets_its_commune(monkeypatch) -> None:
-    # La pointe de Corsen : Nominatim dit Trézien, un village de Plouarzel.
+def test_a_gpx_leaving_from_a_locality_is_named_after_its_commune(monkeypatch) -> None:
+    """Un GPX qui part de la pointe de Corsen, que Nominatim range à Trézien, est rattaché à sa commune, Plouarzel."""
     monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Trézien")
     monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda *args, **kwargs: ("Plouarzel", "29177"))
 
     result = transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")
 
-    assert (result["city_name"], result["commune"], result["insee"]) == ("Trézien", "Plouarzel", "29177")
+    assert (result["city_name"], result["commune"], result["insee"]) == ("Plouarzel", "Plouarzel", "29177")
+
+
+def test_nominatim_names_the_city_only_when_the_state_does_not_answer(monkeypatch) -> None:
+    """Sans réponse de geo.api.gouv.fr, le GPX garde le lieu donné par Nominatim plutôt que d'être perdu."""
+    monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Trézien")
+    monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda *args, **kwargs: (None, None))
+
+    assert transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")["city_name"] == "Trézien"
 
 
 def test_without_nominatim_the_city_is_named_after_its_commune(monkeypatch) -> None:

@@ -4,6 +4,7 @@ from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil, is_excluded_service
 from utils.db_utils import MySQLUtils
 from utils.display_utils import EXCLUDED_SPOT_TYPES
+from utils.geo_utils import commune_of_town
 
 
 def save_reviews(cursor, spot_id: int, reviews: list) -> None:
@@ -17,6 +18,18 @@ def save_reviews(cursor, spot_id: int, reviews: list) -> None:
             " VALUES (%s, %s, %s, %s, %s)",
             (spot_id, review["p4n_review_id"], review["review_date"], review["rating"], review["text"]),
         )
+
+
+def commune_label(row) -> str | None:
+    """
+    La commune d'un spot, à la place du lieu-dit que porte son nom dans la source des spots (issue #184) :
+    « 29880 Lilia » est rangé à Plouguerneau. Le code postal et la position désignent la commune ; si on ne sait pas
+    la trouver (pas de code postal, l'État ne répond pas), le nom reçu est gardé.
+    """
+    label, postcode = row.get('city_label'), row.get('postal_code')
+    if not label or not postcode:
+        return label
+    return commune_of_town(postcode, label, row.get('latitude'), row.get('longitude')) or label
 
 
 def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
@@ -106,7 +119,7 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
                 row['URL_fiche'],
                 source_id,
                 row.get('postal_code'),
-                row.get('city_label'),
+                commune_label(row),
                 row.get('place_label'),
                 row.get('Ouverture'),
                 row.get('Prix_stationnement'),

@@ -191,3 +191,10 @@ def test_the_report_counts_the_pharmacies_of_the_commune_apart():
     rows = [_row_in("Plougonvelin"), _row_in("Le Conquet"), _row_in("Plouzane"), _row_in("Plouzané")]
     assert etl_pharmacies.towns_summary("Plougonvelin", rows) == (
         "Plougonvelin : 1 pharmacie dans la commune, 3 autour (Le Conquet 1, Plouzane 2)")
+
+
+def test_finess_penmarch_counts_in_the_commune_written_with_an_apostrophe():
+    """Les pharmacies que FINESS range à « Penmarch » sont comptées dans la commune, même appelée « Penmarc'h » (#194)."""
+    rows = [_row_in("PENMARCH"), _row_in("Penmarch"), _row_in("Plomeur")]
+    assert etl_pharmacies.towns_summary("Penmarc'h", rows) == (
+        "Penmarc'h : 2 pharmacies dans la commune, 1 autour (Plomeur 1)")

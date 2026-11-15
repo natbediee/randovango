@@ -20,6 +20,7 @@ import json
 from etl.load.load_poi import get_or_create_source, insert_histo_poi, insert_service_and_link
 from etl.load.load_poi_checks import save_signal
 from utils.db_utils import MySQLUtils
+from utils.geo_utils import address_with_commune
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("etl_carburants")
@@ -59,6 +60,8 @@ def human_fields(cursor, source_id: int) -> dict:
 
 def _upsert_poi(cursor, source_id: int, pdv_id: str, poi: dict, protected: dict) -> int:
     """Crée le poi d'une station, ou remet à jour ses colonnes, sauf celles qu'un humain a corrigées (protected)."""
+    # La commune après le code postal, le lieu-dit sur sa propre ligne (issue #184) : « ..., 29760 Penmarch ».
+    poi = {**poi, "address": address_with_commune(poi["address"], poi["latitude"], poi["longitude"])}
     cursor.execute("SELECT id FROM poi WHERE original_id = %s AND source_id = %s", (pdv_id, source_id))
     found = cursor.fetchone()
     if found is None:
