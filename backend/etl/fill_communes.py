@@ -45,21 +45,19 @@ def main():
     parser.add_argument("--essai", action="store_true", help="Montre ce qui serait écrit, n'écrit rien")
     args = parser.parse_args()
 
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    for city in cities_to_fill(cursor, args.ville):
-        time.sleep(PAUSE_SECONDS)
-        commune, insee = get_commune_from_coordinates(city["latitude"], city["longitude"])
-        print(json.dumps({"id": city["id"], "ville": city["name"], "commune": commune, "insee": insee,
-                          "differente": bool(commune) and commune != city["name"]}, ensure_ascii=False))
-        if not insee or args.essai:
-            continue
-        cursor.execute("UPDATE cities SET commune = %s, insee = %s WHERE id = %s AND insee IS NULL",
-                       (commune, insee, city["id"]))
-        connection.commit()
-        logger.info(f"[communes] {city['name']} (id {city['id']}) : {commune} {insee}")
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        for city in cities_to_fill(cursor, args.ville):
+            time.sleep(PAUSE_SECONDS)
+            commune, insee = get_commune_from_coordinates(city["latitude"], city["longitude"])
+            print(json.dumps({"id": city["id"], "ville": city["name"], "commune": commune, "insee": insee,
+                              "differente": bool(commune) and commune != city["name"]}, ensure_ascii=False))
+            if not insee or args.essai:
+                continue
+            cursor.execute("UPDATE cities SET commune = %s, insee = %s WHERE id = %s AND insee IS NULL",
+                           (commune, insee, city["id"]))
+            connection.commit()
+            logger.info(f"[communes] {city['name']} (id {city['id']}) : {commune} {insee}")
 
 
 if __name__ == "__main__":

@@ -73,12 +73,10 @@ def scraping_background(city):
 
     # 3. Extraction P4N en dernier (lent - Selenium ~4min) si la ville n'est pas déjà présente dans histo_scrap
     def city_already_scraped(city_name):
-        conn = MySQLUtils.connect()
-        cursor = MySQLUtils.get_cursor(conn)
-        cursor.execute("SELECT COUNT(*) FROM histo_scrap hs JOIN cities c ON hs.city_id = c.id WHERE c.name = %s", (city_name,))
-        count = cursor.fetchone()[0]
-        cursor.close()
-        MySQLUtils.disconnect(conn)
+        # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+        with MySQLUtils.open_cursor() as (conn, cursor):
+            cursor.execute("SELECT COUNT(*) FROM histo_scrap hs JOIN cities c ON hs.city_id = c.id WHERE c.name = %s", (city_name,))
+            count = cursor.fetchone()[0]
         return count > 0
 
     # Verrou uniquement pour le scraping P4N (Selenium) pour éviter les conflits

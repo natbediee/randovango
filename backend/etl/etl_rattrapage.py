@@ -15,14 +15,12 @@ from etl.etl_meteo import run_meteo_etl
 logger = LoggerUtil.get_logger("etl_rattrapage")
 
 def add_fictive_histo_scrap(city_id):
-    conn = MySQLUtils.connect()
-    cursor = conn.cursor()
-    # Ajoute une ligne fictive (spot_id=-1)
-    cursor.execute("INSERT IGNORE INTO histo_scrap (spot_id, city_id, scraped_at) VALUES (-1, %s, NOW())", (city_id,))
-    conn.commit()
-    logger.info(f"[SCRAP] Résultat INSERT IGNORE histo_scrap city_id={city_id} : rowcount={cursor.rowcount}")
-    cursor.close()
-    MySQLUtils.disconnect(conn)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (conn, cursor):
+        # Ajoute une ligne fictive (spot_id=-1)
+        cursor.execute("INSERT IGNORE INTO histo_scrap (spot_id, city_id, scraped_at) VALUES (-1, %s, NOW())", (city_id,))
+        conn.commit()
+        logger.info(f"[SCRAP] Résultat INSERT IGNORE histo_scrap city_id={city_id} : rowcount={cursor.rowcount}")
     logger.info(f"[SCRAP] Ajout fictif dans histo_scrap pour city_id={city_id}")
 
 def main():
@@ -95,19 +93,17 @@ def main():
 
 def rattrapage_meteo():
     """Relance l'ETL météo pour les villes sans prévisions à jour (coordonnées depuis DB, pas Nominatim)."""
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT c.id, c.name, c.latitude, c.longitude
-        FROM cities c
-        LEFT JOIN weather w ON w.city_id = c.id AND w.date >= CURDATE()
-        WHERE w.id IS NULL
-        GROUP BY c.id, c.name, c.latitude, c.longitude
-        ORDER BY c.name
-    """)
-    missing = cursor.fetchall()
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+        cursor.execute("""
+            SELECT c.id, c.name, c.latitude, c.longitude
+            FROM cities c
+            LEFT JOIN weather w ON w.city_id = c.id AND w.date >= CURDATE()
+            WHERE w.id IS NULL
+            GROUP BY c.id, c.name, c.latitude, c.longitude
+            ORDER BY c.name
+        """)
+        missing = cursor.fetchall()
 
     logger.info(f"[METEO] Villes restant à rattraper (prévisions absentes/périmées) : {len(missing)}")
     for city in missing:
