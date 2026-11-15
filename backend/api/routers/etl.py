@@ -80,13 +80,11 @@ async def delete_gpx(
         return GPXDeleteResponse(success=False, message=f"Extension non autorisée: {ext}")
 
     # Suppression dans MySQL
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor()
-    cursor.execute("DELETE FROM hikes WHERE filename = %s", (filename,))
-    mysql_deleted = cursor.rowcount
-    cnx.commit()
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
+    # « with » : la connexion se ferme à la sortie du bloc, même si la suppression échoue (issue #206).
+    with MySQLUtils.open_cursor() as (cnx, cursor):
+        cursor.execute("DELETE FROM hikes WHERE filename = %s", (filename,))
+        mysql_deleted = cursor.rowcount
+        cnx.commit()
 
     # Suppression dans MongoDB
     MongoUtils.connect()
