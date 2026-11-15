@@ -125,3 +125,32 @@ def hide_closed(closed: dict, known: dict) -> int:
         MySQLUtils.disconnect(cnx)
     logger.info(f"[Load] : {hidden} pharmacies fermées masquées")
     return hidden
+
+
+def mark_pharmacies_read(read_at) -> None:
+    """
+    Note la date de la dernière relecture complète de FINESS (sources.lu_le de la source finess, carte #241) :
+    api/routers/step1.py ne relance pas la relecture le même jour.
+    """
+    cnx = MySQLUtils.connect()
+    cursor = cnx.cursor()
+    try:
+        source_id = get_or_create_source(cursor, SOURCE_NAME)
+        cursor.execute("UPDATE sources SET lu_le = %s WHERE id = %s", (read_at, source_id))
+        cnx.commit()
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(cnx)
+
+
+def pharmacies_read_at():
+    """La date de la dernière relecture complète de FINESS, ou None si elle n'a jamais eu lieu."""
+    cnx = MySQLUtils.connect()
+    cursor = cnx.cursor()
+    try:
+        cursor.execute("SELECT lu_le FROM sources WHERE name = %s", (SOURCE_NAME,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(cnx)
