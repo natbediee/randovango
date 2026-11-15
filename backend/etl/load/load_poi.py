@@ -74,49 +74,47 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
         return
     # Remplacer les NaN par None pour éviter les erreurs MySQL
     df_osm = df_osm.where(pd.notnull(df_osm), None)
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor()
-    source_id = get_or_create_source(cursor, 'osm')
-    for _, row in df_osm.iterrows():
-        # Insertion dans poi sans city_id ni type
-        cursor.execute(
-            """
-            INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, url, source_id, verifie, address)
-            VALUES (%s, %s, %s, %s, %s, %s, %s,1, %s)
-            """,
-            (
-                row.get('osm_id'),
-                row.get('name'),
-                row.get('description'),
-                row.get('lat'),
-                row.get('lon'),
-                row.get('website'),
-                source_id,
-                row.get('address')
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (cnx, cursor):
+        source_id = get_or_create_source(cursor, 'osm')
+        for _, row in df_osm.iterrows():
+            # Insertion dans poi sans city_id ni type
+            cursor.execute(
+                """
+                INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, url, source_id, verifie, address)
+                VALUES (%s, %s, %s, %s, %s, %s, %s,1, %s)
+                """,
+                (
+                    row.get('osm_id'),
+                    row.get('name'),
+                    row.get('description'),
+                    row.get('lat'),
+                    row.get('lon'),
+                    row.get('website'),
+                    source_id,
+                    row.get('address')
+                )
             )
-        )
-        # Récupérer l'id du poi inséré
-        poi_id = cursor.lastrowid
-        if not poi_id:
-            # Si déjà existant, récupérer l'id
-            cursor.execute("SELECT id FROM poi WHERE original_id = %s AND source_id = %s", (row.get('osm_id'), source_id))
-            res = cursor.fetchone()
-            if res:
-                poi_id = res[0]
-        # Insérer le lien dans histo_poi
-        if poi_id:
-            insert_histo_poi(cursor, poi_id, city_name)
-            # Insérer le type dans la table service si besoin, puis lier dans poi_service
-            if row.get('type'):
-                insert_service_and_link(cursor, poi_id, row.get('type'))
-            save_public_access(cursor, poi_id, row)
-            # Téléphone et horaires : pas encore de colonne dans poi, gardés pour la vérification.
-            if row.get('osm_details'):
-                save_check(cursor, poi_id, 'osm', {**row.get('osm_details'), 'present': True})
-    cnx.commit()
-    logger.info(f"[load_osm_poi] : {len(df_osm)} POI OSM insérés pour {city_name}.")
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
+            # Récupérer l'id du poi inséré
+            poi_id = cursor.lastrowid
+            if not poi_id:
+                # Si déjà existant, récupérer l'id
+                cursor.execute("SELECT id FROM poi WHERE original_id = %s AND source_id = %s", (row.get('osm_id'), source_id))
+                res = cursor.fetchone()
+                if res:
+                    poi_id = res[0]
+            # Insérer le lien dans histo_poi
+            if poi_id:
+                insert_histo_poi(cursor, poi_id, city_name)
+                # Insérer le type dans la table service si besoin, puis lier dans poi_service
+                if row.get('type'):
+                    insert_service_and_link(cursor, poi_id, row.get('type'))
+                save_public_access(cursor, poi_id, row)
+                # Téléphone et horaires : pas encore de colonne dans poi, gardés pour la vérification.
+                if row.get('osm_details'):
+                    save_check(cursor, poi_id, 'osm', {**row.get('osm_details'), 'present': True})
+        cnx.commit()
+        logger.info(f"[load_osm_poi] : {len(df_osm)} POI OSM insérés pour {city_name}.")
 
 def load_wikidata_poi(df_wiki: pd.DataFrame, city_name: str):
     """
@@ -126,42 +124,40 @@ def load_wikidata_poi(df_wiki: pd.DataFrame, city_name: str):
     if df_wiki is None or df_wiki.empty:
         logger.warning("[load_wikidata_poi] : Aucun POI Wikidata à insérer.")
         return
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor()
-    source_id = get_or_create_source(cursor, 'wikidata')
-    df_wiki = df_wiki.where(pd.notnull(df_wiki), None)
-    for _, row in df_wiki.iterrows():
-        # Insertion dans poi sans city_id ni type
-        cursor.execute(
-            """
-            INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, image_url, source_id, verifie)
-            VALUES (%s, %s, %s, %s, %s, %s, %s,1)
-            """,
-            (
-                row.get('wikidata_id'),
-                row.get('name'),
-                row.get('description'),
-                row.get('lat'),
-                row.get('lon'),
-                row.get('image_url'),
-                source_id
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (cnx, cursor):
+        source_id = get_or_create_source(cursor, 'wikidata')
+        df_wiki = df_wiki.where(pd.notnull(df_wiki), None)
+        for _, row in df_wiki.iterrows():
+            # Insertion dans poi sans city_id ni type
+            cursor.execute(
+                """
+                INSERT IGNORE INTO poi (original_id, name, description, latitude, longitude, image_url, source_id, verifie)
+                VALUES (%s, %s, %s, %s, %s, %s, %s,1)
+                """,
+                (
+                    row.get('wikidata_id'),
+                    row.get('name'),
+                    row.get('description'),
+                    row.get('lat'),
+                    row.get('lon'),
+                    row.get('image_url'),
+                    source_id
+                )
             )
-        )
-        # Récupérer l'id du poi inséré
-        poi_id = cursor.lastrowid
-        if not poi_id:
-            # Si déjà existant, récupérer l'id
-            cursor.execute("SELECT id FROM poi WHERE original_id = %s AND source_id = %s", (row.get('wikidata_id'), source_id))
-            res = cursor.fetchone()
-            if res:
-                poi_id = res[0]
-        # Insérer le lien dans histo_poi
-        if poi_id:
-            insert_histo_poi(cursor, poi_id, city_name)
-            # Insérer le type dans la table service si besoin, puis lier dans poi_service
-            if row.get('type'):
-                insert_service_and_link(cursor, poi_id, row.get('type'))
-    cnx.commit()
-    logger.info(f"[load_wikidata_poi] : {len(df_wiki)} POI Wikidata insérés pour {city_name}.")
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
+            # Récupérer l'id du poi inséré
+            poi_id = cursor.lastrowid
+            if not poi_id:
+                # Si déjà existant, récupérer l'id
+                cursor.execute("SELECT id FROM poi WHERE original_id = %s AND source_id = %s", (row.get('wikidata_id'), source_id))
+                res = cursor.fetchone()
+                if res:
+                    poi_id = res[0]
+            # Insérer le lien dans histo_poi
+            if poi_id:
+                insert_histo_poi(cursor, poi_id, city_name)
+                # Insérer le type dans la table service si besoin, puis lier dans poi_service
+                if row.get('type'):
+                    insert_service_and_link(cursor, poi_id, row.get('type'))
+        cnx.commit()
+        logger.info(f"[load_wikidata_poi] : {len(df_wiki)} POI Wikidata insérés pour {city_name}.")

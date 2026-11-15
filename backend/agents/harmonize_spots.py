@@ -485,29 +485,25 @@ def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new
     if service is None:
         service = make_llm_service("harmonize_spots")
 
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        for spot in fetch_spots_to_harmonize(cursor, limit=sample, spot_ids=spot_ids, only_new=only_new):
+            try:
+                payload = harmonize_one(service, spot)
+            except (LLMUnavailable, json.JSONDecodeError) as error:
+                # Un échec sur un spot ne doit pas arrêter tout le traitement.
+                logger.warning(f"[harmonize] Spot {spot['id']} ignoré : {error}")
+                continue
 
-    for spot in fetch_spots_to_harmonize(cursor, limit=sample, spot_ids=spot_ids, only_new=only_new):
-        try:
-            payload = harmonize_one(service, spot)
-        except (LLMUnavailable, json.JSONDecodeError) as error:
-            # Un échec sur un spot ne doit pas arrêter tout le traitement.
-            logger.warning(f"[harmonize] Spot {spot['id']} ignoré : {error}")
-            continue
-
-        write_harmonization(cursor, spot["id"], payload)
-        connection.commit()
-        logger.info(
-            f"[harmonize] #{spot['id']} {payload.get('description') or '(rien d’utile)'}"
-            f" | services cités : {', '.join(payload.get('services') or []) or 'aucun'}"
-            f"{' | ⚠ À VÉRIFIER' if payload.get('a_verifier') else ''}"
-            f"{' | ⛔ NUIT INTERDITE' if payload.get('nuit_interdite') else ''}"
-            f"{' | ❓ DOUTE NUIT : ' + payload.get('doute_nuit_raison', '') if payload.get('doute_nuit') else ''}"
-        )
-
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+            write_harmonization(cursor, spot["id"], payload)
+            connection.commit()
+            logger.info(
+                f"[harmonize] #{spot['id']} {payload.get('description') or '(rien d’utile)'}"
+                f" | services cités : {', '.join(payload.get('services') or []) or 'aucun'}"
+                f"{' | ⚠ À VÉRIFIER' if payload.get('a_verifier') else ''}"
+                f"{' | ⛔ NUIT INTERDITE' if payload.get('nuit_interdite') else ''}"
+                f"{' | ❓ DOUTE NUIT : ' + payload.get('doute_nuit_raison', '') if payload.get('doute_nuit') else ''}"
+            )
 
 
 def submit_backfill() -> str:
@@ -518,11 +514,9 @@ def submit_backfill() -> str:
     """
     service = make_llm_service("harmonize_spots", chosen_engine=ENGINE_API)
 
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    spots = fetch_spots_to_harmonize(cursor)
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        spots = fetch_spots_to_harmonize(cursor)
 
     if not spots:
         logger.info("[harmonize] Rien à harmoniser")
@@ -559,14 +553,12 @@ def collect_backfill(batch_id: str) -> int:
 
     payloads = service.fetch_batch_results(batch_id)  # {"spot-12": {...}, ...}
 
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    for custom_id, payload in payloads.items():
-        spot_id = int(custom_id.removeprefix("spot-"))  # "spot-12" -> 12
-        write_harmonization(cursor, spot_id, payload)
-    connection.commit()
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        for custom_id, payload in payloads.items():
+            spot_id = int(custom_id.removeprefix("spot-"))  # "spot-12" -> 12
+            write_harmonization(cursor, spot_id, payload)
+        connection.commit()
 
     logger.info(f"[harmonize] {len(payloads)} spot(s) harmonisé(s) depuis le lot {batch_id}")
     return len(payloads)

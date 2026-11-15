@@ -105,12 +105,10 @@ def get_city_center(city_name):
     grâce au GPX. Le nom seul ne suffit pas : Saint-Philibert (Morbihan), géocodée
     par son nom, donne l'homonyme de Côte-d'Or. Géocodage seulement si elle n'y est pas.
     """
-    conn = MySQLUtils.connect()
-    cursor = MySQLUtils.get_cursor(conn)
-    cursor.execute("SELECT latitude, longitude FROM cities WHERE name = %s ORDER BY id LIMIT 1", (city_name,))
-    row = cursor.fetchone()
-    cursor.close()
-    MySQLUtils.disconnect(conn)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (conn, cursor):
+        cursor.execute("SELECT latitude, longitude FROM cities WHERE name = %s ORDER BY id LIMIT 1", (city_name,))
+        row = cursor.fetchone()
     if row:
         return row[0], row[1]
     return get_coordinates_for_city(city_name)

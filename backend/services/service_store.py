@@ -230,12 +230,10 @@ def one_city_per_commune(cities: list) -> list:
 
 def load_cities() -> list:
     """Toutes les villes, avec leur commune officielle (cities.commune et cities.insee, etl/fill_communes.py)."""
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    cursor.execute("SELECT id, name, commune, insee, latitude, longitude, department FROM cities ORDER BY id")
-    rows = _rows(cursor)
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        cursor.execute("SELECT id, name, commune, insee, latitude, longitude, department FROM cities ORDER BY id")
+        rows = _rows(cursor)
     return rows
 
 
@@ -259,15 +257,13 @@ def commune_spots(name: str) -> list:
     L'adresse, pas la distance au centre : celui de Brest est à Sainte-Anne du Portzic, à 9,6 km de ses derniers spots.
     """
     placeholders = ",".join(["%s"] * len(HIDDEN_SPOT_TYPES))
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    cursor.execute(f"""SELECT id, latitude, longitude, address, city_label FROM spots
-                       WHERE (city_label = %s OR address LIKE %s) AND type IS NOT NULL AND type NOT IN ({placeholders})
-                         AND duplicate_of_spot_id IS NULL AND p4n_removed = 0 AND (nuit_interdite IS NULL OR nuit_interdite = 0)
-                       ORDER BY id""", (name, f"%{name}", *HIDDEN_SPOT_TYPES))
-    rows = _rows(cursor)
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        cursor.execute(f"""SELECT id, latitude, longitude, address, city_label FROM spots
+                           WHERE (city_label = %s OR address LIKE %s) AND type IS NOT NULL AND type NOT IN ({placeholders})
+                             AND duplicate_of_spot_id IS NULL AND p4n_removed = 0 AND (nuit_interdite IS NULL OR nuit_interdite = 0)
+                           ORDER BY id""", (name, f"%{name}", *HIDDEN_SPOT_TYPES))
+        rows = _rows(cursor)
     in_commune = re.compile(rf"\b\d{{5}}\s+{re.escape(name)}$", re.I)
     return [row for row in rows if row["city_label"] == name or in_commune.search(row["address"] or "")]
 

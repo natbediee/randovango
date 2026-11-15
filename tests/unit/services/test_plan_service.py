@@ -5,6 +5,8 @@ vident bien la colonne en base (carte #231).
 
 La base est remplacée par un faux curseur qui garde les requêtes reçues.
 """
+import pytest
+
 from services import plan_service
 
 EXISTING_DAY_ID = 12
@@ -67,3 +69,33 @@ def test_a_chosen_spot_is_saved(monkeypatch) -> None:
 def test_the_services_step_leaves_the_spot_and_the_hike_alone(monkeypatch) -> None:
     """L'étape 4 n'envoie que ses services : le spot et la rando du jour ne sont pas touchés."""
     assert save(monkeypatch, {"services": [7, 8], "day_number": 1}) == []
+
+
+class FailingCursor(FakeCursor):
+    """Curseur qui échoue à l'écriture du choix du jour, et retient s'il a été fermé."""
+    def __init__(self):
+        super().__init__()
+        self.closed = False
+
+    def execute(self, query, params=None):
+        if query.startswith("UPDATE trip_days"):
+            raise RuntimeError("Lock wait timeout exceeded")
+        super().execute(query, params)
+
+    def close(self):
+        self.closed = True
+
+
+def test_failed_choice_still_closes_the_connection(monkeypatch) -> None:
+    """Une écriture du choix du jour qui échoue ferme quand même la connexion (fuite qui avait bloqué l'étape 3, issue #206)."""
+    cursor = FailingCursor()
+    connection = FakeConnection(cursor)
+    disconnected = []
+    monkeypatch.setattr(plan_service.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(plan_service.MySQLUtils, "disconnect", lambda cnx: disconnected.append(cnx))
+
+    with pytest.raises(RuntimeError, match="Lock wait timeout"):
+        plan_service.insert_or_update_plan(1, {"spot_id": 7, "day_number": 1})
+
+    assert cursor.closed is True
+    assert disconnected == [connection]
