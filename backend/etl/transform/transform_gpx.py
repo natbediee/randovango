@@ -60,11 +60,14 @@ def transform_gpx(gpx_content, fname) -> dict:
 	elif gpx.tracks and gpx.tracks[0].description:
 		description = gpx.tracks[0].description
 
-	# Détection de la ville à la phase de transformation : le lieu (Nominatim) et sa commune officielle.
+	# Détection de la ville à la phase de transformation : la commune officielle qui contient le départ (geo.api.gouv.fr).
+	# Nominatim donne le lieu le plus proche, parfois un lieu-dit (Trézien pour la pointe de Corsen, en Plouarzel) :
+	# depuis l'issue #184, « Où pars-tu » ne propose plus que des communes, et un GPX parti d'un lieu-dit est rattaché à
+	# la ville de sa commune. Nominatim ne sert plus que si l'État ne répond pas.
 	city_name = commune = insee = None
 	if start_lat and start_lon:
 		commune, insee = get_commune_from_coordinates(start_lat, start_lon)
-		city_name = get_city_from_coordinates(start_lat, start_lon, language='fr') or commune
+		city_name = commune or get_city_from_coordinates(start_lat, start_lon, language='fr')
 	# Si la ville n'est pas trouvée, on arrête la transformation (aucun chargement)
 	if not city_name:
 		return None
