@@ -1,5 +1,6 @@
 import pandas as pd
 from etl.load.load_poi_checks import save_check
+from etl.transform.transform_osm import PUBLIC_FACILITY_TYPES
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 from utils.service_utils import ServiceUtil, SERVICE_CATEGORY_LABEL_MAP
@@ -36,6 +37,24 @@ def insert_histo_poi(cursor, poi_id, city_name):
             """,
             (poi_id, city_id)
         )
+
+def _value_or_none(value):
+    """Une case vide du tableau pandas (NaN) devient None : MySQL n'accepte pas NaN."""
+    return None if pd.isna(value) else value
+
+
+def save_public_access(cursor, poi_id: int, row) -> None:
+    """
+    Écrit à qui une toilette ou une douche est ouverte (acces_osm) et si elle est payante (payant).
+    Un UPDATE et pas l'INSERT : l'INSERT IGNORE ne touche pas une toilette déjà en base, qui doit être reprise
+    à chaque passage de l'ETL. Une étiquette retirée dans OSM revient ainsi à NULL (issue #193).
+    """
+    if row.get('type') not in PUBLIC_FACILITY_TYPES:
+        return
+    payant = _value_or_none(row.get('payant'))
+    cursor.execute("UPDATE poi SET acces_osm = %s, payant = %s WHERE id = %s",
+                   (_value_or_none(row.get('access')), None if payant is None else int(payant), poi_id))
+
 
 def get_or_create_source(cursor, source_name):
     cursor.execute("SELECT id FROM sources WHERE name = %s", (source_name,))
@@ -90,6 +109,7 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
             # Insérer le type dans la table service si besoin, puis lier dans poi_service
             if row.get('type'):
                 insert_service_and_link(cursor, poi_id, row.get('type'))
+            save_public_access(cursor, poi_id, row)
             # Téléphone et horaires : pas encore de colonne dans poi, gardés pour la vérification.
             if row.get('osm_details'):
                 save_check(cursor, poi_id, 'osm', {**row.get('osm_details'), 'present': True})

@@ -24,6 +24,10 @@ DEFAULT_NAME_BY_TYPE = {
 }
 # Les types dont le nom de secours prend la marque ou l'exploitant : « Toilettes publiques Mairie » ne dirait rien.
 NAMED_BY_OPERATOR = ('laundry',)
+# Les équipements dont OSM dit à qui ils sont ouverts (étiquette access) et s'ils sont payants (étiquette fee).
+# Mesure du 13 novembre 2026 sur Brest, Plougonvelin et Le Conquet : 21 toilettes sur 221 réservées aux clients
+# (camping municipal, médiathèque, restaurant), montrées « Toilettes publiques » à l'étape 4 (issue #193).
+PUBLIC_FACILITY_TYPES = ('toilets', 'shower')
 
 # Le lien d'un lieu, du plus utile au moins utile. Beaucoup de contributeurs n'écrivent
 # que contact:website, ou seulement la page Facebook : 159 restaurants sur 1 775 sans lien
@@ -102,6 +106,26 @@ def osm_details(tags: dict) -> dict:
         "seasonal": tags.get("seasonal"),
         "months_open": months_open(tags.get("opening_hours")),
     }
+
+
+def fee_flag(fee: str | None) -> int | None:
+    """L'étiquette fee en 1 (payant) ou 0 (gratuit). Toute autre valeur (absente, « donation »...) reste inconnue."""
+    value = (fee or "").strip().lower()
+    if value == "yes":
+        return 1
+    if value == "no":
+        return 0
+    return None
+
+
+def public_access(tags: dict) -> dict:
+    """
+    À qui une toilette ou une douche est ouverte, et si elle est payante, d'après ses étiquettes OSM.
+    access reste brut (yes, customers, permissive...) : c'est l'étape 4 qui décide quoi montrer.
+    Sans étiquette, access vaut None : personne n'a dit que le lieu était ouvert au public.
+    """
+    access = (tags.get("access") or "").strip().lower() or None
+    return {"access": access, "payant": fee_flag(tags.get("fee"))}
 
 
 def pick_osm_element(elements: list, latitude: float, longitude: float) -> dict | None:
@@ -242,6 +266,8 @@ def transform_osm(osm_json : dict,city : str) -> pd.DataFrame:
                 poi['address'] = address
             if details['phone'] or details['opening_hours'] or details['seasonal']:
                 poi['osm_details'] = details
+            if poi_type in PUBLIC_FACILITY_TYPES:
+                poi.update(public_access(tags))
             pois.append(poi)
     df = pd.DataFrame(pois)
     logger.info(f"[transform] {len(df)} POI valides extraits pour {city}")
