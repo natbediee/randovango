@@ -11,7 +11,7 @@ relire. Elle n'est jamais réaffichée par ce chargement. Sa date de fermeture n
 from etl.load.load_carburants import human_fields
 from etl.load.load_poi import get_or_create_source, insert_histo_poi, insert_service_and_link
 from utils.db_utils import MySQLUtils
-from utils.geo_utils import get_bounding_box
+from utils.geo_utils import address_with_commune, get_bounding_box
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("etl_pharmacies")
@@ -47,6 +47,8 @@ def osm_pharmacies_near(latitude: float, longitude: float, distance_km: float) -
 
 def _upsert_poi(cursor, source_id: int, finess: str, poi: dict, protected: dict) -> int:
     """Crée le poi d'une pharmacie, ou remet à jour ses colonnes, sauf celles qu'un humain a corrigées (protected)."""
+    # La commune après le code postal, le lieu-dit sur sa propre ligne (issue #184) : « ..., 29760 Penmarch ».
+    poi = {**poi, "address": address_with_commune(poi["address"], poi["latitude"], poi["longitude"])}
     cursor.execute("SELECT id FROM poi WHERE original_id = %s AND source_id = %s", (finess, source_id))
     found = cursor.fetchone()
     if found is None:

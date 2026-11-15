@@ -3,6 +3,7 @@ from etl.load.load_poi_checks import save_check
 from etl.transform.transform_osm import PUBLIC_FACILITY_TYPES
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
+from utils.geo_utils import address_with_commune
 from utils.service_utils import ServiceUtil, SERVICE_CATEGORY_LABEL_MAP
 logger = LoggerUtil.get_logger("etl_poi")
 
@@ -92,7 +93,8 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
                     row.get('lon'),
                     row.get('website'),
                     source_id,
-                    row.get('address')
+                    # La commune après le code postal, le lieu-dit sur sa propre ligne (issue #184).
+                    address_with_commune(row.get('address'), row.get('lat'), row.get('lon'))
                 )
             )
             # Récupérer l'id du poi inséré

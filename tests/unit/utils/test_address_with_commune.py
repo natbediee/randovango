@@ -6,6 +6,9 @@ import pytest
 
 from utils import geo_utils
 
+# La vraie fonction, gardée avant que le conftest ne la remplace pour tous les tests.
+REAL_COMMUNES_OF_POSTCODE = geo_utils.communes_of_postcode
+
 # Les communes que l'État donne pour ces codes postaux (geo.api.gouv.fr, 15 novembre 2026).
 COMMUNES = {
     "29810": ["Brélès", "Lampaul-Plouarzel", "Plouarzel", "Ploumoguer"],
@@ -19,6 +22,7 @@ COMMUNES = {
 @pytest.fixture(autouse=True)
 def fake_geo_api(monkeypatch):
     """geo.api.gouv.fr remplacé : les communes d'un code postal, et la commune qui contient un point."""
+    monkeypatch.setattr(geo_utils, "communes_of_postcode", REAL_COMMUNES_OF_POSTCODE)
     monkeypatch.setattr(geo_utils, "POSTCODE_COMMUNES", dict(COMMUNES))
     points = {(48.42, -4.73): ("Plouarzel", "29177"), (48.60, -4.56): ("Landéda", "29101"),
               (48.23, -4.50): ("Crozon", "29042")}
