@@ -296,6 +296,76 @@ def communes_only(alias: str = "") -> str:
 SAME_COMMUNE_HIKES = "city_id IN (SELECT id FROM cities WHERE insee = %s)"
 
 
+# LE LIEU-DIT DEVIENT SA COMMUNE (issue #184, étape 2). Une adresse venue d'un agent, d'OSM ou de la source des spots
+# finit parfois par un lieu-dit : « 29810 Trézien » au lieu de « 29810 Plouarzel ». Tout le code lit la commune après
+# le code postal (address_town) : la supervision rangeait alors le service sous « Trézien », et l'étape 4 ne le voyait
+# pas depuis Plouarzel. L'adresse est réécrite à la façon de La Poste, le lieu-dit sur sa propre ligne :
+# « rue, Trézien, 29810 Plouarzel ». Seul l'État sait quelles communes porte un code postal : geo.api.gouv.fr.
+POSTCODE_COMMUNES = {}      # {code postal : [noms officiels de ses communes]}, gardé pour ne demander qu'une fois
+
+
+def communes_of_postcode(postcode: str, timeout=10) -> list:
+    """
+    Les noms officiels des communes d'un code postal (29810 : Brélès, Lampaul-Plouarzel, Plouarzel, Ploumoguer).
+    Liste vide si l'API ne répond pas ; seule une réponse est gardée, pour réessayer la fois suivante.
+    """
+    if postcode in POSTCODE_COMMUNES:
+        return POSTCODE_COMMUNES[postcode]
+    try:
+        response = requests.get(COMMUNE_URL, params={"codePostal": postcode, "fields": "nom,code"},
+                                timeout=timeout, headers={"User-Agent": "randovango"})
+        response.raise_for_status()
+        names = [row["nom"] for row in response.json()]
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"geo.api.gouv.fr injoignable pour le code postal {postcode} : {e}")
+        return []
+    POSTCODE_COMMUNES[postcode] = names
+    return names
+
+
+def same_spelling(town: str, commune: str) -> bool:
+    """« Penmarc'h » et « Penmarch », « PLOUDALMEZEAU » et « Ploudalmézeau » : le même nom autrement écrit."""
+    return town_key(town).replace(" ", "") == town_key(commune).replace(" ", "")
+
+
+def commune_of_town(postcode: str, town: str, latitude=None, longitude=None) -> str | None:
+    """
+    Le nom officiel de la commune où se trouve `town`, écrit après le code postal d'une adresse :
+        - `town` lui-même, s'il est une commune de ce code postal (au besoin, autrement écrit) ;
+        - sinon la seule commune du code postal (29160 Morgat : Crozon et Lanvéoc, il faut la position) ;
+        - sinon celle des communes du code postal qui contient la position du lieu.
+    None si on ne sait pas : l'adresse est alors laissée telle quelle.
+    """
+    communes = communes_of_postcode(postcode)
+    official = next((commune for commune in communes if same_spelling(town, commune)), None)
+    if official:
+        return official
+    if len(communes) == 1:
+        return communes[0]
+    if latitude is None or longitude is None or not communes:
+        return None
+    commune, _ = get_commune_from_coordinates(latitude, longitude)
+    return commune if commune in communes else None
+
+
+def address_with_commune(address: str | None, latitude=None, longitude=None) -> str | None:
+    """
+    L'adresse avec la commune après le code postal : « 553 Korejoù, 29880 Tremenac'h » devient « 553 Korejoù,
+    Tremenac'h, 29880 Plouguerneau ». Une commune autrement écrite prend son nom officiel (« 29760 Penmarch »).
+    Une adresse sans code postal, déjà juste, ou dont la commune reste inconnue, est rendue telle quelle.
+    """
+    match = ADDRESS_TOWN.search(address or "")
+    if not match:
+        return address
+    postcode, town = match.groups()
+    commune = commune_of_town(postcode, town, latitude, longitude)
+    if commune is None or commune == town:
+        return address
+    street = address[:match.start()].rstrip(" ,")
+    locality = "" if same_spelling(town, commune) else f"{town}, "
+    return f"{street}, {locality}{postcode} {commune}" if street else f"{locality}{postcode} {commune}"
+
+
 BAN_URL = "https://api-adresse.data.gouv.fr/search/"
 BAN_MIN_SCORE = 0.5
 
