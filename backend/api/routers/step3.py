@@ -146,8 +146,9 @@ def _spots_around_city(connection, cursor, city_id, distance_km, get_bounding_bo
 @limiter.limit(DAY_SPOT_LIMIT, error_message=DAY_CHOICE_MESSAGE)
 def update_plan(request: Request, plan_id: int, data: dict = Body(...)):
     plan_id = insert_or_update_plan(plan_id, data)
-    # Le spot est choisi : on prépare tout de suite, en tâche de fond, les idées
-    # (pépites de Vany) du jour, pour qu'elles soient prêtes au récap.
-    if data.get("spot_id"):
+    # Le spot est choisi, ou « autre hébergement » (spot_id à None) : on prépare tout de
+    # suite, en tâche de fond, les idées (pépites de Vany) du jour, autour du spot ou du
+    # centre de la commune, pour qu'elles soient prêtes au récap (carte #231).
+    if "spot_id" in data:
         start_preparation(plan_id, data.get("day_number", 1))
     return {"status": "updated", "plan_id": plan_id, "recap": data}
