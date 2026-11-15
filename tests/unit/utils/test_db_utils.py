@@ -25,11 +25,13 @@ class FakeConnection:
         self.cursor_fails = cursor_fails
         self.last_cursor = None
         self.dictionary = None
+        self.options = None
 
-    def cursor(self, dictionary=False):
+    def cursor(self, **options):
         if self.cursor_fails:
             raise RuntimeError("curseur impossible à créer")
-        self.dictionary = dictionary
+        self.options = options
+        self.dictionary = options.get("dictionary", False)
         self.last_cursor = FakeCursor()
         return self.last_cursor
 
@@ -72,3 +74,19 @@ def test_open_cursor_closes_connection_when_cursor_fails(fake_mysql) -> None:
             pass
 
     assert fake_mysql["disconnected"] == [fake_mysql["connection"]]
+
+
+def test_open_cursor_passes_no_option_by_default(fake_mysql) -> None:
+    """Sans option, open_cursor appelle cnx.cursor() tout court, comme le code d'avant (plan_service, service_store)."""
+    with MySQLUtils.open_cursor() as (cnx, _):
+        pass
+
+    assert cnx.options == {}
+
+
+def test_open_cursor_can_ask_a_buffered_cursor(fake_mysql) -> None:
+    """open_cursor(buffered=True) demande un curseur qui lit tout le résultat d'un coup, comme le chargement Park4Night."""
+    with MySQLUtils.open_cursor(dictionary=True, buffered=True) as (cnx, _):
+        pass
+
+    assert cnx.options == {"dictionary": True, "buffered": True}
