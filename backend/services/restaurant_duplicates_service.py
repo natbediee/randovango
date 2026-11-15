@@ -22,7 +22,7 @@ UTILISATION (dans le conteneur backend, depuis /usr/src/app) :
 import argparse
 
 from etl.load.load_poi_checks import save_signal
-from services import poi_review_service as review
+from services.supervision import services_review as review
 from services import service_store
 from services.service_store import place_key, same_address
 from utils.db_utils import MySQLUtils

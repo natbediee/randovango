@@ -263,6 +263,7 @@ function renderCategory(categoryId, poiList) {
                         ${poi.nouveau ? '<span class="status-badge top">Nouveau</span>' : ''}
                         ${poi.automate_24_24 ? '<span class="status-badge fuel-open">24h/24</span>' : ''}
                         ${poi.autoroute ? '<span class="status-badge fuel-open">Autoroute</span>' : ''}
+                        ${poi.payant ? '<span class="status-badge planned"><i class="fas fa-euro-sign"></i> Payant</span>' : ''}
                         ${poi.fermeture_label ? `<span class="status-badge pending">${escapeHtml(poi.fermeture_label)}</span>` : ''}
                         ${previousPoiDay.has(poi.id) ? `<span class="status-badge planned"><i class="fas fa-check"></i> J${previousPoiDay.get(poi.id)} déjà planifié</span>` : ''}                    </div>
                     <h4>${poi.name}</h4>
@@ -305,12 +306,23 @@ function renderCategory(categoryId, poiList) {
               .on('popupclose', function () { if (!this.getTooltip()) this.bindTooltip(poiTipHtml, TIP_OPTS); });
             poiMarkers.push({ marker, category: categoryId, poi });
 
-            // Survol de la fiche → aperçu de son marqueur sur la carte.
+            // Survol du service dans la liste → aperçu de son nom sur la carte. La carte ne bouge que si le service
+            // est hors du cadre, juste assez pour le montrer (comme le survol d'une rando à l'étape 2).
+            // Clic sur le service → la carte se centre sur lui (carte #192).
             const poiBtn = document.getElementById(`btn-poi-${poi.id}`);
             const poiCard = poiBtn ? poiBtn.closest('.service-card') : null;
             if (poiCard) {
-                poiCard.addEventListener('mouseenter', () => marker.openTooltip());
+                poiCard.addEventListener('mouseenter', () => {
+                    if (!serviceMap.getBounds().contains(marker.getLatLng())) serviceMap.panTo(marker.getLatLng());
+                    marker.openTooltip();
+                });
                 poiCard.addEventListener('mouseleave', () => marker.closeTooltip());
+                poiCard.addEventListener('click', event => {
+                    // Un clic sur un bouton ou un lien de la carte (« Ajouter », Google Maps) fait déjà son travail :
+                    // « Ajouter » centre la carte lui-même, et un second centrage couperait l'animation du premier.
+                    if (event.target.closest('button, a')) return;
+                    centerMapOnPoi(poi.id);
+                });
             }
         }
     });
@@ -638,6 +650,19 @@ function updatePoiMarker(poiId) {
         : buildPoiDivIcon(markerData.category));
 }
 
+// Centre la carte sur un service, au zoom 14 comme le choix d'une rando à l'étape 2 ou d'un spot à l'étape 3.
+// Au zoom 15, les tuiles du fond de carte sont rarement déjà chargées : quand le serveur de tuiles est lent,
+// la carte restait grise autour du marqueur (essai à Plougonvelin, 14 novembre 2026).
+// Appelée au clic sur le service dans la liste et quand on l'ajoute : on voit son marqueur au milieu de la carte.
+function centerMapOnPoi(poiId) {
+    const markerData = poiMarkers.find(m => m.poi.id === poiId);
+    if (!serviceMap || !markerData) return;
+    // Le survol, juste avant le clic, a pu lancer un déplacement animé de la carte (panTo) : sans stop(), il
+    // pourrait se terminer après setView et laisser la carte ailleurs (même piège qu'à l'étape 2).
+    serviceMap.stop();
+    serviceMap.setView(markerData.marker.getLatLng(), 14);
+}
+
 // Sauvegarde en base la liste des services sélectionnés pour le jour en cours
 function saveToDB() {
     return saveDayChoice('step4', {
@@ -661,6 +686,8 @@ function toggleService(poiId, poiName) {
         selectedPoiIds.add(poiId);
         if (btn) { btn.textContent = 'Retirer'; btn.className = 'btn btn-selected btn-sm'; }
         if (card) card.classList.add('selected');
+        // Le service ajouté passe au vert : la carte se centre sur lui pour montrer où il est (carte #192).
+        centerMapOnPoi(poiId);
     }
 
     updatePoiMarker(poiId);

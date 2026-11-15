@@ -267,3 +267,74 @@ def test_an_isolated_failure_does_not_stop_the_catch_up() -> None:
     answers = iter(["echec", "faite", "echec", "echec", "faite"] + ["couverte"] * 5)
     report = pepite_service.run_catch_up(CITIES, lambda city: next(answers))
     assert report == {"faites": 2, "echecs": 3, "arret": False}
+
+
+# --- Un jour sans spot (carte #231) : hébergée chez des amis à Plougonvelin ---
+
+PLOUGONVELIN_DAY = {"trip_day_id": 40, "has_spot": False, "spot_name": None, "spot_latitude": None,
+                    "spot_longitude": None, "city_name": "Plougonvelin", "city_latitude": 48.3407,
+                    "city_longitude": -4.7186, "day_date": date(2026, 11, 15), "hike_duration_h": 0,
+                    "hike_mongo_id": None, "weather_picto": None, "points": [(48.3407, -4.7186)]}
+
+
+class FakeConnection:
+    """Connexion à la base remplacée : rien n'est lu ni écrit."""
+    def cursor(self, dictionary=False):
+        return self
+
+    def commit(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def no_database(monkeypatch, day: dict) -> None:
+    """Remplace la base : le jour donné est celui que lit le service."""
+    monkeypatch.setattr(pepite_service.MySQLUtils, "connect", lambda: FakeConnection())
+    monkeypatch.setattr(pepite_service.MySQLUtils, "disconnect", lambda connection: None)
+    monkeypatch.setattr(pepite_service, "load_day_context", lambda cursor, plan_id, day_number: dict(day))
+
+
+def test_without_a_spot_vany_relies_on_the_town_centre() -> None:
+    """Sans spot, Vany se base sur le centre de la commune ; avec un spot, sur le spot."""
+    assert pepite_service.reference_point(PLOUGONVELIN_DAY) == {
+        "is_spot": False, "name": "Plougonvelin", "latitude": 48.3407, "longitude": -4.7186,
+        "label": "autour du centre de Plougonvelin"}
+    with_spot = PLOUGONVELIN_DAY | {"has_spot": True, "spot_name": "Parking de Bertheaume",
+                                    "spot_latitude": 48.3436, "spot_longitude": -4.6936}
+    assert pepite_service.reference_point(with_spot)["is_spot"] is True
+    assert pepite_service.reference_point(with_spot)["name"] == "Parking de Bertheaume"
+
+
+def test_without_a_spot_the_pepites_around_the_town_centre_are_shown(monkeypatch) -> None:
+    """Sans spot, l'étape 5 montre les pépites proposées autour du centre, avec la même règle de distance."""
+    saint_mathieu = idea(id=1, nom="Pointe Saint-Mathieu", latitude=48.3301, longitude=-4.7733, statut="proposee")
+    morgat = idea(id=2, nom="Plage de Morgat", latitude=48.2250, longitude=-4.5000, statut="proposee")  # à 20 km
+    no_database(monkeypatch, PLOUGONVELIN_DAY)
+    monkeypatch.setattr(pepite_service, "day_links", lambda cursor, trip_day_id: [saint_mathieu, morgat])
+    monkeypatch.setattr(pepite_service, "recent_search_exists", lambda cursor, day, mode: True)
+    monkeypatch.setattr(pepite_service, "fetch_trail_tips", lambda cursor, mongo_id: [])
+
+    state = pepite_service.get_day_state(9001, 1)
+    assert state["state"] == "propositions"
+    assert [i["nom"] for i in state["ideas"]] == ["Pointe Saint-Mathieu"]
+    assert state["reference"]["name"] == "Plougonvelin"
+    assert "Vany a cherché autour du centre de Plougonvelin." in state["intro"]
+
+
+def test_without_a_spot_no_paid_search_is_run(monkeypatch) -> None:
+    """Sans spot, le second temps propose ce que la recherche de la ville a trouvé, sans appeler l'agent."""
+    def paid_search(*args, **kwargs):
+        raise AssertionError("aucune recherche de l'agent pour un jour sans spot")
+
+    no_database(monkeypatch, PLOUGONVELIN_DAY)
+    top_ups = []
+    monkeypatch.setattr(pepite_service, "_still_proposed", lambda cursor, day: set())
+    monkeypatch.setattr(pepite_service, "_top_up",
+                        lambda cursor, day, proposed, section: top_ups.append(section) or 3)
+    monkeypatch.setattr(pepite_service, "missing_searches", lambda cursor, day: ["agenda", "lieux"])
+    monkeypatch.setattr(pepite_service, "search_and_store", paid_search)
+
+    pepite_service.complete_day(9001, 1)
+    assert "saison" in top_ups and "sejour" in top_ups

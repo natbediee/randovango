@@ -1,5 +1,5 @@
-from etl.transform.transform_osm import (months_open, normalize_osm_link, osm_link, osm_signals, pick_osm_element,
-                                         transform_osm)
+from etl.transform.transform_osm import (fee_flag, months_open, normalize_osm_link, osm_link, osm_signals,
+                                         pick_osm_element, transform_osm)
 
 
 def test_transform_osm_filters_and_keeps_expected_pois() -> None:
@@ -143,3 +143,30 @@ def test_an_unnamed_laundry_is_kept_with_its_operator() -> None:
                              {"type": "node", "id": 3, "lat": 48.36, "lon": -4.76, "tags": {"amenity": "toilets", "operator": "Mairie"}}]}
     df = transform_osm(osm_json, "Plougonvelin")
     assert list(df["name"]) == ["Laverie Util", "Laverie", "Toilettes publiques"]
+
+
+def test_toilets_and_showers_keep_their_access_and_fee() -> None:
+    """Les toilettes et douches gardent leur étiquette access et fee : 21 toilettes « customers » sur 221 (13 nov. 2026)."""
+    osm_json = {"elements": [
+        {"type": "node", "id": 1, "lat": 48.34, "lon": -4.72, "tags": {"amenity": "toilets", "access": "customers"}},
+        {"type": "node", "id": 2, "lat": 48.34, "lon": -4.72, "tags": {"amenity": "shower", "access": "Yes", "fee": "yes"}},
+        {"type": "node", "id": 3, "lat": 48.34, "lon": -4.72, "tags": {"amenity": "toilets"}},
+    ]}
+    df = transform_osm(osm_json, "Plougonvelin")
+    assert list(df["access"]) == ["customers", "yes", None]
+    assert df["payant"].tolist()[1] == 1
+
+
+def test_other_services_get_no_access() -> None:
+    """Un restaurant n'a pas d'étiquette access gardée : seules les toilettes et douches sont concernées."""
+    osm_json = {"elements": [{"type": "node", "id": 1, "lat": 48.34, "lon": -4.72,
+                              "tags": {"amenity": "restaurant", "name": "Le Kervéguen", "access": "customers"}}]}
+    assert "access" not in transform_osm(osm_json, "Plougonvelin").columns
+
+
+def test_fee_flag_reads_only_yes_and_no() -> None:
+    """fee=yes donne payant, fee=no gratuit ; une autre valeur ou rien reste inconnu."""
+    assert fee_flag("yes") == 1
+    assert fee_flag(" No ") == 0
+    assert fee_flag("donation") is None
+    assert fee_flag(None) is None

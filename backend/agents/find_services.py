@@ -2,7 +2,7 @@
 Le lancement de la chaîne des services (service_chain.py) : un passage par commune, pour toutes ses catégories.
 
 UN PASSAGE, UN IDENTIFIANT
-Toutes les catégories d'une commune (restaurants, commerces, supermarchés) passent l'une après l'autre sous le même identifiant, porté
+Toutes les catégories d'une commune (restaurants, commerces, supermarchés, laveries) passent l'une après l'autre sous le même identifiant, porté
 par chaque appel d'agent jusque dans llm_calls et par chaque fichier JSON. On relit ainsi tout ce que la commune a coûté
 et l'enchaînement de ses agents (services/llm_calls_service.passage_calls).
 Les catégories passent dans l'ordre de CATEGORIES : la suivante trouve en base ce que la précédente vient d'enregistrer.
@@ -38,6 +38,7 @@ from contextlib import contextmanager
 
 from agents import service_chain
 from agents.find_commerces import COMMERCES
+from agents.find_laveries import LAVERIES
 from agents.find_restaurants import RESTAURANTS
 from agents.find_supermarches import SUPERMARCHES
 from agents.llm_config import model_of
@@ -50,7 +51,7 @@ from utils.logger_util import LoggerUtil
 logger = LoggerUtil.get_logger("agent_services")
 
 # Les catégories de la chaîne, dans l'ordre où elles passent sur une commune.
-CATEGORIES = (RESTAURANTS, COMMERCES, SUPERMARCHES)
+CATEGORIES = (RESTAURANTS, COMMERCES, SUPERMARCHES, LAVERIES)
 
 
 # Le nom du verrou de MySQL : un seul lancement de la chaîne à la fois, quel que soit le conteneur qui le lance.

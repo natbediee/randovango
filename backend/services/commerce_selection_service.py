@@ -7,6 +7,7 @@ LES SUPERMARCHÉS ET LES CAFÉS ONT LEUR ONGLET
 L'agent des commerces ne cherche que les commerces de proximité et les cafés (décision de l'utilisatrice du 7 novembre
 2026) ; les supermarchés ont leur propre agent depuis le 11 novembre 2026 (agents/find_supermarches.py). Les trois
 écrivent leurs fiches dans la table commerces : la catégorie de la fiche dit l'onglet (OWN_TAB).
+Les laveries aussi, depuis le 14 novembre 2026 (agents/find_laveries.py, carte #195).
 """
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 
@@ -16,6 +17,7 @@ COMMERCE_SERVICES = tuple(category for category, tab in POI_FRONTEND_CATEGORY_MA
 # Les cafés et bars ont leur onglet (7 novembre 2026) : l'agent commerces les cherche, celui des restaurants non.
 CAFE_SERVICES = tuple(category for category, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab == "cafe")
 SUPERMARKET_SERVICES = tuple(category for category, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab == "supermarche")
+LAUNDRY_SERVICES = tuple(category for category, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab == "laverie")
 # Une liste fixe, comme celle des restaurants : le genre, écrit librement, ne range pas deux passages pareil.
 # Cave et Gourmandises (8 novembre 2026) : rangées avant en épicerie, des chocolateries s'y retrouvaient.
 # Artisan (8 novembre 2026) : boucher, poissonnier, fromager, traiteur, rangés avant avec les producteurs. Sur 162 fiches
@@ -24,25 +26,30 @@ SHOP_CATEGORIES = ["boulangerie", "epicerie", "cave", "gourmandise", "artisan", 
 SHOP_CATEGORY_LABELS = {"boulangerie": "Boulangerie", "epicerie": "Épicerie, supérette", "cave": "Cave",
                         "gourmandise": "Gourmandises", "artisan": "Boucherie, poissonnerie, fromagerie",
                         "marche": "Marché", "producteur": "Producteur, ferme", "cafe": "Café, bar",
-                        "supermarche": "Supermarché"}
+                        "supermarche": "Supermarché", "laverie": "Laverie"}
 # Le service OSM de chaque catégorie : un commerce créé par l'agent rejoint l'onglet « commerce »
 # (utils/service_utils.POI_FRONTEND_CATEGORY_MAP) et le carnet affiche le nom de ce service.
 SHOP_SERVICES = {"boulangerie": "bakery", "epicerie": "convenience", "cave": "wine", "gourmandise": "confectionery",
                  "artisan": "butcher",
-                 "marche": "marketplace", "producteur": "farm", "cafe": "cafe", "supermarche": "supermarket"}
+                 "marche": "marketplace", "producteur": "farm", "cafe": "cafe", "supermarche": "supermarket",
+                 "laverie": "laundry"}
 # Les commerces de la commune montrés au voyageur, les plus proches du spot : la même limite que les tables.
 SHOPS_SHOWN = 15
 MARKET = "marche"
 CAFE = "cafe"
 PRODUCER = "producteur"
 SUPERMARKET = "supermarche"
+LAUNDRY = "laverie"
 # Les fiches de la table commerces qui ont leur propre onglet à l'étape 4 : {catégorie de la fiche : services de l'onglet}.
 # Là où leur agent est passé, seuls ceux qui ont une fiche de cette catégorie sont montrés (step4.keep_checked_commerces)
 # et triés (poi_triage_service.CHAINS). Toutes les autres catégories vont dans l'onglet « commerce ».
-OWN_TAB = {CAFE: CAFE_SERVICES, SUPERMARKET: SUPERMARKET_SERVICES}
+OWN_TAB = {CAFE: CAFE_SERVICES, SUPERMARKET: SUPERMARKET_SERVICES, LAUNDRY: LAUNDRY_SERVICES}
 # Les onglets où seuls les services prouvés sont montrés, partout, même là où l'agent n'est jamais passé.
 # Les supermarchés (décision de l'utilisatrice, 13 novembre 2026, #130) : OSM ne suit ni les déménagements ni les
 # changements d'enseigne (Lidl de Saint-Renan et de Crozon, Super U de Saint-Renan devenu Carrefour). La règle du code
 # postal laissait pourtant le Leclerc et l'Aldi d'OSM de Guilers, commune où l'agent ne passe pas, dans l'onglet de
 # Saint-Renan. Sans preuve, pas de présentation.
-PROVEN_ONLY_TABS = (SUPERMARKET,)
+# Les laveries (décision du 13 novembre 2026, carte #195) : les 184 d'OSM n'avaient aucune preuve. À Lannilis, le
+# pressing qu'OSM montrait est fermé au registre depuis le 31 mars 2026. La règle vaut tout de suite, avant le passage
+# de leur agent : l'onglet reste vide là où il n'est pas encore passé.
+PROVEN_ONLY_TABS = (SUPERMARKET, LAUNDRY)

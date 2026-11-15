@@ -24,7 +24,7 @@ from services.restaurant_selection_service import MAPS_SEARCH_URL
 FUEL_SEARCH_WORD = "station-service"
 MOTORWAY = "A"              # le champ « pop » du fichier de l'État : A = réseau autoroutier, R = route
 OSM_URL = "https://www.openstreetmap.org/"
-# Ce que la base dit d'une station, pour sa fiche de supervision (poi_edit_service._station_views).
+# Ce que la base dit d'une station, pour sa fiche de supervision (services_edit._station_views).
 STATION_VIEW_SQL = """
     SELECT sc.poi_id, sc.pdv_id, sc.marque, sc.adresse_etat, sc.code_postal, sc.ville_etat, sc.route, sc.automate_24_24,
            sc.osm_element, sc.lien_osm, sc.lu_le, p.address, p.latitude, p.longitude, p.name,

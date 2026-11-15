@@ -1,21 +1,28 @@
 // Supervision (admin) : le bilan. Combien il reste à trancher, file par file, avec un lien
-// vers chaque file. Les chiffres viennent de services/supervision_summary_service.py, qui
-// compte avec les mêmes règles que les pages Spots et Services.
+// vers chaque file. Les chiffres viennent de services/supervision/summary.py, qui
+// compte avec les mêmes règles que les pages Spots et Services. Route : GET /api/supervision/reviews/summary.
 
-const CITIES_SHOWN = 12;
+const SHOWN_ROWS = 12;   // les lignes montrées d'un bloc long (villes, types), les autres sont repliées
+let allCities = [];   // les villes de l'appli qui ont quelque chose à trancher, pour la recherche de ville
+let allTowns = [];    // les communes qui n'en sont pas
+let chosenPlace = null; // la ville ou la commune choisie : {id, name} ou {commune} ; null sans filtre
 
-function showMessage(text) {
-    const box = document.getElementById('supervisionMsg');
-    box.textContent = text;
-    box.style.display = text ? '' : 'none';
+// Le filtre choisi, à mettre dans l'adresse de GET /reviews/summary.
+function filterQuery() {
+    const params = new URLSearchParams();
+    const city = document.getElementById('filterCity').value;
+    const town = document.getElementById('filterTown').value;
+    if (city) params.set('ville', city);
+    if (town) params.set('commune', town);
+    return params.toString();
 }
 
-async function summaryFetch() {
-    const response = await window.RVG.apiFetch('/api/supervision/bilan');
-    if (response.status === 401) throw new Error('Ta session a expiré : reconnecte-toi.');
-    if (response.status === 403) throw new Error('Cette page est réservée aux comptes admin.');
-    if (!response.ok) throw new Error(`Erreur du serveur (HTTP ${response.status}) : bilan indisponible.`);
-    return response.json();
+// Un lien vers une page de la supervision qui garde la ville choisie : la page s'ouvre déjà filtrée (placeFromUrl).
+// Spots attend l'identifiant de la ville, Services son nom.
+function withPlace(url, page) {
+    const place = placeParams(chosenPlace, chosenPlace && (page === 'spots' ? chosenPlace.id : chosenPlace.name));
+    if (!place) return url;
+    return `${url}${url.includes('?') ? '&' : '?'}${place}`;
 }
 
 function plural(count, word) {
@@ -42,6 +49,17 @@ function rows(items, href) {
     }).join('');
 }
 
+// Les SHOWN_ROWS premières lignes, puis les autres repliées sous « Voir les … autres … ». plural et single : la fin
+// du lien, « autres villes » / « l'autre ville ».
+function foldedRows(items, plural, single) {
+    const others = items.slice(SHOWN_ROWS);
+    return rows(items.slice(0, SHOWN_ROWS)) + (others.length ? `
+        <details class="bilan-more">
+            <summary>${others.length > 1 ? `Voir les ${others.length} ${plural}` : `Voir ${single}`}</summary>
+            ${rows(others)}
+        </details>` : '');
+}
+
 function showBlock(id, rowsId, html) {
     document.getElementById(rowsId).innerHTML = html;
     document.getElementById(id).style.display = html ? '' : 'none';
@@ -66,48 +84,108 @@ function renderRatings(categories) {
         <tbody>${lines}</tbody>`;
 }
 
+// Ce qu'il y a : les spots et les services de toute la base, ou de la ville choisie, comptés comme dans « Modifier ».
+function renderPlace(place) {
+    document.getElementById('placeTitle').textContent =
+        chosenPlace ? `Ce qu'il y a à ${place.lieu}` : `Ce qu'il y a dans ${place.lieu}`;
+    const spots = place.spots;
+    // Comme pour les services : ceux que le voyageur peut voir à l'étape 3, puis ceux qu'elle masque, par raison.
+    document.getElementById('placeSpotsRows').innerHTML = rows([
+        { label: 'Spots en tout', n: spots.total },
+        { label: 'Proposés au voyageur', n: spots.proposes },
+        ...spots.par_categorie,
+        { label: 'Vérifiés', n: spots.verifies },
+        { label: 'Non vérifiés', n: spots.non_verifies },
+        { label: 'Masqués', n: spots.masques },
+        ...spots.masques_par_raison,
+    ]);
+    const services = place.services;
+    document.getElementById('placeServicesRows').innerHTML = rows([
+        { label: 'Services en tout', n: services.total },
+        { label: 'Affichés au voyageur', n: services.affiches },
+        { label: 'Masqués', n: services.masques },
+        { label: 'Saisonniers', n: services.saisonniers },
+    ]) + rows(services.par_type);
+}
+
+// Le garde-fou (plan de #186, 5.2) : les services masqués sans décision ni signal, un par ligne, avec leur numéro
+// pour les retrouver dans Modifier. Aucun : le bloc reste caché.
+function renderUntraced(untraced) {
+    const html = untraced.map(service =>
+        `<p>${escapeHtml(service.nom)} <span class="muted">(n° ${service.id})</span></p>`).join('');
+    showBlock('untracedBlock', 'untracedRows', html);
+}
+
 function render(data) {
     const urls = window.APP_URLS;
+    allCities = data.cities;
+    allTowns = data.towns;
+    // Le total des décisions et les notes restent ceux de toutes les villes : on le dit quand une ville est choisie.
+    const everywhere = chosenPlace ? ' (toutes villes)' : '';
     document.getElementById('reviewsCount').textContent =
         data.total === 0 ? 'Rien à trancher' : `${plural(data.total, 'décision')} en attente au total`;
 
     document.getElementById('bilanTotals').innerHTML = [
         totalCard(data.total, 'à trancher en tout'),
-        totalCard(data.spots.a_relire, 'spots à relire', urls.supervision),
-        totalCard(data.services.a_relire, 'services à relire', urls.supervisionServices),
-        totalCard(data.decisions, 'décisions déjà prises'),
+        totalCard(data.spots.a_relire + data.spots.non_verifies, 'spots à trancher', withPlace(urls.supervision, 'spots')),
+        totalCard(data.services.a_relire, 'services à relire', withPlace(urls.supervisionServices, 'services')),
+        totalCard(data.decisions, `décisions déjà prises${everywhere}`),
     ].join('');
 
     const spots = data.spots;
     showBlock('spotsBlock', 'spotsRows', rows([
-        { label: 'Retraits proposés par l\'agent, à relire', n: spots.a_relire, href: urls.supervision },
+        { label: 'Retraits proposés par l\'agent, à relire', n: spots.a_relire,
+          href: withPlace(`${urls.supervision}?probleme=retrait`, 'spots') },
+        { label: 'Non vérifiés, à confirmer', n: spots.non_verifies,
+          href: withPlace(`${urls.supervision}?probleme=non_verifie`, 'spots') },
         { label: 'Gardés par l\'administrateur', n: spots.gardes },
         { label: 'Retirés par l\'administrateur', n: spots.retires },
         { label: 'Ouvertures tranchées par l\'administrateur', n: spots.ouvertures },
     ], item => item.href));
 
     showBlock('servicesBlock', 'servicesRows',
-        rows(data.services.files, file => `${urls.supervisionServices}?tab=${encodeURIComponent(file.tab)}`));
-    // Les villes les plus chargées d'abord ; les autres restent repliées.
-    const cities = data.par_ville;
-    const others = cities.slice(CITIES_SHOWN);
-    showBlock('citiesBlock', 'citiesRows', rows(cities.slice(0, CITIES_SHOWN)) + (others.length ? `
-        <details class="bilan-more">
-            <summary>${others.length > 1 ? `Voir les ${others.length} autres villes` : 'Voir l\'autre ville'}</summary>
-            ${rows(others)}
-        </details>` : ''));
-    showBlock('typesBlock', 'typesRows', rows(data.services.par_type));
+        rows(data.services.files, file => withPlace(`${urls.supervisionServices}?tab=${encodeURIComponent(file.tab)}`, 'services')));
+    // Les villes et les types les plus chargés d'abord ; les autres restent repliés.
+    showBlock('citiesBlock', 'citiesRows', foldedRows(data.par_ville, 'autres villes', 'l\'autre ville'));
+    showBlock('typesBlock', 'typesRows', foldedRows(data.services.par_type, 'autres types de service', 'l\'autre type de service'));
+    renderPlace(data.ville);
+    renderUntraced(data.masques_sans_trace);
     renderRatings(data.notation);
+    document.getElementById('ratingsScope').textContent = everywhere;
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    if (!window.RVG.isLoggedIn()) {
-        window.location.href = window.APP_URLS.contributorLogin;
-        return;
-    }
+// Montre l'une des deux vues : « pending » (à trancher) ou « global » (données globales). Les deux sont dessinées à
+// chaque chargement ; le bouton ne fait que choisir celle qu'on voit, la ville choisie vaut pour les deux.
+function setView(view) {
+    const pending = view === 'pending';
+    document.getElementById('viewPending').style.display = pending ? '' : 'none';
+    document.getElementById('viewGlobal').style.display = pending ? 'none' : '';
+    document.getElementById('viewPendingButton').className = `btn ${pending ? 'btn--primary' : 'btn--outline'}`;
+    document.getElementById('viewGlobalButton').className = `btn ${pending ? 'btn--outline' : 'btn--primary'}`;
+    document.getElementById('viewPendingButton').setAttribute('aria-pressed', pending);
+    document.getElementById('viewGlobalButton').setAttribute('aria-pressed', !pending);
+}
+
+// Redessine le bilan avec la ville choisie.
+async function load() {
     try {
-        render(await summaryFetch());
+        showMessage('');
+        render(await supervisionCall(`/reviews/summary?${filterQuery()}`));
     } catch (error) {
         showMessage(error.message);
     }
+}
+
+// Au choix d'une ville ou d'une commune (supervision_ville.js) : on garde aussi son nom, pour les liens vers Services.
+function choosePlace({ ville, commune }) {
+    const city = allCities.find(item => String(item.id) === String(ville));
+    chosenPlace = city ? { id: city.id, name: city.name } : commune ? { commune } : null;
+    chooseCity({ ville, commune });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (redirectIfLoggedOut()) return;
+    citySearch({ inputId: 'filterCitySearch', boxId: 'filterCitySuggestions', cityValue: city => city.id,
+                 sources: () => ({ cities: allCities, towns: allTowns }), onChoose: choosePlace });
+    load();
 });

@@ -17,7 +17,8 @@ from services.station_selection_service import (closure_label, is_closed_for_goo
 from services.restaurant_selection_service import (TABLE_CATEGORY_LABELS, TABLES_SHOWN, is_new, is_out_of_season, maps_url,
                                                    season_label)
 from etl.load.load_carburants import FUEL_SERVICE, SOURCE_NAME as FUEL_SOURCE
-from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
+from etl.load.load_pharmacies import PHARMACY_SERVICE, SOURCE_NAME as PHARMACY_SOURCE
+from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE, PUBLIC_FACILITY_TYPES
 from utils.db_utils import MySQLUtils
 from utils import display_utils
 from utils.display_utils import PENDING_DOUBT_SQL, enrich_poi, poi_subtitle
@@ -32,14 +33,21 @@ RESTAURATION_CATEGORY = "restauration"
 COMMERCE_CATEGORY = "commerce"
 CAFE_CATEGORY = "cafe"
 SUPERMARKET_CATEGORY = "supermarche"
+LAUNDRY_CATEGORY = "laverie"
 # Les onglets dont un agent écrit des fiches, et combien de fiches de la commune y sont montrées.
 SHEETS_SHOWN = {RESTAURATION_CATEGORY: TABLES_SHOWN, COMMERCE_CATEGORY: SHOPS_SHOWN, CAFE_CATEGORY: SHOPS_SHOWN,
-                SUPERMARKET_CATEGORY: SHOPS_SHOWN}
+                SUPERMARKET_CATEGORY: SHOPS_SHOWN, LAUNDRY_CATEGORY: SHOPS_SHOWN}
 # Toutes les cartes de services ont le bouton Google Maps (7 novembre 2026). Celui d'une station se construit à part,
 # avec la marque, pour tomber sur la station et non sur le supermarché voisin (services/station_selection_service.py).
 FUEL_CATEGORY = "gasoil"
 # Les noms de secours d'OSM (etl/transform/transform_osm.py) : le lien Google part alors de la position.
 GENERIC_NAMES = set(DEFAULT_NAME_BY_TYPE.values())
+# Toilettes et douches d'OSM (issue #193) : l'étiquette access dit à qui elles sont ouvertes.
+# Réservées aux clients (camping, médiathèque, restaurant), privées ou fermées : jamais montrées.
+CLOSED_ACCESS = {"customers", "private", "no"}
+# Seul access=yes dit « ouvert à tous ». Sans étiquette, ou permissive (le propriétaire tolère le passage et peut le
+# retirer, décision de l'utilisatrice du 15 novembre 2026) : montrées « non vérifié ».
+PUBLIC_ACCESS = "yes"
 
 
 def postcode_of(address: str | None) -> str | None:
@@ -74,6 +82,21 @@ def keep_state_stations(poi_list: list) -> list:
     return [poi for poi in poi_list if poi["service_category"] != FUEL_SERVICE or poi.get("source_name") == FUEL_SOURCE]
 
 
+def is_state_pharmacy(poi: dict) -> bool:
+    """Une pharmacie du registre FINESS de l'État (etl/etl_pharmacies.py)."""
+    return poi.get("source_name") == PHARMACY_SOURCE
+
+
+def keep_state_pharmacies(poi_list: list) -> list:
+    """
+    Les pharmacies : FINESS est la référence (carte #194). Là où il est passé (une de ses pharmacies a ce code postal),
+    les pharmacies d'OSM ne sont plus montrées : celles qui existent sont déjà là par FINESS, les autres ont fermé
+    (la Pharmacie de Kérinou à Brest). Ailleurs, elles restent montrées tant que FINESS n'y est pas passé : une
+    pharmacie, c'est l'urgence du voyageur, un onglet vide serait pire qu'une adresse un peu ancienne.
+    """
+    return keep_checked(poi_list, (PHARMACY_SERVICE,), is_state_pharmacy)
+
+
 def station_fields(poi: dict) -> dict:
     """
     Ce que la carte d'une station ajoute aux autres cartes : ses pastilles de prix, la phrase des dates, l'automate,
@@ -94,13 +117,13 @@ def keep_checked_commerces(poi_list: list) -> list:
     d'OSM disparaissent là où l'agent des commerces a écrit des fiches. Les cafés, qui ont leur onglet
     (commerce_selection_service.OWN_TAB), suivent la même règle avec leurs seules fiches : une commune où les commerces
     sont passés sans les cafés garde ses cafés d'OSM.
-    Les supermarchés (PROVEN_ONLY_TABS) : seuls ceux qui ont leur fiche sont montrés, partout (keep_proven).
+    Les supermarchés et les laveries (PROVEN_ONLY_TABS) : seuls ceux qui ont leur fiche sont montrés, partout (keep_proven).
     """
     poi_list = keep_checked(poi_list, COMMERCE_SERVICES,
                             lambda poi: bool(poi.get("commerce_genre")) and poi.get("commerce_categorie") not in OWN_TAB)
     for sheet, services in OWN_TAB.items():
         def has_sheet(poi: dict, sheet: str = sheet) -> bool:
-            """Le lieu a sa fiche de cet onglet (café ou supermarché)."""
+            """Le lieu a sa fiche de cet onglet (café, supermarché ou laverie)."""
             return poi.get("commerce_categorie") == sheet
 
         if sheet in PROVEN_ONLY_TABS:
@@ -163,8 +186,8 @@ def order_category(pois: list, category: str, city_name: str) -> list:
 
 CATEGORY_LABELS = {**TABLE_CATEGORY_LABELS, **SHOP_CATEGORY_LABELS}
 SHEET_FIELDS = ("genre", "pourquoi", "categorie", "registre_depuis")
-# Les onglets dont la fiche vient de l'agent des commerces (table commerces).
-SHOP_TABS = {COMMERCE_CATEGORY, CAFE_CATEGORY, SUPERMARKET_CATEGORY}
+# Les onglets dont la fiche vient de la table commerces (agents des commerces, des supermarchés et des laveries).
+SHOP_TABS = {COMMERCE_CATEGORY, CAFE_CATEGORY, SUPERMARKET_CATEGORY, LAUNDRY_CATEGORY}
 
 
 def sheet_of(poi: dict, tab: str | None = None) -> dict:
@@ -185,14 +208,28 @@ def is_generic_name(name: str | None) -> bool:
     return any((name or "").startswith(generic) for generic in GENERIC_NAMES)
 
 
+def is_public_facility(poi: dict) -> bool:
+    """Une toilette ou une douche : les services d'OSM dont l'étiquette access compte."""
+    return (poi.get("service_category") or "").lower() in PUBLIC_FACILITY_TYPES
+
+
+def is_closed_to_public(poi: dict) -> bool:
+    """Une toilette ou une douche réservée aux clients, privée ou fermée : l'étape 4 ne la montre pas."""
+    return is_public_facility(poi) and poi.get("acces_osm") in CLOSED_ACCESS
+
+
 def shown_verified(poi: dict, frontend_category: str, sheet: dict) -> int:
     """
     Dans les onglets dont un agent écrit les fiches, « Vérifié » suit la preuve (service_store.set_verified) :
     un lieu d'OSM sans fiche n'a été contrôlé par personne, même si load_poi.py l'a chargé avec verifie = 1.
-    Les autres onglets (eau, toilettes...) gardent la valeur de la base.
+    Une toilette ou une douche n'est « Vérifié » que si OSM la dit ouverte à tous (access=yes) : sans étiquette,
+    personne ne l'a dit (134 toilettes sur 221 le 13 novembre 2026).
+    Les autres onglets (eau, vidange...) gardent la valeur de la base.
     Partout, un service dont un doute attend une relecture s'affiche « non vérifié » (display_utils.shown_verified).
     """
     if frontend_category in SHEETS_SHOWN and not sheet["genre"]:
+        return 0
+    if is_public_facility(poi) and poi.get("acces_osm") != PUBLIC_ACCESS:
         return 0
     return int(display_utils.shown_verified(poi["verifie"], poi.get("doute")))
 
@@ -225,110 +262,107 @@ def get_poi(
     POI les plus proches du spot choisi (ou du centre-ville à défaut), afin
     d'éviter une liste trop longue dans les grandes villes.
     """
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    
-    # Récupérer les coordonnées de la ville
-    cursor.execute(
-        "SELECT name, commune, latitude, longitude FROM cities WHERE id = %s",
-        (city_id,)
-    )
-    city = cursor.fetchone()
-    
-    if not city:
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
-        empty = {
-            "eau": [], "vidange": [], "gasoil": [], "supermarche": [], "commerce": [],
-            "restauration": [], "cafe": [],
-            "toilettes": [],
-            "hygiene": [], "laverie": [],
-            "culture": [],
-            "urgence": []
-        }
-        empty["subtitles"] = _build_subtitles(empty)
-        return empty
-    
-    # Calculer la bounding box autour de la ville
-    from utils.geo_utils import get_bounding_box, haversine_distance_km
-    min_lat, min_lon, max_lat, max_lon = get_bounding_box(
-        city['latitude'],
-        city['longitude'],
-        distance_km
-    )
-
-    # Point de référence pour trier par proximité : le spot choisi si fourni, sinon le centre-ville
-    ref_lat = spot_lat if spot_lat is not None else city['latitude']
-    ref_lon = spot_lon if spot_lon is not None else city['longitude']
-    
-    # Tous les POI (vérifiés et non vérifiés)
-    query = f"""
-        SELECT
-            p.id,
-            p.name,
-            p.description,
-            p.latitude,
-            p.longitude,
-            p.verifie,
-            {PENDING_DOUBT_SQL} AS doute,
-            p.image_url,
-            p.url,
-            p.address,
-            p.maps_url AS maps_saisi,
-            --
-            s.category as service_category,
-            s.name as service_name,
-            r.genre,
-            r.pourquoi,
-            r.budget,
-            r.jours_fermeture,
-            r.distinction,
-            r.categorie,
-            r.registre_depuis,
-            c.genre AS commerce_genre,
-            c.pourquoi AS commerce_pourquoi,
-            c.categorie AS commerce_categorie,
-            c.registre_depuis AS commerce_registre_depuis,
-            c.jours,
-            p.statut_saison,
-            p.mois_ouverture,
-            src.name AS source_name,
-            sc.marque AS station_marque,
-            sc.code_postal AS station_code_postal,
-            sc.ville_etat AS station_ville,
-            sc.automate_24_24 AS station_automate,
-            sc.route AS station_route,
-            sc.fermeture_type AS station_fermeture_type,
-            sc.fermeture_debut AS station_fermeture_debut,
-            sc.fermeture_fin AS station_fermeture_fin,
-            sc.lu_le AS station_lu_le,
-            -- Les prix de la station en une colonne JSON : pas de deuxième requête, pas de ligne en double.
-            (SELECT JSON_ARRAYAGG(JSON_OBJECT('carburant', pc.carburant, 'prix', pc.prix, 'releve_le', pc.releve_le,
-                                              'rupture_type', pc.rupture_type))
-             FROM prix_carburants pc WHERE pc.poi_id = sc.poi_id) AS station_prix
-        FROM poi p
-        JOIN poi_service ps ON p.id = ps.poi_id
-        JOIN services s ON ps.service_id = s.id
-        LEFT JOIN sources src ON src.id = p.source_id
-        LEFT JOIN stations_carburant sc ON sc.poi_id = p.id
-        LEFT JOIN restaurants r ON r.poi_id = p.id
-        LEFT JOIN commerces c ON c.poi_id = p.id
-        WHERE p.masque = 0
-        AND (
-            (p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s)
-            -- Une commune déborde de la zone : la Pointe Saint-Mathieu est à 5,2 km du centre de Plougonvelin.
-            OR ((r.poi_id IS NOT NULL OR c.poi_id IS NOT NULL) AND p.address LIKE %s)
+    # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+        # Récupérer les coordonnées de la ville
+        cursor.execute(
+            "SELECT name, commune, latitude, longitude FROM cities WHERE id = %s",
+            (city_id,)
         )
-        ORDER BY s.category, p.name ASC
-    """
+        city = cursor.fetchone()
 
-    # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
-    poi_list = keep_state_stations(keep_checked_commerces(keep_checked_restaurants(cursor.fetchall())))
+        if not city:
+            empty = {
+                "eau": [], "vidange": [], "gasoil": [], "supermarche": [], "commerce": [],
+                "restauration": [], "cafe": [],
+                "toilettes": [],
+                "hygiene": [], "laverie": [],
+                "culture": [],
+                "urgence": []
+            }
+            empty["subtitles"] = _build_subtitles(empty)
+            return empty
 
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
-    
+        # Calculer la bounding box autour de la ville
+        from utils.geo_utils import get_bounding_box, haversine_distance_km
+        min_lat, min_lon, max_lat, max_lon = get_bounding_box(
+            city['latitude'],
+            city['longitude'],
+            distance_km
+        )
+
+        # Point de référence pour trier par proximité : le spot choisi si fourni, sinon le centre-ville
+        ref_lat = spot_lat if spot_lat is not None else city['latitude']
+        ref_lon = spot_lon if spot_lon is not None else city['longitude']
+
+        # Tous les POI (vérifiés et non vérifiés)
+        query = f"""
+            SELECT
+                p.id,
+                p.name,
+                p.description,
+                p.latitude,
+                p.longitude,
+                p.verifie,
+                {PENDING_DOUBT_SQL} AS doute,
+                p.image_url,
+                p.url,
+                p.address,
+                p.maps_url AS maps_saisi,
+                p.acces_osm,
+                p.payant,
+                --
+                s.category as service_category,
+                s.name as service_name,
+                r.genre,
+                r.pourquoi,
+                r.budget,
+                r.jours_fermeture,
+                r.distinction,
+                r.categorie,
+                r.registre_depuis,
+                c.genre AS commerce_genre,
+                c.pourquoi AS commerce_pourquoi,
+                c.categorie AS commerce_categorie,
+                c.registre_depuis AS commerce_registre_depuis,
+                c.jours,
+                p.statut_saison,
+                p.mois_ouverture,
+                src.name AS source_name,
+                sc.marque AS station_marque,
+                sc.code_postal AS station_code_postal,
+                sc.ville_etat AS station_ville,
+                sc.automate_24_24 AS station_automate,
+                sc.route AS station_route,
+                sc.fermeture_type AS station_fermeture_type,
+                sc.fermeture_debut AS station_fermeture_debut,
+                sc.fermeture_fin AS station_fermeture_fin,
+                sc.lu_le AS station_lu_le,
+                -- Les prix de la station en une colonne JSON : pas de deuxième requête, pas de ligne en double.
+                (SELECT JSON_ARRAYAGG(JSON_OBJECT('carburant', pc.carburant, 'prix', pc.prix, 'releve_le', pc.releve_le,
+                                                  'rupture_type', pc.rupture_type))
+                 FROM prix_carburants pc WHERE pc.poi_id = sc.poi_id) AS station_prix
+            FROM poi p
+            JOIN poi_service ps ON p.id = ps.poi_id
+            JOIN services s ON ps.service_id = s.id
+            LEFT JOIN sources src ON src.id = p.source_id
+            LEFT JOIN stations_carburant sc ON sc.poi_id = p.id
+            LEFT JOIN restaurants r ON r.poi_id = p.id
+            LEFT JOIN commerces c ON c.poi_id = p.id
+            WHERE p.masque = 0
+            AND (
+                (p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s)
+                -- Une commune déborde de la zone : la Pointe Saint-Mathieu est à 5,2 km du centre de Plougonvelin.
+                OR ((r.poi_id IS NOT NULL OR c.poi_id IS NOT NULL) AND p.address LIKE %s)
+            )
+            ORDER BY s.category, p.name ASC
+        """
+
+        # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
+        cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
+        poi_list = keep_state_pharmacies(
+            keep_state_stations(keep_checked_commerces(keep_checked_restaurants(cursor.fetchall()))))
+
     category_mapping = POI_FRONTEND_CATEGORY_MAP
 
     # Grouper les POI par catégorie
@@ -353,6 +387,8 @@ def get_poi(
         if poi.get('latitude') is None or poi.get('longitude') is None:
             continue
         if is_out_of_season(poi.get('statut_saison'), poi.get('mois_ouverture'), day):
+            continue
+        if is_closed_to_public(poi):
             continue
         service_cat = poi.get('service_category', '').lower()
         frontend_category = category_mapping.get(service_cat)
@@ -399,10 +435,14 @@ def get_poi(
                                  poi.get('station_ville'), poi['latitude'], poi['longitude'])
                 if frontend_category == FUEL_CATEGORY else maps_url(
                     poi['name'], poi['address'], poi['latitude'], poi['longitude'], generic=is_generic_name(poi['name']),
-                    several=names[" ".join((poi['name'] or "").lower().split())] > 1)),
+                    # Une pharmacie de FINESS garde toujours son adresse entière : avec le nom seul, « Pharmacie
+                    # Kerros 29200 Brest » donnait une liste, avec la rue la bonne pharmacie (essai du 14 novembre 2026).
+                    several=is_state_pharmacy(poi) or names[" ".join((poi['name'] or "").lower().split())] > 1)),
             "statut_saison": poi['statut_saison'],
             "saison_label": season_label(poi['statut_saison'], poi['mois_ouverture']),
             "mois_ouverture": poi['mois_ouverture'],
+            # L'étiquette fee d'OSM des toilettes et douches : le badge « Payant » affiché sur le service.
+            "payant": poi.get('payant') == 1,
             **(station_fields(poi) if frontend_category == FUEL_CATEGORY else {})
         }))
 

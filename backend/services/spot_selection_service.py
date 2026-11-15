@@ -13,7 +13,7 @@ décision, elle, est prise ici, sans IA, à chaque demande : elle dépend de la 
 """
 from datetime import date
 
-from services.supervision_service import hidden_spot_ids
+from services.supervision.spots_review import hidden_spot_ids
 from utils.display_utils import HIDDEN_SPOT_TYPES
 
 PERIOD = "periode"

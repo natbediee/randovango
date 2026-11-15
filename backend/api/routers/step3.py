@@ -6,7 +6,7 @@ from api.rate_limit import DAY_CHOICE_MESSAGE, DAY_SPOT_LIMIT, limiter
 from services.pepite_service import start_preparation
 from services.plan_service import insert_or_update_plan
 from services.spot_selection_service import proposable_spots
-from services.supervision_service import reworked_a_savoir
+from services.supervision.spots_review import reworked_a_savoir
 from utils.display_utils import SPOT_ON_HIKE_KM, enrich_spot
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
@@ -34,17 +34,12 @@ def get_spots(
 
     # Connexion DB
     from utils.geo_utils import get_bounding_box
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    # try/finally : la connexion est fermée même en cas d'erreur. Sinon elle reste
+    # « with » : la connexion est fermée même en cas d'erreur (issue #206). Sinon elle reste
     # ouverte avec une lecture en cours, et bloque toute modification de la table.
-    try:
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
         night = _night_date(cursor, plan_id, day_number)
         return _spots_around_city(cnx, cursor, city_id, distance_km, get_bounding_box, _hike_trace(cursor, hike_id),
                                   night)
-    finally:
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
 
 
 def _night_date(cursor, plan_id, day_number) -> date:
@@ -146,8 +141,9 @@ def _spots_around_city(connection, cursor, city_id, distance_km, get_bounding_bo
 @limiter.limit(DAY_SPOT_LIMIT, error_message=DAY_CHOICE_MESSAGE)
 def update_plan(request: Request, plan_id: int, data: dict = Body(...)):
     plan_id = insert_or_update_plan(plan_id, data)
-    # Le spot est choisi : on prépare tout de suite, en tâche de fond, les idées
-    # (pépites de Vany) du jour, pour qu'elles soient prêtes au récap.
-    if data.get("spot_id"):
+    # Le spot est choisi, ou « autre hébergement » (spot_id à None) : on prépare tout de
+    # suite, en tâche de fond, les idées (pépites de Vany) du jour, autour du spot ou du
+    # centre de la commune, pour qu'elles soient prêtes au récap (carte #231).
+    if "spot_id" in data:
         start_preparation(plan_id, data.get("day_number", 1))
     return {"status": "updated", "plan_id": plan_id, "recap": data}

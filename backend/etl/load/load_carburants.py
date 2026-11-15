@@ -39,7 +39,7 @@ REMOVING_DECISIONS = ("retirer", "fusionner")
 def human_fields(cursor, source_id: int) -> dict:
     """
     {poi_id: colonnes de poi corrigées par une décision non annulée} pour les stations de l'État. Une décision garde
-    les valeurs d'avant dans detail.avant (poi_review_service) : ce sont les colonnes qu'elle a changées.
+    les valeurs d'avant dans detail.avant (services_review) : ce sont les colonnes qu'elle a changées.
     """
     cursor.execute(
         """
@@ -199,14 +199,12 @@ def prices_read_at():
 
 def known_stations() -> dict:
     """{identifiant de l'État: (poi_id, osm_element, lien_osm, nom, latitude, longitude, marque)} des stations en base."""
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    cursor.execute(
-        """
-        SELECT sc.pdv_id, sc.poi_id, sc.osm_element, sc.lien_osm, sc.marque, p.name, p.latitude, p.longitude
-        FROM stations_carburant sc JOIN poi p ON p.id = sc.poi_id
-        """)
-    rows = {row["pdv_id"]: row for row in cursor.fetchall()}
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+        cursor.execute(
+            """
+            SELECT sc.pdv_id, sc.poi_id, sc.osm_element, sc.lien_osm, sc.marque, p.name, p.latitude, p.longitude
+            FROM stations_carburant sc JOIN poi p ON p.id = sc.poi_id
+            """)
+        rows = {row["pdv_id"]: row for row in cursor.fetchall()}
     return rows

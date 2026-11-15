@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services import poi_edit_service as edit
+from services.supervision import services_edit as edit
 
 BEFORE = {"url": "https://ancien.fr", "name": "Cave Keruzas", "masque": 0, "ferme_moment": 0, "statut_saison": None,
           "mois_ouverture": None, "maps_url": None, "latitude": 48.34, "longitude": -4.71}
@@ -358,3 +358,18 @@ def test_the_distance_is_unknown_when_a_place_has_no_position():
     """Un lieu sans position (un objet OSM sans coordonnées) : la distance n'est pas inventée, elle reste inconnue."""
     assert edit.distance_m(None, [48.36, -4.77]) is None
     assert edit.distance_m([48.36, -4.77], [48.36, -4.77]) == 0
+
+
+def test_a_long_list_comes_in_pages():
+    """Les 120 boulangeries d'une catégorie seule viennent en pages de 50 : la deuxième montre les cartes 51 à 100."""
+    cards = list(range(120))
+    shown, page, pages = edit.page_of(cards, 2)
+    assert (shown[0], shown[-1], page, pages) == (50, 99, 2, 3)
+
+
+def test_a_page_out_of_the_list_comes_back_inside():
+    """Une page trop loin (la liste a raccourci depuis le clic) ramène à la dernière ; une liste vide a une page."""
+    assert edit.page_of(list(range(60)), 9)[1:] == (2, 2)
+    assert edit.page_of(list(range(60)), 0)[1:] == (1, 2)
+    assert edit.page_of([], 1) == ([], 1, 1)
+

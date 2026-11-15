@@ -1,5 +1,5 @@
 """Un doute en attente dans la supervision : le service s'affiche « non vérifié », à l'étape 4 comme dans sa fiche."""
-from services import poi_edit_service as edit
+from services.supervision import services_edit as edit
 from test_step4_restaurants import _get_poi, _row
 from utils.display_utils import shown_verified, verified_badge
 
@@ -21,9 +21,10 @@ def test_step4_shows_a_doubted_service_as_not_verified(monkeypatch):
 
 
 def test_step4_applies_the_rule_to_every_tab(monkeypatch):
-    """La règle vaut aussi hors des onglets des agents : une pharmacie d'OSM avec un doute en attente n'a plus le badge, des toilettes sans doute le gardent."""
+    """La règle vaut aussi hors des onglets des agents : une pharmacie d'OSM avec un doute en attente n'a plus le badge, des toilettes ouvertes à tous (access=yes) sans doute le gardent."""
     rows = [{**_row(1, "Pharmacie du Trez-Hir", "pharmacy", None, "3 rue, 29217 Plougonvelin"), "doute": 1},
-            {**_row(2, "Toilettes publiques", "toilets", None, "4 rue, 29217 Plougonvelin"), "doute": 0}]
+            {**_row(2, "Toilettes publiques", "toilets", None, "4 rue, 29217 Plougonvelin"), "doute": 0,
+             "acces_osm": "yes"}]
     result, _ = _get_poi(monkeypatch, rows)
     assert result["urgence"][0]["verifie"] == 0 and result["toilettes"][0]["verifie"] == 1
 

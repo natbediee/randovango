@@ -7,7 +7,7 @@
 //     "agenda_pending" est vrai, l'agenda peut encore en apporter : on continue de
 //     redemander, sans bloquer le voyageur (il sera prévenu dans la barre du bas s'il part) ;
 //   - 'rien'         : Vany a cherché sans rien trouver de bon ;
-//   - 'vide'         : pas de recherche pour ce jour (pas de spot choisi).
+//   - 'vide'         : pas de recherche pour ce jour (ancien plan).
 // Avec les idées viennent les lieux à voir en chemin sur la rando ("trail_tips"), recommandés
 // par Vany dès l'étape 2 : ici, seulement leurs pastilles sur la carte du jour.
 //
@@ -143,13 +143,15 @@ function renderPepites(state) {
     img.src = ideas.length ? img.dataset.imgIdeas : img.dataset.imgSearching;
 
     if (state.state === 'recherche') {
+        // « autour du spot … » ou « autour du centre de … » : la page dit où Vany cherche (carte #231).
+        const around = state.reference ? ` ${state.reference.label}` : '';
         document.getElementById('pepitesIntro').textContent =
-            'Vany cherche autour de ton spot et de ta rando. Tu peux aussi continuer sans attendre :'
+            `Vany cherche${around}. Tu peux aussi continuer sans attendre :`
             + ' il te préviendra dans la barre du bas.';
         list.innerHTML = '<div class="pepite-skeleton"><span></span><span></span><span></span></div>'.repeat(3);
     } else if (state.state === 'vide') {
         document.getElementById('pepitesIntro').textContent =
-            'Pas d\'idée de Vany pour cette journée : choisis un spot pour la nuit pour qu\'il puisse chercher autour.';
+            'Pas d\'idée de Vany pour cette journée.';
         list.innerHTML = '';
     } else if (state.state === 'rien') {
         list.innerHTML = '';
@@ -194,10 +196,18 @@ function drawMap(state, ideas) {
     markersByIdea = {};
     const positions = [];
 
-    if (state.spot && state.spot.latitude) {
-        const pos = [state.spot.latitude, state.spot.longitude];
+    const reference = state.reference;   // le spot, ou le centre de la commune sans spot
+    if (reference && reference.is_spot && reference.latitude) {
+        const pos = [reference.latitude, reference.longitude];
         ideaMarkers.push(L.marker(pos, { icon: buildSpotDivIcon(`J${currentDay}`), zIndexOffset: 500 })
-            .bindPopup(`<b>${escapeHtml(state.spot.name)}</b>`));
+            .bindPopup(`<b>${escapeHtml(reference.name)}</b>`));
+        positions.push(pos);
+    } else if (reference && reference.latitude) {
+        // Sans spot (« autre hébergement »), un point discret montre le centre de la
+        // commune, d'où Vany mesure la distance des idées.
+        const pos = [reference.latitude, reference.longitude];
+        ideaMarkers.push(L.circleMarker(pos, { radius: 7, color: '#555', weight: 2, fillOpacity: 0.4 })
+            .bindPopup(`<b>Centre de ${escapeHtml(reference.name)}</b>`));
         positions.push(pos);
     }
     ideas.forEach((idea, i) => {

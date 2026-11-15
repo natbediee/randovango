@@ -253,6 +253,9 @@ EXCLUDED_SPOT_TYPES = ("PARKING JOUR UNIQUEMENT",)
 HIDDEN_SPOT_TYPES = (
     "AIRE DE SERVICES SANS STAT.",
     "SERVICES D'APPOINT",
+    # Une aire de pique-nique n'est pas un lieu où dormir : masquée sur décision de l'administratrice
+    # (14 novembre 2026, Crozon et Le Hézo, les deux seules de la base).
+    "AIRE DE PIQUE-NIQUE",
     # Un spot déjà en base peut devenir "jour uniquement" sur p4n : il
     # reste en base (un carnet de voyage peut y faire référence) mais est masqué.
     *EXCLUDED_SPOT_TYPES,
@@ -687,22 +690,34 @@ def trail_tip_display(tip) -> dict:
             "latitude": tip["latitude"], "longitude": tip["longitude"]}
 
 
-def pepite_day_texts(day_date, hike_duration_h, free_time_h) -> dict:
-    """Titre et phrase d'introduction de l'étape « Les pépites de Vany »."""
+def pepite_reference_label(is_spot: bool, name: str, with_hike: bool) -> str:
+    """
+    Sur quoi Vany se base pour les idées du jour, en quelques mots que la page reprend :
+    le spot (et le départ de la rando, qui compte aussi), ou le centre de la commune
+    quand le voyageur dort ailleurs (carte #231).
+    """
+    if not is_spot:
+        return f"autour du centre de {name}"
+    label = f"autour du spot {name}"
+    return label + " et du départ de ta rando" if with_hike else label
+
+
+def pepite_day_texts(day_date, hike_duration_h, free_time_h, around: str) -> dict:
+    """Titre et phrase d'introduction de l'étape « Les pépites de Vany », qui dit où Vany a cherché."""
     weekday = FR_WEEKDAYS[day_date.weekday()].lower()
     if hike_duration_h:
         intro = f"Après tes {js_num(hike_duration_h)} h de rando, il te reste environ {js_num(free_time_h)} h en journée."
     else:
         intro = "Journée sans rando : tu as tout ton temps."
     return {"title": f"Les pépites de Vany pour ton {weekday}",
-            "intro": intro + " Ajoute ce qui te tente, ou continue sans."}
+            "intro": f"{intro} Vany a cherché {around}. Ajoute ce qui te tente, ou continue sans."}
 
 
-def pepite_nothing_texts(day_date) -> dict:
+def pepite_nothing_texts(day_date, around: str) -> dict:
     """Encadré quand la recherche n'a rien donné d'exceptionnel pour ce jour."""
     weekday = FR_WEEKDAYS[day_date.weekday()].lower()
     return {"title": f"Pas de pépite pour ton {weekday}",
-            "intro": "Vany a cherché autour de ton spot et de ta rando sans trouver de bonne idée en plus."
+            "intro": f"Vany a cherché {around} sans trouver de bonne idée en plus."
                      " Plutôt rien qu'une idée moyenne : profite simplement de ta journée !"}
 
 

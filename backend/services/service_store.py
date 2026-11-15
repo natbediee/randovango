@@ -43,7 +43,7 @@ HUMAN_LINK_DECISIONS = ("valider_lien", "valider_lien_nom", "refuser_lien", "aut
 # UN AGENT ENRICHIT, IL NE RECRÉE PAS (11 novembre 2026). Le lieu déjà en base est cherché dans tous les services des
 # onglets que la chaîne remplit, quelle que soit la catégorie qui passe : Le Galion de Ploudalmézeau existait deux fois,
 # restaurant pour un agent et café pour l'autre, parce que chacun ne regardait que ses propres services.
-KNOWN_TABS = ("restauration", "cafe", "commerce", "supermarche")
+KNOWN_TABS = ("restauration", "cafe", "commerce", "supermarche", "laverie")
 KNOWN_SERVICES = tuple(service for service, tab in POI_FRONTEND_CATEGORY_MAP.items() if tab in KNOWN_TABS)
 # Le signal d'un doublon possible, à trancher dans la file « Doublons » de /supervision (poi_duplicates_service.py).
 DUPLICATE_SOURCE, DUPLICATE_SIGNAL = "doublons", "doublon_service"
@@ -230,12 +230,10 @@ def one_city_per_commune(cities: list) -> list:
 
 def load_cities() -> list:
     """Toutes les villes, avec leur commune officielle (cities.commune et cities.insee, etl/fill_communes.py)."""
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    cursor.execute("SELECT id, name, commune, insee, latitude, longitude, department FROM cities ORDER BY id")
-    rows = _rows(cursor)
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        cursor.execute("SELECT id, name, commune, insee, latitude, longitude, department FROM cities ORDER BY id")
+        rows = _rows(cursor)
     return rows
 
 
@@ -259,15 +257,13 @@ def commune_spots(name: str) -> list:
     L'adresse, pas la distance au centre : celui de Brest est à Sainte-Anne du Portzic, à 9,6 km de ses derniers spots.
     """
     placeholders = ",".join(["%s"] * len(HIDDEN_SPOT_TYPES))
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    cursor.execute(f"""SELECT id, latitude, longitude, address, city_label FROM spots
-                       WHERE (city_label = %s OR address LIKE %s) AND type IS NOT NULL AND type NOT IN ({placeholders})
-                         AND duplicate_of_spot_id IS NULL AND p4n_removed = 0 AND (nuit_interdite IS NULL OR nuit_interdite = 0)
-                       ORDER BY id""", (name, f"%{name}", *HIDDEN_SPOT_TYPES))
-    rows = _rows(cursor)
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        cursor.execute(f"""SELECT id, latitude, longitude, address, city_label FROM spots
+                           WHERE (city_label = %s OR address LIKE %s) AND type IS NOT NULL AND type NOT IN ({placeholders})
+                             AND duplicate_of_spot_id IS NULL AND p4n_removed = 0 AND (nuit_interdite IS NULL OR nuit_interdite = 0)
+                           ORDER BY id""", (name, f"%{name}", *HIDDEN_SPOT_TYPES))
+        rows = _rows(cursor)
     in_commune = re.compile(rf"\b\d{{5}}\s+{re.escape(name)}$", re.I)
     return [row for row in rows if row["city_label"] == name or in_commune.search(row["address"] or "")]
 
@@ -478,7 +474,7 @@ def _same_place(row: dict, position: tuple | None, known: list) -> dict | None:
 # --- Ce qu'un humain a décidé prime ---
 
 def _decided_by_human(cursor, poi_id: int, decisions: tuple) -> bool:
-    """Un humain a tranché ce point du lieu dans la supervision (poi_review_service.py) : sa décision prime sur l'agent."""
+    """Un humain a tranché ce point du lieu dans la supervision (services_review.py) : sa décision prime sur l'agent."""
     marks = ", ".join(["%s"] * len(decisions))
     cursor.execute(f"""
         SELECT 1 FROM decisions WHERE objet_type = 'poi' AND objet_id = %s AND annulee_at IS NULL
@@ -488,7 +484,7 @@ def _decided_by_human(cursor, poi_id: int, decisions: tuple) -> bool:
 
 
 class _DictRows:
-    """Un curseur qui rend des dictionnaires, comme celui qu'attend poi_edit_service, à partir de celui d'un agent."""
+    """Un curseur qui rend des dictionnaires, comme celui qu'attend services_edit, à partir de celui d'un agent."""
 
     def __init__(self, cursor):
         self.cursor = cursor
@@ -512,12 +508,12 @@ class _DictRows:
 
 def human_fields(cursor, poi_id: int) -> set:
     """
-    Les champs qu'un humain a corrigés dans la supervision (onglet « Modifier », poi_edit_service.human_fields) : un
+    Les champs qu'un humain a corrigés dans la supervision (onglet « Modifier », services_edit.human_fields) : un
     passage d'agent les laisse tels quels (8 novembre 2026). Noms : name, address, url, maps_url (position comprise),
     description, saison (statut et mois), et genre, pourquoi, categorie, jours, distinction pour la fiche.
     """
-    from services import poi_edit_service   # ici : poi_edit_service importe ce module
-    return poi_edit_service.human_fields(_DictRows(cursor), poi_id)
+    from services.supervision import services_edit   # ici : services_edit importe ce module
+    return services_edit.human_fields(_DictRows(cursor), poi_id)
 
 
 def keep_human_sheet(cursor, table: str, poi_id: int, row: dict, columns: tuple) -> dict:
@@ -682,7 +678,7 @@ def create_poi(category, cursor, row: dict, position: tuple | None, city: dict, 
 
 
 def sheet_of(category, row: dict, version: int, model: str) -> dict:
-    """Ce qu'il faut pour écrire la fiche plus tard, si un humain valide le lieu à confirmer (poi_review_service.py)."""
+    """Ce qu'il faut pour écrire la fiche plus tard, si un humain valide le lieu à confirmer (services_review.py)."""
     return {**{field: row.get(field) for field in category.sheet_fields}, "prompt_version": version, "model": model}
 
 
@@ -788,8 +784,8 @@ def close_superseded(category, cursor, row: dict, position: tuple | None, city: 
     stale = find_in(row, position, city, masked, within_km=category.same_name_km)
     if not stale or not waiting_for_review(cursor, stale["id"]):
         return False
-    from services import poi_review_service        # ici pour éviter une boucle d'imports : il lit ce module au chargement
-    poi_review_service.decide_one(_DictRows(cursor), "confirmer", stale["id"], "sans_suite", f"affiché sous le service {poi_id}",
+    from services.supervision import services_review        # ici pour éviter une boucle d'imports : il lit ce module au chargement
+    services_review.decide_one(_DictRows(cursor), "confirmer", stale["id"], "sans_suite", f"affiché sous le service {poi_id}",
                                   RULE_AUTHOR, None)
     category.logger.info(f"[{category.key}] {row['nom']} : {stale['id']} n'attend plus de relecture, affiché sous {poi_id}")
     return True

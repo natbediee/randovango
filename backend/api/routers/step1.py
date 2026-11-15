@@ -6,6 +6,8 @@ from utils.db_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
 from etl.etl_carburants import refresh_prices
 from etl.load.load_carburants import prices_read_at
+from etl.etl_pharmacies import refresh_pharmacies
+from etl.load.load_pharmacies import pharmacies_read_at
 from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -29,12 +31,11 @@ def refresh_all_cities_meteo_background():
     """Rafraîchit la météo de toutes les villes en arrière-plan (thread séparé, non bloquant)."""
     global meteo_refresh_in_progress
     try:
-        cnx = MySQLUtils.connect()
-        cursor = cnx.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, latitude, longitude FROM cities")
-        cities = cursor.fetchall()
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
+        # « with » : la connexion se ferme à la sortie du bloc, même si la requête échoue (issue #206).
+        # Elle est rendue avant la boucle météo, qui dure plusieurs minutes.
+        with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+            cursor.execute("SELECT id, name, latitude, longitude FROM cities")
+            cities = cursor.fetchall()
 
         logger.info(f"[METEO-BG] Début du rafraîchissement météo en arrière-plan pour {len(cities)} villes")
         for idx, city in enumerate(cities):
@@ -109,6 +110,64 @@ def start_fuel_prices_refresh() -> bool:
     return True
 
 
+# LES PHARMACIES DU JOUR (carte #241)
+# Même règle que les prix des carburants : au début d'un voyage, si FINESS n'a pas encore été relu aujourd'hui,
+# refresh_pharmacies le relit dans un fil à part (gratuit, 52 Mo, quelques secondes) et repasse toutes les villes.
+# Une pharmacie fermée dans FINESS est ainsi masquée au plus tard un jour après sa fermeture, une pharmacie qui ouvre
+# est ajoutée. La page ne l'attend pas, et un échec la laisse intacte : les pharmacies déjà en base restent montrées.
+# La date vient de sources.lu_le de la source finess. Après un échec, on attend PHARMACY_RETRY_MINUTES.
+PHARMACY_RETRY_MINUTES = 60
+pharmacy_refresh_lock = threading.Lock()
+pharmacy_refresh_in_progress = False
+pharmacy_refresh_failed_at = None
+
+
+def pharmacies_are_fresh(read_at, today: date) -> bool:
+    """Vrai si FINESS a déjà été relu en entier aujourd'hui."""
+    return read_at is not None and read_at.date() == today
+
+
+def refresh_pharmacies_background():
+    """Relit FINESS et repasse toutes les villes, en arrière-plan. Un échec est noté, jamais remonté."""
+    global pharmacy_refresh_in_progress, pharmacy_refresh_failed_at
+    failed = False
+    try:
+        logger.info("[PHARMACIES-BG] Début de la relecture de FINESS")
+        loaded = refresh_pharmacies()
+        if loaded is None:
+            failed = True
+            logger.error("[PHARMACIES-BG] Fichier FINESS illisible : les pharmacies déjà en base restent")
+        else:
+            logger.info(f"[PHARMACIES-BG] FINESS relu : {loaded} pharmacies repassées")
+    except Exception as e:
+        failed = True
+        logger.error(f"[PHARMACIES-BG] Échec de la relecture de FINESS, les pharmacies déjà en base restent : {e}")
+    finally:
+        with pharmacy_refresh_lock:
+            pharmacy_refresh_in_progress = False
+            pharmacy_refresh_failed_at = datetime.now() if failed else None
+
+
+def start_pharmacies_refresh() -> bool:
+    """Lance la relecture de FINESS s'il le faut. Vrai si elle est lancée. Ne lève jamais d'erreur."""
+    global pharmacy_refresh_in_progress
+    now = datetime.now()
+    try:
+        if pharmacies_are_fresh(pharmacies_read_at(), now.date()):
+            return False
+    except Exception as e:
+        logger.error(f"[PHARMACIES-BG] Date de la dernière relecture illisible, rien n'est lancé : {e}")
+        return False
+    with pharmacy_refresh_lock:
+        if pharmacy_refresh_in_progress:
+            return False
+        if pharmacy_refresh_failed_at and now - pharmacy_refresh_failed_at < timedelta(minutes=PHARMACY_RETRY_MINUTES):
+            return False
+        pharmacy_refresh_in_progress = True
+    threading.Thread(target=refresh_pharmacies_background, daemon=True).start()
+    return True
+
+
 def get_all_city_stats(cursor, cities, distance_km=5):
     """
     Calcule les stats (randonnées, spots, POI) pour TOUTES les villes en une poignée
@@ -179,85 +238,81 @@ def get_cities_bounds():
     référencée) - calculée dynamiquement, pas codée en dur, pour suivre l'ajout
     de nouveaux départements sans changement de code.
     """
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT MIN(latitude) AS min_lat, MAX(latitude) AS max_lat,
-               MIN(longitude) AS min_lon, MAX(longitude) AS max_lon
-        FROM cities
-    """)
-    bounds = cursor.fetchone()
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
-    return bounds
+    # « with » : la connexion se ferme à la sortie du bloc, même si la requête échoue (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+        cursor.execute("""
+            SELECT MIN(latitude) AS min_lat, MAX(latitude) AS max_lat,
+                   MIN(longitude) AS min_lon, MAX(longitude) AS max_lon
+            FROM cities
+        """)
+        return cursor.fetchone()
 
 @router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
 async def get_ville_list(
     request: Request,
     distance_km: float = Query(5, description="Rayon de recherche en km")
 ):
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
+    # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+        # Vérification si les données météo J+6 existent (7 jours de prévisions : J+0 à J+6)
+        date_j6 = datetime.now().date() + timedelta(days=6)
+        cursor.execute("SELECT COUNT(*) as count FROM weather WHERE date >= %s", (date_j6,))
+        result = cursor.fetchone()
+        meteo_j7_exists = result['count'] > 0
 
-    # Vérification si les données météo J+6 existent (7 jours de prévisions : J+0 à J+6)
-    date_j6 = datetime.now().date() + timedelta(days=6)
-    cursor.execute("SELECT COUNT(*) as count FROM weather WHERE date >= %s", (date_j6,))
-    result = cursor.fetchone()
-    meteo_j7_exists = result['count'] > 0
-
-    # Si les données J+6 n'existent pas, lancer l'ETL météo pour toutes les villes en arrière-plan
-    # (non bloquant : la requête répond avec les données déjà en base pendant que le rafraîchissement se fait)
-    if not meteo_j7_exists:
-        global meteo_refresh_in_progress
-        with meteo_refresh_lock:
-            already_running = meteo_refresh_in_progress
+        # Si les données J+6 n'existent pas, lancer l'ETL météo pour toutes les villes en arrière-plan
+        # (non bloquant : la requête répond avec les données déjà en base pendant que le rafraîchissement se fait)
+        if not meteo_j7_exists:
+            global meteo_refresh_in_progress
+            with meteo_refresh_lock:
+                already_running = meteo_refresh_in_progress
+                if not already_running:
+                    meteo_refresh_in_progress = True
             if not already_running:
-                meteo_refresh_in_progress = True
-        if not already_running:
-            logger.info("Lancement de l'ETL météo en arrière-plan pour toutes les villes...")
-            threading.Thread(target=refresh_all_cities_meteo_background, daemon=True).start()
-        else:
-            logger.info("Rafraîchissement météo déjà en cours en arrière-plan.")
+                logger.info("Lancement de l'ETL météo en arrière-plan pour toutes les villes...")
+                threading.Thread(target=refresh_all_cities_meteo_background, daemon=True).start()
+            else:
+                logger.info("Rafraîchissement météo déjà en cours en arrière-plan.")
 
-    # Les prix des carburants du jour, en arrière-plan aussi (voir start_fuel_prices_refresh).
-    start_fuel_prices_refresh()
+        # Les prix des carburants du jour, en arrière-plan aussi (voir start_fuel_prices_refresh).
+        start_fuel_prices_refresh()
+        # Les pharmacies du jour (fermetures et ouvertures de FINESS), en arrière-plan aussi (voir start_pharmacies_refresh).
+        start_pharmacies_refresh()
 
-    cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
-    cities = cursor.fetchall()
+        cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
+        cities = cursor.fetchall()
 
-    # Stats de toutes les villes en une poignée de requêtes agrégées (voir get_all_city_stats)
-    # au lieu d'une boucle de 6 requêtes par ville.
-    all_stats = get_all_city_stats(cursor, cities, distance_km)
+        # Stats de toutes les villes en une poignée de requêtes agrégées (voir get_all_city_stats)
+        # au lieu d'une boucle de 6 requêtes par ville.
+        all_stats = get_all_city_stats(cursor, cities, distance_km)
 
-    # Météo de toutes les villes en une seule requête, regroupée ensuite par ville en Python.
-    city_ids = [c["id"] for c in cities]
-    meteo_by_city = {cid: [] for cid in city_ids}
-    if city_ids:
-        placeholders = ",".join(["%s"] * len(city_ids))
-        cursor.execute(
-            f"SELECT * FROM weather WHERE city_id IN ({placeholders}) AND DATE >= CURDATE() ORDER BY city_id, date ASC",
-            tuple(city_ids)
-        )
-        for m in cursor.fetchall():
-            meteo_by_city[m["city_id"]].append({
-                "date": m["date"],
-                "temp_max": m["temp_max_c"],
-                "temp_min": m["temp_min_c"],
-                "weather_code": m["weather_code"],
-                "picto": meteo_code_to_picto(m["weather_code"]),
-                "precipitation_sum": m.get("precipitation_mm", 0.0),
-                "wind_speed_max": m.get("wind_max_kmh", 0.0)
-            })
+        # Météo de toutes les villes en une seule requête, regroupée ensuite par ville en Python.
+        city_ids = [c["id"] for c in cities]
+        meteo_by_city = {cid: [] for cid in city_ids}
+        if city_ids:
+            placeholders = ",".join(["%s"] * len(city_ids))
+            cursor.execute(
+                f"SELECT * FROM weather WHERE city_id IN ({placeholders}) AND DATE >= CURDATE() ORDER BY city_id, date ASC",
+                tuple(city_ids)
+            )
+            for m in cursor.fetchall():
+                meteo_by_city[m["city_id"]].append({
+                    "date": m["date"],
+                    "temp_max": m["temp_max_c"],
+                    "temp_min": m["temp_min_c"],
+                    "weather_code": m["weather_code"],
+                    "picto": meteo_code_to_picto(m["weather_code"]),
+                    "precipitation_sum": m.get("precipitation_mm", 0.0),
+                    "wind_speed_max": m.get("wind_max_kmh", 0.0)
+                })
 
-    # Champs prêts à afficher (libellés des stats, entêtes et conseils météo)
-    # calculés en Python : le frontend n'a plus qu'à les insérer dans la page.
-    for row in cities:
-        row["stats"] = all_stats[row["id"]]
-        row["stats_labels"] = city_stats_labels(all_stats[row["id"]])
-        row["meteo"] = enrich_meteo_forecasts(meteo_by_city[row["id"]])
+        # Champs prêts à afficher (libellés des stats, entêtes et conseils météo)
+        # calculés en Python : le frontend n'a plus qu'à les insérer dans la page.
+        for row in cities:
+            row["stats"] = all_stats[row["id"]]
+            row["stats_labels"] = city_stats_labels(all_stats[row["id"]])
+            row["meteo"] = enrich_meteo_forecasts(meteo_by_city[row["id"]])
 
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
     return cities
 
 
@@ -283,28 +338,19 @@ def create_plan(
     if duration_days is None or duration_days < 1:
         raise HTTPException(status_code=400, detail="La durée du séjour doit être d'au moins 1 jour.")
     try:
-        cnx = MySQLUtils.connect()
-        cursor = cnx.cursor()
-        cursor.execute("SELECT 1 FROM cities WHERE id = %s", (city_id,))
-        if cursor.fetchone() is None:
-            cursor.close()
-            raise HTTPException(status_code=400, detail=f"Ville introuvable (id={city_id}). Choisis une ville dans la liste.")
-        plan_start_date = start_date or date.today()
-        insert_plan = """
-            INSERT INTO trip_plans (start_date, duration_days, city_id, user_token, user_id, created_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
-        """
-        cursor.execute(insert_plan, (plan_start_date, duration_days, city_id, user_token_to_insert, user_id_to_insert))
-        plan_id = cursor.lastrowid
-        insert_day = """
-            INSERT INTO trip_days (trip_plan_id, day_number, hike_id, spot_id, city_id)
-            VALUES (%s, %s, NULL, NULL, %s)
-        """
-        for day_num in range(1, duration_days + 1):
-            cursor.execute(insert_day, (plan_id, day_num, city_id))
-        cnx.commit()
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
+        # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
+        with MySQLUtils.open_cursor() as (cnx, cursor):
+            cursor.execute("SELECT 1 FROM cities WHERE id = %s", (city_id,))
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=400, detail=f"Ville introuvable (id={city_id}). Choisis une ville dans la liste.")
+            try:
+                plan_id = insert_plan_with_days(cursor, start_date or date.today(), duration_days, city_id,
+                                                user_token_to_insert, user_id_to_insert)
+                cnx.commit()
+            except Exception:
+                # Une écriture a échoué : on annule le plan à moitié écrit, avant que le with ferme la connexion.
+                cnx.rollback()
+                raise
         # La ville est choisie : Vany commence à chercher ses pépites
         # pendant que l'utilisateur choisit sa rando et son spot.
         start_zone_search(plan_id, 1)
@@ -312,14 +358,26 @@ def create_plan(
     except HTTPException:
         # Erreur client déjà formée (ville introuvable, etc.) : la laisser passer
         # telle quelle plutôt que de la ré-emballer en 500.
-        if 'cnx' in locals():
-            MySQLUtils.disconnect(cnx)
         raise
     except Exception as e:
-        if 'cnx' in locals():
-            cnx.rollback()
-            MySQLUtils.disconnect(cnx)
         raise HTTPException(status_code=500, detail=f"Erreur lors de la création du plan : {str(e)}")
+
+
+def insert_plan_with_days(cursor, plan_start_date, duration_days, city_id, user_token, user_id) -> int:
+    """Écrit le plan (trip_plans) et ses jours vides (trip_days), tous dans la ville de départ ; rend l'id du plan."""
+    insert_plan = """
+        INSERT INTO trip_plans (start_date, duration_days, city_id, user_token, user_id, created_at)
+        VALUES (%s, %s, %s, %s, %s, NOW())
+    """
+    cursor.execute(insert_plan, (plan_start_date, duration_days, city_id, user_token, user_id))
+    plan_id = cursor.lastrowid
+    insert_day = """
+        INSERT INTO trip_days (trip_plan_id, day_number, hike_id, spot_id, city_id)
+        VALUES (%s, %s, NULL, NULL, %s)
+    """
+    for day_num in range(1, duration_days + 1):
+        cursor.execute(insert_day, (plan_id, day_num, city_id))
+    return plan_id
 
 
 @router.put("/update_day_city/{plan_id}", summary="Set (or change) the city for a given day of the trip.",
@@ -341,28 +399,25 @@ def update_day_city(request: Request, plan_id: int, data: dict = Body(...)):
 async def refresh_city_meteo(city_id: int):
     """Lancer l'ETL météo pour une ville spécifique (en cas de données manquantes)"""
     try:
-        cnx = MySQLUtils.connect()
-        cursor = cnx.cursor(dictionary=True)
-        
-        # Récupérer le nom et les coordonnées de la ville
-        cursor.execute("SELECT name, latitude, longitude FROM cities WHERE id = %s", (city_id,))
-        result = cursor.fetchone()
+        # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
+        with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+            # Récupérer le nom et les coordonnées de la ville
+            cursor.execute("SELECT name, latitude, longitude FROM cities WHERE id = %s", (city_id,))
+            result = cursor.fetchone()
 
-        if not result:
-            cursor.close()
-            MySQLUtils.disconnect(cnx)
-            raise HTTPException(status_code=404, detail="Ville non trouvée")
+            if not result:
+                raise HTTPException(status_code=404, detail="Ville non trouvée")
 
-        city_name = result['name']
-        logger.info(f"[REFRESH] Lancement ETL météo pour la ville : {city_name}")
+            city_name = result['name']
+            logger.info(f"[REFRESH] Lancement ETL météo pour la ville : {city_name}")
 
-        # Lancer l'ETL météo avec les coordonnées DB (évite l'appel Nominatim)
-        etl_result = run_meteo_etl(city_name, result['latitude'], result['longitude'])
-        
-        # Récupérer les prévisions météo fraîchement créées
-        cursor.execute("SELECT * FROM weather WHERE city_id = %s AND DATE >= CURDATE() ORDER BY date ASC", (city_id,))
-        meteo_data = cursor.fetchall()
-        
+            # Lancer l'ETL météo avec les coordonnées DB (évite l'appel Nominatim)
+            etl_result = run_meteo_etl(city_name, result['latitude'], result['longitude'])
+
+            # Récupérer les prévisions météo fraîchement créées
+            cursor.execute("SELECT * FROM weather WHERE city_id = %s AND DATE >= CURDATE() ORDER BY date ASC", (city_id,))
+            meteo_data = cursor.fetchall()
+
         forecasts = []
         for m in meteo_data:
             forecasts.append({
@@ -374,9 +429,6 @@ async def refresh_city_meteo(city_id: int):
                 "precipitation_sum": m.get("precipitation_mm", 0.0),
                 "wind_speed_max": m.get("wind_max_kmh", 0.0)
             })
-        
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
 
         # Même enrichissement que /cities : le frontend remplace son cache météo
         # tel quel, la forme des deux réponses doit donc être identique.
@@ -390,8 +442,6 @@ async def refresh_city_meteo(city_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        if 'cnx' in locals():
-            MySQLUtils.disconnect(cnx)
         logger.error(f"Erreur lors du refresh météo pour city_id {city_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'actualisation météo : {str(e)}")
 

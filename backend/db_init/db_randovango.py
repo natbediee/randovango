@@ -286,6 +286,9 @@ def init_database():
             """,
             # 8. poi (dépend de cities, sources)
             # maps_url : le lien Google Maps qu'un admin a saisi dans /supervision, à la place de celui que le code fabrique
+            # acces_osm : l'étiquette access d'OSM des toilettes et douches (yes, customers, permissive...), NULL sans
+            #   étiquette ; l'étape 4 cache celles réservées aux clients (issue #193).
+            # payant : l'étiquette fee d'OSM (1 payant, 0 gratuit, NULL inconnu).
             """
             CREATE TABLE IF NOT EXISTS poi (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -304,6 +307,8 @@ def init_database():
                 mois_ouverture JSON,
                 address VARCHAR(512),
                 maps_url VARCHAR(512),
+                acces_osm VARCHAR(20),
+                payant TINYINT(1),
                 unique (original_id, source_id),
                 INDEX idx_poi_latlon (latitude, longitude),
                 FOREIGN KEY (source_id) REFERENCES sources(id)
@@ -574,7 +579,7 @@ def init_database():
             # 18. decisions : ce qu'un humain a tranché (qui, quand, quoi, pourquoi)
             # pertinence et raison (facultatives, #201) : la note que l'humain donne à la proposition de l'agent
             # (juste, à corriger, fausse) et la cause d'une erreur. Elles forment le jeu d'évaluation des agents (#114) ;
-            # les valeurs permises sont dans services/decision_rating.py. NULL : décision non notée.
+            # les valeurs permises sont dans services/supervision/rating.py. NULL : décision non notée.
             """
             CREATE TABLE IF NOT EXISTS decisions (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,

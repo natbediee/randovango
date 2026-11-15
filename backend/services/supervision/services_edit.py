@@ -1,7 +1,7 @@
 """
 Supervision, onglet « Modifier » : corriger n'importe quel service, même sans signal à relire (7 novembre 2026).
 
-La relecture (poi_review_service.py) ne montre que les lieux qu'une vérification a signalés. Une erreur vue sur
+La relecture (services_review.py) ne montre que les lieux qu'une vérification a signalés. Une erreur vue sur
 une carte de l'étape 4 (la Cave de Keruzas, sans aucun signal) ne pouvait pas y être corrigée. Ici, on retrouve
 le lieu comme le voyageur le voit, puis on le corrige.
 
@@ -11,14 +11,16 @@ pouvoir les remettre.
 
 LES MÊMES CORRECTIONS QUE LA RELECTURE, et le même code : applied_fields, typed_name, typed_link, typed_maps_link.
 Chaque correction est une décision (objet_type = 'poi', detail.file = 'modifier') qui garde les valeurs d'avant :
-poi_review_service.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
+decisions.cancel_decision la défait. Les noms de décision sont ceux de la relecture : un agent ne touche
 pas un nom ou un lien corrigé ici (service_store._decided_by_human).
 """
 import json
 import re
 from datetime import date
 
-from services import poi_review_service as review, service_store
+from services import service_store
+from services.supervision import services_review as review
+from services.supervision.decisions import record_decision
 from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
 from services.station_selection_service import STATION_VIEW_SQL, station_view
@@ -138,8 +140,10 @@ def _search_rows(cursor, city: dict | None, name: str, cities: list | None = Non
                (SELECT r.categorie FROM restaurants r WHERE r.poi_id = p.id) AS table_categorie,
                (SELECT c.categorie FROM commerces c WHERE c.poi_id = p.id) AS shop_categorie,
                (SELECT MIN(c.name) FROM histo_poi h JOIN cities c ON c.id = h.city_id WHERE h.poi_id = p.id) AS commune
-        FROM poi p WHERE {' AND '.join(filters)}
+        FROM poi p WHERE {' AND '.join(filters) or 'TRUE'}
     """, tuple(params))
+    # Sans aucun filtre (TRUE), tous les services viennent : seul le bilan de toute la base le demande
+    # (summary.city_inventory) ; la recherche de Modifier exige une ville, une commune ou un nom.
     rows = cursor.fetchall()
     for row in rows:
         # La commune affichée : celle de l'adresse, pas la première des villes dont la zone contient le lieu.
@@ -180,12 +184,23 @@ def _recent(cursor) -> list:
             for row in cursor.fetchall()]
 
 
+def page_of(cards: list, page: int) -> tuple:
+    """
+    Une page de la liste : (ses cartes, le numéro de la page, le nombre de pages). Un numéro trop grand ou trop petit
+    ramène à la dernière ou à la première page : la liste a pu raccourcir depuis le clic.
+    """
+    pages = max(1, -(-len(cards) // PAGE_SIZE))
+    page = min(max(1, page), pages)
+    return cards[(page - 1) * PAGE_SIZE:page * PAGE_SIZE], page, pages
+
+
 def search(city_id: int | None = None, service: str | None = None, kind: str | None = None, name: str | None = None,
-           town: str | None = None) -> dict:
+           town: str | None = None, page: int = 1) -> dict:
     """
     Les lieux d'une ville, d'un onglet de l'étape 4, d'un type précis, et dont le nom contient `name`. town : une commune
-    des adresses qui n'est pas une ville de l'appli (address_towns). Il faut une ville, une commune ou un bout de nom :
-    sans eux, toute la table viendrait.
+    des adresses qui n'est pas une ville de l'appli (address_towns). Il faut une ville, une commune, une catégorie ou un
+    bout de nom : sans aucun, toute la table viendrait. Une catégorie seule suffit (carte #186) : « toutes les
+    boulangeries » ; la liste vient alors en pages de PAGE_SIZE (page : le numéro de la page).
     """
     town = " ".join((town or "").split()) or None
     name = " ".join((name or "").split())
@@ -197,14 +212,15 @@ def search(city_id: int | None = None, service: str | None = None, kind: str | N
         city_codes, towns = address_towns(cursor, all_cities)
         cities = [{"id": row["id"], "name": row["name"], "codes": city_codes.get(row["id"], [])} for row in all_cities]
         city = _city(cursor, city_id)
-        searched = bool(city or town or len(name) >= MIN_NAME_SEARCH)
+        searched = bool(city or town or service or len(name) >= MIN_NAME_SEARCH)
         cards, service_counts, type_counts = [], {}, {}
         if searched:
             cards, service_counts, type_counts = filter_cards(_search_rows(cursor, city, name, all_cities, town),
                                                               service, kind)
         recent = _recent(cursor)
         cursor.close()
-        return {"cities": cities, "towns": towns, "cards": cards[:PAGE_SIZE], "total": len(cards),
+        shown, page, pages = page_of(cards, page)
+        return {"cities": cities, "towns": towns, "cards": shown, "total": len(cards), "page": page, "pages": pages,
                 "service_counts": service_counts, "type_counts": type_counts, "recent": recent, "buttons": EDIT_BUTTONS,
                 "searched": searched}
     finally:
@@ -237,11 +253,7 @@ def decide_one(cursor, poi_id: int, action: str, note: str, decided_by: str, mon
             cursor.execute(f"UPDATE poi_signals SET statut = %s, reviewed_at = NOW() WHERE id IN ({marks})",
                            (review.ACTIONS[action], *signal_ids))
     detail = {"file": EDIT_FILE, "signal_ids": signal_ids, "avant": {column: before[column] for column in fields}}
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-    """, (review.POI, poi_id, action, (note or "").strip()[:255] or None, decided_by,
-          json.dumps(detail, ensure_ascii=False, default=str)))
+    record_decision(cursor, review.POI, poi_id, action, note, decided_by, detail)
     if action == "autre_maps":
         review.confirm_located(cursor, poi_id, fields, decided_by)
 
@@ -477,11 +489,7 @@ def decide_sheet_one(cursor, poi_id: int, changes: dict, note: str, decided_by: 
     if sheet_fields:
         detail["avant_fiche"] = {"origine": sheet["origine"], "table": sheet["table"], "signal_id": sheet.get("signal_id"),
                                  "values": {column: old_sheet.get(column) for column in sheet_fields}}
-    cursor.execute("""
-        INSERT INTO decisions (objet_type, objet_id, decision, note, decided_by, decided_at, detail)
-        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-    """, (review.POI, poi_id, SHEET_DECISION, (note or "").strip()[:255] or None, decided_by,
-          json.dumps(detail, ensure_ascii=False, default=str)))
+    record_decision(cursor, review.POI, poi_id, SHEET_DECISION, note, decided_by, detail)
     review.confirm_located(cursor, poi_id, poi_fields, decided_by)
     return changed
 

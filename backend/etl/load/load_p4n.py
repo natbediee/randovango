@@ -31,110 +31,109 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     logger.info(f"[load] : Chargement de {len(df)} lignes depuis DataFrame fourni")
     # Remplacer tous les NaN par None pour éviter les erreurs MySQL
     df = df.where(pd.notnull(df), None)
-    conn = MySQLUtils.connect()
-    cursor = MySQLUtils.get_cursor(conn)
-    # Gestion de la source (p4n)
-    source_name = 'Park4Night'
-    cursor.execute("SELECT id FROM sources WHERE name = %s", (source_name,))
-    result = cursor.fetchone()
-    if result:
-        source_id = result[0]
-    else:
-        cursor.execute("INSERT INTO sources (name) VALUES (%s)", (source_name,))
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur ou de return anticipé (issue #206).
+    # Une seule connexion pour tout le chargement. Avant, la fonction en ouvrait deux et ne fermait jamais la
+    # première : une connexion perdue à chaque passage, même sans erreur, y compris dans l'API (envoi d'un GPX).
+    # Curseur bufferisé : save_reviews et get_or_create_service_with_category enchaînent des centaines de petites
+    # requêtes ; il lit tout le résultat d'un coup, pour qu'une ligne non lue ne bloque pas la suivante.
+    with MySQLUtils.open_cursor(buffered=True) as (conn, cursor):
+        # Gestion de la source (p4n)
+        source_name = 'Park4Night'
+        cursor.execute("SELECT id FROM sources WHERE name = %s", (source_name,))
+        result = cursor.fetchone()
+        if result:
+            source_id = result[0]
+        else:
+            cursor.execute("INSERT INTO sources (name) VALUES (%s)", (source_name,))
+            conn.commit()
+            source_id = cursor.lastrowid
+
+        # Récupère tous les p4n_id déjà présents dans spots
+        cursor.execute("SELECT p4n_id FROM spots")
+        existing_ids = set(str(row[0]) for row in cursor.fetchall())
+        logger.info(f"[load] : {len(existing_ids)} p4n_id déjà présents dans la table spots")
+
+        # Filtre le DataFrame pour ne garder que les nouveaux p4n_id
+        df_new = df[~df['p4n_id'].astype(str).isin(existing_ids)]
+
+        # On ne charge pas les spots où l'on ne peut pas dormir (ex : "PARKING JOUR UNIQUEMENT").
+        excluded = df_new['Type_Place'].isin(EXCLUDED_SPOT_TYPES)
+        if excluded.any():
+            logger.info(f"[load] : {int(excluded.sum())} spot(s) ignoré(s), type exclu : {sorted(set(df_new[excluded]['Type_Place']))}")
+        df_new = df_new[~excluded]
+        logger.info(f"[load] : {len(df_new)} nouveaux spots à insérer")
+
+        # Prépare les requêtes
+        insert_spot_sql = """
+            INSERT INTO spots (name, description, type, latitude, longitude, p4n_id, rating, url, source_id, verifie,
+                               postal_code, city_label, place_label,
+                               opening_period, price_parking, price_services, details_scraped_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,1, %s, %s, %s, %s, %s, %s, NOW())
+        """
+        # select_service_sql = "SELECT id FROM services WHERE name=%s"
+        # insert_service_sql = "INSERT INTO services (name, category) VALUES (%s, %s)"
+        insert_spot_service_sql = "INSERT IGNORE INTO spot_service (spot_id, service_id) VALUES (%s, %s)"
+
+        # Prépare la requête pour histo_ (ou city_spot_scraped)
+        insert_histo_sql = """
+            INSERT IGNORE INTO histo_scrap (spot_id, city_id, scraped_at)
+            VALUES (%s, %s, NOW())
+        """
+
+        # Utilise uniquement la ville passée explicitement (issue du GPX)
+        if not city:
+            logger.error("[load] : Aucune ville fournie par le pipeline. Aucune insertion ne sera effectuée.")
+            return
+        cursor.execute("SELECT id FROM cities WHERE name = %s", (city,))
+        result = cursor.fetchone()
+        if result:
+            city_id = result[0]
+        else:
+            logger.error(f"[load] : Ville '{city}' absente de la base. Aucune insertion ne sera effectuée.")
+            return
+
+        logger.info(f"[load] : Ville utilisée pour l'insertion : {city} (id={city_id})")
+        for _, row in df_new.iterrows():
+            # 1. Insert spot
+            spot_values = (
+                row['Nom_Place'],
+                row['Description'],
+                row['Type_Place'],
+                row['latitude'],
+                row['longitude'],
+                row['p4n_id'],
+                row['note'],
+                row['URL_fiche'],
+                source_id,
+                row.get('postal_code'),
+                row.get('city_label'),
+                row.get('place_label'),
+                row.get('Ouverture'),
+                row.get('Prix_stationnement'),
+                row.get('Prix_services'),
+            )
+            cursor.execute(insert_spot_sql, spot_values)
+            spot_id = cursor.lastrowid
+            logger.info(f"[load] : Spot inséré - Nom: {row['Nom_Place']}, p4n_id: {row['p4n_id']}, ville: {city}, spot_id: {spot_id}")
+
+            # 2. Insert services et liaisons
+            services = [s.strip() for s in str(row['Services']).split(',') if s.strip()]
+            for service in services:
+                # Services hors sujet (ex : "Belle balade à moto") : on ne les enregistre pas.
+                if is_excluded_service(service):
+                    continue
+                service_id = ServiceUtil.get_or_create_service_with_category(cursor, service)
+                cursor.execute(insert_spot_service_sql, (spot_id, service_id))
+                logger.info(f"[load] : Service lié - spot_id: {spot_id}, service: {service}, service_id: {service_id}")
+
+            # 3. Commentaires (échantillon choisi au scraping)
+            avis = row.get('Avis')
+            if isinstance(avis, list):
+                save_reviews(cursor, spot_id, avis)
+
+            # 4. Ajout dans histo_scrap (ou city_spot_scraped) avec la ville principale
+            cursor.execute(insert_histo_sql, (spot_id, city_id))
+            logger.info(f"[load] : Ajout dans histo_scrap - spot_id: {spot_id}, city_id: {city_id}")
+
         conn.commit()
-        source_id = cursor.lastrowid
-
-    conn = MySQLUtils.connect()
-    cursor = conn.cursor(buffered=True)
-
-    # Récupère tous les p4n_id déjà présents dans spots
-    cursor.execute("SELECT p4n_id FROM spots")
-    existing_ids = set(str(row[0]) for row in cursor.fetchall())
-    logger.info(f"[load] : {len(existing_ids)} p4n_id déjà présents dans la table spots")
-
-    # Filtre le DataFrame pour ne garder que les nouveaux p4n_id
-    df_new = df[~df['p4n_id'].astype(str).isin(existing_ids)]
-
-    # On ne charge pas les spots où l'on ne peut pas dormir (ex : "PARKING JOUR UNIQUEMENT").
-    excluded = df_new['Type_Place'].isin(EXCLUDED_SPOT_TYPES)
-    if excluded.any():
-        logger.info(f"[load] : {int(excluded.sum())} spot(s) ignoré(s), type exclu : {sorted(set(df_new[excluded]['Type_Place']))}")
-    df_new = df_new[~excluded]
-    logger.info(f"[load] : {len(df_new)} nouveaux spots à insérer")
-
-    # Prépare les requêtes
-    insert_spot_sql = """
-        INSERT INTO spots (name, description, type, latitude, longitude, p4n_id, rating, url, source_id, verifie,
-                           postal_code, city_label, place_label,
-                           opening_period, price_parking, price_services, details_scraped_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,1, %s, %s, %s, %s, %s, %s, NOW())
-    """
-    # select_service_sql = "SELECT id FROM services WHERE name=%s"
-    # insert_service_sql = "INSERT INTO services (name, category) VALUES (%s, %s)"
-    insert_spot_service_sql = "INSERT IGNORE INTO spot_service (spot_id, service_id) VALUES (%s, %s)"
-
-    # Prépare la requête pour histo_ (ou city_spot_scraped)
-    insert_histo_sql = """
-        INSERT IGNORE INTO histo_scrap (spot_id, city_id, scraped_at)
-        VALUES (%s, %s, NOW())
-    """
-   
-    # Utilise uniquement la ville passée explicitement (issue du GPX)
-    if not city:
-        logger.error("[load] : Aucune ville fournie par le pipeline. Aucune insertion ne sera effectuée.")
-        return
-    cursor.execute("SELECT id FROM cities WHERE name = %s", (city,))
-    result = cursor.fetchone()
-    if result:
-        city_id = result[0]
-    else:
-        logger.error(f"[load] : Ville '{city}' absente de la base. Aucune insertion ne sera effectuée.")
-        return
-
-    logger.info(f"[load] : Ville utilisée pour l'insertion : {city} (id={city_id})")
-    for _, row in df_new.iterrows():
-        # 1. Insert spot
-        spot_values = (
-            row['Nom_Place'],
-            row['Description'],
-            row['Type_Place'],
-            row['latitude'],
-            row['longitude'],
-            row['p4n_id'],
-            row['note'],
-            row['URL_fiche'],
-            source_id,
-            row.get('postal_code'),
-            row.get('city_label'),
-            row.get('place_label'),
-            row.get('Ouverture'),
-            row.get('Prix_stationnement'),
-            row.get('Prix_services'),
-        )
-        cursor.execute(insert_spot_sql, spot_values)
-        spot_id = cursor.lastrowid
-        logger.info(f"[load] : Spot inséré - Nom: {row['Nom_Place']}, p4n_id: {row['p4n_id']}, ville: {city}, spot_id: {spot_id}")
-
-        # 2. Insert services et liaisons
-        services = [s.strip() for s in str(row['Services']).split(',') if s.strip()]
-        for service in services:
-            # Services hors sujet (ex : "Belle balade à moto") : on ne les enregistre pas.
-            if is_excluded_service(service):
-                continue
-            service_id = ServiceUtil.get_or_create_service_with_category(cursor, service)
-            cursor.execute(insert_spot_service_sql, (spot_id, service_id))
-            logger.info(f"[load] : Service lié - spot_id: {spot_id}, service: {service}, service_id: {service_id}")
-
-        # 3. Commentaires (échantillon choisi au scraping)
-        avis = row.get('Avis')
-        if isinstance(avis, list):
-            save_reviews(cursor, spot_id, avis)
-
-        # 4. Ajout dans histo_scrap (ou city_spot_scraped) avec la ville principale
-        cursor.execute(insert_histo_sql, (spot_id, city_id))
-        logger.info(f"[load] : Ajout dans histo_scrap - spot_id: {spot_id}, city_id: {city_id}")
-
-    conn.commit()
-    logger.info(f"[load] : {len(df_new)} nouveaux spots insérés avec services associés.")
-    cursor.close()
-    MySQLUtils.disconnect(conn)
+        logger.info(f"[load] : {len(df_new)} nouveaux spots insérés avec services associés.")

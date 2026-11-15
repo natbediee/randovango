@@ -41,38 +41,34 @@ REPORT_PATH = Path(__file__).resolve().parents[2] / "storage" / "relecture_poi.c
 
 def load_pois(services: list) -> list:
     """Un lieu classé dans deux services n'est vérifié qu'une fois, avec le premier des services demandés."""
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor(dictionary=True)
-    marks = ",".join(["%s"] * len(services))
-    cursor.execute(
-        f"""SELECT p.id, p.name, p.url, p.address, p.latitude, p.longitude, p.original_id, s.name AS source_name,
-                   sv.name AS service
-            FROM poi p
-            JOIN poi_service ps ON ps.poi_id = p.id
-            JOIN services sv ON sv.id = ps.service_id AND sv.name IN ({marks})
-            JOIN sources s ON s.id = p.source_id
-            ORDER BY p.id""", services)
-    rows = {}
-    for row in cursor.fetchall():
-        known = rows.get(row["id"])
-        if not known or services.index(row["service"]) < services.index(known["service"]):
-            rows[row["id"]] = row
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (connection, cursor):
+        marks = ",".join(["%s"] * len(services))
+        cursor.execute(
+            f"""SELECT p.id, p.name, p.url, p.address, p.latitude, p.longitude, p.original_id, s.name AS source_name,
+                       sv.name AS service
+                FROM poi p
+                JOIN poi_service ps ON ps.poi_id = p.id
+                JOIN services sv ON sv.id = ps.service_id AND sv.name IN ({marks})
+                JOIN sources s ON s.id = p.source_id
+                ORDER BY p.id""", services)
+        rows = {}
+        for row in cursor.fetchall():
+            known = rows.get(row["id"])
+            if not known or services.index(row["service"]) < services.index(known["service"]):
+                rows[row["id"]] = row
     return list(rows.values())
 
 
 def write_results(results: list) -> None:
     """results : (poi_id, source, bilan, [(signal, détail)...]). Une transaction par paquet, sans garder la connexion."""
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    for poi_id, source, result, signals in results:
-        save_check(cursor, poi_id, source, result)
-        for signal_type, detail in signals:
-            save_signal(cursor, poi_id, source, signal_type, detail)
-    connection.commit()
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        for poi_id, source, result, signals in results:
+            save_check(cursor, poi_id, source, result)
+            for signal_type, detail in signals:
+                save_signal(cursor, poi_id, source, signal_type, detail)
+        connection.commit()
 
 
 def check_osm(rows: list, force: bool, limit: int | None) -> None:
@@ -138,17 +134,15 @@ def check_dead_links(rows: list, limit: int | None) -> None:
 
 
 def report() -> None:
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute(
-        """SELECT sg.signal_type, sg.source, p.id, p.name, p.address, p.url, sg.statut, sg.detail,
-                  (SELECT MIN(sv.name) FROM poi_service ps JOIN services sv ON sv.id = ps.service_id
-                   WHERE ps.poi_id = p.id) AS service
-           FROM poi_signals sg JOIN poi p ON p.id = sg.poi_id
-           ORDER BY sg.signal_type, service, p.name""")
-    rows = cursor.fetchall()
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (connection, cursor):
+        cursor.execute(
+            """SELECT sg.signal_type, sg.source, p.id, p.name, p.address, p.url, sg.statut, sg.detail,
+                      (SELECT MIN(sv.name) FROM poi_service ps JOIN services sv ON sv.id = ps.service_id
+                       WHERE ps.poi_id = p.id) AS service
+               FROM poi_signals sg JOIN poi p ON p.id = sg.poi_id
+               ORDER BY sg.signal_type, service, p.name""")
+        rows = cursor.fetchall()
     counts = {}
     for row in rows:
         counts[row["signal_type"]] = counts.get(row["signal_type"], 0) + 1
