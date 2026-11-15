@@ -25,10 +25,9 @@ def save_signal(cursor, poi_id: int, source: str, signal_type: str, detail: dict
 
 
 def checked_ids(source: str) -> set:
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    cursor.execute("SELECT poi_id FROM poi_checks WHERE source = %s", (source,))
-    ids = {row[0] for row in cursor.fetchall()}
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    """Les identifiants des lieux déjà vérifiés par cette source (poi_checks)."""
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        cursor.execute("SELECT poi_id FROM poi_checks WHERE source = %s", (source,))
+        ids = {row[0] for row in cursor.fetchall()}
     return ids

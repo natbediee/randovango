@@ -32,9 +32,17 @@ def load_gpx_data(data, gpx_path, verifie=0) -> str:
     Retourne le nom de la ville ou None si déjà importé.
     verifie: 1 si admin, 0 sinon
     """
-    # Create MySQL connection inside function
+    # try/finally : la connexion MySQL se ferme même en cas d'erreur (issue #206). Pas d'open_cursor ici :
+    # le chargement ouvre lui-même plusieurs curseurs successifs sur cette même connexion.
     mysql_conn = MySQLUtils.connect()
-    
+    try:
+        return _load_gpx_with_connection(mysql_conn, data, gpx_path, verifie)
+    finally:
+        MySQLUtils.disconnect(mysql_conn)
+
+
+def _load_gpx_with_connection(mysql_conn, data, gpx_path, verifie) -> str:
+    """Le chargement lui-même, sur une connexion MySQL ouverte et fermée par load_gpx_data."""
     fname = os.path.basename(gpx_path)
     MongoUtils.connect()
     gpx_collection = MongoUtils.get_collection("gpx_traces")
@@ -42,7 +50,6 @@ def load_gpx_data(data, gpx_path, verifie=0) -> str:
     city_name = data.get('city_name')
     if existing:
         logger.info(f"[load] : Le fichier {fname} existe déjà dans MongoDB (id={existing.get('_id')}). Ignorer l'import.")
-        MySQLUtils.disconnect(mysql_conn)
         return city_name if city_name else None
 
     logger.info(f"[load] : Import du fichier GPX: {fname}")
@@ -132,9 +139,6 @@ def load_gpx_data(data, gpx_path, verifie=0) -> str:
     except Exception as e:
         logger.warning(f"[load] : Erreur lors de la suppression du fichier {gpx_path} : {e}")
 
-    # Close MySQL connection
-    MySQLUtils.disconnect(mysql_conn)
-    
     return city_name if city_name else None
 
 
