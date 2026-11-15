@@ -114,6 +114,18 @@ def test_a_trial_run_writes_nothing(monkeypatch):
     assert writes == []
 
 
+def test_a_new_city_reads_finess_then_loads_its_pharmacies(monkeypatch):
+    """Une ville ajoutée : FINESS est lu, puis ses pharmacies sont chargées ; sans fichier, rien n'est écrit."""
+    loaded = []
+    monkeypatch.setattr(etl_pharmacies, "read_pharmacies", lambda: [RIVOALEN])
+    monkeypatch.setattr(etl_pharmacies, "run_city_etl", lambda city, pharmacies: loaded.append((city, pharmacies)) or 1)
+    assert etl_pharmacies.run_new_city_etl("Plougonvelin") == 1
+    assert loaded == [("Plougonvelin", [RIVOALEN])]
+    monkeypatch.setattr(etl_pharmacies, "read_pharmacies", lambda: None)
+    assert etl_pharmacies.run_new_city_etl("Plougonvelin") is None
+    assert len(loaded) == 1
+
+
 def _row_in(town):
     return {"poi": {"address": f"Rue, 29217 {town}"}}
 

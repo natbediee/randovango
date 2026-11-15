@@ -78,6 +78,18 @@ def run_city_etl(city: str, pharmacies: list, dry_run: bool = False) -> int | No
     return load_pharmacy_rows(rows, city)
 
 
+def run_new_city_etl(city: str) -> int | None:
+    """
+    Les pharmacies d'une ville qui vient d'entrer dans l'application (carte #241), lancé par
+    etl_pipeline.scraping_background après OSM, sans geste de l'administratrice. FINESS est téléchargé pour elle seule :
+    une ville ajoutée est rare, et le fichier ne prend que quelques secondes. None si le fichier ou la ville manquent.
+    """
+    pharmacies = read_pharmacies()
+    if pharmacies is None:
+        return None
+    return run_city_etl(city, pharmacies)
+
+
 def hide_closed_pharmacies(pharmacies: list, dry_run: bool = False) -> int:
     """Les pharmacies déjà en base qui ne sont plus ouvertes dans FINESS : masquées (ou seulement listées en essai)."""
     known = known_pharmacies()
