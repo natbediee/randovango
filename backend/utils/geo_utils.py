@@ -276,6 +276,20 @@ def city_commune(city: dict) -> str:
     return city.get("commune") or city["name"]
 
 
+def communes_only(alias: str = "") -> str:
+    """
+    Le filtre SQL qui ne garde que les communes de la table cities, pas les lieux-dits (issue #184, décision du
+    15 novembre 2026). Une ville vient du départ d'une rando : parfois un lieu-dit (Lochrist, au Conquet ; Lilia et
+    Tremenac'h, en Plouguerneau). Une commune est une ligne dont le nom est celui de sa commune ; celles qui
+    manquaient ont été créées par etl/add_missing_communes.py. Les lieux-dits restent en base pour les anciens voyages.
+    MySQL compare sans tenir compte de la casse ni des accents : « Plounéour-Brignogan-plages » est bien sa commune.
+    Une ville dont la commune n'est pas encore connue reste gardée : on ne sait pas si c'est un lieu-dit.
+    alias : la lettre de la table cities dans une jointure (« c »), pour ne pas confondre avec un autre « name ».
+    """
+    prefix = f"{alias}." if alias else ""
+    return f"({prefix}commune IS NULL OR {prefix}name = {prefix}commune)"
+
+
 BAN_URL = "https://api-adresse.data.gouv.fr/search/"
 BAN_MIN_SCORE = 0.5
 

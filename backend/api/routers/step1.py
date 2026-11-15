@@ -12,6 +12,7 @@ from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from utils.display_utils import enrich_meteo_forecasts, city_stats_labels
+from utils.geo_utils import communes_only
 from services.pepite_service import start_zone_search
 from services.plan_service import owner_columns, set_day_city
 from typing import List
@@ -247,22 +248,17 @@ def get_cities_bounds():
         """)
         return cursor.fetchone()
 
-# LES COMMUNES SEULEMENT (issue #184, décision du 15 novembre 2026). Une ville de la table cities vient du départ d'une
-# rando : parfois un lieu-dit, pas une commune (Lochrist, au Conquet ; Lilia et Tremenac'h, en Plouguerneau). Ranger
-# les services et les spots sous ces noms en perdait : la station Carrefour de Plouguerneau était introuvable.
-# « Où pars-tu » ne propose donc plus que les communes : une ligne dont le nom est celui de sa commune
-# (etl/add_missing_communes.py a créé celles qui manquaient). Les lieux-dits restent en base pour les anciens voyages,
-# et leurs randos sortent depuis leur commune : l'étape 2 cherche les randos autour du point de départ.
-# MySQL compare sans tenir compte de la casse ni des accents : « Plounéour-Brignogan-plages » est bien sa commune.
-# Une ville dont la commune n'est pas encore connue (commune vide) reste proposée : on ne sait pas si c'est un lieu-dit.
-COMMUNES_ONLY = "commune IS NULL OR name = commune"
+# LES COMMUNES SEULEMENT (issue #184, décision du 15 novembre 2026). Ranger les services et les spots sous le nom d'un
+# lieu-dit en perdait : la station Carrefour de Plouguerneau était introuvable, Plouguerneau n'existant que sous Lilia
+# et Tremenac'h. « Où pars-tu » ne propose donc plus que les communes (geo_utils.communes_only). Les randos d'un
+# lieu-dit sortent depuis sa commune : l'étape 2 cherche les randos autour du point de départ, pas par ville.
 
 
 def load_communes(cursor) -> list:
     """Les villes que « Où pars-tu » propose : les communes, sans les lieux-dits, par ordre alphabétique."""
     cursor.execute(f"""
         SELECT id, name, department, region, country, latitude, longitude FROM cities
-        WHERE {COMMUNES_ONLY} ORDER BY name ASC
+        WHERE {communes_only()} ORDER BY name ASC
     """)
     return cursor.fetchall()
 

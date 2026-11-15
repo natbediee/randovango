@@ -15,7 +15,7 @@ from datetime import date
 from services.supervision import rating, services_edit, services_review, spots_edit, spots_review
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, spot_category
-from utils.geo_utils import address_town, town_choices, town_key
+from utils.geo_utils import address_town, communes_only, town_choices, town_key
 
 # Les files des services (services_review.TAB_SIGNALS), avec le libellé et l'ordre du filtre
 # « Problème » de la page Services (TABS dans supervision_services.js).
@@ -281,7 +281,7 @@ def get_summary(city_id: int | None = None, town: str | None = None) -> dict:
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities ORDER BY name")
+        cursor.execute(f"SELECT id, name, commune, latitude, longitude FROM cities WHERE {communes_only()} ORDER BY name")
         cities = cursor.fetchall()
         city = next((row for row in cities if row["id"] == city_id), None)
         if city_id is not None and not city:

@@ -46,7 +46,7 @@ from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from utils.db_utils import MySQLUtils
-from utils.geo_utils import address_town, town_choices, town_key
+from utils.geo_utils import address_town, communes_only, town_choices, town_key
 
 POI = "poi"
 PAGE_SIZE = 50
@@ -517,9 +517,9 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
                 offer_mixed_place(card)
         cards.sort(key=lambda card: (card["nom"] or "").lower())
 
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT DISTINCT c.name, c.commune FROM poi_signals sg JOIN histo_poi h ON h.poi_id = sg.poi_id
-            JOIN cities c ON c.id = h.city_id WHERE sg.statut = 'a_relire' ORDER BY c.name
+            JOIN cities c ON c.id = h.city_id WHERE sg.statut = 'a_relire' AND {communes_only("c")} ORDER BY c.name
         """)
         city_rows = [{"id": row["name"], "name": row["name"], "commune": row["commune"]} for row in cursor.fetchall()]
         # La recherche de ville, comme dans « Modifier » : les villes qui ont des lieux à relire, et les communes des

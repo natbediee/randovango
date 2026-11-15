@@ -1,14 +1,15 @@
 """
 « Où pars-tu » ne propose que des communes, plus les lieux-dits (api/routers/step1.load_communes, issue #184).
-La règle est écrite en SQL ; elle est rejouée ici en Python sur des villes réelles, sans base.
+La règle est écrite en SQL (geo_utils.communes_only) ; elle est rejouée ici en Python sur des villes réelles, sans base.
 """
 from unittest.mock import MagicMock
 
 from api.routers import step1
+from utils.geo_utils import communes_only
 
 
 def _shown(city: dict) -> bool:
-    """La règle COMMUNES_ONLY, comme MySQL l'applique : sans tenir compte de la casse (la collation de la table)."""
+    """La règle communes_only, comme MySQL l'applique : sans tenir compte de la casse (la collation de la table)."""
     return city["commune"] is None or city["name"].lower() == city["commune"].lower()
 
 
@@ -17,7 +18,12 @@ def test_the_list_query_keeps_only_the_communes() -> None:
     cursor = MagicMock()
     step1.load_communes(cursor)
     query = cursor.execute.call_args.args[0]
-    assert f"WHERE {step1.COMMUNES_ONLY}" in query and "ORDER BY name" in query
+    assert f"WHERE {communes_only()}" in query and "ORDER BY name" in query
+
+
+def test_the_rule_names_the_table_in_a_join() -> None:
+    """Dans une jointure, la règle désigne les colonnes de cities par leur lettre : « name » existe aussi ailleurs."""
+    assert communes_only("c") == "(c.commune IS NULL OR c.name = c.commune)"
 
 
 def test_a_locality_is_no_longer_offered_but_its_commune_is() -> None:

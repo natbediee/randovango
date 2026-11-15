@@ -373,3 +373,42 @@ def test_a_page_out_of_the_list_comes_back_inside():
     assert edit.page_of(list(range(60)), 0)[1:] == (1, 2)
     assert edit.page_of([], 1) == ([], 1, 1)
 
+
+
+# --- Le Carrefour de Plouguerneau (issue #184) : la commune est une ville de la supervision, plus ses lieux-dits ---
+
+PLOUGUERNEAU = {"id": 144, "name": "Plouguerneau", "commune": "Plouguerneau", "latitude": 48.6046, "longitude": -4.5104}
+CARREFOUR_PLOUGUERNEAU = [
+    {"id": 48527, "name": "Carrefour Contact", "address": "1 rue saint exupery, 29880 Plouguerneau", "latitude": 48.607,
+     "longitude": -4.511, "commune": None},
+    {"id": 48528, "name": "Carrefour Contact", "address": "Rue d'Armorique, 29880 Plouguerneau", "latitude": 48.6069,
+     "longitude": -4.51106, "commune": None}]
+
+
+def test_the_plouguerneau_station_is_found_by_choosing_plouguerneau():
+    """La station Carrefour Contact de Plouguerneau (48527, 48528) sort quand on choisit Plouguerneau, rangée à Plouguerneau."""
+    cursor = MagicMock()
+    cursor.fetchall.return_value = CARREFOUR_PLOUGUERNEAU
+    rows = edit._search_rows(cursor, PLOUGUERNEAU, "", [PLOUGUERNEAU])
+    assert [(row["id"], row["commune"]) for row in rows] == [(48527, "Plouguerneau"), (48528, "Plouguerneau")]
+
+
+def test_typing_plouguerneau_offers_the_commune_and_not_a_locality():
+    """Taper « Plouguerneau » ou « 29880 » propose la commune Plouguerneau elle-même, plus son lieu-dit Tremenac'h."""
+    city_codes, towns = edit.town_choices([row["address"] for row in CARREFOUR_PLOUGUERNEAU], [PLOUGUERNEAU])
+    assert city_codes == {144: ["29880"]} and towns == []
+
+
+def test_the_city_list_of_the_search_leaves_out_the_localities(monkeypatch):
+    """La liste des villes de « Modifier » ne garde que les communes : Lilia et Tremenac'h n'y sont plus."""
+    cursor = MagicMock()
+    cursor.fetchall.return_value = []
+    connection = MagicMock()
+    connection.cursor.return_value = cursor
+    monkeypatch.setattr(edit.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(edit.MySQLUtils, "disconnect", lambda connection: None)
+    monkeypatch.setattr(edit, "_city", lambda cursor, city_id: None)
+    monkeypatch.setattr(edit, "_recent", lambda cursor: [])
+    edit.search(name="Car")
+    first_query = cursor.execute.call_args_list[0].args[0]
+    assert "FROM cities" in first_query and edit.communes_only() in first_query
