@@ -350,22 +350,18 @@ def main():
         return
 
     ServiceUtil.load_env()
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        # Choix de la façon d'appeler Claude (même option que harmonize_spots).
+        service = make_llm_service("dedupe_spots", chosen_engine=args.engine)
 
-    # Choix de la façon d'appeler Claude (même option que harmonize_spots).
-    service = make_llm_service("dedupe_spots", chosen_engine=args.engine)
+        confirmed = arbitrate(service, candidate_pairs(cursor))
 
-    confirmed = arbitrate(service, candidate_pairs(cursor))
-
-    if args.apply:
-        apply_merges(cursor, confirmed)
-        connection.commit()
-    else:
-        logger.info(f"[dedupe] Simulation : {len(confirmed)} fusion(s) auraient été appliquées")
-
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+        if args.apply:
+            apply_merges(cursor, confirmed)
+            connection.commit()
+        else:
+            logger.info(f"[dedupe] Simulation : {len(confirmed)} fusion(s) auraient été appliquées")
 
 
 if __name__ == "__main__":

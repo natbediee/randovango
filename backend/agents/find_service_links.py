@@ -362,37 +362,35 @@ def result_signals(row: dict, links: list) -> list:
 
 def load_candidates(services: list, city: str | None) -> list:
     """Les lieux sans lien, pas déjà traités, et pas déjà signalés fermés par une source gratuite."""
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor(dictionary=True)
-    marks = ",".join(["%s"] * len(services))
-    cursor.execute(
-        f"""SELECT p.id, p.name, p.address, sv.name AS service,
-                   JSON_UNQUOTE(JSON_EXTRACT(osm.result, '$.phone')) AS telephone,
-                   MIN(c.name) AS ville,
-                   JSON_EXTRACT(agent.result, '$.version') AS version
-            FROM poi p
-            JOIN poi_service ps ON ps.poi_id = p.id
-            JOIN services sv ON sv.id = ps.service_id AND sv.name IN ({marks})
-            JOIN histo_poi h ON h.poi_id = p.id
-            JOIN cities c ON c.id = h.city_id
-            LEFT JOIN poi_checks osm ON osm.poi_id = p.id AND osm.source = 'osm'
-            LEFT JOIN poi_checks agent ON agent.poi_id = p.id AND agent.source = 'agent'
-            WHERE (p.url IS NULL OR p.url = '')
-              AND p.id NOT IN (SELECT poi_id FROM poi_signals
-                               WHERE signal_type IN ('fermeture_osm', 'absent_osm')
-                                 AND statut <> 'rejete')
-              AND p.id NOT IN (SELECT poi_id FROM poi_signals WHERE signal_type = 'lien_osm' AND statut <> 'rejete')
-              {"AND EXISTS (SELECT 1 FROM histo_poi h2 JOIN cities c2 ON c2.id = h2.city_id WHERE h2.poi_id = p.id AND c2.name = %s)" if city else ""}
-            GROUP BY p.id, sv.name, osm.result, agent.result""",
-        (*services, city) if city else tuple(services))
-    rows = {}
-    for row in cursor.fetchall():
-        known = rows.get(row["id"])
-        if known and services.index(row["service"]) >= services.index(known["service"]):
-            continue
-        rows[row["id"]] = row
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (connection, cursor):
+        marks = ",".join(["%s"] * len(services))
+        cursor.execute(
+            f"""SELECT p.id, p.name, p.address, sv.name AS service,
+                       JSON_UNQUOTE(JSON_EXTRACT(osm.result, '$.phone')) AS telephone,
+                       MIN(c.name) AS ville,
+                       JSON_EXTRACT(agent.result, '$.version') AS version
+                FROM poi p
+                JOIN poi_service ps ON ps.poi_id = p.id
+                JOIN services sv ON sv.id = ps.service_id AND sv.name IN ({marks})
+                JOIN histo_poi h ON h.poi_id = p.id
+                JOIN cities c ON c.id = h.city_id
+                LEFT JOIN poi_checks osm ON osm.poi_id = p.id AND osm.source = 'osm'
+                LEFT JOIN poi_checks agent ON agent.poi_id = p.id AND agent.source = 'agent'
+                WHERE (p.url IS NULL OR p.url = '')
+                  AND p.id NOT IN (SELECT poi_id FROM poi_signals
+                                   WHERE signal_type IN ('fermeture_osm', 'absent_osm')
+                                     AND statut <> 'rejete')
+                  AND p.id NOT IN (SELECT poi_id FROM poi_signals WHERE signal_type = 'lien_osm' AND statut <> 'rejete')
+                  {"AND EXISTS (SELECT 1 FROM histo_poi h2 JOIN cities c2 ON c2.id = h2.city_id WHERE h2.poi_id = p.id AND c2.name = %s)" if city else ""}
+                GROUP BY p.id, sv.name, osm.result, agent.result""",
+            (*services, city) if city else tuple(services))
+        rows = {}
+        for row in cursor.fetchall():
+            known = rows.get(row["id"])
+            if known and services.index(row["service"]) >= services.index(known["service"]):
+                continue
+            rows[row["id"]] = row
     places = []
     for row in rows.values():
         commune, postcode = commune_of(row["address"])
@@ -406,15 +404,13 @@ def load_candidates(services: list, city: str | None) -> list:
 
 
 def save_results(results: list) -> None:
-    connection = MySQLUtils.connect()
-    cursor = connection.cursor()
-    for poi_id, summary, signals in results:
-        save_check(cursor, poi_id, "agent", summary)
-        for signal_type, detail in signals:
-            save_signal(cursor, poi_id, "agent", signal_type, detail)
-    connection.commit()
-    cursor.close()
-    MySQLUtils.disconnect(connection)
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        for poi_id, summary, signals in results:
+            save_check(cursor, poi_id, "agent", summary)
+            for signal_type, detail in signals:
+                save_signal(cursor, poi_id, "agent", signal_type, detail)
+        connection.commit()
 
 
 def process_batch(places: list) -> None:
