@@ -3,6 +3,7 @@ from api.dependencies import require_plan_owner
 from services.plan_service import insert_or_update_plan
 from utils.db_utils import MySQLUtils
 from utils.display_utils import enrich_hike
+from utils.geo_utils import SAME_COMMUNE_HIKES
 from utils.logger_util import LoggerUtil
 
 router = APIRouter()
@@ -27,7 +28,7 @@ def get_hikes(
     with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
         # Récupérer les coordonnées de la ville
         cursor.execute(
-            "SELECT latitude, longitude FROM cities WHERE id = %s",
+            "SELECT latitude, longitude, insee FROM cities WHERE id = %s",
             (city_id,)
         )
         city = cursor.fetchone()
@@ -42,8 +43,10 @@ def get_hikes(
             distance_km
         )
 
-        # Toutes les randonnées (vérifiées et non vérifiées)
-        query = """
+        # Toutes les randonnées (vérifiées et non vérifiées) qui partent près de la ville, plus celles rangées dans une
+        # ville de la même commune. Depuis que « Où pars-tu » ne propose plus les lieux-dits (issue #184), la rando
+        # de Locuon (« Les sources de l'Aër »), à 6 km du centre de Ploërdut, ne serait sinon plus proposée nulle part.
+        query = f"""
             SELECT
                 id,
                 name,
@@ -57,11 +60,11 @@ def get_hikes(
                 description,
                 city_id
             FROM hikes
-            WHERE start_latitude BETWEEN %s AND %s
-            AND start_longitude BETWEEN %s AND %s
+            WHERE (start_latitude BETWEEN %s AND %s AND start_longitude BETWEEN %s AND %s)
+               OR {SAME_COMMUNE_HIKES}
         """
 
-        cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
+        cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, city["insee"]))
         hikes = cursor.fetchall()
 
     # Les randos qui partent le plus près de la ville choisie d'abord (et non par

@@ -290,6 +290,12 @@ def communes_only(alias: str = "") -> str:
     return f"({prefix}commune IS NULL OR {prefix}name = {prefix}commune)"
 
 
+# Les randos rangées dans une ville de la même commune (même code INSEE, donné en paramètre %s) : la rando d'un lieu-dit
+# reste proposée depuis sa commune, même quand elle part loin de son centre (Locuon et Ploërdut, issue #184).
+# Une commune encore inconnue (insee vide) ne retrouve rien par ce chemin : « insee = NULL » n'est jamais vrai en SQL.
+SAME_COMMUNE_HIKES = "city_id IN (SELECT id FROM cities WHERE insee = %s)"
+
+
 BAN_URL = "https://api-adresse.data.gouv.fr/search/"
 BAN_MIN_SCORE = 0.5
 

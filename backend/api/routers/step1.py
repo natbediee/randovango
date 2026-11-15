@@ -192,10 +192,14 @@ def get_all_city_stats(cursor, cities, distance_km=5):
         """
     bbox_params = (lat_delta, lat_delta, lat_delta, lat_delta)
 
+    # Les randos comptées sont celles que l'étape 2 proposera (step2.get_hikes) : près de la ville, ou rangées dans une
+    # ville de la même commune (la rando de Locuon, à 6 km du centre de Ploërdut, issue #184). Le OR suit tout le
+    # carré : en SQL, AND passe avant OR.
     cursor.execute(f"""
         SELECT c.id AS city_id, COUNT(*) AS cnt
         FROM cities c
         JOIN hikes h {bbox_on("h", "start_latitude", "start_longitude")}
+                  OR h.city_id IN (SELECT o.id FROM cities o WHERE o.insee = c.insee)
         GROUP BY c.id
     """, bbox_params)
     for row in cursor.fetchall():
