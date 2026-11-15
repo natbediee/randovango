@@ -247,6 +247,26 @@ def get_cities_bounds():
         """)
         return cursor.fetchone()
 
+# LES COMMUNES SEULEMENT (issue #184, décision du 15 novembre 2026). Une ville de la table cities vient du départ d'une
+# rando : parfois un lieu-dit, pas une commune (Lochrist, au Conquet ; Lilia et Tremenac'h, en Plouguerneau). Ranger
+# les services et les spots sous ces noms en perdait : la station Carrefour de Plouguerneau était introuvable.
+# « Où pars-tu » ne propose donc plus que les communes : une ligne dont le nom est celui de sa commune
+# (etl/add_missing_communes.py a créé celles qui manquaient). Les lieux-dits restent en base pour les anciens voyages,
+# et leurs randos sortent depuis leur commune : l'étape 2 cherche les randos autour du point de départ.
+# MySQL compare sans tenir compte de la casse ni des accents : « Plounéour-Brignogan-plages » est bien sa commune.
+# Une ville dont la commune n'est pas encore connue (commune vide) reste proposée : on ne sait pas si c'est un lieu-dit.
+COMMUNES_ONLY = "commune IS NULL OR name = commune"
+
+
+def load_communes(cursor) -> list:
+    """Les villes que « Où pars-tu » propose : les communes, sans les lieux-dits, par ordre alphabétique."""
+    cursor.execute(f"""
+        SELECT id, name, department, region, country, latitude, longitude FROM cities
+        WHERE {COMMUNES_ONLY} ORDER BY name ASC
+    """)
+    return cursor.fetchall()
+
+
 @router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
 async def get_ville_list(
     request: Request,
@@ -279,8 +299,7 @@ async def get_ville_list(
         # Les pharmacies du jour (fermetures et ouvertures de FINESS), en arrière-plan aussi (voir start_pharmacies_refresh).
         start_pharmacies_refresh()
 
-        cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
-        cities = cursor.fetchall()
+        cities = load_communes(cursor)
 
         # Stats de toutes les villes en une poignée de requêtes agrégées (voir get_all_city_stats)
         # au lieu d'une boucle de 6 requêtes par ville.
