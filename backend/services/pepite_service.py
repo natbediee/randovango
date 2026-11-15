@@ -68,7 +68,7 @@ from datetime import date, datetime, timedelta
 from agents.llm_service import mesure_objet
 from services.map_service import fetch_hike_trace
 from utils.db_utils import MySQLUtils
-from utils.display_utils import (HIKE_START_H, pepite_news_text, pepite_section, pepite_day_texts, pepite_display, pepite_nothing_texts, spot_name_label,
+from utils.display_utils import (HIKE_START_H, pepite_news_text, pepite_section, pepite_day_texts, pepite_display, pepite_nothing_texts, pepite_reference_label, spot_name_label,
                                  trail_tip_display)
 from utils.geo_utils import geocode_address_ban, get_bounding_box, haversine_distance_km
 from utils.logger_util import LoggerUtil
@@ -1135,15 +1135,20 @@ def start_completion(plan_id: int, day_number: int) -> None:
 
 def reference_point(day: dict) -> dict:
     """
-    Le point sur lequel Vany se base pour ce jour, que la page montre sur la carte :
-    le spot s'il est choisi, sinon le centre de la commune, comme l'étape 4 pour les
-    services (carte #231 : une voyageuse hébergée chez des amis à Plougonvelin).
+    Le point sur lequel Vany se base pour ce jour, que la page montre sur la carte et
+    nomme dans son texte ("label") : le spot s'il est choisi, sinon le centre de la
+    commune, comme l'étape 4 pour les services (carte #231 : une voyageuse hébergée
+    chez des amis à Plougonvelin).
     """
     if day["has_spot"]:
-        return {"is_spot": True, "name": day["spot_name"],
-                "latitude": day["spot_latitude"], "longitude": day["spot_longitude"]}
-    return {"is_spot": False, "name": day["city_name"],
-            "latitude": day["city_latitude"], "longitude": day["city_longitude"]}
+        reference = {"is_spot": True, "name": day["spot_name"],
+                     "latitude": day["spot_latitude"], "longitude": day["spot_longitude"]}
+    else:
+        reference = {"is_spot": False, "name": day["city_name"],
+                     "latitude": day["city_latitude"], "longitude": day["city_longitude"]}
+    # Le départ de la rando ne compte qu'avec un spot (voir load_day_context).
+    with_hike = day["has_spot"] and day.get("hike_latitude") is not None
+    return reference | {"label": pepite_reference_label(reference["is_spot"], reference["name"], with_hike)}
 
 
 def get_day_state(plan_id: int, day_number: int) -> dict:
@@ -1191,9 +1196,10 @@ def get_day_state(plan_id: int, day_number: int) -> dict:
     if not ideas and pending:
         return {"state": "recherche"} | context
     if not ideas and not removed:
-        state = pepite_nothing_texts(day["day_date"]) | {"state": "rien"} if searched else {"state": "vide"}
+        state = pepite_nothing_texts(day["day_date"], context["reference"]["label"]) | {"state": "rien"} if searched else {"state": "vide"}
         return state | context
-    texts = pepite_day_texts(day["day_date"], day["hike_duration_h"], free_time_h(day["hike_duration_h"]))
+    texts = pepite_day_texts(day["day_date"], day["hike_duration_h"], free_time_h(day["hike_duration_h"]),
+                             context["reference"]["label"])
     return texts | context | {"state": "propositions", "removed": removed, "agenda_pending": pending,
                               "ideas": [pepite_display(i, top=top) for i, top in arrange_ideas(ideas)]}
 

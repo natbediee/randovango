@@ -299,7 +299,8 @@ def no_database(monkeypatch, day: dict) -> None:
 def test_without_a_spot_vany_relies_on_the_town_centre() -> None:
     """Sans spot, Vany se base sur le centre de la commune ; avec un spot, sur le spot."""
     assert pepite_service.reference_point(PLOUGONVELIN_DAY) == {
-        "is_spot": False, "name": "Plougonvelin", "latitude": 48.3407, "longitude": -4.7186}
+        "is_spot": False, "name": "Plougonvelin", "latitude": 48.3407, "longitude": -4.7186,
+        "label": "autour du centre de Plougonvelin"}
     with_spot = PLOUGONVELIN_DAY | {"has_spot": True, "spot_name": "Parking de Bertheaume",
                                     "spot_latitude": 48.3436, "spot_longitude": -4.6936}
     assert pepite_service.reference_point(with_spot)["is_spot"] is True
@@ -319,6 +320,7 @@ def test_without_a_spot_the_pepites_around_the_town_centre_are_shown(monkeypatch
     assert state["state"] == "propositions"
     assert [i["nom"] for i in state["ideas"]] == ["Pointe Saint-Mathieu"]
     assert state["reference"]["name"] == "Plougonvelin"
+    assert "Vany a cherché autour du centre de Plougonvelin." in state["intro"]
 
 
 def test_without_a_spot_no_paid_search_is_run(monkeypatch) -> None:

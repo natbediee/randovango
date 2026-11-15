@@ -8,6 +8,7 @@ from utils.display_utils import (
     pepite_line_html,
     pepite_news_text,
     pepite_nothing_texts,
+    pepite_reference_label,
     pepite_section,
     distance_label,
     hike_distance_label,
@@ -337,11 +338,14 @@ def test_pepite_display_keeps_only_web_links() -> None:
     assert shown["source_url"] is None and shown["source_label"] == ""
 
 
-def test_pepite_day_texts_name_the_day_and_the_free_time() -> None:
-    texts = pepite_day_texts(date(2026, 11, 15), 5, 4)
+def test_pepite_day_texts_name_the_day_the_free_time_and_where_vany_searched() -> None:
+    """L'étape 5 nomme le jour, le temps libre après la rando et l'endroit où Vany a cherché."""
+    texts = pepite_day_texts(date(2026, 11, 15), 5, 4, "autour du centre de Plougonvelin")
     assert texts["title"] == "Les pépites de Vany pour ton dimanche"
     assert texts["intro"].startswith("Après tes 5 h de rando, il te reste environ 4 h en journée.")
-    assert pepite_day_texts(date(2026, 11, 15), 0, 9)["intro"].startswith("Journée sans rando")
+    assert "Vany a cherché autour du centre de Plougonvelin." in texts["intro"]
+    assert pepite_day_texts(date(2026, 11, 15), 0, 9, "autour du spot Parking de Bertheaume")["intro"].startswith(
+        "Journée sans rando")
 
 
 def test_pepite_line_escapes_the_name_coming_from_the_web() -> None:
@@ -355,8 +359,19 @@ def test_result_day_shows_every_added_idea_with_the_services() -> None:
     assert display["services_html"].count("pepite-icon") == 2
 
 
-def test_pepite_nothing_texts_names_the_day() -> None:
-    assert pepite_nothing_texts(date(2026, 10, 31))["title"] == "Pas de pépite pour ton samedi"
+def test_pepite_nothing_texts_names_the_day_and_where_vany_searched() -> None:
+    """Quand Vany n'a rien trouvé, l'encadré nomme le jour et l'endroit où il a cherché."""
+    texts = pepite_nothing_texts(date(2026, 10, 31), "autour du centre de Plougonvelin")
+    assert texts["title"] == "Pas de pépite pour ton samedi"
+    assert texts["intro"].startswith("Vany a cherché autour du centre de Plougonvelin sans trouver")
+
+
+def test_the_page_says_whether_vany_relies_on_the_spot_or_the_town_centre() -> None:
+    """La page dit « autour du spot » ou « autour du centre de <commune> » (carte #231, Plougonvelin chez des amis)."""
+    assert pepite_reference_label(False, "Plougonvelin", False) == "autour du centre de Plougonvelin"
+    assert pepite_reference_label(True, "Parking de Bertheaume", False) == "autour du spot Parking de Bertheaume"
+    assert pepite_reference_label(True, "Parking de Bertheaume", True) == (
+        "autour du spot Parking de Bertheaume et du départ de ta rando")
 
 
 def test_trail_tips_appear_under_the_hike_escaped() -> None:
