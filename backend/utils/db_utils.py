@@ -1,4 +1,5 @@
 import mysql.connector
+from contextlib import contextmanager
 from dotenv import load_dotenv
 from pathlib import Path
 from utils.service_utils import ServiceUtil
@@ -28,6 +29,35 @@ class MySQLUtils:
     def disconnect(conn):
         if conn:
             conn.close()
+
+    # POURQUOI CETTE FONCTION (issue #206)
+    # Une connexion ouverte puis oubliée reste prise sur le serveur MySQL. Une fuite de ce genre a déjà bloqué
+    # l'étape 3 (erreur 500, table verrouillée) : une erreur survenait avant le disconnect, qui n'était jamais appelé.
+    # open_cursor s'utilise avec « with », qui garantit la fermeture :
+    #
+    #     with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+    #         cursor.execute("SELECT ...")
+    #         rows = cursor.fetchall()
+    #
+    # Comment marche le « with » : Python exécute le début de la fonction (ouverture de la connexion et du curseur)
+    # jusqu'au « yield », qui donne (cnx, cursor) au bloc. Puis il exécute le bloc. En sortant du bloc, de quelque
+    # façon que ce soit (fin normale, return, raise HTTPException, erreur MySQL), il revient dans la fonction et
+    # passe par le « finally », qui ferme le curseur puis la connexion. L'erreur éventuelle continue ensuite son
+    # chemin, comme avant : rien n'est avalé.
+    @staticmethod
+    @contextmanager
+    def open_cursor(dictionary=False):
+        """Ouvre une connexion et un curseur pour un bloc « with », et les ferme tous deux à la sortie, même en cas d'erreur."""
+        # connect et disconnect passent par MySQLUtils : les tests les remplacent par de fausses connexions.
+        cnx = MySQLUtils.connect()
+        cursor = None  # reste None si la création du curseur échoue : il n'y a alors rien à fermer de ce côté
+        try:
+            cursor = cnx.cursor(dictionary=dictionary)
+            yield cnx, cursor
+        finally:
+            if cursor is not None:
+                cursor.close()
+            MySQLUtils.disconnect(cnx)
 
 def p4n_id_exists(p4n_id: str) -> bool:
     """

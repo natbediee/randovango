@@ -21,57 +21,53 @@ def get_hikes(
     Vérifiées ou non, quel que soit le statut de connexion de l'utilisateur.
     """
     logger.info(f"Route /hikes appelée avec city_id={city_id}")
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    
-    # Récupérer les coordonnées de la ville
-    cursor.execute(
-        "SELECT latitude, longitude FROM cities WHERE id = %s", 
-        (city_id,)
-    )
-    city = cursor.fetchone()
-    
-    if not city:
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
-        return []
-    
-    # Calculer la bounding box autour de la ville
     from utils.geo_utils import get_bounding_box, haversine_distance_km
-    min_lat, min_lon, max_lat, max_lon = get_bounding_box(
-        city['latitude'], 
-        city['longitude'], 
-        distance_km
-    )
-    
-    # Toutes les randonnées (vérifiées et non vérifiées)
-    query = """
-        SELECT
-            id,
-            name,
-            difficulte,
-            estimated_duration_h as duration,
-            distance_km,
-            start_latitude,
-            start_longitude,
-            elevation_gain_m,
-            verifie,
-            description,
-            city_id
-        FROM hikes
-        WHERE start_latitude BETWEEN %s AND %s
-        AND start_longitude BETWEEN %s AND %s
-    """
 
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
-    hikes = cursor.fetchall()
+    # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+        # Récupérer les coordonnées de la ville
+        cursor.execute(
+            "SELECT latitude, longitude FROM cities WHERE id = %s",
+            (city_id,)
+        )
+        city = cursor.fetchone()
+
+        if not city:
+            return []
+
+        # Calculer la bounding box autour de la ville
+        min_lat, min_lon, max_lat, max_lon = get_bounding_box(
+            city['latitude'],
+            city['longitude'],
+            distance_km
+        )
+
+        # Toutes les randonnées (vérifiées et non vérifiées)
+        query = """
+            SELECT
+                id,
+                name,
+                difficulte,
+                estimated_duration_h as duration,
+                distance_km,
+                start_latitude,
+                start_longitude,
+                elevation_gain_m,
+                verifie,
+                description,
+                city_id
+            FROM hikes
+            WHERE start_latitude BETWEEN %s AND %s
+            AND start_longitude BETWEEN %s AND %s
+        """
+
+        cursor.execute(query, (min_lat, max_lat, min_lon, max_lon))
+        hikes = cursor.fetchall()
+
     # Les randos qui partent le plus près de la ville choisie d'abord (et non par
     # ordre alphabétique : une rando d'une commune voisine passait en tête).
     hikes.sort(key=lambda h: haversine_distance_km(city["latitude"], city["longitude"],
                                                    h["start_latitude"], h["start_longitude"]))
-
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
 
     # Champs prêts à afficher (badge, catégories, libellés) calculés en Python :
     # le frontend n'a plus qu'à les insérer dans la page.
@@ -83,12 +79,10 @@ def get_hike_trace(hike_id: int):
     from utils.mongo_utils import MongoUtils
     from bson import ObjectId
 
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    cursor.execute("SELECT mongo_id FROM hikes WHERE id = %s", (hike_id,))
-    hike = cursor.fetchone()
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
+    # « with » : la connexion se ferme à la sortie du bloc, même si la requête échoue (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+        cursor.execute("SELECT mongo_id FROM hikes WHERE id = %s", (hike_id,))
+        hike = cursor.fetchone()
 
     if not hike or not hike.get("mongo_id"):
         return {"points": []}

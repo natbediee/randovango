@@ -262,113 +262,107 @@ def get_poi(
     POI les plus proches du spot choisi (ou du centre-ville à défaut), afin
     d'éviter une liste trop longue dans les grandes villes.
     """
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    
-    # Récupérer les coordonnées de la ville
-    cursor.execute(
-        "SELECT name, commune, latitude, longitude FROM cities WHERE id = %s",
-        (city_id,)
-    )
-    city = cursor.fetchone()
-    
-    if not city:
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
-        empty = {
-            "eau": [], "vidange": [], "gasoil": [], "supermarche": [], "commerce": [],
-            "restauration": [], "cafe": [],
-            "toilettes": [],
-            "hygiene": [], "laverie": [],
-            "culture": [],
-            "urgence": []
-        }
-        empty["subtitles"] = _build_subtitles(empty)
-        return empty
-    
-    # Calculer la bounding box autour de la ville
-    from utils.geo_utils import get_bounding_box, haversine_distance_km
-    min_lat, min_lon, max_lat, max_lon = get_bounding_box(
-        city['latitude'],
-        city['longitude'],
-        distance_km
-    )
-
-    # Point de référence pour trier par proximité : le spot choisi si fourni, sinon le centre-ville
-    ref_lat = spot_lat if spot_lat is not None else city['latitude']
-    ref_lon = spot_lon if spot_lon is not None else city['longitude']
-    
-    # Tous les POI (vérifiés et non vérifiés)
-    query = f"""
-        SELECT
-            p.id,
-            p.name,
-            p.description,
-            p.latitude,
-            p.longitude,
-            p.verifie,
-            {PENDING_DOUBT_SQL} AS doute,
-            p.image_url,
-            p.url,
-            p.address,
-            p.maps_url AS maps_saisi,
-            p.acces_osm,
-            p.payant,
-            --
-            s.category as service_category,
-            s.name as service_name,
-            r.genre,
-            r.pourquoi,
-            r.budget,
-            r.jours_fermeture,
-            r.distinction,
-            r.categorie,
-            r.registre_depuis,
-            c.genre AS commerce_genre,
-            c.pourquoi AS commerce_pourquoi,
-            c.categorie AS commerce_categorie,
-            c.registre_depuis AS commerce_registre_depuis,
-            c.jours,
-            p.statut_saison,
-            p.mois_ouverture,
-            src.name AS source_name,
-            sc.marque AS station_marque,
-            sc.code_postal AS station_code_postal,
-            sc.ville_etat AS station_ville,
-            sc.automate_24_24 AS station_automate,
-            sc.route AS station_route,
-            sc.fermeture_type AS station_fermeture_type,
-            sc.fermeture_debut AS station_fermeture_debut,
-            sc.fermeture_fin AS station_fermeture_fin,
-            sc.lu_le AS station_lu_le,
-            -- Les prix de la station en une colonne JSON : pas de deuxième requête, pas de ligne en double.
-            (SELECT JSON_ARRAYAGG(JSON_OBJECT('carburant', pc.carburant, 'prix', pc.prix, 'releve_le', pc.releve_le,
-                                              'rupture_type', pc.rupture_type))
-             FROM prix_carburants pc WHERE pc.poi_id = sc.poi_id) AS station_prix
-        FROM poi p
-        JOIN poi_service ps ON p.id = ps.poi_id
-        JOIN services s ON ps.service_id = s.id
-        LEFT JOIN sources src ON src.id = p.source_id
-        LEFT JOIN stations_carburant sc ON sc.poi_id = p.id
-        LEFT JOIN restaurants r ON r.poi_id = p.id
-        LEFT JOIN commerces c ON c.poi_id = p.id
-        WHERE p.masque = 0
-        AND (
-            (p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s)
-            -- Une commune déborde de la zone : la Pointe Saint-Mathieu est à 5,2 km du centre de Plougonvelin.
-            OR ((r.poi_id IS NOT NULL OR c.poi_id IS NOT NULL) AND p.address LIKE %s)
+    # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
+        # Récupérer les coordonnées de la ville
+        cursor.execute(
+            "SELECT name, commune, latitude, longitude FROM cities WHERE id = %s",
+            (city_id,)
         )
-        ORDER BY s.category, p.name ASC
-    """
+        city = cursor.fetchone()
 
-    # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
-    cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
-    poi_list = keep_state_pharmacies(
-        keep_state_stations(keep_checked_commerces(keep_checked_restaurants(cursor.fetchall()))))
+        if not city:
+            empty = {
+                "eau": [], "vidange": [], "gasoil": [], "supermarche": [], "commerce": [],
+                "restauration": [], "cafe": [],
+                "toilettes": [],
+                "hygiene": [], "laverie": [],
+                "culture": [],
+                "urgence": []
+            }
+            empty["subtitles"] = _build_subtitles(empty)
+            return empty
 
-    cursor.close()
-    MySQLUtils.disconnect(cnx)
-    
+        # Calculer la bounding box autour de la ville
+        from utils.geo_utils import get_bounding_box, haversine_distance_km
+        min_lat, min_lon, max_lat, max_lon = get_bounding_box(
+            city['latitude'],
+            city['longitude'],
+            distance_km
+        )
+
+        # Point de référence pour trier par proximité : le spot choisi si fourni, sinon le centre-ville
+        ref_lat = spot_lat if spot_lat is not None else city['latitude']
+        ref_lon = spot_lon if spot_lon is not None else city['longitude']
+
+        # Tous les POI (vérifiés et non vérifiés)
+        query = f"""
+            SELECT
+                p.id,
+                p.name,
+                p.description,
+                p.latitude,
+                p.longitude,
+                p.verifie,
+                {PENDING_DOUBT_SQL} AS doute,
+                p.image_url,
+                p.url,
+                p.address,
+                p.maps_url AS maps_saisi,
+                p.acces_osm,
+                p.payant,
+                --
+                s.category as service_category,
+                s.name as service_name,
+                r.genre,
+                r.pourquoi,
+                r.budget,
+                r.jours_fermeture,
+                r.distinction,
+                r.categorie,
+                r.registre_depuis,
+                c.genre AS commerce_genre,
+                c.pourquoi AS commerce_pourquoi,
+                c.categorie AS commerce_categorie,
+                c.registre_depuis AS commerce_registre_depuis,
+                c.jours,
+                p.statut_saison,
+                p.mois_ouverture,
+                src.name AS source_name,
+                sc.marque AS station_marque,
+                sc.code_postal AS station_code_postal,
+                sc.ville_etat AS station_ville,
+                sc.automate_24_24 AS station_automate,
+                sc.route AS station_route,
+                sc.fermeture_type AS station_fermeture_type,
+                sc.fermeture_debut AS station_fermeture_debut,
+                sc.fermeture_fin AS station_fermeture_fin,
+                sc.lu_le AS station_lu_le,
+                -- Les prix de la station en une colonne JSON : pas de deuxième requête, pas de ligne en double.
+                (SELECT JSON_ARRAYAGG(JSON_OBJECT('carburant', pc.carburant, 'prix', pc.prix, 'releve_le', pc.releve_le,
+                                                  'rupture_type', pc.rupture_type))
+                 FROM prix_carburants pc WHERE pc.poi_id = sc.poi_id) AS station_prix
+            FROM poi p
+            JOIN poi_service ps ON p.id = ps.poi_id
+            JOIN services s ON ps.service_id = s.id
+            LEFT JOIN sources src ON src.id = p.source_id
+            LEFT JOIN stations_carburant sc ON sc.poi_id = p.id
+            LEFT JOIN restaurants r ON r.poi_id = p.id
+            LEFT JOIN commerces c ON c.poi_id = p.id
+            WHERE p.masque = 0
+            AND (
+                (p.latitude BETWEEN %s AND %s AND p.longitude BETWEEN %s AND %s)
+                -- Une commune déborde de la zone : la Pointe Saint-Mathieu est à 5,2 km du centre de Plougonvelin.
+                OR ((r.poi_id IS NOT NULL OR c.poi_id IS NOT NULL) AND p.address LIKE %s)
+            )
+            ORDER BY s.category, p.name ASC
+        """
+
+        # Une adresse finit par la commune (« 29810 Plouarzel »), jamais par le lieu-dit (Trézien).
+        cursor.execute(query, (min_lat, max_lat, min_lon, max_lon, f"%{city_commune(city)}"))
+        poi_list = keep_state_pharmacies(
+            keep_state_stations(keep_checked_commerces(keep_checked_restaurants(cursor.fetchall()))))
+
     category_mapping = POI_FRONTEND_CATEGORY_MAP
 
     # Grouper les POI par catégorie

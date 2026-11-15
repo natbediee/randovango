@@ -34,17 +34,12 @@ def get_spots(
 
     # Connexion DB
     from utils.geo_utils import get_bounding_box
-    cnx = MySQLUtils.connect()
-    cursor = cnx.cursor(dictionary=True)
-    # try/finally : la connexion est fermée même en cas d'erreur. Sinon elle reste
+    # « with » : la connexion est fermée même en cas d'erreur (issue #206). Sinon elle reste
     # ouverte avec une lecture en cours, et bloque toute modification de la table.
-    try:
+    with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
         night = _night_date(cursor, plan_id, day_number)
         return _spots_around_city(cnx, cursor, city_id, distance_km, get_bounding_box, _hike_trace(cursor, hike_id),
                                   night)
-    finally:
-        cursor.close()
-        MySQLUtils.disconnect(cnx)
 
 
 def _night_date(cursor, plan_id, day_number) -> date:
