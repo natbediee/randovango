@@ -6,6 +6,8 @@ from utils.db_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
 from etl.etl_carburants import refresh_prices
 from etl.load.load_carburants import prices_read_at
+from etl.etl_pharmacies import refresh_pharmacies
+from etl.load.load_pharmacies import pharmacies_read_at
 from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
@@ -106,6 +108,64 @@ def start_fuel_prices_refresh() -> bool:
             return False
         fuel_refresh_in_progress = True
     threading.Thread(target=refresh_fuel_prices_background, daemon=True).start()
+    return True
+
+
+# LES PHARMACIES DU JOUR (carte #241)
+# Même règle que les prix des carburants : au début d'un voyage, si FINESS n'a pas encore été relu aujourd'hui,
+# refresh_pharmacies le relit dans un fil à part (gratuit, 52 Mo, quelques secondes) et repasse toutes les villes.
+# Une pharmacie fermée dans FINESS est ainsi masquée au plus tard un jour après sa fermeture, une pharmacie qui ouvre
+# est ajoutée. La page ne l'attend pas, et un échec la laisse intacte : les pharmacies déjà en base restent montrées.
+# La date vient de sources.lu_le de la source finess. Après un échec, on attend PHARMACY_RETRY_MINUTES.
+PHARMACY_RETRY_MINUTES = 60
+pharmacy_refresh_lock = threading.Lock()
+pharmacy_refresh_in_progress = False
+pharmacy_refresh_failed_at = None
+
+
+def pharmacies_are_fresh(read_at, today: date) -> bool:
+    """Vrai si FINESS a déjà été relu en entier aujourd'hui."""
+    return read_at is not None and read_at.date() == today
+
+
+def refresh_pharmacies_background():
+    """Relit FINESS et repasse toutes les villes, en arrière-plan. Un échec est noté, jamais remonté."""
+    global pharmacy_refresh_in_progress, pharmacy_refresh_failed_at
+    failed = False
+    try:
+        logger.info("[PHARMACIES-BG] Début de la relecture de FINESS")
+        loaded = refresh_pharmacies()
+        if loaded is None:
+            failed = True
+            logger.error("[PHARMACIES-BG] Fichier FINESS illisible : les pharmacies déjà en base restent")
+        else:
+            logger.info(f"[PHARMACIES-BG] FINESS relu : {loaded} pharmacies repassées")
+    except Exception as e:
+        failed = True
+        logger.error(f"[PHARMACIES-BG] Échec de la relecture de FINESS, les pharmacies déjà en base restent : {e}")
+    finally:
+        with pharmacy_refresh_lock:
+            pharmacy_refresh_in_progress = False
+            pharmacy_refresh_failed_at = datetime.now() if failed else None
+
+
+def start_pharmacies_refresh() -> bool:
+    """Lance la relecture de FINESS s'il le faut. Vrai si elle est lancée. Ne lève jamais d'erreur."""
+    global pharmacy_refresh_in_progress
+    now = datetime.now()
+    try:
+        if pharmacies_are_fresh(pharmacies_read_at(), now.date()):
+            return False
+    except Exception as e:
+        logger.error(f"[PHARMACIES-BG] Date de la dernière relecture illisible, rien n'est lancé : {e}")
+        return False
+    with pharmacy_refresh_lock:
+        if pharmacy_refresh_in_progress:
+            return False
+        if pharmacy_refresh_failed_at and now - pharmacy_refresh_failed_at < timedelta(minutes=PHARMACY_RETRY_MINUTES):
+            return False
+        pharmacy_refresh_in_progress = True
+    threading.Thread(target=refresh_pharmacies_background, daemon=True).start()
     return True
 
 
@@ -221,6 +281,8 @@ async def get_ville_list(
 
     # Les prix des carburants du jour, en arrière-plan aussi (voir start_fuel_prices_refresh).
     start_fuel_prices_refresh()
+    # Les pharmacies du jour (fermetures et ouvertures de FINESS), en arrière-plan aussi (voir start_pharmacies_refresh).
+    start_pharmacies_refresh()
 
     cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
     cities = cursor.fetchall()

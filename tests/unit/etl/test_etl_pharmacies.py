@@ -126,6 +126,44 @@ def test_a_new_city_reads_finess_then_loads_its_pharmacies(monkeypatch):
     assert len(loaded) == 1
 
 
+def test_the_daily_reading_repasses_every_city_hides_closures_and_notes_the_date(monkeypatch):
+    """La relecture du jour : toutes les villes repassées, la Fresneau fermée masquée, la date de lecture notée."""
+    cities, hidden, marks = [], [], []
+    monkeypatch.setattr(etl_pharmacies, "read_pharmacies", lambda: [RIVOALEN, CLOSED])
+    monkeypatch.setattr(etl_pharmacies, "get_all_city_ids", lambda: [(1, "Plougonvelin"), (2, "Brest")])
+    monkeypatch.setattr(etl_pharmacies, "run_city_etl", lambda city, pharmacies, dry_run=False: cities.append(city) or 1)
+    monkeypatch.setattr(etl_pharmacies, "known_pharmacies", lambda: {"290011048": 54, "290013226": 55})
+    monkeypatch.setattr(etl_pharmacies, "hide_closed", lambda closed, known: hidden.append(closed) or len(closed))
+    monkeypatch.setattr(etl_pharmacies, "mark_pharmacies_read", lambda read_at: marks.append(read_at))
+    assert etl_pharmacies.refresh_pharmacies() == 2
+    assert cities == ["Plougonvelin", "Brest"]
+    assert list(hidden[0]) == ["290013226"]
+    assert len(marks) == 1
+
+
+def test_a_missing_finess_file_writes_nothing_and_notes_no_date(monkeypatch):
+    """Le fichier FINESS manque : aucune ville n'est repassée, et la date n'est pas notée, pour réessayer plus tard."""
+    writes = []
+    monkeypatch.setattr(etl_pharmacies, "read_pharmacies", lambda: None)
+    monkeypatch.setattr(etl_pharmacies, "run_city_etl", lambda *args, **kwargs: writes.append(args))
+    monkeypatch.setattr(etl_pharmacies, "mark_pharmacies_read", lambda read_at: writes.append(read_at))
+    assert etl_pharmacies.refresh_pharmacies() is None
+    assert writes == []
+
+
+def test_the_last_reading_date_is_kept_on_the_finess_source(monkeypatch):
+    """La date de relecture est écrite dans sources.lu_le de la source finess, et relue de la même ligne."""
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (date(2026, 11, 15),)
+    _connection(monkeypatch, cursor)
+    monkeypatch.setattr(load_pharmacies, "get_or_create_source", lambda cur, name: 7 if name == "finess" else None)
+    load_pharmacies.mark_pharmacies_read("2026-11-15 08:00:00")
+    assert cursor.execute.call_args_list[0].args == ("UPDATE sources SET lu_le = %s WHERE id = %s",
+                                                     ("2026-11-15 08:00:00", 7))
+    assert load_pharmacies.pharmacies_read_at() == date(2026, 11, 15)
+    assert cursor.execute.call_args_list[-1].args == ("SELECT lu_le FROM sources WHERE name = %s", ("finess",))
+
+
 def _row_in(town):
     return {"poi": {"address": f"Rue, 29217 {town}"}}
 

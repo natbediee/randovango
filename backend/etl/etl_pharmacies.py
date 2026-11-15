@@ -11,16 +11,24 @@ cachées qu'une fois ce passage fait sur elle. Avant, elles restent : une pharma
 À chaque passage, les pharmacies déjà en base qui ont fermé (ou sont sorties du fichier) sont masquées, dans toute
 la France : le fichier est national.
 
+DEUX DÉCLENCHEURS AUTOMATIQUES, COMME LES CARBURANTS (carte #241)
+    une ville ajoutée   : etl_pipeline.scraping_background lance run_new_city_etl après OSM ;
+    chaque jour         : api/routers/step1.py lance refresh_pharmacies au début d'un voyage, si FINESS n'a pas encore
+                          été relu aujourd'hui. Toutes les villes sont repassées : une pharmacie qui ouvre est ajoutée,
+                          une pharmacie qui ferme est masquée, au plus tard un jour après (FINESS est refait chaque nuit).
+
 UTILISATION (depuis backend/) :
     python -m etl.etl_pharmacies --ville Plougonvelin --essai     # n'écrit rien : affiche ce qui serait chargé
     python -m etl.etl_pharmacies --ville Plougonvelin --ville Brest
     python -m etl.etl_pharmacies --toutes                          # toutes les villes de la table cities
 """
 import argparse
-from datetime import date
+import threading
+from datetime import date, datetime
 
 from etl.extract.api_finess import download_pharmacies
-from etl.load.load_pharmacies import hide_closed, known_pharmacies, load_pharmacy_rows, osm_pharmacies_near
+from etl.load.load_pharmacies import (hide_closed, known_pharmacies, load_pharmacy_rows, mark_pharmacies_read,
+                                      osm_pharmacies_near)
 from etl.transform.transform_carburants import keep_near
 from etl.transform.transform_pharmacies import closures, is_open, pharmacy_row, to_pharmacy
 from utils.db_utils import get_all_city_ids
@@ -30,6 +38,10 @@ from utils.logger_util import LoggerUtil
 logger = LoggerUtil.get_logger("etl_pharmacies")
 
 DISTANCE_KM = 5     # le carré de l'ETL OSM (api_osm.extract_osm) et de l'étape 4 (step4_services.js)
+
+# Une ville ajoutée et la relecture du jour peuvent tourner en même temps, chacune dans son fil. Sans ce verrou, les deux
+# pourraient créer la même pharmacie deux fois : rien n'empêche deux poi au même numéro FINESS dans la table.
+write_lock = threading.Lock()
 
 
 def read_pharmacies() -> list | None:
@@ -87,7 +99,36 @@ def run_new_city_etl(city: str) -> int | None:
     pharmacies = read_pharmacies()
     if pharmacies is None:
         return None
-    return run_city_etl(city, pharmacies)
+    with write_lock:
+        return run_city_etl(city, pharmacies)
+
+
+def run_cities(cities: list, pharmacies: list, dry_run: bool = False) -> int:
+    """
+    Le passage sur plusieurs villes : leurs pharmacies ouvertes chargées, puis les fermées masquées partout.
+    Renvoie le nombre de pharmacies chargées (une pharmacie de deux villes voisines compte deux fois).
+    """
+    loaded = 0
+    for city in cities:
+        loaded += run_city_etl(city, pharmacies, dry_run=dry_run) or 0
+    hide_closed_pharmacies(pharmacies, dry_run=dry_run)
+    return loaded
+
+
+def refresh_pharmacies() -> int | None:
+    """
+    La relecture du jour (carte #241) : FINESS est relu, toutes les villes de la table cities sont repassées, les
+    pharmacies fermées masquées. Lancée au début d'un voyage (api/routers/step1.py) ; la date du passage réussi est
+    notée dans sources.lu_le, pour ne relire qu'une fois par jour. None si le fichier manque : rien n'est écrit.
+    """
+    pharmacies = read_pharmacies()
+    if pharmacies is None:
+        return None
+    read_at = datetime.now().replace(microsecond=0)
+    with write_lock:
+        loaded = run_cities([name for _, name in get_all_city_ids()], pharmacies)
+        mark_pharmacies_read(read_at)
+    return loaded
 
 
 def hide_closed_pharmacies(pharmacies: list, dry_run: bool = False) -> int:
@@ -139,9 +180,7 @@ def main() -> None:
     pharmacies = read_pharmacies()
     if pharmacies is None:
         return
-    for city in cities:
-        run_city_etl(city, pharmacies, dry_run=args.essai)
-    hide_closed_pharmacies(pharmacies, dry_run=args.essai)
+    run_cities(cities, pharmacies, dry_run=args.essai)
 
 
 if __name__ == "__main__":
