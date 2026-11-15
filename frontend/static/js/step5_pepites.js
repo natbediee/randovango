@@ -194,10 +194,11 @@ function drawMap(state, ideas) {
     markersByIdea = {};
     const positions = [];
 
-    if (state.spot && state.spot.latitude) {
-        const pos = [state.spot.latitude, state.spot.longitude];
+    const reference = state.reference;   // le spot, ou le centre de la commune sans spot
+    if (reference && reference.is_spot && reference.latitude) {
+        const pos = [reference.latitude, reference.longitude];
         ideaMarkers.push(L.marker(pos, { icon: buildSpotDivIcon(`J${currentDay}`), zIndexOffset: 500 })
-            .bindPopup(`<b>${escapeHtml(state.spot.name)}</b>`));
+            .bindPopup(`<b>${escapeHtml(reference.name)}</b>`));
         positions.push(pos);
     }
     ideas.forEach((idea, i) => {

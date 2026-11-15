@@ -51,8 +51,9 @@ LES RECHERCHES DU PARCOURS SONT LANCÉES EN TÂCHE DE FOND :
       et les lieux s'ils n'ont pas encore été cherchés (start_zone_search). Une
       recherche web prend souvent plusieurs minutes : elle tourne pendant que
       l'utilisateur choisit sa rando, son spot et ses services ;
-    - quand le SPOT est choisi (étape 3) : préparation du jour avec ce qui est déjà en
-      base, en quelques secondes (start_preparation) ; le voyageur n'attend pas l'agenda ;
+    - quand le SPOT est choisi (étape 3), ou « autre hébergement » : préparation du jour
+      avec ce qui est déjà en base, en quelques secondes (start_preparation) ; le voyageur
+      n'attend pas l'agenda. Sans spot, Vany se base sur le centre de la commune ;
     - puis, sans bloquer personne, second temps (complete_day) : quand les recherches sont
       finies, les idées qu'elles apportent s'ajoutent, et la barre du bas le signale
       (day_news) si le voyageur a quitté l'étape 5.
@@ -972,8 +973,9 @@ def _still_proposed(cursor, day: dict) -> set:
 
 def prepare_day(plan_id: int, day_number: int) -> None:
     """
-    Premier temps, appelé à chaque choix de spot, en quelques secondes : l'étape 5
-    n'attend pas l'agenda pour proposer ce qui est déjà en base.
+    Premier temps, appelé à chaque choix de spot ou d'« autre hébergement », en quelques
+    secondes : l'étape 5 n'attend pas l'agenda pour proposer ce qui est déjà en base.
+    Sans spot, les idées sont choisies autour du centre de la commune (carte #231).
       1. retire les idées devenues incompatibles (le jour a pu être modifié) ;
          une idée CHOISIE passe en 'retiree' pour prévenir l'utilisateur ;
       2. complète chaque section avec les idées en base ;
@@ -983,7 +985,7 @@ def prepare_day(plan_id: int, day_number: int) -> None:
     cursor = connection.cursor(dictionary=True)
     try:
         day = load_day_context(cursor, plan_id, day_number)
-        if day is None or not day["has_spot"]:
+        if day is None:
             return
 
         still_proposed = _still_proposed(cursor, day)
@@ -1013,40 +1015,51 @@ def searches_to_run(missing: list, free: dict) -> list:
     return [mode for mode in missing if free[section_of_search[mode]] > 0]
 
 
+def search_spot_zone(cursor, connection, day: dict, free: dict) -> None:
+    """
+    Recherches de l'agent dans la zone du spot, s'il reste de la place dans une section :
+      - les recherches qui manquent (agenda, lieux) ;
+      - ou, si le séjour a déjà pris les lieux de la zone (long séjour au même endroit) :
+        recherche complémentaire de lieux, une seule fois pour ce jour.
+    """
+    missing = missing_searches(cursor, day)
+    for mode in searches_to_run(missing, free):
+        search_and_store(cursor, day, mode)
+        connection.commit()
+    if free["saison"] > 0 and "lieux" not in missing:
+        in_zone = {c["id"] for c in find_candidates(cursor, day)}
+        if in_zone & ids_used_elsewhere(cursor, day) and not complementary_search_done(cursor, day["trip_day_id"]):
+            search_and_store(cursor, day, "lieux", trip_day_id=day["trip_day_id"])
+            connection.commit()
+
+
 def complete_day(plan_id: int, day_number: int) -> None:
     """
     Second temps, en tâche de fond : le voyageur peut continuer sans attendre.
-    Attend la recherche lancée au choix de la ville (_search_lock), puis, s'il reste de
-    la place dans une section :
-      - lance les recherches qui manquent dans la zone du spot (agenda, lieux) ;
-      - ou, si le séjour a déjà pris les lieux de la zone (long séjour au même endroit) :
-        recherche complémentaire de lieux, une seule fois pour ce jour ;
-    et propose ce que ces recherches ont trouvé (le rappel de la barre du bas, day_news).
+    Attend la recherche lancée au choix de la ville (_search_lock), propose ce qu'elle a
+    trouvé, puis, avec un spot, lance les recherches de sa zone (search_spot_zone) et
+    propose ce qu'elles ont trouvé (le rappel de la barre du bas, day_news).
     """
     connection = MySQLUtils.connect()
     cursor = connection.cursor(dictionary=True)
     try:
         day = load_day_context(cursor, plan_id, day_number)
-        if day is None or not day["has_spot"]:
+        if day is None:
             return
         with _choice_lock(plan_id):
             still_proposed = _still_proposed(cursor, day)
             free = {section: _top_up(cursor, day, still_proposed, section) for section in MAX_IDEAS}
             connection.commit()
 
-        missing = missing_searches(cursor, day)
-        for mode in searches_to_run(missing, free):
-            search_and_store(cursor, day, mode)
-            connection.commit()
-        if free["saison"] > 0 and "lieux" not in missing:
-            in_zone = {c["id"] for c in find_candidates(cursor, day)}
-            if in_zone & ids_used_elsewhere(cursor, day) and not complementary_search_done(cursor, day["trip_day_id"]):
-                search_and_store(cursor, day, "lieux", trip_day_id=day["trip_day_id"])
-                connection.commit()
+        # Sans spot, Vany se base sur le centre de la commune : la recherche lancée au
+        # choix de la ville l'a déjà couvert. Aucun appel payant de plus (carte #231),
+        # même si cette recherche a échoué : elle sera retentée au prochain choix de ville.
+        if day["has_spot"]:
+            search_spot_zone(cursor, connection, day, free)
 
         # Le spot a pu changer pendant la recherche : on repart de l'état du jour.
         day = load_day_context(cursor, plan_id, day_number)
-        if day and day["has_spot"]:
+        if day:
             with _choice_lock(plan_id):
                 still_proposed = _still_proposed(cursor, day)
                 for section in MAX_IDEAS:
@@ -1120,6 +1133,19 @@ def start_completion(plan_id: int, day_number: int) -> None:
 # 6. CE QUE L'API RENVOIE ET LES CHOIX DE L'UTILISATEUR
 # =============================================================================
 
+def reference_point(day: dict) -> dict:
+    """
+    Le point sur lequel Vany se base pour ce jour, que la page montre sur la carte :
+    le spot s'il est choisi, sinon le centre de la commune, comme l'étape 4 pour les
+    services (carte #231 : une voyageuse hébergée chez des amis à Plougonvelin).
+    """
+    if day["has_spot"]:
+        return {"is_spot": True, "name": day["spot_name"],
+                "latitude": day["spot_latitude"], "longitude": day["spot_longitude"]}
+    return {"is_spot": False, "name": day["city_name"],
+            "latitude": day["city_latitude"], "longitude": day["city_longitude"]}
+
+
 def get_day_state(plan_id: int, day_number: int) -> dict:
     """
     Contenu de l'étape « Les pépites de Vany » pour un jour :
@@ -1129,10 +1155,10 @@ def get_day_state(plan_id: int, day_number: int) -> dict:
                          nom d'une idée ajoutée qui ne tient plus, et "agenda_pending"
                          tant que les recherches peuvent encore apporter des idées ;
       - 'rien'         : Vany a cherché pour ce jour mais n'a rien trouvé ;
-      - 'vide'         : pas de recherche pour ce jour (spot pas choisi, ancien plan).
-    Dès que le spot est choisi, "trail_tips" donne les lieux à voir en chemin sur la
-    rando du jour et "spot" la position du spot : la page cadre sa carte dessus
-    sans attendre la fin de la recherche.
+      - 'vide'         : pas de recherche pour ce jour (ancien plan).
+    "trail_tips" donne les lieux à voir en chemin sur la rando du jour et "reference"
+    le point sur lequel Vany se base (le spot, ou le centre de la commune sans spot) :
+    la page cadre sa carte dessus sans attendre la fin de la recherche.
     """
     with _running_lock:
         key = (plan_id, day_number)
@@ -1143,8 +1169,8 @@ def get_day_state(plan_id: int, day_number: int) -> dict:
     cursor = connection.cursor(dictionary=True)
     try:
         day = load_day_context(cursor, plan_id, day_number)
-        if day is None or not day["has_spot"]:
-            return {"state": "recherche" if preparing or pending else "vide"}
+        if day is None:
+            return {"state": "vide"}
         links = day_links(cursor, day["trip_day_id"])
         searched = any(recent_search_exists(cursor, day, mode) for mode in SEARCH_FRESH_DAYS)
         trail_tips = fetch_trail_tips(cursor, day["hike_mongo_id"])
@@ -1154,7 +1180,7 @@ def get_day_state(plan_id: int, day_number: int) -> dict:
 
     context = {
         "trail_tips": [trail_tip_display(tip) for tip in trail_tips],
-        "spot": {"name": day["spot_name"], "latitude": day["spot_latitude"], "longitude": day["spot_longitude"]},
+        "reference": reference_point(day),
     }
     if preparing:
         return {"state": "recherche"} | context
