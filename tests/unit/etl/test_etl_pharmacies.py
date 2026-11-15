@@ -164,6 +164,24 @@ def test_the_last_reading_date_is_kept_on_the_finess_source(monkeypatch):
     assert cursor.execute.call_args_list[-1].args == ("SELECT lu_le FROM sources WHERE name = %s", ("finess",))
 
 
+def test_a_pharmacy_opening_in_finess_is_added_by_the_daily_reading(monkeypatch):
+    """Une pharmacie qui ouvre dans FINESS à Plougonvelin, ville déjà présente : la relecture du jour la charge."""
+    opened = _pharmacy("290099998", "PHARMACIE DU BOURG", 48.3410, -4.7180)
+    loaded = []
+    monkeypatch.setattr(etl_pharmacies, "read_pharmacies", lambda: [RIVOALEN, opened])
+    monkeypatch.setattr(etl_pharmacies, "get_all_city_ids", lambda: [(2, "Plougonvelin")])
+    monkeypatch.setattr(etl_pharmacies, "get_city_center", lambda city: (48.3400, -4.7200))
+    monkeypatch.setattr(etl_pharmacies, "osm_pharmacies_near", lambda *args: [])
+    monkeypatch.setattr(etl_pharmacies, "load_pharmacy_rows", lambda rows, city: loaded.extend(rows) or len(rows))
+    # Avant cette relecture, seule la Rivoalen-Cousin était en base.
+    monkeypatch.setattr(etl_pharmacies, "known_pharmacies", lambda: {"290011048": 54})
+    monkeypatch.setattr(etl_pharmacies, "hide_closed", lambda closed, known: len(closed))
+    monkeypatch.setattr(etl_pharmacies, "mark_pharmacies_read", lambda read_at: None)
+    assert etl_pharmacies.refresh_pharmacies() == 2
+    assert sorted(row["finess"] for row in loaded) == ["290011048", "290099998"]
+    assert [row["poi"]["name"] for row in loaded if row["finess"] == "290099998"] == ["Pharmacie du Bourg"]
+
+
 def _row_in(town):
     return {"poi": {"address": f"Rue, 29217 {town}"}}
 
