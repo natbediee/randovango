@@ -263,6 +263,7 @@ function renderCategory(categoryId, poiList) {
                         ${poi.nouveau ? '<span class="status-badge top">Nouveau</span>' : ''}
                         ${poi.automate_24_24 ? '<span class="status-badge fuel-open">24h/24</span>' : ''}
                         ${poi.autoroute ? '<span class="status-badge fuel-open">Autoroute</span>' : ''}
+                        ${poi.payant ? '<span class="status-badge planned"><i class="fas fa-euro-sign"></i> Payant</span>' : ''}
                         ${poi.fermeture_label ? `<span class="status-badge pending">${escapeHtml(poi.fermeture_label)}</span>` : ''}
                         ${previousPoiDay.has(poi.id) ? `<span class="status-badge planned"><i class="fas fa-check"></i> J${previousPoiDay.get(poi.id)} déjà planifié</span>` : ''}                    </div>
                     <h4>${poi.name}</h4>

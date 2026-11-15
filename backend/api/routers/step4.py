@@ -18,7 +18,7 @@ from services.restaurant_selection_service import (TABLE_CATEGORY_LABELS, TABLES
                                                    season_label)
 from etl.load.load_carburants import FUEL_SERVICE, SOURCE_NAME as FUEL_SOURCE
 from etl.load.load_pharmacies import PHARMACY_SERVICE, SOURCE_NAME as PHARMACY_SOURCE
-from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE
+from etl.transform.transform_osm import DEFAULT_NAME_BY_TYPE, PUBLIC_FACILITY_TYPES
 from utils.db_utils import MySQLUtils
 from utils import display_utils
 from utils.display_utils import PENDING_DOUBT_SQL, enrich_poi, poi_subtitle
@@ -42,6 +42,12 @@ SHEETS_SHOWN = {RESTAURATION_CATEGORY: TABLES_SHOWN, COMMERCE_CATEGORY: SHOPS_SH
 FUEL_CATEGORY = "gasoil"
 # Les noms de secours d'OSM (etl/transform/transform_osm.py) : le lien Google part alors de la position.
 GENERIC_NAMES = set(DEFAULT_NAME_BY_TYPE.values())
+# Toilettes et douches d'OSM (issue #193) : l'étiquette access dit à qui elles sont ouvertes.
+# Réservées aux clients (camping, médiathèque, restaurant), privées ou fermées : jamais montrées.
+CLOSED_ACCESS = {"customers", "private", "no"}
+# Seul access=yes dit « ouvert à tous ». Sans étiquette, ou permissive (le propriétaire tolère le passage et peut le
+# retirer, décision de l'utilisatrice du 15 novembre 2026) : montrées « non vérifié ».
+PUBLIC_ACCESS = "yes"
 
 
 def postcode_of(address: str | None) -> str | None:
@@ -202,14 +208,28 @@ def is_generic_name(name: str | None) -> bool:
     return any((name or "").startswith(generic) for generic in GENERIC_NAMES)
 
 
+def is_public_facility(poi: dict) -> bool:
+    """Une toilette ou une douche : les services d'OSM dont l'étiquette access compte."""
+    return (poi.get("service_category") or "").lower() in PUBLIC_FACILITY_TYPES
+
+
+def is_closed_to_public(poi: dict) -> bool:
+    """Une toilette ou une douche réservée aux clients, privée ou fermée : l'étape 4 ne la montre pas."""
+    return is_public_facility(poi) and poi.get("acces_osm") in CLOSED_ACCESS
+
+
 def shown_verified(poi: dict, frontend_category: str, sheet: dict) -> int:
     """
     Dans les onglets dont un agent écrit les fiches, « Vérifié » suit la preuve (service_store.set_verified) :
     un lieu d'OSM sans fiche n'a été contrôlé par personne, même si load_poi.py l'a chargé avec verifie = 1.
-    Les autres onglets (eau, toilettes...) gardent la valeur de la base.
+    Une toilette ou une douche n'est « Vérifié » que si OSM la dit ouverte à tous (access=yes) : sans étiquette,
+    personne ne l'a dit (134 toilettes sur 221 le 13 novembre 2026).
+    Les autres onglets (eau, vidange...) gardent la valeur de la base.
     Partout, un service dont un doute attend une relecture s'affiche « non vérifié » (display_utils.shown_verified).
     """
     if frontend_category in SHEETS_SHOWN and not sheet["genre"]:
+        return 0
+    if is_public_facility(poi) and poi.get("acces_osm") != PUBLIC_ACCESS:
         return 0
     return int(display_utils.shown_verified(poi["verifie"], poi.get("doute")))
 
@@ -292,6 +312,8 @@ def get_poi(
             p.url,
             p.address,
             p.maps_url AS maps_saisi,
+            p.acces_osm,
+            p.payant,
             --
             s.category as service_category,
             s.name as service_name,
@@ -372,6 +394,8 @@ def get_poi(
             continue
         if is_out_of_season(poi.get('statut_saison'), poi.get('mois_ouverture'), day):
             continue
+        if is_closed_to_public(poi):
+            continue
         service_cat = poi.get('service_category', '').lower()
         frontend_category = category_mapping.get(service_cat)
         if not frontend_category:
@@ -423,6 +447,8 @@ def get_poi(
             "statut_saison": poi['statut_saison'],
             "saison_label": season_label(poi['statut_saison'], poi['mois_ouverture']),
             "mois_ouverture": poi['mois_ouverture'],
+            # L'étiquette fee d'OSM des toilettes et douches : le badge « Payant » affiché sur le service.
+            "payant": poi.get('payant') == 1,
             **(station_fields(poi) if frontend_category == FUEL_CATEGORY else {})
         }))
 

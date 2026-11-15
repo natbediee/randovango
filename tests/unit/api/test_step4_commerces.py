@@ -102,10 +102,10 @@ def test_the_commune_shops_show_up_to_fifteen_nearest_the_spot(monkeypatch):
 
 
 def test_an_osm_shop_without_a_sheet_is_not_shown_verified(monkeypatch):
-    """Un commerce d'OSM sans fiche s'affiche « non vérifié », même chargé avec le badge ; les toilettes gardent le leur."""
+    """Un commerce d'OSM sans fiche s'affiche « non vérifié », même chargé avec le badge ; les toilettes ouvertes à tous gardent le leur."""
     rows = [{**_shop(1, "Boulangerie d'OSM", "bakery", None, "1 rue, 29280 Locmaria-Plouzané"), "verifie": 1},
             {**_shop(2, "Le Gall", "bakery", "boulangerie", "2 rue, 29217 Plougonvelin", "boulangerie"), "verifie": 1},
-            {**_row(3, "Toilettes", "toilets", None, "3 rue"), "verifie": 1}]
+            {**_row(3, "Toilettes", "toilets", None, "3 rue"), "verifie": 1, "acces_osm": "yes"}]
     result, _ = _get_poi(monkeypatch, rows)
     badges = {poi["name"]: poi["badge"]["text"] for category in ("commerce", "toilettes") for poi in result[category]}
     assert badges == {"Boulangerie d'OSM": "Non vérifié", "Le Gall": "Vérifié", "Toilettes": "Vérifié"}
