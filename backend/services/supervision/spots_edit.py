@@ -14,7 +14,7 @@ from datetime import date
 from services.supervision import spots_review as supervision
 from services.supervision.services_edit import address_town, in_city
 from utils.db_utils import MySQLUtils
-from utils.geo_utils import city_commune, get_bounding_box
+from utils.geo_utils import city_commune, communes_only, get_bounding_box
 
 ZONE_KM = 5          # le rayon par défaut de l'étape 3 (step3.py)
 PAGE_SIZE = 50
@@ -116,7 +116,7 @@ def search(city_id: int | None = None, name: str | None = None, on_date: date | 
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, latitude, longitude FROM cities ORDER BY name")
+        cursor.execute(f"SELECT id, name, latitude, longitude FROM cities WHERE {communes_only()} ORDER BY name")
         all_cities = cursor.fetchall()
         cities = [{"id": row["id"], "name": row["name"]} for row in all_cities]
         city = None

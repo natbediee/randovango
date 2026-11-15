@@ -26,8 +26,8 @@ from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEA
 from services.station_selection_service import STATION_VIEW_SQL, station_view
 from utils.db_utils import MySQLUtils
 from utils.display_utils import PENDING_DOUBT_SQL, shown_verified
-from utils.geo_utils import (address_town, city_commune, get_bounding_box, haversine_distance_km, town_choices,
-                             town_key)
+from utils.geo_utils import (address_town, city_commune, communes_only, get_bounding_box, haversine_distance_km,
+                             town_choices, town_key)
 
 EDIT_FILE = "modifier"
 ZONE_KM = 5          # le rayon par défaut de l'étape 4 (step4.py)
@@ -207,7 +207,7 @@ def search(city_id: int | None = None, service: str | None = None, kind: str | N
     connection = MySQLUtils.connect()
     try:
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities ORDER BY name")
+        cursor.execute(f"SELECT id, name, commune, latitude, longitude FROM cities WHERE {communes_only()} ORDER BY name")
         all_cities = cursor.fetchall()
         city_codes, towns = address_towns(cursor, all_cities)
         cities = [{"id": row["id"], "name": row["name"], "codes": city_codes.get(row["id"], [])} for row in all_cities]

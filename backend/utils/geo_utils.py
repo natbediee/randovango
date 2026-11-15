@@ -210,6 +210,26 @@ def get_commune_from_coordinates(latitude, longitude, timeout=10):
     return rows[0]["nom"], rows[0]["code"]
 
 
+def get_commune_details(insee: str, timeout=10) -> dict | None:
+    """
+    Ce qu'il faut pour créer la ligne d'une commune dans cities, d'après geo.api.gouv.fr : son nom officiel, la position
+    de son centre, son département et sa région. Plouguerneau, que l'appli ne connaissait que par ses lieux-dits Lilia
+    et Tremenac'h (issue #184). Renvoie None si l'API ne répond pas.
+    """
+    try:
+        response = requests.get(f"{COMMUNE_URL}/{insee}", params={"fields": "nom,code,centre,departement,region"},
+                                timeout=timeout, headers={"User-Agent": "randovango"})
+        response.raise_for_status()
+        row = response.json()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"geo.api.gouv.fr injoignable pour la commune {insee} : {e}")
+        return None
+    # GeoJSON écrit la longitude d'abord : [-4.5104, 48.6046].
+    longitude, latitude = row["centre"]["coordinates"]
+    return {"name": row["nom"], "insee": row["code"], "latitude": latitude, "longitude": longitude,
+            "department": row["departement"]["nom"], "region": row["region"]["nom"]}
+
+
 # LA COMMUNE D'UNE ADRESSE (supervision, 8 et 12 novembre 2026) : ce qui suit le code postal, « 29730 Guilvinec ».
 # Un service se range par la commune de son adresse, même quand ce n'est pas une ville de l'appli (le Carrefour de
 # Guilvinec) : c'est aussi ce qu'un voyageur donnera en signalant un service.
@@ -254,6 +274,26 @@ def town_choices(addresses: list, cities: list) -> tuple:
 def city_commune(city: dict) -> str:
     """La commune d'une ville de la table cities, sinon son nom tant que la commune n'est pas connue."""
     return city.get("commune") or city["name"]
+
+
+def communes_only(alias: str = "") -> str:
+    """
+    Le filtre SQL qui ne garde que les communes de la table cities, pas les lieux-dits (issue #184, décision du
+    15 novembre 2026). Une ville vient du départ d'une rando : parfois un lieu-dit (Lochrist, au Conquet ; Lilia et
+    Tremenac'h, en Plouguerneau). Une commune est une ligne dont le nom est celui de sa commune ; celles qui
+    manquaient ont été créées par etl/add_missing_communes.py. Les lieux-dits restent en base pour les anciens voyages.
+    MySQL compare sans tenir compte de la casse ni des accents : « Plounéour-Brignogan-plages » est bien sa commune.
+    Une ville dont la commune n'est pas encore connue reste gardée : on ne sait pas si c'est un lieu-dit.
+    alias : la lettre de la table cities dans une jointure (« c »), pour ne pas confondre avec un autre « name ».
+    """
+    prefix = f"{alias}." if alias else ""
+    return f"({prefix}commune IS NULL OR {prefix}name = {prefix}commune)"
+
+
+# Les randos rangées dans une ville de la même commune (même code INSEE, donné en paramètre %s) : la rando d'un lieu-dit
+# reste proposée depuis sa commune, même quand elle part loin de son centre (Locuon et Ploërdut, issue #184).
+# Une commune encore inconnue (insee vide) ne retrouve rien par ce chemin : « insee = NULL » n'est jamais vrai en SQL.
+SAME_COMMUNE_HIKES = "city_id IN (SELECT id FROM cities WHERE insee = %s)"
 
 
 BAN_URL = "https://api-adresse.data.gouv.fr/search/"

@@ -12,6 +12,7 @@ from api.models.cities import CityList
 from utils.meteo_utils import meteo_code_to_picto
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from utils.display_utils import enrich_meteo_forecasts, city_stats_labels
+from utils.geo_utils import communes_only
 from services.pepite_service import start_zone_search
 from services.plan_service import owner_columns, set_day_city
 from typing import List
@@ -191,10 +192,14 @@ def get_all_city_stats(cursor, cities, distance_km=5):
         """
     bbox_params = (lat_delta, lat_delta, lat_delta, lat_delta)
 
+    # Les randos comptées sont celles que l'étape 2 proposera (step2.get_hikes) : près de la ville, ou rangées dans une
+    # ville de la même commune (la rando de Locuon, à 6 km du centre de Ploërdut, issue #184). Le OR suit tout le
+    # carré : en SQL, AND passe avant OR.
     cursor.execute(f"""
         SELECT c.id AS city_id, COUNT(*) AS cnt
         FROM cities c
         JOIN hikes h {bbox_on("h", "start_latitude", "start_longitude")}
+                  OR h.city_id IN (SELECT o.id FROM cities o WHERE o.insee = c.insee)
         GROUP BY c.id
     """, bbox_params)
     for row in cursor.fetchall():
@@ -247,6 +252,21 @@ def get_cities_bounds():
         """)
         return cursor.fetchone()
 
+# LES COMMUNES SEULEMENT (issue #184, décision du 15 novembre 2026). Ranger les services et les spots sous le nom d'un
+# lieu-dit en perdait : la station Carrefour de Plouguerneau était introuvable, Plouguerneau n'existant que sous Lilia
+# et Tremenac'h. « Où pars-tu » ne propose donc plus que les communes (geo_utils.communes_only). Les randos d'un
+# lieu-dit sortent depuis sa commune : l'étape 2 cherche les randos autour du point de départ, pas par ville.
+
+
+def load_communes(cursor) -> list:
+    """Les villes que « Où pars-tu » propose : les communes, sans les lieux-dits, par ordre alphabétique."""
+    cursor.execute(f"""
+        SELECT id, name, department, region, country, latitude, longitude FROM cities
+        WHERE {communes_only()} ORDER BY name ASC
+    """)
+    return cursor.fetchall()
+
+
 @router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
 async def get_ville_list(
     request: Request,
@@ -279,8 +299,7 @@ async def get_ville_list(
         # Les pharmacies du jour (fermetures et ouvertures de FINESS), en arrière-plan aussi (voir start_pharmacies_refresh).
         start_pharmacies_refresh()
 
-        cursor.execute("SELECT id, name, department, region, country, latitude, longitude FROM cities ORDER BY name ASC")
-        cities = cursor.fetchall()
+        cities = load_communes(cursor)
 
         # Stats de toutes les villes en une poignée de requêtes agrégées (voir get_all_city_stats)
         # au lieu d'une boucle de 6 requêtes par ville.

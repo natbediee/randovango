@@ -19,7 +19,7 @@ class _FailingCursor:
             raise RuntimeError("Lock wait timeout exceeded")
 
     def fetchone(self):
-        return {"latitude": 48.3378, "longitude": -4.70183}
+        return {"latitude": 48.3378, "longitude": -4.70183, "insee": "29190"}
 
     def close(self):
         self.closed = True

@@ -28,7 +28,7 @@ from services.supervision import rating
 from services.supervision.decisions import record_decision
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, a_savoir_on, spot_category, spot_name_label
-from utils.geo_utils import address_town, town_key
+from utils.geo_utils import address_town, communes_only, town_key
 
 DECISIONS = ("retirer", "garder")
 SPOT = "spot"
@@ -265,7 +265,7 @@ def get_reviews(city_id: int | None = None, town: str | None = None, category: s
                     if spot_status(verification, decision) == "propose"]
         unverified = _unverified_ids(cursor, states)
         spots = _spot_labels(cursor, removals + unverified)
-        cursor.execute("SELECT id, name, commune, latitude, longitude FROM cities ORDER BY name")
+        cursor.execute(f"SELECT id, name, commune, latitude, longitude FROM cities WHERE {communes_only()} ORDER BY name")
         cities = cursor.fetchall()
         reviews = [_review_card(cursor, spot_id, states.get(spot_id, (None, None))[0], spots.get(spot_id) or {},
                                 cities, file)
