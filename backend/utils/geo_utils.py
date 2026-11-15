@@ -334,6 +334,21 @@ def same_spelling(town: str, commune: str) -> bool:
 
 
 TOWN_IS_COMMUNE = {}        # {clé d'un nom : est-ce une commune de France ?}, gardé pour ne demander qu'une fois
+LOCALITY_COMMUNES = None    # {clé d'un lieu-dit de la table cities : sa commune}, lu une fois dans la base
+
+
+def known_locality_commune(town: str) -> str | None:
+    """
+    La commune d'un lieu-dit que la table cities connaît déjà (Trézien : Plouarzel ; Lochrist : Le Conquet). C'est
+    la réponse sûre pour les points que l'État ne place dans aucune commune : un sentier côtier, une cale, posés un peu
+    en mer (la reprise du 15 novembre 2026 en laissait 66, tous sur l'un de ces lieux-dits, dont 10 à Trézien).
+    """
+    global LOCALITY_COMMUNES
+    if LOCALITY_COMMUNES is None:
+        with MySQLUtils.open_cursor() as (connection, cursor):
+            cursor.execute("SELECT name, commune FROM cities WHERE commune IS NOT NULL AND name <> commune")
+            LOCALITY_COMMUNES = {spelling_key(name): commune for name, commune in cursor.fetchall()}
+    return LOCALITY_COMMUNES.get(spelling_key(town))
 
 
 def is_commune_name(town: str, timeout=10) -> bool | None:
@@ -360,6 +375,7 @@ def commune_of_town(postcode: str, town: str, latitude=None, longitude=None) -> 
     """
     Le nom officiel de la commune où se trouve `town`, écrit après le code postal d'une adresse :
         - `town` lui-même, s'il est une commune de ce code postal (au besoin, autrement écrit) ;
+        - sinon la commune connue de ce lieu-dit dans la table cities (Trézien : Plouarzel), si elle porte ce code ;
         - sinon la seule commune du code postal (29160 Morgat : Crozon et Lanvéoc, il faut la position) ;
         - sinon celle des communes du code postal qui contient la position du lieu.
     None si on ne sait pas : l'adresse est alors laissée telle quelle. C'est aussi le cas d'une vraie commune écrite
@@ -372,6 +388,11 @@ def commune_of_town(postcode: str, town: str, latitude=None, longitude=None) -> 
     official = next((commune for commune in communes if same_spelling(town, commune)), None)
     if official:
         return official
+    # Le lieu-dit connu passe avant la vérification du nom : Argenton, lieu-dit de Landunvez (29840), est aussi le nom
+    # d'une commune du Lot-et-Garonne, et ses 9 services restaient sinon à « 29840 Argenton ».
+    known = known_locality_commune(town)
+    if known in communes:
+        return known
     if is_commune_name(town) is not False:
         return None
     if len(communes) == 1:

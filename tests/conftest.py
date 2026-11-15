@@ -61,3 +61,4 @@ def no_postcode_api(monkeypatch):
     from utils import geo_utils
 
     monkeypatch.setattr(geo_utils, "communes_of_postcode", lambda postcode: [])
+    monkeypatch.setattr(geo_utils, "LOCALITY_COMMUNES", {})

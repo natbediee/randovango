@@ -17,6 +17,7 @@ COMMUNES = {
     "29160": ["Crozon", "Lanvéoc"],
     "29880": ["Plouguerneau"],
     "29760": ["Penmarch"],
+    "29840": ["Landunvez", "Porspoder"],
 }
 
 
@@ -26,6 +27,8 @@ def fake_geo_api(monkeypatch):
     monkeypatch.setattr(geo_utils, "communes_of_postcode", REAL_COMMUNES_OF_POSTCODE)
     monkeypatch.setattr(geo_utils, "POSTCODE_COMMUNES", dict(COMMUNES))
     monkeypatch.setattr(geo_utils, "is_commune_name", lambda town: town in {"Séné", "Vannes"})
+    monkeypatch.setattr(geo_utils, "LOCALITY_COMMUNES", {"trezien": "Plouarzel", "lochrist": "Le Conquet",
+                                                         "argenton": "Landunvez"})
     points = {(48.42, -4.73): ("Plouarzel", "29177"), (48.60, -4.56): ("Landéda", "29101"),
               (48.23, -4.50): ("Crozon", "29042")}
     monkeypatch.setattr(geo_utils, "get_commune_from_coordinates", lambda lat, lon: points.get((lat, lon), (None, None)))
@@ -123,3 +126,21 @@ def test_a_commune_name_is_asked_once(monkeypatch) -> None:
     assert geo_utils.is_commune_name("Trézien") is False
     assert geo_utils.is_commune_name("TREZIEN") is False
     assert len(calls) == 1
+
+
+def test_a_coastal_point_outside_every_commune_takes_the_known_commune_of_its_locality() -> None:
+    """Un sentier côtier de Trézien, que l'État ne place dans aucune commune (en mer), va à Plouarzel, commune connue de Trézien."""
+    assert geo_utils.address_with_commune("Sentier Côtier, 29810 Trézien", 48.4371, -4.7851) \
+        == "Sentier Côtier, Trézien, 29810 Plouarzel"
+
+
+def test_a_known_locality_needs_its_commune_in_the_postcode(monkeypatch) -> None:
+    """La commune connue d'un lieu-dit ne vaut qu'avec son code postal : un autre Lochrist, ailleurs, n'est pas au Conquet."""
+    monkeypatch.setitem(geo_utils.POSTCODE_COMMUNES, "29430", ["Plounévez-Lochrist", "Tréflez"])
+    assert geo_utils.address_with_commune("Route du Bourg, 29430 Lochrist") == "Route du Bourg, 29430 Lochrist"
+
+
+def test_a_known_locality_wins_over_a_namesake_commune_elsewhere(monkeypatch) -> None:
+    """Argenton, lieu-dit de Landunvez, est rangé à Landunvez, même si une commune du Lot-et-Garonne porte ce nom."""
+    monkeypatch.setattr(geo_utils, "is_commune_name", lambda town: True)
+    assert geo_utils.address_with_commune("Route de la Cale, 29840 Argenton") == "Route de la Cale, Argenton, 29840 Landunvez"
