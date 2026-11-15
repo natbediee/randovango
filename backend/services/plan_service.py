@@ -36,10 +36,14 @@ def insert_or_update_plan(plan_id, data):
     Met à jour un jour de plan existant (créé à l'étape 1 dans trip_plans/trip_days).
 
     data peut contenir :
-    - hike_id (int)        : étape 2 – randonnée choisie
-    - spot_id (int)        : étape 3 – spot de nuit choisi (doit exister dans spots)
-    - services (list[int]) : étape 4 – IDs des POI sélectionnés → trip_day_pois
-    - day_number (int)     : numéro du jour concerné (défaut : 1)
+    - hike_id (int ou None) : étape 2 – randonnée choisie, None pour « sans rando »
+    - spot_id (int ou None) : étape 3 – spot de nuit choisi (doit exister dans spots),
+                              None pour « autre hébergement »
+    - services (list[int])  : étape 4 – IDs des POI sélectionnés → trip_day_pois
+    - day_number (int)      : numéro du jour concerné (défaut : 1)
+
+    Une clé absente laisse la colonne telle quelle ; une clé présente à None la vide
+    (carte #231 : un spot remplacé par « autre hébergement » restait en base).
     """
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor()
@@ -65,13 +69,15 @@ def insert_or_update_plan(plan_id, data):
         trip_day_id = cursor.lastrowid
     else:
         trip_day_id = row[0]
-        if hike_id is not None:
+        # On teste la présence de la clé, pas sa valeur : chaque étape n'envoie que
+        # son propre choix, et None veut dire « sans rando » ou « autre hébergement ».
+        if "hike_id" in data:
             cursor.execute(
                 "UPDATE trip_days SET hike_id = %s WHERE id = %s",
                 (hike_id, trip_day_id)
             )
-        if spot_id is not None:
-            # spot_id FK → spots(id) : le spot doit exister dans la table spots
+        if "spot_id" in data:
+            # spot_id FK → spots(id) : le spot doit exister dans la table spots (None est permis)
             cursor.execute(
                 "UPDATE trip_days SET spot_id = %s WHERE id = %s",
                 (spot_id, trip_day_id)
