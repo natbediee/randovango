@@ -323,9 +323,14 @@ def communes_of_postcode(postcode: str, timeout=10) -> list:
     return names
 
 
+def spelling_key(town: str | None) -> str:
+    """La clé d'un nom sans casse, accents, traits d'union, apostrophes ni espaces : « Penmarc'h » donne « penmarch »."""
+    return town_key(town).replace(" ", "")
+
+
 def same_spelling(town: str, commune: str) -> bool:
     """« Penmarc'h » et « Penmarch », « PLOUDALMEZEAU » et « Ploudalmézeau » : le même nom autrement écrit."""
-    return town_key(town).replace(" ", "") == town_key(commune).replace(" ", "")
+    return spelling_key(town) == spelling_key(commune)
 
 
 def commune_of_town(postcode: str, town: str, latitude=None, longitude=None) -> str | None:

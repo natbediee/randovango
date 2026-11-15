@@ -90,3 +90,21 @@ def test_open_cursor_can_ask_a_buffered_cursor(fake_mysql) -> None:
         pass
 
     assert cnx.options == {"dictionary": True, "buffered": True}
+
+
+def test_every_city_pass_goes_through_the_communes_only(monkeypatch) -> None:
+    """Les passages « --toutes » (pharmacies, carburants) ne repassent plus par les lieux-dits, comme Penmarc'h ou Lilia."""
+    from unittest.mock import MagicMock
+
+    from utils import db_utils
+    from utils.geo_utils import communes_only
+
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [(140, "Penmarch")]
+    connection = MagicMock()
+    connection.cursor.return_value = cursor
+    monkeypatch.setattr(db_utils.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(db_utils.MySQLUtils, "disconnect", lambda cnx: None)
+
+    assert db_utils.get_all_city_ids() == [(140, "Penmarch")]
+    assert communes_only() in cursor.execute.call_args.args[0]

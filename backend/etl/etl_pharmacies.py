@@ -32,7 +32,7 @@ from etl.load.load_pharmacies import (hide_closed, known_pharmacies, load_pharma
 from etl.transform.transform_carburants import keep_near
 from etl.transform.transform_pharmacies import closures, is_open, pharmacy_row, to_pharmacy
 from utils.db_utils import get_all_city_ids
-from utils.geo_utils import address_town, get_city_center, town_key
+from utils.geo_utils import address_town, get_city_center, spelling_key
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("etl_pharmacies")
@@ -147,14 +147,16 @@ def towns_summary(city: str, rows: list) -> str:
     Le compte des pharmacies d'un passage, par commune : « Plougonvelin : 1 pharmacie dans la commune, 6 autour
     (Le Conquet 1, Locmaria-Plouzané 1, Plouzané 4) ». Un passage charge toute la zone de 5 km et ses codes postaux :
     le total seul laissait croire à 7 pharmacies à Plougonvelin, qui n'en a qu'une (essai du 14 novembre 2026).
+    Les noms se comparent sans apostrophe : FINESS écrit « Penmarch », la ville s'écrivait « Penmarc'h », et le compte
+    disait « 0 pharmacie dans la commune » (compte rendu de #194, 14 novembre 2026).
     """
     names, counts = {}, {}
     for row in rows:
         town = address_town(row["poi"]["address"]) or "commune inconnue"
-        key = town_key(town)
+        key = spelling_key(town)
         names.setdefault(key, town)
         counts[key] = counts.get(key, 0) + 1
-    inside = counts.pop(town_key(city), 0)
+    inside = counts.pop(spelling_key(city), 0)
     around = ", ".join(f"{names[key]} {count}" for key, count in sorted(counts.items()))
     summary = f"{city} : {inside} pharmacie{'s' if inside > 1 else ''} dans la commune"
     return summary + (f", {sum(counts.values())} autour ({around})" if counts else "")
