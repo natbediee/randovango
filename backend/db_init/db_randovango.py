@@ -648,6 +648,56 @@ def init_database():
                 PRIMARY KEY (user_id, user_token)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
+            # 21. passages : la trace d'un passage d'une chaîne d'agents sur une ville, lancé depuis la supervision
+            # (issue #204) ou, plus tard, à la fin de l'ETL (#211). llm_calls dit ce que chaque appel a coûté ; cette
+            # table dit ce qui a été demandé et où en est le passage, même quand aucun agent n'a encore été appelé.
+            # passage_id : le même que llm_calls.passage_id. chain : la chaîne lancée (services aujourd'hui, les autres
+            # avec #276). origin : qui l'a demandé (supervision, etl). status : en_file, en_cours, fini ou echec.
+            # error : la raison d'un échec, en phrase lisible. resumed_from : le passage en échec que celui-ci reprend.
+            # Un passage n'est repris qu'une fois (UNIQUE) : si la reprise échoue, c'est elle qu'on reprend.
+            # Clés étrangères (MLD du MCD de F-11c) : la ville du passage (cities), et le passage repris. Le lien avec
+            # llm_calls.passage_id reste sans contrainte : les passages lancés en ligne de commande, et ceux d'avant
+            # #204, ont des appels mesurés sans ligne dans passages.
+            """
+            CREATE TABLE IF NOT EXISTS passages (
+                passage_id CHAR(32) NOT NULL PRIMARY KEY,
+                chain VARCHAR(30) NOT NULL,
+                city_id INT NOT NULL,
+                origin VARCHAR(20) NOT NULL,
+                status VARCHAR(10) NOT NULL,
+                requested_at DATETIME NOT NULL,
+                started_at DATETIME,
+                finished_at DATETIME,
+                error VARCHAR(255),
+                resumed_from CHAR(32),
+                INDEX idx_passages_status (status),
+                INDEX idx_passages_city (city_id),
+                UNIQUE KEY uq_passages_resumed_from (resumed_from),
+                FOREIGN KEY (city_id) REFERENCES cities(id),
+                FOREIGN KEY (resumed_from) REFERENCES passages(passage_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 22. passage_parts : les parties d'un passage, dans l'ordre (position) ; pour la chaîne des services, une
+            # catégorie (restaurants, commerces...). Son état (a_faire, en_cours, fini, echec) dit ce qu'une reprise
+            # peut sauter sans repayer : l'enregistrement d'une catégorie n'appelle aucun agent, llm_calls ne le voit pas.
+            # step : l'étape notée par le code quand aucun agent ne l'annonce (« enregistrement ») ; les autres étapes se
+            # lisent dans llm_calls. summary : le bilan de l'enregistrement (services ajoutés, mis à jour...), en JSON.
+            # Une partie n'existe qu'avec son passage (clé étrangère) : elle s'efface avec lui (ON DELETE CASCADE).
+            """
+            CREATE TABLE IF NOT EXISTS passage_parts (
+                passage_id CHAR(32) NOT NULL,
+                part VARCHAR(30) NOT NULL,
+                position INT NOT NULL,
+                status VARCHAR(10) NOT NULL,
+                step VARCHAR(30),
+                started_at DATETIME,
+                finished_at DATETIME,
+                summary JSON,
+                error VARCHAR(255),
+                PRIMARY KEY (passage_id, part),
+                FOREIGN KEY (passage_id) REFERENCES passages(passage_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
         ]
         ("- Création des tables :")
         user_cnx = MySQLUtils.connect()

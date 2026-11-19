@@ -34,6 +34,7 @@ la réécrire déferait un reclassement.
 """
 import argparse
 import json
+import threading
 from contextlib import contextmanager
 
 from agents import service_chain
@@ -56,7 +57,15 @@ CATEGORIES = (RESTAURANTS, COMMERCES, SUPERMARCHES, LAVERIES)
 
 # Le nom du verrou de MySQL : un seul lancement de la chaîne à la fois, quel que soit le conteneur qui le lance.
 LOCK_NAME = "randovango_passage_services"
-_lock_connection = None     # la connexion qui tient le verrou dans ce programme, tant qu'un lancement est en cours
+# La connexion qui tient le verrou, gardée fil par fil (threading.local) tant qu'un lancement est en cours. Dans l'API,
+# chaque requête tourne dans son propre fil : une variable commune à tout le programme ferait croire au second lancement
+# qu'il tient déjà le verrou, et il passerait sans lui (issue #204).
+_held = threading.local()
+
+
+def lock_connection():
+    """La connexion qui tient le verrou dans ce fil, ou None si ce fil ne le tient pas."""
+    return getattr(_held, "connection", None)
 
 
 class PassageRunning(RuntimeError):
@@ -68,14 +77,13 @@ def single_passage():
     """
     Tient le verrou « un seul passage à la fois » pendant le bloc, ou lève PassageRunning si un autre lancement le tient.
     Le verrou appartient à une connexion MySQL gardée ouverte (GET_LOCK) : il se libère à la fin du bloc, et tout seul si le
-    programme s'arrête brutalement. Un bloc dans un bloc ne le reprend pas : main le tient pour toutes ses communes, et
-    run_passage le retrouve déjà tenu.
+    programme s'arrête brutalement. Un bloc dans un bloc du même fil ne le reprend pas : main le tient pour toutes ses
+    communes, et run_passage le retrouve déjà tenu. Un autre fil, lui, le demande à MySQL comme tout autre lancement.
     """
-    global _lock_connection
-    if _lock_connection is not None:
+    if lock_connection() is not None:
         # Déjà tenu par ce lancement. Une requête garde la connexion éveillée entre deux communes ; si elle a été coupée,
         # le verrou est perdu et l'erreur remonte au lieu de continuer sans lui.
-        cursor = _lock_connection.cursor()
+        cursor = lock_connection().cursor()
         cursor.execute("SELECT 1")
         cursor.fetchone()
         cursor.close()
@@ -87,16 +95,47 @@ def single_passage():
         cursor.execute("SELECT GET_LOCK(%s, 0)", (LOCK_NAME,))
         if cursor.fetchone()[0] != 1:
             raise PassageRunning("Un passage de la chaîne des services est déjà en cours : attendre sa fin avant d'en lancer un autre.")
-        _lock_connection = connection
+        _held.connection = connection
         try:
             yield
         finally:
-            _lock_connection = None
+            _held.connection = None
             cursor.execute("SELECT RELEASE_LOCK(%s)", (LOCK_NAME,))
             cursor.fetchone()
     finally:
         cursor.close()
         MySQLUtils.disconnect(connection)
+
+
+def lock_is_free() -> bool:
+    """
+    Le verrou est-il libre ? Demandé à MySQL depuis une autre connexion (IS_FREE_LOCK), sans le prendre : la supervision
+    s'en sert pour refuser un lancement tout de suite, avec un message, et pour reconnaître un passage resté « en cours »
+    alors que plus personne ne le fait tourner (un redémarrage du serveur pendant le passage).
+    """
+    connection = MySQLUtils.connect()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("SELECT IS_FREE_LOCK(%s)", (LOCK_NAME,))
+        return cursor.fetchone()[0] == 1
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(connection)
+
+
+def search_and_save(category, city: dict, trial: bool = False, stopped: dict | None = None,
+                    before_saving=lambda: None) -> dict:
+    """
+    Une catégorie d'une commune : la chaîne des agents cherche, puis le code enregistre. À l'essai, rien n'est écrit :
+    on renvoie les lieux trouvés. `stopped` est le fichier d'un passage arrêté en route, à reprendre sans repayer ses
+    zones finies. `before_saving` est appelé juste avant l'enregistrement, qui n'appelle aucun agent : la supervision
+    y note l'étape « enregistrement » (services/passage_service.py).
+    """
+    answer = service_chain.search_commune(category, city, stopped)
+    if trial:
+        return {"lieux": [row["nom"] for row in answer[category.key]]}
+    before_saving()
+    return service_store.save_commune(category, city, answer, category.prompt_version, model_of(category.find_agent))
 
 
 def run_passage(city: dict, categories: tuple = CATEGORIES, trial: bool = False, resume: bool = False) -> dict:
@@ -118,12 +157,7 @@ def run_passage(city: dict, categories: tuple = CATEGORIES, trial: bool = False,
             if resume and not stopped:
                 results[category.key] = {"passe": "aucun passage arrêté à reprendre"}
                 continue
-            answer = service_chain.search_commune(category, city, stopped)
-            if trial:
-                results[category.key] = {"lieux": [row["nom"] for row in answer[category.key]]}
-            else:
-                results[category.key] = service_store.save_commune(category, city, answer, category.prompt_version,
-                                                                   model_of(category.find_agent))
+            results[category.key] = search_and_save(category, city, trial, stopped)
     return results
 
 

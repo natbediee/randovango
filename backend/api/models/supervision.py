@@ -86,3 +86,15 @@ class ServiceDecision(BaseModel):
 # Le corps de POST /decisions : le champ « objet » dit lequel des modèles s'applique (un « discriminant »).
 # Pydantic lit d'abord « objet », puis vérifie les champs du bon modèle ; /docs montre les formes possibles.
 Decision = Annotated[SpotDecision | OpeningDecision | ServiceDecision, Field(discriminator="objet")]
+
+
+class PassageRequest(BaseModel):
+    """
+    Lancer un passage d'une chaîne d'agents sur une ville (POST /passages, issue #204), toujours en vraie mise à jour :
+    {"chaine": "services", "ville_id": 12, "categories": ["restaurants", "laveries"]}
+    chaine : la chaîne à lancer ; seule « services » est branchée aujourd'hui, les autres viendront avec #276.
+    ville_id : la ville de l'appli (cities.id). categories : celles à mettre à jour ; absentes, toutes celles de la chaîne.
+    """
+    chaine: str
+    ville_id: int
+    categories: list[str] | None = None
