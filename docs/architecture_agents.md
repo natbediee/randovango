@@ -1,7 +1,7 @@
 # Architecture de la chaîne des services
 
-La chaîne des services est l'agent de Randovango évalué en E3 : pour une ville, elle cherche sur le web les
-restaurants, commerces, supermarchés et laveries, avec une preuve pour chacun. Depuis l'issue #204, l'administratrice
+La chaîne des services est un agent de Randovango : pour une ville, elle cherche sur le web les
+restaurants, commerces, supermarchés et laveries, avec une preuve pour chacun. L'administratrice
 la lance et la suit depuis la supervision, par l'API, sans ouvrir le conteneur.
 
 Le principe, pour tous les agents : **l'agent propose, le code contrôle, l'humain tranche.**
@@ -11,7 +11,7 @@ Le principe, pour tous les agents : **l'agent propose, le code contrôle, l'huma
 ```mermaid
 flowchart TB
     ADMIN["Administratrice<br/>supervision, espace Agents"]
-    ETLV["Ajout d'une ville par l'ETL<br/>à venir, issue #211"]
+    ETLV["Ajout d'une ville par l'ETL<br/>à venir"]
 
     subgraph API["API FastAPI : routes de la supervision, réservées aux admins"]
         POST["POST /api/supervision/passages<br/>lance, répond tout de suite (202)"]
@@ -92,7 +92,7 @@ flowchart TB
   (`POST /api/supervision/passages/ID/reprise`) ne refait que les catégories non finies ; une grande ville reprend en
   plus ses zones finies depuis son fichier JSON.
 - **Une chaîne en paramètre.** Seule la chaîne des services est branchée (`CHAINS` dans `passage_service.py`) ;
-  les autres chaînes (OSM, pépites, carburants) s'y ajouteront sans nouvelle route (issue #276). Le lancement à la fin
-  de l'ETL d'une nouvelle ville (#211) appellera les mêmes fonctions, avec l'origine `etl` et la file d'attente.
+  les autres chaînes (OSM, pépites, carburants) s'y ajouteront sans nouvelle route. Le lancement à la fin
+  de l'ETL d'une nouvelle ville appellera les mêmes fonctions, avec l'origine `etl` et la file d'attente.
 - **Les mesures.** `llm_calls` garde chaque appel, réussi ou non : son coût en équivalent API, sa durée, ses tokens,
   ses recherches web, son passage et son étape. C'est la source du suivi des coûts dans la supervision.
