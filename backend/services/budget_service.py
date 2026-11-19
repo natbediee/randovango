@@ -95,14 +95,16 @@ def budget_state(now: datetime | None = None) -> dict:
     now = now or datetime.now()
     settings = load_settings()
     day_start, month_start = period_starts(now)
-    spent_today = agent_settings_store.spent_since(day_start)
-    spent_month = agent_settings_store.spent_since(month_start)
+    # Arrondies au centime d'abord : ce qui reste se calcule sur les montants affichés, sinon 10 − 2,725 donnerait
+    # « 2,73 dépensés » et « 7,28 restants » (essai du 19 novembre 2026).
+    spent_today = round(agent_settings_store.spent_since(day_start), 2)
+    spent_month = round(agent_settings_store.spent_since(month_start), 2)
     usable = settings["monthly_budget_usd"] - settings["vany_reserve_usd"]
     return {"services_apres_etl": settings["services_after_etl"],
             "enveloppe_du_mois_usd": settings["monthly_budget_usd"],
             "plafond_du_jour_usd": settings["daily_budget_usd"],
             "reserve_vany_usd": settings["vany_reserve_usd"],
-            "depense_du_jour_usd": round(spent_today, 2), "depense_du_mois_usd": round(spent_month, 2),
+            "depense_du_jour_usd": spent_today, "depense_du_mois_usd": spent_month,
             "reste_du_jour_usd": round(max(0.0, settings["daily_budget_usd"] - spent_today), 2),
             "reste_du_mois_usd": round(max(0.0, usable - spent_month), 2),
             "budget_atteint": block_reason(settings, spent_today, spent_month, now),

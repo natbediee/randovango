@@ -92,3 +92,10 @@ def test_the_reason_of_a_change_is_kept_with_it(base):
     """La raison libre que l'admin donne à un changement est gardée avec lui, et rendue avec le réglage."""
     state = budget_service.save_settings({"daily_budget_usd": 0.0}, "camille", "test du budget atteint")
     assert state["raison_du_changement"] == "test du budget atteint" and state["budget_atteint"] is not None
+
+
+def test_what_is_left_adds_up_with_what_is_spent(base):
+    """Dépensé et restant s'additionnent au centime près : 2,725 $ dépensés sur 10 $ affichent 2,73 $ et 7,27 $ (essai du 19 novembre)."""
+    base["today"], base["month"] = 2.725, 40.0
+    state = budget_service.budget_state(NOW)
+    assert (state["depense_du_jour_usd"], state["reste_du_jour_usd"]) == (2.73, 7.27)
