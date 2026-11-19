@@ -188,7 +188,8 @@ par `POST /api/auth/guest` (30 jours). Chaque route a un niveau d'accès, lu dan
 | compte | envoi d'un tracé GPX | un compte connecté | 401, 403 |
 | admin | supervision, suppression d'un tracé | le rôle admin, relu en base | 401, 403 |
 
-Les routes qui lancent les recherches de Vany sont plafonnées (429 au-delà, `backend/api/rate_limit.py`) ;
+Les routes qui lancent les recherches de Vany et les essais de connexion manqués sont plafonnés
+(429 au-delà, `backend/api/rate_limit.py`, liste dans [docs/plafonds.md](docs/plafonds.md)) ;
 `RATE_LIMIT_ENABLED=0` coupe ces plafonds sur le poste de développement. CORS n'accepte que les origines
 de `ALLOWED_ORIGINS` (`backend/api/cors.py`).
 

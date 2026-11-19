@@ -254,10 +254,21 @@
     }
   }
 
+  // ===== Dernière page du parcours visitée (issue #262) =====
+  // Les pages du parcours (étapes 1 à 5 et carnet) sont celles qui affichent la timeline du séjour.
+  // On note la dernière ouverte pendant un voyage : « Reprendre mon voyage » y ramène le voyageur,
+  // là où il s'était arrêté (voir trip_resume.js).
+  function rememberTripPage() {
+    if (!document.querySelector('[data-timeline]')) return;
+    if (!localStorage.getItem('planId')) return; // étape 1 avant la création du voyage : rien à reprendre
+    localStorage.setItem('lastTripPage', window.location.pathname);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     initBurger();
     initAccountMenu();
     initDayTimeline();
+    rememberTripPage();
   });
 
   // ===== Helpers exposés =====

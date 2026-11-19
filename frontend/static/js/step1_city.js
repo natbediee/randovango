@@ -21,8 +21,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // sans marqueur d'édition ni de changement de ville — typiquement par le « ← » de
     // l'étape 2, y compris au jour 2. Recréer un plan écraserait planId et repartirait
     // à Jour 1, perdant les jours déjà composés : on se contente de (re)poser la ville
-    // du jour courant. /duration purge planId, donc sa présence signifie bien qu'un
-    // séjour est entamé.
+    // du jour courant. /duration efface planId quand le voyageur choisit « nouveau
+    // voyage » (issue #262), donc sa présence signifie bien qu'un séjour est entamé.
     const resumingPlan = !changingCityForNextDay && !editingDay && !!localStorage.getItem('planId');
 
     const select = document.getElementById('citySelect');
@@ -691,6 +691,9 @@ document.addEventListener('DOMContentLoaded', async function() {
             // Stocker le plan_id dans localStorage pour les étapes suivantes
             localStorage.setItem('planId', data.plan_id);
             localStorage.setItem('currentDay', 1);
+            // Le nouveau voyage existe : l'ancien, gardé en secours au choix « nouveau voyage »
+            // pour le cas où le plafond du jour refuserait celui-ci, peut être oublié (issue #262).
+            localStorage.removeItem('previousTrip');
 
             // Réinitialiser les sélections des étapes suivantes (nouveau plan = nouveau départ)
             localStorage.removeItem('selectedHiking');

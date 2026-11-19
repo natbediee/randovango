@@ -31,3 +31,11 @@ def test_unlimited_offer_is_not_sold_yet():
     page = load_front().test_client().get("/limite-gratuite").get_data(as_text=True)
     assert "Bientôt disponible</button>" in page
     assert "disabled>Bientôt disponible" in page
+
+
+def test_free_limit_page_offers_to_resume_the_trip_of_the_day():
+    """La page propose de reprendre le voyage du jour, sinon dit que ce navigateur ne le garde plus (issue #262)."""
+    page = load_front().test_client().get("/limite-gratuite").get_data(as_text=True)
+    assert "Reprendre mon voyage du jour" in page
+    assert "Ce navigateur ne garde plus ton voyage du jour." in page
+    assert page.index("js/trip_resume.js") < page.index("js/free_limit.js")

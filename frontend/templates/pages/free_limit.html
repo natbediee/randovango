@@ -2,7 +2,8 @@
   Page « voyage gratuit du jour déjà composé » (carte #21). Le voyageur y arrive quand l'API refuse
   un deuxième plan dans la journée (réponse 429, voir step1_city.js createPlan). Elle explique la
   limite et annonce l'offre illimitée, encore fictive : le bouton reste désactivé tant que l'offre
-  payante n'existe pas (carte « Offre gratuite et offre payante »).
+  payante n'existe pas (carte « Offre gratuite et offre payante »). Elle propose aussi de reprendre
+  le voyage déjà composé aujourd'hui (issue #262).
 #}
 {% extends "base.html" %}
 {% block title %}Ton voyage gratuit du jour - RandoVanGo{% endblock %}
@@ -32,7 +33,17 @@
         <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Jusqu'à 7 jours de séjour</li>
         <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Les pépites de Vany et le carnet PDF</li>
       </ul>
-      <a href="{{ url_for('results') }}" class="btn btn--outline btn--block" style="margin-top:auto;">Revoir mon carnet</a>
+      {# Reprise du voyage du jour (issue #262) : free_limit.js montre le bouton si le navigateur garde
+         ce voyage (en cours, ou en secours après un choix « nouveau voyage ») et que l'API le rend
+         encore au voyageur ; sinon, la phrase qui dit pourquoi on ne peut pas le reprendre. #}
+      <div style="margin-top:auto;">
+        <button type="button" class="btn btn--primary btn--block" id="tripResumeButton" hidden>
+          Reprendre mon voyage du jour <i class="fas fa-arrow-right"></i>
+        </button>
+        <p class="muted" id="tripResumeMissing" style="font-size:13px; margin:0;" hidden>
+          Ce navigateur ne garde plus ton voyage du jour.
+        </p>
+      </div>
     </div>
 
     <div class="unlock-or"><span class="unlock-or__line"></span><span class="unlock-or__label">ou</span><span class="unlock-or__line"></span></div>
@@ -56,4 +67,9 @@
   </p>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/trip_resume.js') }}"></script>
+<script src="{{ url_for('static', filename='js/free_limit.js') }}"></script>
 {% endblock %}
