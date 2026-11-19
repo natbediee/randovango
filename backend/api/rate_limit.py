@@ -9,11 +9,15 @@ répond 429 (« trop de demandes ») au-delà du plafond, sans exécuter la rout
 Les plafonds sont calculés sur un séjour de 7 jours, la plus longue durée proposée : un vrai
 voyageur ne les atteint pas. Les compteurs sont en mémoire, remis à zéro au redémarrage de l'API,
 ce qui suffit pour un seul serveur.
+
+La connexion a aussi son plafond (issue #264) : il compte les essais manqués, pas les appels.
+La liste de tous les plafonds est dans docs/plafonds.md.
 """
 import os
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+from limits import parse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
@@ -37,6 +41,16 @@ GUEST_TOKEN_LIMIT = "10/hour"
 CREATE_PLAN_MESSAGE = "Tu as déjà composé ton voyage gratuit aujourd'hui. Reviens demain pour en composer un autre."
 DAY_CHOICE_MESSAGE = "Trop de changements en peu de temps : ton choix n'a pas été enregistré. Réessaie dans une heure au plus."
 GUEST_TOKEN_MESSAGE = "Trop de nouveaux visiteurs depuis ta connexion internet. Réessaie dans une heure au plus."
+
+# Essais de connexion manqués (issue #264, OWASP API2) : sans plafond, un script pourrait essayer des
+# mots de passe sans fin, sur les comptes admin compris. Seuls les échecs comptent, sur deux compteurs :
+# - par nom de compte : une vraie personne se trompe 2 ou 3 fois ; au-delà de 5, c'est un script.
+#   Le blocage ne dure que 15 minutes, pour qu'un compte bloqué exprès par un autre ne le reste pas longtemps ;
+# - par adresse IP : arrête un script qui essaie beaucoup de noms de compte depuis la même machine,
+#   tout en laissant quelques contributeurs se tromper derrière un même wifi de camping.
+LOGIN_FAILURES_PER_ACCOUNT = parse("5/15 minutes")
+LOGIN_FAILURES_PER_ADDRESS = parse("20/15 minutes")
+LOGIN_FAILURES_MESSAGE = "Trop d'essais de connexion manqués. Réessaie dans 15 minutes au plus."
 
 
 def client_ip(request: Request) -> str:
@@ -72,6 +86,37 @@ def rate_limit_enabled() -> bool:
 
 
 limiter = Limiter(key_func=traveller_key, enabled=rate_limit_enabled())
+
+
+def login_counters(ip: str, username: str) -> list:
+    """
+    Les deux compteurs d'échecs d'un essai de connexion : (plafond, clé) pour l'adresse et pour le compte.
+    Le nom est compté en minuscules : sinon, taper « Admin » au lieu de « admin » repartirait de zéro.
+    """
+    return [
+        (LOGIN_FAILURES_PER_ADDRESS, f"login-ip:{ip}"),
+        (LOGIN_FAILURES_PER_ACCOUNT, f"login-user:{username.strip().lower()}"),
+    ]
+
+
+def login_blocked(ip: str, username: str) -> bool:
+    """
+    L'adresse ou le compte a-t-il déjà atteint son plafond d'échecs ? Si oui, la connexion est refusée
+    avant même de regarder le mot de passe. Les compteurs sont ceux de slowapi (même stockage, remis à zéro
+    ensemble) ; un décorateur @limiter.limit ne convient pas ici, car il compterait aussi les connexions
+    réussies et ne sait pas lire le nom de compte, qui est dans le corps de la requête.
+    """
+    if not limiter.enabled:
+        return False
+    return any(not limiter.limiter.test(limit, key) for limit, key in login_counters(ip, username))
+
+
+def count_login_failure(ip: str, username: str) -> None:
+    """Compte un essai manqué (mauvais mot de passe, compte inconnu) pour l'adresse et pour le compte."""
+    if not limiter.enabled:
+        return
+    for limit, key in login_counters(ip, username):
+        limiter.limiter.hit(limit, key)
 
 
 def too_many_requests(request: Request, exc: RateLimitExceeded) -> JSONResponse:

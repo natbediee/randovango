@@ -47,7 +47,9 @@
           window.RVG.storeSession(data.user, data.expires_at);
           window.location.href = window.APP_URLS.contributor;
         } else {
-          errorBox.textContent = data.message || 'Identifiant ou mot de passe incorrect.';
+          // 401 : la raison est dans message. 429 (trop d'essais manqués, issue #264) : elle est dans detail,
+          // comme pour tous les plafonds ; sans cela, la page dirait « mot de passe incorrect » à tort.
+          errorBox.textContent = data.message || data.detail || 'Identifiant ou mot de passe incorrect.';
           errorBox.style.display = 'block';
           submit.disabled = false;
           submit.innerHTML = original;
