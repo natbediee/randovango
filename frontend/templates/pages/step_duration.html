@@ -39,6 +39,22 @@
     </ol>
   </section>
 
+  {# Voyage en cours (issue #262) : caché par défaut, step_duration.js l'affiche quand le navigateur
+     garde un voyage que l'API rend encore au voyageur. Tant qu'il n'a pas choisi, les durées sont
+     grisées : un clic sur une durée ne doit pas effacer son voyage par accident. #}
+  <div class="card card--selected trip-resume" id="tripResume" hidden>
+    <span class="eyebrow">Voyage en cours</span>
+    <div class="card__title">Ton voyage est en cours</div>
+    <p class="trip-resume__summary" id="tripResumeSummary"></p>
+    <div class="trip-resume__actions">
+      <button type="button" class="btn btn--primary" id="tripResumeButton">
+        Reprendre mon voyage <i class="fas fa-arrow-right"></i>
+      </button>
+      <button type="button" class="btn btn--outline" id="tripNewButton">Commencer un nouveau voyage</button>
+    </div>
+    <p class="muted trip-resume__note">Rappel : un seul voyage gratuit par jour.</p>
+  </div>
+
   {# Deux chemins côte à côte : composer soi-même (durée) ou laisser Vany composer #}
   <div class="home-paths">
 
@@ -103,5 +119,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/trip_resume.js') }}"></script>
 <script src="{{ url_for('static', filename='js/step_duration.js') }}"></script>
 {% endblock %}
