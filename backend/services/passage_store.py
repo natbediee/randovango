@@ -126,3 +126,15 @@ def oldest_queued() -> str | None:
                  (QUEUED,))
     return rows[0]["passage_id"] if rows else None
 
+
+
+def open_parts(chain: str, city_ids: list) -> set:
+    """
+    Les parties déjà demandées pour ces villes (les villes d'une même commune) dans un passage en file, en attente ou
+    en cours : l'ETL ne les redemande pas, une seconde rando dans la même commune ne fait pas payer deux fois.
+    """
+    placeholders = ",".join(["%s"] * len(city_ids))
+    rows = _read(f"""SELECT DISTINCT pp.part FROM passages p JOIN passage_parts pp ON pp.passage_id = p.passage_id
+                     WHERE p.chain = %s AND p.city_id IN ({placeholders})
+                       AND p.status IN ('en_file', 'en_attente', 'en_cours')""", (chain, *city_ids))
+    return {row["part"] for row in rows}

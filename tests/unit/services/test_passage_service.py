@@ -58,6 +58,11 @@ class _Store:
         # Les passages sont gardés dans l'ordre où ils ont été demandés (un dictionnaire garde l'ordre d'écriture).
         return next((key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED), None)
 
+    def open_parts(self, chain, city_ids):
+        return {row["part"] for key, passage in self.passages.items()
+                if passage["chain"] == chain and passage["city_id"] in city_ids
+                and passage["status"] in ("en_file", "en_attente", "en_cours") for row in self.parts[key]}
+
     def recent_ids(self, limit):
         return [key for key, row in self.passages.items() if row["status"] in ("fini", "echec")][:limit]
 
@@ -67,7 +72,7 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by", "oldest_queued"):
+                 "passage_ids", "recent_ids", "resumed_by", "oldest_queued", "open_parts"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
     monkeypatch.setattr(passage_service.service_store, "load_city", lambda name: CITY)
@@ -425,3 +430,86 @@ def test_an_error_while_reading_the_queue_does_not_stop_the_worker(store, chain,
     with pytest.raises(SystemExit):
         passage_queue.work_forever()
     assert turns == [1]
+
+
+# --- La demande de l'ETL d'une nouvelle ville (issue #211) ---
+
+# Le Conquet et Lochrist, un lieu-dit du Conquet (même code INSEE), comme dans cities.
+CONQUET = {"id": 30, "name": "Le Conquet", "commune": "Le Conquet", "insee": "29040"}
+LOCHRIST = {"id": 31, "name": "Lochrist", "commune": "Le Conquet", "insee": "29040"}
+
+
+@pytest.fixture
+def etl(store, chain, monkeypatch):
+    """
+    Les villes du Conquet, les fichiers des passages déjà allés au bout (searched : {catégorie : noms des fichiers})
+    et le réglage de la mise à jour automatique (activée), tels que l'ETL les trouve.
+    """
+    state = {"searched": {}, "auto": True}
+    cities = [CITY, CONQUET, LOCHRIST]
+    monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: cities)
+    # load_city rend la ville qui porte le nom de la commune : Lochrist se cherche depuis Le Conquet.
+    monkeypatch.setattr(passage_service.service_store, "load_city",
+                        lambda name: CONQUET if name in ("Lochrist", "Le Conquet") else CITY)
+    monkeypatch.setattr(passage_service, "latest_traces",
+                        lambda category: {name: {} for name in state["searched"].get(category.key, ())})
+    monkeypatch.setattr(passage_service.budget_service, "load_settings",
+                        lambda: {"services_after_etl": state["auto"]})
+    return state
+
+
+def test_the_etl_city_name_becomes_its_official_commune(store, etl):
+    """Une rando partie de Lochrist fait chercher la commune officielle, Le Conquet, avec l'origine « etl »."""
+    passage_id = passage_service.request_etl_passage("Lochrist")
+    passage = store.passages[passage_id]
+    assert (passage["city_id"], passage["origin"], passage["status"]) == (CONQUET["id"], "etl", "en_file")
+    assert [row["part"] for row in store.parts[passage_id]] == ["restaurants", "commerces", "supermarches", "laveries"]
+
+
+def test_only_the_categories_never_searched_are_requested(store, etl):
+    """Guidel, dont restaurants, supermarchés et laveries sont déjà cherchés : l'ETL ne demande que les commerces."""
+    etl["searched"] = {"restaurants": ["Guidel"], "supermarches": ["Guidel"], "laveries": ["Guidel"]}
+    passage_id = passage_service.request_etl_passage("Guidel")
+    assert [row["part"] for row in store.parts[passage_id]] == ["commerces"]
+
+
+def test_an_old_file_named_after_the_place_counts_for_its_commune(store, etl):
+    """Un fichier d'avant le 8 novembre, au nom de Lochrist, compte pour Le Conquet : rien n'est cherché deux fois."""
+    etl["searched"] = {key: ["Lochrist"] for key in passage_service.SERVICE_LABELS}
+    assert passage_service.request_etl_passage("Le Conquet") is None
+    assert store.passages == {}
+
+
+def test_a_second_hike_in_the_same_commune_asks_nothing_more(store, etl):
+    """Deux randos au Conquet coup sur coup : la seconde ne redemande pas les catégories déjà en file."""
+    first = passage_service.request_etl_passage("Le Conquet")
+    assert passage_service.request_etl_passage("Lochrist") is None
+    assert list(store.passages) == [first]
+
+
+def test_with_the_automatic_update_off_the_city_waits_for_the_admin(store, etl):
+    """Mise à jour automatique coupée : la ville est gardée « en attente », elle n'est pas perdue et la file ne la lance pas."""
+    etl["auto"] = False
+    passage_id = passage_service.request_etl_passage("Guidel")
+    assert store.passages[passage_id]["status"] == "en_attente"
+    assert passage_queue.run_next() is False
+
+
+def test_the_etl_wakes_the_queue_after_its_request(monkeypatch):
+    """À la fin de l'ETL, la demande de passage est faite, puis la file est réveillée pour la lancer sans attendre."""
+    from etl import etl_pipeline
+    calls = []
+    monkeypatch.setattr(passage_service, "request_etl_passage", lambda city: calls.append(("demande", city)) or "abc")
+    monkeypatch.setattr(passage_queue, "wake", lambda: calls.append(("réveil",)))
+    etl_pipeline.launch_services("Guidel")
+    assert calls == [("demande", "Guidel"), ("réveil",)]
+
+
+def test_a_failed_request_does_not_stop_the_etl(monkeypatch):
+    """Une base injoignable au moment de la demande est notée dans le journal ; l'ETL de la ville finit quand même."""
+    from etl import etl_pipeline
+
+    def broken(city):
+        raise ConnectionError("base injoignable")
+    monkeypatch.setattr(passage_service, "request_etl_passage", broken)
+    etl_pipeline.launch_services("Guidel")

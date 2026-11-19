@@ -31,9 +31,10 @@ from typing import Callable
 from agents import find_services
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMRefused, LLMTimeout, mesure_passage, new_passage_id
-from agents.service_chain import RegisterUnavailable, interrupted_trace
+from agents.service_chain import RegisterUnavailable, interrupted_trace, latest_traces
 from services import budget_service, passage_store, service_store
-from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO
+from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO, WAITING
+from utils.geo_utils import city_commune
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("passages")
@@ -234,6 +235,42 @@ def run_passage(passage_id: str) -> None:
         if part:
             passage_store.set_part(passage_id, part, FAILED, error=reason)
         passage_store.set_passage_status(passage_id, FAILED, reason)
+
+
+def searched_service_categories(cities: list) -> set:
+    """
+    Les catégories de services déjà cherchées jusqu'au bout pour une commune (ses villes : `cities`), d'après les
+    fichiers des passages des agents. Les fichiers, et pas la table passages : les communes cherchées en ligne de
+    commande, avant la supervision, n'ont aucune ligne dans passages. Un fichier porte le nom de la commune, ou celui de
+    la ville pour un passage d'avant le 8 novembre 2026 (Morgat pour Crozon) : les deux sont regardés.
+    """
+    names = {city_commune(city) for city in cities} | {city["name"] for city in cities}
+    return {key for key, category in SERVICE_CATEGORIES.items() if names & set(latest_traces(category))}
+
+
+def request_etl_passage(city_name: str) -> str | None:
+    """
+    À la fin de l'ETL d'une ville : demande le passage de la chaîne des services pour sa commune, et rend son
+    identifiant ; None s'il n'y a rien à chercher.
+    1. Le nom de l'ETL est converti en commune officielle (code INSEE) : une rando partie de Lochrist fait chercher
+       Le Conquet, depuis la ville qui porte le nom de la commune.
+    2. Seules les catégories jamais cherchées pour cette commune, et pas déjà demandées, sont demandées : une seconde
+       rando dans une commune déjà faite ne coûte rien.
+    3. Le passage entre dans la file ; si la mise à jour automatique est coupée, il attend l'admin (« en attente »).
+    """
+    city = service_store.load_city(city_name)
+    if city is None:
+        logger.warning(f"[passages] {city_name} : ville inconnue, aucun passage des services demandé")
+        return None
+    commune = [other for other in service_store.load_cities()
+               if service_store.commune_key(other) == service_store.commune_key(city)]
+    already = searched_service_categories(commune) | passage_store.open_parts("services", [c["id"] for c in commune])
+    left = [key for key in SERVICE_LABELS if key not in already]
+    if not left:
+        logger.info(f"[passages] {city_name} : {city_commune(city)} déjà cherchée, aucun passage des services demandé")
+        return None
+    status = QUEUED if budget_service.load_settings()["services_after_etl"] else WAITING
+    return create_passage("services", city["id"], left, origin="etl", status=status)
 
 
 def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:

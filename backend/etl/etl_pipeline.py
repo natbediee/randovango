@@ -128,7 +128,27 @@ def scraping_background(city):
     except Exception as pepites_error:
         logger.warning(f"[ETL-SC] Pépites de Vany ignorées pour {city} : {pepites_error}")
 
+    # 5. Les services cherchés par les agents (restaurants, commerces, supermarchés, laveries, issue #211). En tout
+    # dernier : une grande ville est découpée en zones d'après ses spots, chargés plus haut. Le passage entre dans la
+    # file des passages, qui le lance quand le verrou et le budget du jour le permettent : l'ETL n'attend pas sa fin.
+    launch_services(city)
+
     logger.info(f"[ETL-SC] Scraping terminé pour la ville: {city}")
+
+
+def launch_services(city):
+    """
+    Demande le passage de la chaîne des services pour la commune de la ville, puis réveille la file des passages.
+    Non bloquant, comme les autres étapes : une ville sans passage reste affichable, et l'admin peut le lancer.
+    """
+    try:
+        from services import passage_queue, passage_service
+        passage_id = passage_service.request_etl_passage(city)
+        if passage_id:
+            logger.info(f"[ETL-SC] Passage des services demandé pour {city} : {passage_id}")
+            passage_queue.wake()
+    except Exception as services_error:
+        logger.warning(f"[ETL-SC] Passage des services non demandé pour {city} : {services_error}")
 
 def load_one_gpx(gpx_file, verifie) -> dict:
     """
