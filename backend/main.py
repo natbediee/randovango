@@ -119,3 +119,15 @@ if os.getenv("ENV", "dev") == "dev":
     init_mysql_randovango()
 else:
     logger.info("[INIT] ENV != dev : auto-init des bases désactivée.")
+
+
+@app.on_event("startup")
+def start_passage_queue():
+    """
+    Au démarrage du serveur, lance le fil de la file des passages (services/passage_queue.py, issue #211) : les villes
+    ajoutées par l'ETL y attendent leur tour, et celles restées en file avant un redémarrage repartent.
+    Pas pendant les tests (ENV=test) : aucun fil ne doit y lire la base.
+    """
+    if os.getenv("ENV", "dev") != "test":
+        from services import passage_queue
+        passage_queue.start_worker()

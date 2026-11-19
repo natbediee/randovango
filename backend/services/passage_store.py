@@ -11,7 +11,8 @@ from datetime import datetime
 from utils.db_utils import MySQLUtils
 
 # Les états d'un passage, et ceux de chacune de ses parties.
-QUEUED = "en_file"          # demandé, pas encore commencé
+QUEUED = "en_file"          # demandé, pas encore commencé : il partira dès que le verrou et le budget le permettent
+WAITING = "en_attente"      # demandé par l'ETL alors que la mise à jour automatique est coupée : attend l'admin (#211)
 RUNNING = "en_cours"
 DONE = "fini"
 FAILED = "echec"
@@ -37,18 +38,26 @@ def _read(sql: str, params: tuple) -> list:
 
 
 def insert_passage(passage_id: str, chain: str, city_id: int, origin: str, parts: list,
-                   resumed_from: str | None = None) -> None:
-    """Écrit un passage demandé (en file) et ses parties, toutes à faire, dans l'ordre où elles passeront."""
+                   resumed_from: str | None = None, status: str = QUEUED) -> None:
+    """
+    Écrit un passage demandé et ses parties, toutes à faire, dans l'ordre où elles passeront. Le passage est en file,
+    ou en attente de l'admin quand la mise à jour automatique est coupée.
+    """
     _write("""INSERT INTO passages (passage_id, chain, city_id, origin, status, requested_at, resumed_from)
               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-           [(passage_id, chain, city_id, origin, QUEUED, datetime.now(), resumed_from)])
+           [(passage_id, chain, city_id, origin, status, datetime.now(), resumed_from)])
     _write("INSERT INTO passage_parts (passage_id, part, position, status) VALUES (%s, %s, %s, %s)",
            [(passage_id, part, position, TO_DO) for position, part in enumerate(parts, start=1)])
 
 
 def set_passage_status(passage_id: str, status: str, error: str | None = None) -> None:
-    """Change l'état d'un passage : son début est noté quand il passe en cours, sa fin quand il finit ou échoue."""
-    if status == RUNNING:
+    """
+    Change l'état d'un passage : son début est noté quand il passe en cours, sa fin quand il finit ou échoue. Un passage
+    remis en file (relancé par l'admin) garde sa date de demande : il reprend sa place dans la file.
+    """
+    if status == QUEUED:
+        _write("UPDATE passages SET status = %s WHERE passage_id = %s", [(status, passage_id)])
+    elif status == RUNNING:
         _write("UPDATE passages SET status = %s, started_at = %s WHERE passage_id = %s",
                [(status, datetime.now(), passage_id)])
     else:
@@ -109,3 +118,11 @@ def resumed_by(passage_id: str) -> str | None:
     """Le passage qui reprend celui-ci (sa colonne resumed_from le désigne), ou None s'il n'a pas été repris."""
     rows = _read("SELECT passage_id FROM passages WHERE resumed_from = %s", (passage_id,))
     return rows[0]["passage_id"] if rows else None
+
+
+def oldest_queued() -> str | None:
+    """Le passage en file depuis le plus longtemps : c'est lui qui part en premier. None si la file est vide."""
+    rows = _read("SELECT passage_id FROM passages WHERE status = %s ORDER BY requested_at, passage_id LIMIT 1",
+                 (QUEUED,))
+    return rows[0]["passage_id"] if rows else None
+

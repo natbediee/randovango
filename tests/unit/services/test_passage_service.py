@@ -10,7 +10,7 @@ import pytest
 
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMTimeout, LLMUnavailable, passage_courant
-from services import passage_service, passage_store
+from services import passage_queue, passage_service, passage_store
 from services.passage_service import PassageConflict
 
 CITY = {"id": 12, "name": "Guidel", "commune": "Guidel", "insee": "56078"}
@@ -21,9 +21,9 @@ class _Store:
     def __init__(self):
         self.passages, self.parts, self.calls = {}, {}, {}
 
-    def insert_passage(self, passage_id, chain, city_id, origin, parts, resumed_from=None):
+    def insert_passage(self, passage_id, chain, city_id, origin, parts, resumed_from=None, status=passage_store.QUEUED):
         self.passages[passage_id] = {"passage_id": passage_id, "chain": chain, "city_id": city_id, "origin": origin,
-                                     "status": passage_store.QUEUED, "requested_at": datetime(2026, 11, 19, 10),
+                                     "status": status, "requested_at": datetime(2026, 11, 19, 10),
                                      "started_at": None, "finished_at": None, "error": None,
                                      "resumed_from": resumed_from, "city_name": CITY["name"], "city_commune": CITY["commune"]}
         self.parts[passage_id] = [{"part": part, "position": n, "status": passage_store.TO_DO, "step": None,
@@ -54,6 +54,10 @@ class _Store:
     def resumed_by(self, passage_id):
         return next((key for key, row in self.passages.items() if row["resumed_from"] == passage_id), None)
 
+    def oldest_queued(self):
+        # Les passages sont gardés dans l'ordre où ils ont été demandés (un dictionnaire garde l'ordre d'écriture).
+        return next((key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED), None)
+
     def recent_ids(self, limit):
         return [key for key, row in self.passages.items() if row["status"] in ("fini", "echec")][:limit]
 
@@ -63,7 +67,7 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by"):
+                 "passage_ids", "recent_ids", "resumed_by", "oldest_queued"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
     monkeypatch.setattr(passage_service.service_store, "load_city", lambda name: CITY)
@@ -175,13 +179,35 @@ def test_a_quota_reached_keeps_the_finished_categories_and_stops(store, chain):
     assert store.parts[passage_id][1]["error"] == reason
 
 
-def test_a_passage_refused_by_the_lock_fails_with_a_clear_reason(store, chain):
-    """Un passage qui trouve le verrou pris au moment de partir échoue, avec la raison, sans rien chercher."""
+def test_a_passage_that_finds_the_lock_taken_keeps_its_place_in_the_queue(store, chain):
+    """Un passage qui trouve le verrou pris au moment de partir reste en file, sans échec ni recherche : la file le relancera (#211)."""
     passage_id = passage_service.create_passage("services", 12)
     chain["busy"] = True
     passage_service.run_passage(passage_id)
-    assert chain["ran"] == [] and store.passages[passage_id]["status"] == "echec"
-    assert store.passages[passage_id]["error"] == "un autre passage tournait déjà : relancer après sa fin"
+    assert chain["ran"] == [] and store.passages[passage_id]["status"] == "en_file"
+    assert store.passages[passage_id]["error"] is None
+
+
+def test_a_passage_already_run_is_not_run_twice(store, chain):
+    """Si la file et la tâche de fond de la supervision visent le même passage, le second le trouve fini et ne le refait pas."""
+    passage_id = passage_service.create_passage("services", 12)
+    passage_service.run_passage(passage_id)
+    passage_service.run_passage(passage_id)
+    assert len(chain["ran"]) == 4 and store.passages[passage_id]["status"] == "fini"
+
+
+def test_an_etl_request_is_queued_even_while_a_passage_runs_or_the_budget_is_reached(store, chain):
+    """Une ville de l'ETL n'est jamais refusée : son passage prend sa place dans la file, verrou pris et budget atteint."""
+    chain["busy"] = True
+    store.budget_reason = "plafond du jour atteint"
+    passage_id = passage_service.create_passage("services", 12, origin="etl")
+    assert store.passages[passage_id]["status"] == "en_file" and store.passages[passage_id]["origin"] == "etl"
+
+
+def test_an_etl_request_waits_for_the_admin_when_the_automatic_update_is_off(store, chain):
+    """Mise à jour automatique coupée : le passage de l'ETL est écrit « en attente », pour que l'admin le lance."""
+    passage_id = passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
+    assert store.passages[passage_id]["status"] == "en_attente"
 
 
 # --- Reprendre ---
@@ -344,3 +370,58 @@ def test_the_state_of_a_category_carries_its_summary_sentence(store, chain):
     store.set_part(passage_id, "supermarches", "fini", summary={"fiches": 3})
     finished, waiting = passage_service.read_passage(passage_id)["categories"]
     assert finished["bilan_texte"] == "3 services enregistrés." and waiting["bilan_texte"] is None
+
+
+# --- La file (services/passage_queue.py, issue #211) ---
+
+def test_two_cities_added_one_after_the_other_pass_in_order(store, chain):
+    """Deux villes ajoutées coup sur coup par l'ETL passent l'une après l'autre, dans l'ordre d'arrivée : la seconde n'est pas perdue."""
+    first = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    second = passage_service.create_passage("services", 12, ["laveries"], origin="etl")
+    assert passage_queue.run_next() is True
+    assert store.passages[first]["status"] == "fini" and store.passages[second]["status"] == "en_file"
+    assert passage_queue.run_next() is True
+    assert store.passages[second]["status"] == "fini"
+    assert [ran[0] for ran in chain["ran"]] == ["restaurants", "laveries"]
+    assert passage_queue.run_next() is False
+
+
+def test_the_queue_waits_while_a_passage_runs(store, chain):
+    """Tant qu'un passage tient le verrou, la ville en file attend, avec la raison, et rien n'est cherché."""
+    queued = passage_service.create_passage("services", 12, origin="etl")
+    chain["busy"] = True
+    assert passage_queue.why_waiting(queued) == "attend la fin du passage en cours"
+    assert passage_queue.run_next() is False and chain["ran"] == []
+
+
+def test_the_queue_waits_for_the_budget_then_goes_by_itself(store, chain):
+    """Budget atteint : la ville reste en file avec la raison ; dès que le budget le permet, elle part seule."""
+    queued = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    assert passage_queue.run_next() is False
+    assert passage_queue.why_waiting(queued).startswith("plafond du jour atteint")
+    store.budget_reason = None          # le lendemain, ou le plafond relevé par l'admin
+    assert passage_queue.run_next() is True and store.passages[queued]["status"] == "fini"
+
+
+def test_a_passage_waiting_for_the_admin_is_not_taken_by_the_queue(store, chain):
+    """Une ville en attente (mise à jour automatique coupée) n'est pas lancée par la file : elle attend l'admin."""
+    passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
+    assert passage_queue.run_next() is False and chain["ran"] == []
+
+
+def test_an_error_while_reading_the_queue_does_not_stop_the_worker(store, chain, monkeypatch):
+    """Une base injoignable un instant est notée dans le journal ; le fil de la file attend le tour suivant au lieu de s'arrêter."""
+    turns = []
+
+    def broken():
+        turns.append(1)
+        raise ConnectionError("base injoignable")
+
+    def stop_after_one_turn(seconds):
+        raise SystemExit         # arrête la boucle sans fin du fil, pour le test
+    monkeypatch.setattr(passage_queue, "run_next", broken)
+    monkeypatch.setattr(passage_queue._wake, "wait", stop_after_one_turn)
+    with pytest.raises(SystemExit):
+        passage_queue.work_forever()
+    assert turns == [1]

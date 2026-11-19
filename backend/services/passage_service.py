@@ -167,11 +167,15 @@ def check_budget(chain: Chain) -> None:
 
 
 def create_passage(chain_key: str, city_id: int, parts: list | None = None, origin: str = "supervision",
-                   resumed_from: str | None = None) -> str:
+                   resumed_from: str | None = None, status: str = QUEUED) -> str:
     """
     Écrit un passage demandé, en file, et renvoie son identifiant. Sans catégories, toutes celles de la chaîne.
-    Lève ValueError pour une chaîne, une ville, une catégorie ou une origine inconnue, et PassageConflict si un
-    passage de la chaîne tourne déjà ou si le budget des agents est atteint. Le faire tourner : run_passage.
+    Lève ValueError pour une chaîne, une ville, une catégorie ou une origine inconnue.
+    Lancé depuis la supervision, il est refusé (PassageConflict) si un passage de la chaîne tourne déjà ou si le budget
+    des agents est atteint : l'admin le sait tout de suite. Demandé par l'ETL, il n'est jamais refusé : il prend sa
+    place dans la file, et la file le lance quand le verrou et le budget le permettent (passage_queue.py, #211).
+    `status` : WAITING pour un passage de l'ETL quand la mise à jour automatique est coupée ; il attend l'admin.
+    Le faire tourner : run_passage.
     """
     chain = CHAINS.get(chain_key)
     if chain is None:
@@ -183,21 +187,23 @@ def create_passage(chain_key: str, city_id: int, parts: list | None = None, orig
         raise ValueError(f"Origine inconnue : {origin} (attendu : {', '.join(ORIGINS)})")
     if find_city(city_id) is None:
         raise ValueError(f"Ville inconnue : {city_id}")
-    check_free(chain)
-    check_budget(chain)
+    if origin == "supervision":
+        check_free(chain)
+        check_budget(chain)
     # Les catégories passent toujours dans l'ordre de la chaîne : la suivante trouve en base ce que la précédente a écrit.
     chosen = [part for part in chain.parts if not parts or part in parts]
     passage_id = new_passage_id()
-    passage_store.insert_passage(passage_id, chain_key, city_id, origin, chosen, resumed_from)
-    logger.info(f"[passages] {passage_id} demandé : {chain_key}, ville {city_id}, {chosen}, origine {origin}")
+    passage_store.insert_passage(passage_id, chain_key, city_id, origin, chosen, resumed_from, status)
+    logger.info(f"[passages] {passage_id} demandé ({status}) : {chain_key}, ville {city_id}, {chosen}, origine {origin}")
     return passage_id
 
 
 def run_passage(passage_id: str) -> None:
     """
-    Fait tourner un passage demandé, catégorie après catégorie, sous le verrou de sa chaîne. Ne lève jamais : c'est une
+    Fait tourner un passage en file, catégorie après catégorie, sous le verrou de sa chaîne. Ne lève jamais : c'est une
     tâche de fond, personne n'attend sa réponse. Un échec est écrit dans la trace, avec sa raison ; les catégories
     finies avant lui restent enregistrées, et celles d'après restent « à faire », pour la reprise.
+    Si le verrou est pris, le passage reste en file, sans échec : la file le relancera après le passage en cours (#211).
     """
     passage = passage_store.load_passage(passage_id)
     chain = CHAINS[passage["chain"]]
@@ -207,6 +213,10 @@ def run_passage(passage_id: str) -> None:
         # La chaîne des services cherche une commune depuis une seule de ses villes : Morgat se cherche comme Crozon.
         city = service_store.load_city(passage["city_name"])
         with chain.lock(), mesure_passage(passage_id):
+            # Relu sous le verrou : la file et la tâche de fond de la supervision peuvent viser le même passage ;
+            # le second à prendre le verrou le trouve déjà fini et ne le refait pas.
+            if passage_store.load_passage(passage_id)["status"] != QUEUED:
+                return
             passage_store.set_passage_status(passage_id, RUNNING)
             for part in [row["part"] for row in passage_store.load_parts(passage_id) if row["status"] == TO_DO]:
                 passage_store.set_part(passage_id, part, RUNNING)
@@ -215,6 +225,9 @@ def run_passage(passage_id: str) -> None:
             part = None
         passage_store.set_passage_status(passage_id, DONE)
         logger.info(f"[passages] {passage_id} fini")
+    except PassageRunning:
+        # Le verrou était pris avant que le passage commence : il garde sa place dans la file.
+        logger.info(f"[passages] {passage_id} attend : un autre passage tient le verrou")
     except Exception as error:
         reason = failure_reason(error)
         logger.exception(f"[passages] {passage_id} en échec ({part or 'avant la première catégorie'}) : {reason}")
