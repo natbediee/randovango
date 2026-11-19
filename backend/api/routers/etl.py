@@ -1,10 +1,10 @@
 from utils.db_utils import MySQLUtils
 from utils.mongo_utils import MongoUtils
 from fastapi import APIRouter, UploadFile, File, Depends
-from pathlib import Path
 from api.dependencies import get_current_user, require_admin
 from api.models.etl import GPXUploadResponse, GPXDeleteResponse
 from etl.etl_pipeline import main as run_etl_pipeline
+from etl.extract.gpx import GPX_DIR
 from services.authentification import get_roles_for_user, insert_auth_log
 
 router = APIRouter()
@@ -17,6 +17,10 @@ async def upload_gpx(
     file: UploadFile = File(..., description="Fichier GPX"),
     user=Depends(get_current_user)
 ):
+    """
+    Reçoit le GPX d'une rando depuis la page d'ajout, le charge en base et dit ce qui s'est vraiment passé :
+    la ville du tracé chargé, ou le motif du refus (issue #266).
+    """
     # Récupérer le rôle de l'utilisateur
     user_id = user["user_id"]
     roles = get_roles_for_user(user_id)
@@ -25,33 +29,17 @@ async def upload_gpx(
     ext = file.filename.split(".")[-1].lower()
     if ext not in ALLOWED_EXT:
         return GPXUploadResponse(success=False, message=f"Extension non autorisée: {ext}")
-    # Sauvegarde du fichier dans le dossier data (volume Docker)
-    DATA = Path("/usr/src/data")
-    DATA.mkdir(parents=True, exist_ok=True)
-    dest_path = DATA / file.filename
+    # Sauvegarde du fichier dans le dossier d'attente (volume Docker), celui que le pipeline lit.
+    GPX_DIR.mkdir(parents=True, exist_ok=True)
+    dest_path = GPX_DIR / file.filename
     with open(dest_path, "wb") as f:
         f.write(await file.read())
-    # Lancer le pipeline ETL (traitement synchrone)
+    # Lancer le pipeline ETL (traitement synchrone), puis retrouver le résultat du fichier envoyé.
     try:
-        city = run_etl_pipeline(user_role=user_role)
-        # Si city est une liste, on ne retourne que la première (pour compatibilité front)
-        if isinstance(city, list):
-            city = city[0] if city else None
-        if city:
-            msg = f"Nouveau tracé sur {city} (fichier {file.filename})."
-        else:
-            msg = f"Fichier {file.filename} importé."
-        # Audit log - succès
-        insert_auth_log(
-            user_id=user_id,
-            username=user["username"],
-            action="upload_gpx",
-            route="/api/etl/upload_gpx",
-            status_code=200,
-            filename=file.filename
-        )
-        return GPXUploadResponse(success=True, message=msg, city=city, role=user_role)
+        outcome = find_outcome(run_etl_pipeline(user_role=user_role), file.filename)
     except Exception as e:
+        # Le fichier non chargé ne reste pas dans le dossier d'attente, sinon il repasserait au prochain envoi.
+        dest_path.unlink(missing_ok=True)
         # Audit log - échec
         insert_auth_log(
             user_id=user_id,
@@ -62,6 +50,44 @@ async def upload_gpx(
             filename=file.filename
         )
         return GPXUploadResponse(success=False, message=f"Erreur ETL: {e}", role=user_role)
+
+    if outcome["reason"]:
+        # Refus : la page d'ajout montre le motif, pour que l'admin ou le contributeur sache quoi corriger (issue #266).
+        insert_auth_log(
+            user_id=user_id,
+            username=user["username"],
+            action="upload_gpx_refused",
+            route="/api/etl/upload_gpx",
+            status_code=200,
+            filename=file.filename
+        )
+        return GPXUploadResponse(success=False, message=f"Fichier {file.filename} non chargé : {outcome['reason']}.",
+                                 role=user_role)
+
+    # Audit log - succès
+    insert_auth_log(
+        user_id=user_id,
+        username=user["username"],
+        action="upload_gpx",
+        route="/api/etl/upload_gpx",
+        status_code=200,
+        filename=file.filename
+    )
+    city = outcome["city"]
+    return GPXUploadResponse(success=True, message=f"Nouveau tracé sur {city} (fichier {file.filename}).",
+                             city=city, role=user_role)
+
+
+def find_outcome(outcomes, filename) -> dict:
+    """
+    Le résultat du fichier envoyé parmi ceux du dossier d'attente. S'il manque (fichier disparu entre l'écriture
+    et la lecture), c'est un refus : jamais un succès annoncé pour un tracé que personne n'a chargé (issue #266).
+    """
+    for outcome in outcomes:
+        if outcome["filename"] == filename:
+            return outcome
+    return {"filename": filename, "city": None, "reason": "le fichier n'a pas été traité"}
+
 
 @router.delete("/delete_gpx/{filename}", summary="Delete a GPX file (Admin only)", response_model=GPXDeleteResponse)
 async def delete_gpx(

@@ -14,7 +14,7 @@ from utils.logger_util import LoggerUtil
 from etl.load.load_gpx import load_gpx_data
 from etl.extract.api_meteo import extract_weather_data
 from etl.load.load_meteo import load_weather_data
-from etl.extract.gpx import extract_all_gpx_files
+from etl.extract.gpx import extract_all_gpx_files, remove_file, ALREADY_LOADED, LOAD_FAILED
 
 
 logger = LoggerUtil.get_logger("etl_pipeline")
@@ -130,43 +130,65 @@ def scraping_background(city):
 
     logger.info(f"[ETL-SC] Scraping terminé pour la ville: {city}")
 
-def main(user_role="user"):
+def load_one_gpx(gpx_file, verifie) -> dict:
+    """
+    Charge en base un fichier GPX déjà lu (extract_all_gpx_files) et rend son résultat :
+    {"filename", "city", "reason"}, avec la ville si la rando est chargée, sinon le motif du refus (issue #266).
+    """
+    outcome = {"filename": gpx_file["filename"], "city": None, "reason": gpx_file["reason"]}
+    if outcome["reason"]:
+        return outcome
+    try:
+        outcome["city"] = load_gpx_data(gpx_file["data"], gpx_file["gpx_path"], verifie=verifie)
+    except Exception as e:
+        # Une erreur de base ne doit ni laisser le fichier dans le dossier d'attente, ni bloquer les autres fichiers.
+        logger.error(f"[ETL] Erreur au chargement de {gpx_file['filename']} : {e}")
+        remove_file(gpx_file["gpx_path"])
+        outcome["reason"] = LOAD_FAILED
+        return outcome
+    if not outcome["city"]:
+        # load_gpx_data ne rend pas de ville quand le tracé était déjà dans MongoDB.
+        outcome["reason"] = ALREADY_LOADED
+    return outcome
 
-    # 1. Import GPX (Mongo + MySQL) et récupération de la ville pour chaque fichier
-    gpx_files = extract_all_gpx_files()
-    if not gpx_files:
-        logger.info("[ETL] Aucun fichier GPX à traiter. Arrêt du pipeline.")
-        return None
 
-    results = []
-    for data, gpx_path, fname in gpx_files:
-        verifie = 1 if user_role == "admin" else 0
-        city = load_gpx_data(data, gpx_path, verifie=verifie)
-        if not city:
-            logger.info(f"[ETL] Fichier {fname} ignoré (pas de ville détectée).")
-            continue
-        logger.info(f"[ETL] Ville extraite du GPX: {city}")
+def complete_city(city):
+    """Pour la ville d'une rando qui vient d'entrer : la météo tout de suite, puis le reste en arrière-plan."""
+    # 1. Extraction et chargement météo pour la ville (rapide)
+    try:
+        logger.info(f"[ETL] Extraction météo pour la ville: {city}")
+        weather_data = extract_weather_data(city)
+        if weather_data:
+            load_weather_data(weather_data, city)
+            logger.info(f"[ETL] Données météo chargées pour la ville: {city}")
+        else:
+            logger.warning(f"[ETL] Aucune donnée météo à charger pour la ville: {city}")
+    except Exception as e:
+        logger.error(f"[ETL] Erreur lors de l'extraction/chargement météo: {e}")
 
-        # 2. Extraction et chargement météo pour la ville (rapide)
-        try:
-            logger.info(f"[ETL] Extraction météo pour la ville: {city}")
-            weather_data = extract_weather_data(city)
-            if weather_data:
-                load_weather_data(weather_data, city)
-                logger.info(f"[ETL] Données météo chargées pour la ville: {city}")
-            else:
-                logger.warning(f"[ETL] Aucune donnée météo à charger pour la ville: {city}")
-        except Exception as e:
-            logger.error(f"[ETL] Erreur lors de l'extraction/chargement météo: {e}")
+    # 2. Lancer le scraping en arrière-plan (non bloquant)
+    logger.info(f"[ETL_SC] Lancement du scraping en arrière-plan pour la ville: {city}")
+    threading.Thread(target=scraping_background, args=(city,), daemon=True).start()
 
-        # 3. Lancer le scraping en arrière-plan (non bloquant)
-        logger.info(f"[ETL_SC] Lancement du scraping en arrière-plan pour la ville: {city}")
-        threading.Thread(target=scraping_background, args=(city,), daemon=True).start()
-        results.append(city)
 
-    # Retourner la liste des villes traitées
-    logger.info(f"[ETL] Pipeline principal terminé. Villes traitées: {results}")
-    return results
+def main(user_role="user") -> list:
+    """
+    Traite les fichiers GPX du dossier d'attente et rend, pour chacun, {"filename", "city", "reason"} :
+    la ville de la rando chargée, ou le motif du refus. La route upload_gpx y retrouve le fichier envoyé.
+    """
+    verifie = 1 if user_role == "admin" else 0
+    outcomes = []
+    for gpx_file in extract_all_gpx_files():
+        outcome = load_one_gpx(gpx_file, verifie)
+        if outcome["reason"]:
+            logger.info(f"[ETL] Fichier {outcome['filename']} non chargé : {outcome['reason']}")
+        else:
+            logger.info(f"[ETL] Ville extraite du GPX: {outcome['city']}")
+            complete_city(outcome["city"])
+        outcomes.append(outcome)
+
+    logger.info(f"[ETL] Pipeline principal terminé : {outcomes}")
+    return outcomes
 
 
 if __name__ == "__main__":
