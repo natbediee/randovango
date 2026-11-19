@@ -107,6 +107,37 @@ def single_passage():
         MySQLUtils.disconnect(connection)
 
 
+def lock_is_free() -> bool:
+    """
+    Le verrou est-il libre ? Demandé à MySQL depuis une autre connexion (IS_FREE_LOCK), sans le prendre : la supervision
+    s'en sert pour refuser un lancement tout de suite, avec un message, et pour reconnaître un passage resté « en cours »
+    alors que plus personne ne le fait tourner (un redémarrage du serveur pendant le passage).
+    """
+    connection = MySQLUtils.connect()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("SELECT IS_FREE_LOCK(%s)", (LOCK_NAME,))
+        return cursor.fetchone()[0] == 1
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(connection)
+
+
+def search_and_save(category, city: dict, trial: bool = False, stopped: dict | None = None,
+                    before_saving=lambda: None) -> dict:
+    """
+    Une catégorie d'une commune : la chaîne des agents cherche, puis le code enregistre. À l'essai, rien n'est écrit :
+    on renvoie les lieux trouvés. `stopped` est le fichier d'un passage arrêté en route, à reprendre sans repayer ses
+    zones finies. `before_saving` est appelé juste avant l'enregistrement, qui n'appelle aucun agent : la supervision
+    y note l'étape « enregistrement » (services/passage_service.py).
+    """
+    answer = service_chain.search_commune(category, city, stopped)
+    if trial:
+        return {"lieux": [row["nom"] for row in answer[category.key]]}
+    before_saving()
+    return service_store.save_commune(category, city, answer, category.prompt_version, model_of(category.find_agent))
+
+
 def run_passage(city: dict, categories: tuple = CATEGORIES, trial: bool = False, resume: bool = False) -> dict:
     """
     Un passage d'une commune : chaque catégorie est cherchée puis enregistrée, sous un seul identifiant. À l'essai, rien
@@ -126,12 +157,7 @@ def run_passage(city: dict, categories: tuple = CATEGORIES, trial: bool = False,
             if resume and not stopped:
                 results[category.key] = {"passe": "aucun passage arrêté à reprendre"}
                 continue
-            answer = service_chain.search_commune(category, city, stopped)
-            if trial:
-                results[category.key] = {"lieux": [row["nom"] for row in answer[category.key]]}
-            else:
-                results[category.key] = service_store.save_commune(category, city, answer, category.prompt_version,
-                                                                   model_of(category.find_agent))
+            results[category.key] = search_and_save(category, city, trial, stopped)
     return results
 
 
