@@ -249,6 +249,44 @@ def call_totals(calls: list) -> dict:
             "cout_usd": round(sum(float(call["cost_usd"] or 0) for call in calls), 4)}
 
 
+# Le bilan d'une catégorie (service_store.save_commune), clé par clé, en morceau de phrase : (singulier, pluriel).
+# « fiches » est l'ancien nom des services enregistrés, gardé dans le bilan ; la phrase dit « services ».
+SUMMARY_WORDS = {
+    "a_confirmer": ("à confirmer dans la supervision", "à confirmer dans la supervision"),
+    "meme_nom_dans_la_commune": ("même nom ailleurs dans la commune, à relire comme doublon possible",
+                                 "mêmes noms ailleurs dans la commune, à relire comme doublons possibles"),
+    "doublons_possibles": ("doublon possible à trancher", "doublons possibles à trancher"),
+    "deja_restaurant": ("déjà montré comme restaurant", "déjà montrés comme restaurants"),
+    "deja_supermarche": ("déjà montré comme supermarché", "déjà montrés comme supermarchés"),
+}
+# Les lieux écartés, dits ensemble à la fin, avec leur raison.
+DISCARDED_WORDS = {"sans_page": "sans preuve", "liquidation": "société liquidée ou fermée"}
+
+
+def summary_text(summary: dict | None) -> str | None:
+    """
+    Le bilan d'une catégorie en une phrase, pour l'écran : « 3 services enregistrés ; 1 même nom ailleurs dans la
+    commune, à relire comme doublon possible. » Les cases à zéro ne sont pas dites ; une clé inconnue garde son nom,
+    pour ne rien perdre. None tant que la catégorie n'a pas été enregistrée.
+    """
+    if summary is None:
+        return None
+    saved = summary.get("fiches", 0)
+    pieces = [f"{saved} service{'s' if saved > 1 else ''} enregistré{'s' if saved > 1 else ''}" if saved
+              else "Aucun service enregistré"]
+    for key, count in summary.items():
+        if key == "fiches" or key in DISCARDED_WORDS or not count:
+            continue
+        one, many = SUMMARY_WORDS.get(key, (key, key))
+        pieces.append(f"{count} {one if count == 1 else many}")
+    discarded = {DISCARDED_WORDS[key]: summary[key] for key in DISCARDED_WORDS if summary.get(key)}
+    if discarded:
+        total = sum(discarded.values())
+        reasons = ", ".join(f"{count} {reason}" for reason, count in discarded.items())
+        pieces.append(f"{total} écarté{'s' if total > 1 else ''} ({reasons})")
+    return " ; ".join(pieces) + "."
+
+
 def part_state(chain: Chain, part: dict, calls: list) -> dict:
     """
     Ce que l'écran montre d'une catégorie : son état, son étape, son coût, son bilan ou la raison de son échec.
@@ -266,7 +304,8 @@ def part_state(chain: Chain, part: dict, calls: list) -> dict:
         detail = last["etape"] if last else None
     return {"cle": part["part"], "libelle": chain.parts[part["part"]], "payant": chain.paid, "etat": part["status"],
             "etape": step, "detail_etape": detail, "agent": last["agent"] if last and step != SAVING else None,
-            **call_totals(mine), "bilan": part["summary"], "raison_echec": part["error"],
+            **call_totals(mine), "bilan": part["summary"], "bilan_texte": summary_text(part["summary"]),
+            "raison_echec": part["error"],
             "debut": part["started_at"], "fin": part["finished_at"]}
 
 

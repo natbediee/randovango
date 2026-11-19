@@ -308,3 +308,28 @@ def test_a_service_category_resumes_from_its_stopped_file_and_notes_the_saving_s
     summary = passage_service.run_service_category("p1", "laveries", CITY, resume=True)
     assert summary == {"fiches": 2} and seen == {"category": "laveries", "stopped": {"zones": ["finie"]}}
     assert steps == [("laveries", "en_cours", "enregistrement")]
+
+
+# --- Le bilan en phrase ---
+
+@pytest.mark.parametrize("summary,text", [
+    ({"fiches": 3, "sans_page": 0, "a_confirmer": 0, "liquidation": 0, "meme_nom_dans_la_commune": 1},
+     "3 services enregistrés ; 1 même nom ailleurs dans la commune, à relire comme doublon possible."),
+    ({"fiches": 0, "sans_page": 0, "a_confirmer": 1, "liquidation": 0},
+     "Aucun service enregistré ; 1 à confirmer dans la supervision."),
+    ({"fiches": 12, "a_confirmer": 2, "sans_page": 2, "liquidation": 1},
+     "12 services enregistrés ; 2 à confirmer dans la supervision ; 3 écartés (2 sans preuve, 1 société liquidée ou fermée)."),
+    ({"fiches": 1, "nouveau_compteur": 4}, "1 service enregistré ; 4 nouveau_compteur."),
+    (None, None),
+])
+def test_the_summary_of_a_category_is_said_in_one_sentence(summary, text):
+    """Le bilan d'une catégorie devient une phrase (supermarchés et laveries de Guidel, 19 novembre 2026) ; une clé inconnue garde son nom."""
+    assert passage_service.summary_text(summary) == text
+
+
+def test_the_state_of_a_category_carries_its_summary_sentence(store, chain):
+    """L'état d'une catégorie finie porte la phrase de son bilan, prête pour l'écran ; une catégorie à faire n'en a pas."""
+    passage_id = passage_service.create_passage("services", 12, ["supermarches", "laveries"])
+    store.set_part(passage_id, "supermarches", "fini", summary={"fiches": 3})
+    finished, waiting = passage_service.read_passage(passage_id)["categories"]
+    assert finished["bilan_texte"] == "3 services enregistrés." and waiting["bilan_texte"] is None
