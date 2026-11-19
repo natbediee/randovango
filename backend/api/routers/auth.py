@@ -10,7 +10,10 @@ from api.models.auth import UserLogin
 from fastapi.responses import ORJSONResponse
 from passlib.hash import bcrypt
 from datetime import datetime, timedelta
-from api.rate_limit import GUEST_TOKEN_LIMIT, GUEST_TOKEN_MESSAGE, client_ip, limiter
+from api.rate_limit import (
+    GUEST_TOKEN_LIMIT, GUEST_TOKEN_MESSAGE, LOGIN_FAILURES_MESSAGE, client_ip, count_login_failure, limiter,
+    login_blocked,
+)
 from services.authentification import (
     ACCESS_TOKEN_EXPIRE_MINUTES, GUEST_TOKEN_EXPIRE_DAYS, clear_auth_cookie, create_access_token,
     create_guest_token, get_roles_for_user, get_user_by_username, insert_auth_log, set_auth_cookie,
@@ -23,11 +26,19 @@ async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse
     """
     Vérifie le mot de passe, puis pose le jeton dans le cookie. La réponse donne seulement
     ce que le front affiche (nom, rôles) et l'heure d'expiration de la session.
+    Au-delà de 5 échecs pour un compte, ou de 20 pour une adresse, en 15 minutes : 429 (api/rate_limit.py).
     """
     username = body.username
     password = body.password
+    ip = client_ip(request)
     user = get_user_by_username(username)
+    # Trop d'essais manqués pour cette adresse ou ce compte (issue #264) : refusé sans vérifier le
+    # mot de passe, sinon un script continuerait d'essayer. Le refus est noté comme les autres essais.
+    if login_blocked(ip, username):
+        insert_auth_log(user[0] if user else None, username, "login_rate_limited", "/auth/login", 429, filename=None)
+        return ORJSONResponse(content={"detail": LOGIN_FAILURES_MESSAGE}, status_code=429)
     if not user or not bcrypt.verify(password or "", user[2]):
+        count_login_failure(ip, username)
         insert_auth_log(user[0] if user else None, username, "failed_login", "/auth/login", 401, filename=None)
         return ORJSONResponse(
             content={"success": False, "message": "Identifiants invalides"},
