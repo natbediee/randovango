@@ -21,9 +21,9 @@ def base(monkeypatch):
         # Le début du jour (le 19) ou le début du mois (le 1er) : chaque test compte à la date NOW.
         return state["month"] if start.day == 1 else state["today"]
 
-    def insert(settings, changed_by):
+    def insert(settings, changed_by, reason=None):
         state["inserted"].append((settings, changed_by))
-        state["latest"] = {**settings, "changed_at": NOW, "changed_by": changed_by}
+        state["latest"] = {**settings, "changed_at": NOW, "changed_by": changed_by, "reason": reason}
 
     store = budget_service.agent_settings_store
     monkeypatch.setattr(store, "load_latest", lambda: state["latest"])
@@ -86,3 +86,9 @@ def test_a_raised_cap_lets_passages_go_again(base):
 def test_the_next_month_of_december_is_january():
     """L'enveloppe de décembre repart le 1er janvier de l'année suivante."""
     assert budget_service.next_month(datetime(2026, 12, 31)) == datetime(2027, 1, 1)
+
+
+def test_the_reason_of_a_change_is_kept_with_it(base):
+    """La raison libre que l'admin donne à un changement est gardée avec lui, et rendue avec le réglage."""
+    state = budget_service.save_settings({"daily_budget_usd": 0.0}, "camille", "test du budget atteint")
+    assert state["raison_du_changement"] == "test du budget atteint" and state["budget_atteint"] is not None

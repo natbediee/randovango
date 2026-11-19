@@ -31,11 +31,11 @@ def load_settings() -> dict:
     """Le réglage en vigueur, avec qui l'a fait et quand ; les valeurs par défaut si personne n'a encore rien réglé."""
     row = agent_settings_store.load_latest()
     if row is None:
-        return {**DEFAULTS, "changed_at": None, "changed_by": None}
+        return {**DEFAULTS, "changed_at": None, "changed_by": None, "reason": None}
     return {"services_after_etl": bool(row["services_after_etl"]),
             "monthly_budget_usd": float(row["monthly_budget_usd"]), "daily_budget_usd": float(row["daily_budget_usd"]),
             "vany_reserve_usd": float(row["vany_reserve_usd"]),
-            "changed_at": row["changed_at"], "changed_by": row["changed_by"]}
+            "changed_at": row["changed_at"], "changed_by": row["changed_by"], "reason": row["reason"]}
 
 
 def check_amounts(settings: dict) -> None:
@@ -46,15 +46,16 @@ def check_amounts(settings: dict) -> None:
         raise ValueError("La part gardée pour Vany ne peut pas dépasser l'enveloppe du mois.")
 
 
-def save_settings(changes: dict, changed_by: str) -> dict:
+def save_settings(changes: dict, changed_by: str, reason: str | None = None) -> dict:
     """
-    Change le réglage : `changes` ne donne que ce qui change, le reste garde sa valeur. Écrit une nouvelle ligne et
-    rend le nouvel état du budget. Lève ValueError si les montants ne vont pas ensemble.
+    Change le réglage : `changes` ne donne que ce qui change, le reste garde sa valeur. Écrit une nouvelle ligne, avec
+    la raison du changement si l'admin en donne une, et rend le nouvel état du budget. Lève ValueError si les montants
+    ne vont pas ensemble.
     """
     current = load_settings()
     settings = {key: changes.get(key, current[key]) for key in DEFAULTS}
     check_amounts(settings)
-    agent_settings_store.insert(settings, changed_by)
+    agent_settings_store.insert(settings, changed_by, reason)
     return budget_state()
 
 
@@ -105,7 +106,8 @@ def budget_state(now: datetime | None = None) -> dict:
             "reste_du_jour_usd": round(max(0.0, settings["daily_budget_usd"] - spent_today), 2),
             "reste_du_mois_usd": round(max(0.0, usable - spent_month), 2),
             "budget_atteint": block_reason(settings, spent_today, spent_month, now),
-            "modifie_le": settings["changed_at"], "modifie_par": settings["changed_by"]}
+            "modifie_le": settings["changed_at"], "modifie_par": settings["changed_by"],
+            "raison_du_changement": settings["reason"]}
 
 
 def budget_block() -> str | None:

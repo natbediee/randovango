@@ -145,10 +145,10 @@ def settings(api, monkeypatch):
     """Le service du budget remplacé : saved note chaque changement demandé, avec le nom de l'admin."""
     saved = []
 
-    def save_settings(changes, changed_by):
+    def save_settings(changes, changed_by, reason=None):
         if changes.get("daily_budget_usd", 0) > 100:
             raise ValueError("Le plafond du jour ne peut pas dépasser l'enveloppe du mois.")
-        saved.append((changes, changed_by))
+        saved.append((changes, changed_by) if reason is None else (changes, changed_by, reason))
         return {"services_apres_etl": changes.get("services_after_etl", True), "modifie_par": changed_by}
 
     budget = supervision_passages.budget_service
@@ -175,3 +175,9 @@ def test_a_wrong_amount_is_refused(api, settings, body):
     """Un montant négatif, ou un plafond du jour plus grand que l'enveloppe, est refusé (422) et rien ne change."""
     assert api.client.put("/api/supervision/passages/reglage", json=body).status_code == 422
     assert settings == []
+
+
+def test_the_reason_of_a_change_goes_with_it(api, settings):
+    """La raison libre écrite dans la supervision part avec le changement ; elle n'est pas prise pour un réglage."""
+    api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_usd": 5, "raison": "test du budget atteint"})
+    assert settings == [({"daily_budget_usd": 5}, "camille", "test du budget atteint")]

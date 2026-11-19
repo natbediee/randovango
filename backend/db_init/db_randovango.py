@@ -706,7 +706,8 @@ def init_database():
             # Une ligne par changement, jamais modifiée : la plus récente (id le plus grand) est le réglage en vigueur,
             # les autres disent qui a changé quoi et quand. Sans ligne, les valeurs par défaut du code s'appliquent.
             # changed_by : le nom de l'admin, comme decisions.decided_by ; pas de clé étrangère, les comptes sont dans
-            # une autre base. Les CHECK refusent un montant absurde dans la base elle-même, pas seulement dans la route.
+            # une autre base. reason : pourquoi l'admin a changé le réglage, champ libre rempli depuis la supervision
+            # (« test de la file avec deux villes », « fin du mois serrée »), facultatif. Les CHECK refusent un montant absurde dans la base elle-même, pas seulement dans la route.
             # Les contraintes sont nommées (CONSTRAINT) : add_missing_columns ne les prend pas pour des colonnes.
             """
             CREATE TABLE IF NOT EXISTS agent_settings (
@@ -717,6 +718,7 @@ def init_database():
                 vany_reserve_usd DECIMAL(10,2) NOT NULL,
                 changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 changed_by VARCHAR(100) NOT NULL,
+                reason VARCHAR(255),
                 CONSTRAINT chk_agent_settings_positive CHECK (monthly_budget_usd >= 0 AND daily_budget_usd >= 0 AND vany_reserve_usd >= 0),
                 CONSTRAINT chk_agent_settings_daily CHECK (daily_budget_usd <= monthly_budget_usd),
                 CONSTRAINT chk_agent_settings_reserve CHECK (vany_reserve_usd <= monthly_budget_usd)

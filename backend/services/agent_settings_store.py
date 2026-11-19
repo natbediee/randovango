@@ -15,20 +15,23 @@ def load_latest() -> dict | None:
     # L'id plutôt que la date : deux changements dans la même seconde auraient la même date.
     with MySQLUtils.open_cursor(dictionary=True) as (connection, cursor):
         cursor.execute("""SELECT services_after_etl, monthly_budget_usd, daily_budget_usd, vany_reserve_usd,
-                                 changed_at, changed_by
+                                 changed_at, changed_by, reason
                           FROM agent_settings ORDER BY id DESC LIMIT 1""")
         row = cursor.fetchone()
     return row
 
 
-def insert(settings: dict, changed_by: str) -> None:
-    """Écrit un nouveau réglage complet ; l'ancien reste en base, comme trace de qui a changé quoi et quand."""
+def insert(settings: dict, changed_by: str, reason: str | None = None) -> None:
+    """
+    Écrit un nouveau réglage complet ; l'ancien reste en base, comme trace de qui a changé quoi, quand et pourquoi
+    (reason, facultatif).
+    """
     with MySQLUtils.open_cursor() as (connection, cursor):
         cursor.execute("""INSERT INTO agent_settings (services_after_etl, monthly_budget_usd, daily_budget_usd,
-                                                      vany_reserve_usd, changed_at, changed_by)
-                          VALUES (%s, %s, %s, %s, %s, %s)""",
+                                                      vany_reserve_usd, changed_at, changed_by, reason)
+                          VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                        (settings["services_after_etl"], settings["monthly_budget_usd"], settings["daily_budget_usd"],
-                        settings["vany_reserve_usd"], datetime.now(), changed_by))
+                        settings["vany_reserve_usd"], datetime.now(), changed_by, reason))
         connection.commit()
 
 

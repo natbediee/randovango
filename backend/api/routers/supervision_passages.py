@@ -75,13 +75,14 @@ def put_settings(body: AgentSettingsRequest, admin=Depends(require_admin)):
     """
     Seuls les champs envoyés changent ; le changement vaut tout de suite, sans redémarrer l'application. L'ancien
     réglage reste en base, avec le nom de l'admin qui l'a changé. Répond par le nouvel état, comme GET /passages/reglage.
-    {"services_apres_etl": false} ou {"plafond_du_jour_usd": 5}
+    {"services_apres_etl": false} ou {"plafond_du_jour_usd": 5, "raison": "test du budget atteint"}
     Un plafond du jour ou une part de Vany plus grands que l'enveloppe du mois sont refusés (422).
     """
     sent = body.model_dump(exclude_none=True)
+    reason = sent.pop("raison", None)
     changes = {SETTING_COLUMNS[field]: value for field, value in sent.items()}
     try:
-        return budget_service.save_settings(changes, admin["username"])
+        return budget_service.save_settings(changes, admin["username"], reason)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
 
