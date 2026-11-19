@@ -724,6 +724,17 @@ button { font-family: inherit; cursor: pointer; }
 .home-paths .vany-banner__title { font-size: 18px; line-height: 1.25; }
 .home-paths .vany-banner .btn { margin-top: auto; }
 
+/* Voyage en cours, au-dessus du choix de la durée (issue #262). */
+/* hidden doit gagner sur le display des cartes et des boutons (.card, .btn), ici et sur la page
+   « voyage gratuit du jour », où le bouton de reprise attend la réponse de l'API. */
+.trip-resume[hidden],
+.unlock-code [hidden] { display: none; }
+.trip-resume__summary { margin: 6px 0 14px; font-weight: 600; }
+.trip-resume__actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.trip-resume__note { margin: 10px 0 0; font-size: 13px; }
+/* Durées grisées tant que le voyageur n'a pas choisi entre reprendre et nouveau voyage. */
+#durationSection.is-locked { opacity: 0.45; }
+
 .duration-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
