@@ -123,7 +123,11 @@ docker compose exec backend python3 -m etl.etl_meteo
 
 ### Sauvegarde de la base MySQL
 
-Le dump sert à peupler la base en production. Le refaire après chaque traitement important des données (scraping, harmonisation des spots…).
+> La sauvegarde complète des trois bases et des traces des passages, chiffrée et copiée hors de la
+> machine avant chaque gros passage, se fait avec `python3 scripts/backup.py` : voir
+> [docs/exploitation.md](docs/exploitation.md#sauvegarde-et-restauration-des-bases).
+
+Le dump ci-dessous sert à peupler la base en production. Le refaire après chaque traitement important des données (scraping, harmonisation des spots…).
 
 ```bash
 docker compose exec db_randovango mysqldump -u randovango_user -p \
