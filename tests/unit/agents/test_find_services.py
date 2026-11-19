@@ -51,7 +51,7 @@ def _passage(monkeypatch):
     """La chaîne sans agent : note la catégorie cherchée, le passage en cours, et ce qui serait enregistré."""
     calls = {"searched": [], "saved": [], "resumed": []}
 
-    def search(category, city, resume=None):
+    def search(category, city, resume=None, check_budget=None):
         calls["searched"].append((category.key, city["name"], passage_courant()))
         calls["resumed"].append(resume)
         return {category.key: [{"nom": "Riboul"}]}
@@ -128,7 +128,7 @@ def test_a_resumed_launch_searches_only_what_was_stopped(monkeypatch):
 
 def test_a_big_city_without_register_stops_the_launch(monkeypatch):
     """Si le registre d'une grande ville n'a pas pu être lu, le lancement s'arrête avec un message au lieu de payer une recherche sans zones."""
-    def unreadable(category, city, resume=None):
+    def unreadable(category, city, resume=None, check_budget=None):
         raise service_chain.RegisterUnavailable("Marseille : registre illisible")
 
     monkeypatch.setattr(service_chain, "search_commune", unreadable)
@@ -149,7 +149,7 @@ def _replay(monkeypatch, version):
     files = {category.key: {"commune": "Plougonvelin", "version": version(category), "registre": None, "final": []}
              for category in find_services.CATEGORIES}
     monkeypatch.setattr(service_chain, "latest_traces", lambda category: {"Plougonvelin": files[category.key]})
-    monkeypatch.setattr(service_chain, "search_commune", lambda category, city, resume=None: pytest.fail("un rejeu ne cherche rien"))
+    monkeypatch.setattr(service_chain, "search_commune", lambda category, city, resume=None, check_budget=None: pytest.fail("un rejeu ne cherche rien"))
     monkeypatch.setattr(service_store, "save_commune",
                         lambda category, city, answer, version, model, trial: saved.append((category.key, trial)) or {"fiches": 0})
     monkeypatch.setattr(service_store, "load_city", lambda name: CITY)
@@ -234,7 +234,7 @@ def test_a_launch_keeps_one_lock_for_all_its_communes(monkeypatch, database):
 
 def test_the_lock_is_given_back_when_a_passage_fails(monkeypatch, database):
     """Le verrou est rendu même quand le passage échoue."""
-    monkeypatch.setattr(service_chain, "search_commune", lambda category, city, resume=None: 1 / 0)
+    monkeypatch.setattr(service_chain, "search_commune", lambda category, city, resume=None, check_budget=None: 1 / 0)
     with pytest.raises(ZeroDivisionError):
         find_services.run_passage(CITY)
     assert database.queries[-1].startswith("SELECT RELEASE_LOCK") and find_services.lock_connection() is None

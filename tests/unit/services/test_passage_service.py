@@ -88,10 +88,12 @@ def chain(monkeypatch):
     La chaîne des services simulée : chaque catégorie note ce qu'on lui demande et le passage en cours, puis rend un
     bilan ; `fail` donne l'erreur à lever pour une catégorie. Le verrou est libre, sauf si `busy` est vrai.
     """
-    state = {"ran": [], "fail": {}, "busy": False}
+    state = {"ran": [], "fail": {}, "busy": False, "zone_budget": set()}
 
-    def run_part(passage_id, key, city, resume):
+    def run_part(passage_id, key, city, resume, check_budget):
         state["ran"].append((key, resume, passage_courant()))
+        if key in state["zone_budget"]:
+            check_budget()      # une grande ville regarde le budget avant sa zone suivante
         if key in state["fail"]:
             raise state["fail"][key]
         return {"fiches": 3}
@@ -340,14 +342,14 @@ def test_a_service_category_resumes_from_its_stopped_file_and_notes_the_saving_s
     seen, steps = {}, []
     monkeypatch.setattr(passage_service, "interrupted_trace", lambda category, city: {"zones": ["finie"]})
 
-    def search_and_save(category, city, stopped=None, before_saving=None):
+    def search_and_save(category, city, stopped=None, before_saving=None, check_budget=None):
         seen.update(category=category.key, stopped=stopped)
         before_saving()
         return {"fiches": 2}
 
     monkeypatch.setattr(passage_service.find_services, "search_and_save", search_and_save)
     monkeypatch.setattr(passage_store, "set_part", lambda passage_id, key, status, step=None: steps.append((key, status, step)))
-    summary = passage_service.run_service_category("p1", "laveries", CITY, resume=True)
+    summary = passage_service.run_service_category("p1", "laveries", CITY, resume=True, check_budget=lambda: None)
     assert summary == {"fiches": 2} and seen == {"category": "laveries", "stopped": {"zones": ["finie"]}}
     assert steps == [("laveries", "en_cours", "enregistrement")]
 
@@ -554,3 +556,31 @@ def test_the_cities_not_done_are_listed_with_their_reason(store, chain):
     assert rows[waiting]["raison"] == "mise à jour automatique coupée : à lancer depuis la supervision"
     assert rows[failed]["raison"] == "échec : délai dépassé : Claude n'a pas répondu à temps"
     assert resumed_failure not in rows
+
+
+# --- Le budget regardé pendant le passage (issue #211, essai de Rennes) ---
+
+def test_a_passage_stops_between_two_categories_when_the_budget_is_reached(store, chain, monkeypatch):
+    """Budget atteint après les restaurants : le passage retourne en file, les restaurants restent faits, les commerces attendent."""
+    passage_id = passage_service.create_passage("services", 12, ["restaurants", "commerces"], origin="etl")
+    calls = iter([None, "plafond du jour atteint"])      # libre avant les restaurants, atteint avant les commerces
+    monkeypatch.setattr(passage_service.budget_service, "budget_block", lambda: next(calls))
+    passage_service.run_passage(passage_id)
+    assert store.passages[passage_id]["status"] == "en_file"
+    assert [(row["part"], row["status"], row["step"]) for row in store.parts[passage_id]] == [
+        ("restaurants", "fini", None), ("commerces", "a_faire", "budget")]
+    assert [ran[0] for ran in chain["ran"]] == ["restaurants"]
+
+
+def test_a_big_city_stopped_between_two_zones_resumes_its_file_when_the_budget_returns(store, chain, monkeypatch):
+    """Rennes arrêtée entre deux zones : elle retourne en file sans échec, puis reprend son fichier, sans repayer ses zones finies."""
+    passage_id = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    chain["zone_budget"] = {"restaurants"}
+    budget = iter([None, "plafond du jour atteint"])     # libre au départ, atteint avant la zone suivante
+    monkeypatch.setattr(passage_service.budget_service, "budget_block", lambda: next(budget, None))
+    passage_service.run_passage(passage_id)
+    assert store.passages[passage_id]["status"] == "en_file" and store.passages[passage_id]["error"] is None
+    chain["zone_budget"] = set()
+    assert passage_queue.run_next() is True
+    assert store.passages[passage_id]["status"] == "fini"
+    assert [(key, resume) for key, resume, _ in chain["ran"]] == [("restaurants", False), ("restaurants", True)]

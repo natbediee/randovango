@@ -41,10 +41,15 @@ logger = LoggerUtil.get_logger("passages")
 
 ORIGINS = ("supervision", "etl")    # qui a demandé le passage : l'administratrice, ou l'ETL d'une nouvelle ville (#211)
 SAVING = "enregistrement"            # l'étape de l'enregistrement, que le code note lui-même : elle n'appelle aucun agent
+PAUSED = "budget"                    # l'étape d'une catégorie arrêtée en route par le budget : elle reprendra son fichier
 
 
 class PassageConflict(RuntimeError):
     """Le passage ne peut pas partir maintenant : un autre tourne, ou il n'y a rien à reprendre. Le message le dit."""
+
+
+class BudgetReached(RuntimeError):
+    """Le budget des agents est atteint pendant un passage : il s'arrête avant la prochaine catégorie ou zone (#211)."""
 
 
 @dataclass(frozen=True)
@@ -56,7 +61,7 @@ class Chain:
     paid: bool                  # payante (des agents) ou gratuite (OSM, fichiers de l'État)
     lock: Callable              # le verrou « un seul passage à la fois » : un bloc « with »
     lock_is_free: Callable      # () -> le verrou est-il libre ?
-    run_part: Callable          # (passage_id, clé, ville, reprise) -> le bilan de la catégorie
+    run_part: Callable          # (passage_id, clé, ville, reprise, vérification du budget) -> le bilan de la catégorie
     steps_of: Callable          # (clé) -> {agent : l'étape qu'il fait}, pour lire l'étape dans llm_calls
 
 
@@ -67,16 +72,17 @@ SERVICE_LABELS = {"restaurants": "Recherche des restaurants", "commerces": "Rech
                   "supermarches": "Recherche des supermarchés", "laveries": "Recherche des laveries"}
 
 
-def run_service_category(passage_id: str, key: str, city: dict, resume: bool) -> dict:
+def run_service_category(passage_id: str, key: str, city: dict, resume: bool, check_budget) -> dict:
     """
     Une catégorie de la chaîne des services : ses trois agents cherchent, analysent et prouvent, puis le code enregistre.
     En reprise, le fichier d'un passage arrêté en route est repris : ses zones finies ne sont pas repayées.
+    `check_budget` arrête la recherche d'une grande ville entre deux zones quand le budget est atteint.
     """
     category = SERVICE_CATEGORIES[key]
     stopped = interrupted_trace(category, city) if resume else None
     return find_services.search_and_save(
         category, city, stopped=stopped,
-        before_saving=lambda: passage_store.set_part(passage_id, key, RUNNING, step=SAVING))
+        before_saving=lambda: passage_store.set_part(passage_id, key, RUNNING, step=SAVING), check_budget=check_budget)
 
 
 def service_steps(key: str) -> dict:
@@ -167,6 +173,18 @@ def check_budget(chain: Chain) -> None:
         raise PassageConflict(f"Budget des agents atteint ({reason}).")
 
 
+def stop_if_over_budget(chain: Chain) -> None:
+    """
+    Pendant un passage, avant chaque catégorie et chaque zone d'une grande ville : lève BudgetReached si le budget des
+    agents est atteint. Le budget n'est donc jamais dépassé de plus d'une zone, ou d'une catégorie d'une petite ville.
+    """
+    if not chain.paid:
+        return
+    reason = budget_service.budget_block()
+    if reason:
+        raise BudgetReached(reason)
+
+
 def create_passage(chain_key: str, city_id: int, parts: list | None = None, origin: str = "supervision",
                    resumed_from: str | None = None, status: str = QUEUED) -> str:
     """
@@ -205,6 +223,8 @@ def run_passage(passage_id: str) -> None:
     tâche de fond, personne n'attend sa réponse. Un échec est écrit dans la trace, avec sa raison ; les catégories
     finies avant lui restent enregistrées, et celles d'après restent « à faire », pour la reprise.
     Si le verrou est pris, le passage reste en file, sans échec : la file le relancera après le passage en cours (#211).
+    Si le budget est atteint en route, le passage s'arrête avant la catégorie ou la zone suivante et retourne en file :
+    ce qui est fini reste enregistré, et la file le reprendra là où il en était quand le budget le permettra.
     """
     passage = passage_store.load_passage(passage_id)
     chain = CHAINS[passage["chain"]]
@@ -219,9 +239,13 @@ def run_passage(passage_id: str) -> None:
             if passage_store.load_passage(passage_id)["status"] != QUEUED:
                 return
             passage_store.set_passage_status(passage_id, RUNNING)
-            for part in [row["part"] for row in passage_store.load_parts(passage_id) if row["status"] == TO_DO]:
+            for row in [row for row in passage_store.load_parts(passage_id) if row["status"] == TO_DO]:
+                part = row["part"]
+                stop_if_over_budget(chain)
                 passage_store.set_part(passage_id, part, RUNNING)
-                summary = chain.run_part(passage_id, part, city, resume)
+                # Une catégorie arrêtée par le budget reprend son fichier : ses zones finies ne sont pas repayées.
+                summary = chain.run_part(passage_id, part, city, resume or row["step"] == PAUSED,
+                                         lambda: stop_if_over_budget(chain))
                 passage_store.set_part(passage_id, part, DONE, summary=summary)
             part = None
         passage_store.set_passage_status(passage_id, DONE)
@@ -229,6 +253,11 @@ def run_passage(passage_id: str) -> None:
     except PassageRunning:
         # Le verrou était pris avant que le passage commence : il garde sa place dans la file.
         logger.info(f"[passages] {passage_id} attend : un autre passage tient le verrou")
+    except BudgetReached as reason:
+        # Pas un échec : le passage retourne en file, et la catégorie arrêtée garde l'étape « budget » pour la reprise.
+        logger.info(f"[passages] {passage_id} arrêté avant {part} : {reason}")
+        passage_store.set_part(passage_id, part, TO_DO, step=PAUSED)
+        passage_store.set_passage_status(passage_id, QUEUED)
     except Exception as error:
         reason = failure_reason(error)
         logger.exception(f"[passages] {passage_id} en échec ({part or 'avant la première catégorie'}) : {reason}")
