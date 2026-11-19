@@ -1,6 +1,6 @@
 """
 La doc de l'API (/docs) range les routes de la supervision en une section par ressource (carte #186) : Relectures,
-Décisions, Recherche, Services. Avant, les routes étaient toutes dans une seule section « Supervision ».
+Décisions, Recherche, Services, Passages des agents (issue #204). Avant, les routes étaient toutes dans une seule section « Supervision ».
 """
 import pytest
 
@@ -11,6 +11,9 @@ SECTIONS = {
                                 "/api/supervision/decisions/{decision_id}/audit"},
     "Supervision · Recherche": {"/api/supervision/search/services", "/api/supervision/search/spots"},
     "Supervision · Services": {"/api/supervision/services/{poi_id}"},
+    # Issue #204 : lancer, suivre et reprendre un passage d'une chaîne d'agents.
+    "Supervision · Passages des agents": {"/api/supervision/passages", "/api/supervision/passages/{passage_id}",
+                                          "/api/supervision/passages/{passage_id}/reprise"},
 }
 
 

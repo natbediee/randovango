@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from api.access import document_access
 from api.cors import add_cors
 from api.rate_limit import add_rate_limit
-from api.routers import step1, step2, step3, step4, result, auth, etl, pepites, supervision_decisions, supervision_reviews, supervision_search, supervision_sheets
+from api.routers import step1, step2, step3, step4, result, auth, etl, pepites, supervision_decisions, supervision_passages, supervision_reviews, supervision_search, supervision_sheets
 from utils.logger_util import LoggerUtil
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -76,6 +76,7 @@ app.include_router(supervision_reviews.router, prefix="/api/supervision", tags=[
 app.include_router(supervision_decisions.router, prefix="/api/supervision", tags=["Supervision · Décisions"])
 app.include_router(supervision_search.router, prefix="/api/supervision", tags=["Supervision · Recherche"])
 app.include_router(supervision_sheets.router, prefix="/api/supervision", tags=["Supervision · Services"])
+app.include_router(supervision_passages.router, prefix="/api/supervision", tags=["Supervision · Passages des agents"])
 
 # Le niveau d'accès de chaque route, écrit dans la doc OpenAPI (api/access.py) : après tous les routers.
 document_access(app)
