@@ -49,9 +49,11 @@ def post_passage(body: PassageRequest, background: BackgroundTasks, _admin=Depen
 @router.get("/passages", summary="Les passages en cours, en file d'attente, et les derniers finis ou en échec.")
 def get_passages(limite: int = 20, _admin=Depends(require_admin)):
     """
-    Ce que montre le panneau « En cours et file d'attente » de l'espace Agents, et la liste des derniers passages :
-    {"en_cours": [...], "en_file": [...], "derniers": [...]}, chacun au format de GET /passages/{passage_id}.
-    La file reste vide tant que #211 n'y met pas les villes ajoutées par l'ETL.
+    Ce que montre le panneau « En cours et file d'attente » de l'espace Agents, la liste des derniers passages, et le
+    tableau des villes non faites avec leur raison (budget atteint, attend la fin du passage en cours, mise à jour
+    automatique coupée, échec) : {"en_cours": [...], "en_file": [...], "derniers": [...], "villes_en_attente": [...]},
+    chacun au format de GET /passages/{passage_id}, avec son origine (supervision, etl) ; une ville non faite y ajoute
+    sa « raison ». Les villes ajoutées par l'ETL entrent dans la file et partent seules, l'une après l'autre.
     """
     return passage_service.list_passages(limite)
 
@@ -101,12 +103,14 @@ def get_passage(passage_id: str, _admin=Depends(require_admin)):
 
 
 @router.post("/passages/{passage_id}/reprise", status_code=202, responses=NOT_FOUND | CONFLICT,
-             summary="Reprend un passage en échec, sans repayer les catégories finies.")
+             summary="Relance une ville non faite : reprend un échec sans repayer, ou lance une ville en attente.")
 def post_resume(passage_id: str, background: BackgroundTasks, _admin=Depends(require_admin)):
     """
-    Crée un nouveau passage qui ne refait que les catégories non finies du passage en échec (reprise_de le relie à
+    Un passage en échec : crée un nouveau passage qui ne refait que ses catégories non finies (reprise_de le relie à
     lui), et le lance en tâche de fond. Une grande ville cherchée par zones reprend aussi ses zones finies sans les
-    repayer. Un passage qui n'est pas en échec, ou un autre passage en cours, est refusé (409) avec le motif.
+    repayer. Un échec n'est jamais relancé tout seul : c'est cette route qui le reprend.
+    Un passage en attente (l'ETL l'a gardé quand la mise à jour automatique était coupée) : il part lui-même.
+    Refusé (409), avec le motif : un passage ni en échec ni en attente, un autre passage en cours, un budget atteint.
     """
     try:
         resumed = passage_service.resume_passage(passage_id, origin="supervision")

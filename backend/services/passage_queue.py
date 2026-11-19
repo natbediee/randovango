@@ -17,7 +17,7 @@ fil repart d'eux. Pas besoin d'un outil de plus (Celery, Redis) pour un passage 
 """
 import threading
 
-from services import budget_service, passage_service, passage_store
+from services import passage_service, passage_store
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("passages")
@@ -29,18 +29,8 @@ _worker = None              # le fil de fond, une fois lancé
 
 
 def why_waiting(passage_id: str) -> str | None:
-    """
-    Pourquoi ce passage en file ne peut pas partir maintenant, en phrase lisible ; None s'il peut partir.
-    Le verrou d'abord : un passage qui tourne passera de toute façon avant lui.
-    """
-    chain = passage_service.CHAINS[passage_store.load_passage(passage_id)["chain"]]
-    if not chain.lock_is_free():
-        return "attend la fin du passage en cours"
-    if chain.paid:
-        blocked = budget_service.budget_block()
-        if blocked:
-            return blocked
-    return None
+    """Pourquoi ce passage en file ne peut pas partir maintenant (verrou pris, budget atteint) ; None s'il peut partir."""
+    return passage_service.waiting_reason(passage_store.load_passage(passage_id))
 
 
 def run_next() -> bool:

@@ -273,16 +273,34 @@ def request_etl_passage(city_name: str) -> str | None:
     return create_passage("services", city["id"], left, origin="etl", status=status)
 
 
+def launch_waiting(passage: dict) -> str:
+    """
+    Lance une ville que l'ETL a laissée en attente (mise à jour automatique coupée) : le passage est remis en file,
+    à sa place, et l'admin le fait partir. Mêmes refus qu'un lancement à la main : verrou pris ou budget atteint.
+    """
+    chain = CHAINS[passage["chaine"]]
+    check_free(chain)
+    check_budget(chain)
+    passage_store.set_passage_status(passage["passage_id"], QUEUED)
+    logger.info(f"[passages] {passage['passage_id']} lancé par l'admin après l'attente")
+    return passage["passage_id"]
+
+
 def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:
     """
-    Crée la reprise d'un passage en échec et renvoie son identifiant : seules ses catégories non finies repassent.
-    None si le passage n'existe pas ; PassageConflict s'il n'est pas en échec, ou si un autre passage tourne.
+    La relance d'une ville non faite, par l'admin, et l'identifiant du passage à faire tourner :
+    - un passage en échec est repris par un nouveau passage, qui ne refait que ses catégories non finies ;
+    - un passage en attente (mise à jour automatique coupée, #211) part lui-même, sans nouveau passage.
+    None si le passage n'existe pas ; PassageConflict s'il n'est ni en échec ni en attente, si un autre passage tourne,
+    ou si le budget est atteint.
     """
     passage = read_passage(passage_id)
     if passage is None:
         return None
+    if passage["etat"] == WAITING:
+        return launch_waiting(passage)
     if passage["etat"] != FAILED:
-        raise PassageConflict(f"Ce passage est « {passage['etat']} » : seul un passage en échec se reprend.")
+        raise PassageConflict(f"Ce passage est « {passage['etat']} » : seul un passage en échec ou en attente se relance.")
     # Une reprise à la fois : les reprises forment une seule ligne (aaa, puis bbb qui reprend aaa, puis ccc qui reprend
     # bbb). L'écran sait ainsi qu'un échec déjà repris n'attend plus rien : sa reprise dit où en est la ville.
     if passage["repris_par"]:
@@ -292,6 +310,24 @@ def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:
 
 
 # --- Dire où il en est ---
+
+AUTO_OFF = "mise à jour automatique coupée : à lancer depuis la supervision"
+
+
+def waiting_reason(passage: dict) -> str | None:
+    """
+    Pourquoi un passage n'a pas encore tourné, en phrase lisible ; None s'il tourne, a fini, ou peut partir.
+    En file : le verrou d'abord (un passage qui tourne passera de toute façon avant lui), puis le budget.
+    """
+    if passage["status"] == WAITING:
+        return AUTO_OFF
+    if passage["status"] != QUEUED:
+        return None
+    chain = CHAINS[passage["chain"]]
+    if not chain.lock_is_free():
+        return "attend la fin du passage en cours"
+    return budget_service.budget_block() if chain.paid else None
+
 
 def mark_interrupted(passage: dict, parts: list) -> None:
     """
@@ -387,17 +423,36 @@ def read_passage(passage_id: str) -> dict | None:
             "ville": {"id": passage["city_id"], "nom": passage["city_name"], "commune": passage["city_commune"]},
             "origine": passage["origin"], "etat": passage["status"], "payant": chain.paid,
             "demande_le": passage["requested_at"], "debut": passage["started_at"], "fin": passage["finished_at"],
-            "raison_echec": passage["error"], "reprise_de": passage["resumed_from"],
+            "raison_echec": passage["error"], "raison_attente": waiting_reason(passage),
+            "reprise_de": passage["resumed_from"],
             "repris_par": passage_store.resumed_by(passage_id), **call_totals(calls),
             "categories": [part_state(chain, part, calls) for part in parts]}
 
 
+def not_done(queued: list, waiting: list, failed: list) -> list:
+    """
+    Les villes non faites, avec leur raison, pour le tableau « Villes en attente » de l'espace Agents (#211) :
+    celles en file (budget atteint, passage en cours), celles en attente de l'admin (mise à jour coupée), et celles en
+    échec que personne n'a encore reprises. Un échec repris n'y est plus : c'est sa reprise qui dit où en est la ville.
+    """
+    rows = [{**passage, "raison": passage["raison_attente"]} for passage in queued + waiting]
+    rows += [{**passage, "raison": f"échec : {passage['raison_echec']}"} for passage in failed if not passage["repris_par"]]
+    return rows
+
+
 def list_passages(limit: int = 20) -> dict:
-    """Le passage en cours, la file d'attente (remplie par #211) et les derniers passages finis ou en échec."""
+    """
+    Le passage en cours, la file d'attente, les derniers passages finis ou en échec, et les villes non faites avec
+    leur raison (villes_en_attente, #211).
+    """
     def read_all(ids: list) -> list:
         return [passage for passage in map(read_passage, ids) if passage]
 
     running = read_all(passage_store.passage_ids(RUNNING, limit))
+    queued = read_all(passage_store.passage_ids(QUEUED, limit))
+    waiting = read_all(passage_store.passage_ids(WAITING, limit))
+    failed = read_all(passage_store.passage_ids(FAILED, limit))
     return {"en_cours": [passage for passage in running if passage["etat"] == RUNNING],
-            "en_file": read_all(passage_store.passage_ids(QUEUED, limit)),
-            "derniers": read_all(passage_store.recent_ids(limit))}
+            "en_file": queued,
+            "derniers": read_all(passage_store.recent_ids(limit)),
+            "villes_en_attente": not_done(queued, waiting, failed)}

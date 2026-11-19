@@ -246,10 +246,10 @@ def test_a_failed_passage_is_resumed_only_once_and_knows_its_resumption(store, c
 
 
 def test_only_a_failed_passage_can_be_resumed(store, chain):
-    """Un passage fini ne se reprend pas : la reprise est refusée avec un message."""
+    """Un passage fini ne se relance pas : la relance est refusée avec un message."""
     passage_id = passage_service.create_passage("services", 12)
     passage_service.run_passage(passage_id)
-    with pytest.raises(PassageConflict, match="seul un passage en échec se reprend"):
+    with pytest.raises(PassageConflict, match="seul un passage en échec ou en attente se relance"):
         passage_service.resume_passage(passage_id)
 
 
@@ -513,3 +513,44 @@ def test_a_failed_request_does_not_stop_the_etl(monkeypatch):
         raise ConnectionError("base injoignable")
     monkeypatch.setattr(passage_service, "request_etl_passage", broken)
     etl_pipeline.launch_services("Guidel")
+
+
+# --- Les villes non faites et leur relance (issue #211) ---
+
+def test_a_city_waiting_for_the_admin_is_launched_by_the_resume_route(store, chain):
+    """Une ville en attente (mise à jour coupée) est lancée par la relance : le même passage repart, sans en créer un autre."""
+    waiting = passage_service.create_passage("services", 12, ["laveries"], origin="etl", status=passage_store.WAITING)
+    assert passage_service.resume_passage(waiting) == waiting
+    passage_service.run_passage(waiting)
+    assert list(store.passages) == [waiting] and store.passages[waiting]["status"] == "fini"
+    assert store.passages[waiting]["origin"] == "etl"
+
+
+def test_a_waiting_city_is_not_launched_when_the_budget_is_reached(store, chain):
+    """Budget atteint : lancer une ville en attente est refusé avec la raison, et elle reste en attente."""
+    waiting = passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
+    store.budget_reason = "enveloppe du mois atteinte"
+    with pytest.raises(PassageConflict, match="Budget des agents atteint"):
+        passage_service.resume_passage(waiting)
+    assert store.passages[waiting]["status"] == "en_attente"
+
+
+def test_the_cities_not_done_are_listed_with_their_reason(store, chain):
+    """L'API donne les villes non faites avec leur raison : budget atteint, mise à jour coupée, échec ; un échec repris n'y est plus."""
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    queued = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    waiting = passage_service.create_passage("services", 12, ["commerces"], origin="etl", status=passage_store.WAITING)
+    store.budget_reason = None
+    chain["fail"]["laveries"] = LLMTimeout("trop long")
+    failed = passage_service.create_passage("services", 12, ["laveries"])
+    passage_service.run_passage(failed)
+    resumed_failure = passage_service.create_passage("services", 12, ["supermarches"])
+    chain["fail"]["supermarches"] = LLMTimeout("trop long")
+    passage_service.run_passage(resumed_failure)
+    store.insert_passage("reprise", "services", 12, "supervision", ["supermarches"], resumed_from=resumed_failure)
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    rows = {row["passage_id"]: row for row in passage_service.list_passages()["villes_en_attente"]}
+    assert rows[queued]["raison"].startswith("plafond du jour atteint") and rows[queued]["origine"] == "etl"
+    assert rows[waiting]["raison"] == "mise à jour automatique coupée : à lancer depuis la supervision"
+    assert rows[failed]["raison"] == "échec : délai dépassé : Claude n'a pas répondu à temps"
+    assert resumed_failure not in rows
