@@ -138,3 +138,40 @@ def test_an_admin_with_a_real_token_launches_a_passage(api, monkeypatch):
     api.client.cookies.set(AUTH_COOKIE_NAME, create_access_token({"user_id": 1, "username": "camille"}))
     response = api.client.post("/api/supervision/passages", json={"chaine": "services", "ville_id": 12})
     assert response.status_code == 202 and api.ran == ["nouveau"]
+
+
+@pytest.fixture
+def settings(api, monkeypatch):
+    """Le service du budget remplacé : saved note chaque changement demandé, avec le nom de l'admin."""
+    saved = []
+
+    def save_settings(changes, changed_by):
+        if changes.get("daily_budget_usd", 0) > 100:
+            raise ValueError("Le plafond du jour ne peut pas dépasser l'enveloppe du mois.")
+        saved.append((changes, changed_by))
+        return {"services_apres_etl": changes.get("services_after_etl", True), "modifie_par": changed_by}
+
+    budget = supervision_passages.budget_service
+    monkeypatch.setattr(budget, "budget_state", lambda: {"services_apres_etl": True, "budget_atteint": None})
+    monkeypatch.setattr(budget, "save_settings", save_settings)
+    return saved
+
+
+def test_the_settings_are_read_by_an_admin(api, settings):
+    """Le réglage des agents et l'état du budget se lisent (200), et « reglage » n'est pas pris pour un passage."""
+    response = api.client.get("/api/supervision/passages/reglage")
+    assert response.status_code == 200 and response.json() == {"services_apres_etl": True, "budget_atteint": None}
+
+
+def test_a_change_sends_only_the_fields_given_with_the_admin_name(api, settings):
+    """Couper la mise à jour automatique n'envoie que ce champ, sous son nom de colonne, avec le nom de l'admin."""
+    response = api.client.put("/api/supervision/passages/reglage", json={"services_apres_etl": False})
+    assert response.status_code == 200 and response.json()["services_apres_etl"] is False
+    assert settings == [({"services_after_etl": False}, "camille")]
+
+
+@pytest.mark.parametrize("body", [{"plafond_du_jour_usd": -1}, {"plafond_du_jour_usd": 150}])
+def test_a_wrong_amount_is_refused(api, settings, body):
+    """Un montant négatif, ou un plafond du jour plus grand que l'enveloppe, est refusé (422) et rien ne change."""
+    assert api.client.put("/api/supervision/passages/reglage", json=body).status_code == 422
+    assert settings == []

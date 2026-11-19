@@ -32,7 +32,7 @@ from agents import find_services
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMRefused, LLMTimeout, mesure_passage, new_passage_id
 from agents.service_chain import RegisterUnavailable, interrupted_trace
-from services import passage_store, service_store
+from services import budget_service, passage_store, service_store
 from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO
 from utils.logger_util import LoggerUtil
 
@@ -153,12 +153,25 @@ def check_free(chain: Chain) -> None:
     raise PassageConflict(f"Un passage « {chain.label} » tourne déjà, lancé en ligne de commande : attendre sa fin.")
 
 
+def check_budget(chain: Chain) -> None:
+    """
+    Lève PassageConflict, avec la raison, si le budget des agents est atteint (issue #211) : un passage payant ne part
+    pas, même lancé à la main, tant que le budget ne le permet pas de nouveau ou que l'admin ne le relève pas.
+    Une chaîne gratuite (OSM, fichiers de l'État) n'est jamais retenue par le budget.
+    """
+    if not chain.paid:
+        return
+    reason = budget_service.budget_block()
+    if reason:
+        raise PassageConflict(f"Budget des agents atteint ({reason}).")
+
+
 def create_passage(chain_key: str, city_id: int, parts: list | None = None, origin: str = "supervision",
                    resumed_from: str | None = None) -> str:
     """
     Écrit un passage demandé, en file, et renvoie son identifiant. Sans catégories, toutes celles de la chaîne.
     Lève ValueError pour une chaîne, une ville, une catégorie ou une origine inconnue, et PassageConflict si un
-    passage de la chaîne tourne déjà. Le faire tourner : run_passage.
+    passage de la chaîne tourne déjà ou si le budget des agents est atteint. Le faire tourner : run_passage.
     """
     chain = CHAINS.get(chain_key)
     if chain is None:
@@ -171,6 +184,7 @@ def create_passage(chain_key: str, city_id: int, parts: list | None = None, orig
     if find_city(city_id) is None:
         raise ValueError(f"Ville inconnue : {city_id}")
     check_free(chain)
+    check_budget(chain)
     # Les catégories passent toujours dans l'ordre de la chaîne : la suivante trouve en base ce que la précédente a écrit.
     chosen = [part for part in chain.parts if not parts or part in parts]
     passage_id = new_passage_id()

@@ -67,6 +67,9 @@ ACCESS = {
     ("GET", "/api/supervision/passages"): ADMIN,
     ("GET", "/api/supervision/passages/{passage_id}"): ADMIN,
     ("POST", "/api/supervision/passages/{passage_id}/reprise"): ADMIN,
+    # Le réglage des agents et leur budget (issue #211).
+    ("GET", "/api/supervision/passages/reglage"): ADMIN,
+    ("PUT", "/api/supervision/passages/reglage"): ADMIN,
 }
 
 # Les paramètres de chemin et de requête des routes, pour les appeler vraiment.

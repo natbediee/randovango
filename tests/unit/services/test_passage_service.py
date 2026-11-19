@@ -67,6 +67,9 @@ def store(monkeypatch):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
     monkeypatch.setattr(passage_service.service_store, "load_city", lambda name: CITY)
+    # Le budget des agents le permet, sauf si un test pose une raison de blocage dans fake.budget_reason.
+    fake.budget_reason = None
+    monkeypatch.setattr(passage_service.budget_service, "budget_block", lambda: fake.budget_reason)
     return fake
 
 
@@ -133,6 +136,14 @@ def test_a_launch_while_a_passage_runs_names_the_running_one(store, chain):
     with pytest.raises(PassageConflict, match="tourne déjà sur Guidel, depuis le 19/11/2026 à 10 h 05"):
         passage_service.create_passage("services", 12)
     assert len(store.passages) == 1
+
+
+def test_a_launch_is_refused_when_the_budget_is_reached(store, chain):
+    """Quand le budget des agents est atteint, un lancement à la main est refusé avec la raison, et rien n'est écrit."""
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    with pytest.raises(PassageConflict, match="Budget des agents atteint .plafond du jour atteint"):
+        passage_service.create_passage("services", 12)
+    assert store.passages == {}
 
 
 def test_a_lock_held_from_the_command_line_is_named_too(store, chain):
