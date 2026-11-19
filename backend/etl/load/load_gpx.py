@@ -6,6 +6,7 @@ from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import get_admin_info_from_coordinates
+from etl.extract.gpx import remove_file
 
 ROOT = Path(__file__).resolve().parents[3]
 logger = LoggerUtil.get_logger("etl_gpx")
@@ -28,8 +29,9 @@ def find_city(cursor, city_name, insee):
 
 def load_gpx_data(data, gpx_path, verifie=0) -> str:
     """
-    Charge les données GPX transformées dans MongoDB et MySQL, puis archive le fichier.
-    Retourne le nom de la ville ou None si déjà importé.
+    Charge les données GPX transformées dans MongoDB et MySQL, puis retire le fichier du dossier d'attente.
+    Retourne le nom de la ville, ou None si le tracé est déjà dans MongoDB (le fichier est alors retiré aussi :
+    sinon il repasserait à chaque envoi, issue #266).
     verifie: 1 si admin, 0 sinon
     """
     # try/finally : la connexion MySQL se ferme même en cas d'erreur (issue #206). Pas d'open_cursor ici :
@@ -49,8 +51,10 @@ def _load_gpx_with_connection(mysql_conn, data, gpx_path, verifie) -> str:
     existing = gpx_collection.find_one({"filename": fname})
     city_name = data.get('city_name')
     if existing:
+        # Avant l'issue #266, ce cas répondait par la ville, comme un succès : la page annonçait un tracé jamais chargé.
         logger.info(f"[load] : Le fichier {fname} existe déjà dans MongoDB (id={existing.get('_id')}). Ignorer l'import.")
-        return city_name if city_name else None
+        remove_file(gpx_path)
+        return None
 
     logger.info(f"[load] : Import du fichier GPX: {fname}")
 
@@ -133,11 +137,7 @@ def _load_gpx_with_connection(mysql_conn, data, gpx_path, verifie) -> str:
     logger.info(f"[load] : Loaded: {fname} (MySQL id={gpxtrace_id}, Mongo id={id_mongo})")
 
     # --- Suppression du fichier source après traitement ---
-    try:
-        os.remove(gpx_path)
-        logger.info(f"[load] : Fichier supprimé : {gpx_path}")
-    except Exception as e:
-        logger.warning(f"[load] : Erreur lors de la suppression du fichier {gpx_path} : {e}")
+    remove_file(gpx_path)
 
     return city_name if city_name else None
 

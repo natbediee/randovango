@@ -1,0 +1,111 @@
+"""
+La trace des passages en base (tables passages et passage_parts, déclarées dans db_init) : l'écrire et la relire.
+
+Un passage est une chaîne d'agents lancée sur une ville (issue #204). Cette trace dit ce qui a été demandé (chaîne, ville,
+catégories, origine) et où en est chaque partie. Ce que chaque appel d'agent a coûté reste dans llm_calls, sous le même
+passage_id : load_calls le relit. Ce fichier ne contient que les requêtes ; les règles sont dans passage_service.py.
+"""
+import json
+from datetime import datetime
+
+from utils.db_utils import MySQLUtils
+
+# Les états d'un passage, et ceux de chacune de ses parties.
+QUEUED = "en_file"          # demandé, pas encore commencé
+RUNNING = "en_cours"
+DONE = "fini"
+FAILED = "echec"
+TO_DO = "a_faire"           # une partie que le passage n'a pas encore commencée
+
+PASSAGE_COLUMNS = """p.passage_id, p.chain, p.city_id, p.origin, p.status, p.requested_at, p.started_at, p.finished_at,
+                     p.error, p.resumed_from, c.name AS city_name, c.commune AS city_commune"""
+
+
+def _write(sql: str, rows: list) -> None:
+    """Exécute une écriture pour chaque ligne de `rows`, puis la valide (commit)."""
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        for row in rows:
+            cursor.execute(sql, row)
+        connection.commit()
+
+
+def _read(sql: str, params: tuple) -> list:
+    """Les lignes d'une lecture, chacune en dictionnaire {colonne: valeur}."""
+    with MySQLUtils.open_cursor(dictionary=True) as (connection, cursor):
+        cursor.execute(sql, params)
+        return cursor.fetchall()
+
+
+def insert_passage(passage_id: str, chain: str, city_id: int, origin: str, parts: list,
+                   resumed_from: str | None = None) -> None:
+    """Écrit un passage demandé (en file) et ses parties, toutes à faire, dans l'ordre où elles passeront."""
+    _write("""INSERT INTO passages (passage_id, chain, city_id, origin, status, requested_at, resumed_from)
+              VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+           [(passage_id, chain, city_id, origin, QUEUED, datetime.now(), resumed_from)])
+    _write("INSERT INTO passage_parts (passage_id, part, position, status) VALUES (%s, %s, %s, %s)",
+           [(passage_id, part, position, TO_DO) for position, part in enumerate(parts, start=1)])
+
+
+def set_passage_status(passage_id: str, status: str, error: str | None = None) -> None:
+    """Change l'état d'un passage : son début est noté quand il passe en cours, sa fin quand il finit ou échoue."""
+    if status == RUNNING:
+        _write("UPDATE passages SET status = %s, started_at = %s WHERE passage_id = %s",
+               [(status, datetime.now(), passage_id)])
+    else:
+        _write("UPDATE passages SET status = %s, finished_at = %s, error = %s WHERE passage_id = %s",
+               [(status, datetime.now(), error, passage_id)])
+
+
+def set_part(passage_id: str, part: str, status: str, step: str | None = None, summary: dict | None = None,
+             error: str | None = None) -> None:
+    """Change l'état d'une partie, avec l'étape notée par le code, le bilan de l'enregistrement ou la raison d'un échec."""
+    now = datetime.now()
+    _write("""UPDATE passage_parts
+              SET status = %s, step = %s, summary = %s, error = %s,
+                  started_at = COALESCE(started_at, %s),
+                  finished_at = CASE WHEN %s IN ('fini', 'echec') THEN %s ELSE NULL END
+              WHERE passage_id = %s AND part = %s""",
+           [(status, step, json.dumps(summary, ensure_ascii=False) if summary is not None else None, error, now,
+             status, now, passage_id, part)])
+
+
+def load_passage(passage_id: str) -> dict | None:
+    """Le passage, avec le nom et la commune de sa ville ; None s'il n'existe pas."""
+    rows = _read(f"""SELECT {PASSAGE_COLUMNS} FROM passages p LEFT JOIN cities c ON c.id = p.city_id
+                     WHERE p.passage_id = %s""", (passage_id,))
+    return rows[0] if rows else None
+
+
+def load_parts(passage_id: str) -> list:
+    """Les parties d'un passage, dans l'ordre où elles passent, avec leur bilan relu depuis le JSON."""
+    rows = _read("""SELECT part, position, status, step, started_at, finished_at, summary, error
+                    FROM passage_parts WHERE passage_id = %s ORDER BY position""", (passage_id,))
+    for row in rows:
+        row["summary"] = json.loads(row["summary"]) if row["summary"] else None
+    return rows
+
+
+def load_calls(passage_id: str) -> list:
+    """Les appels d'agents du passage, lus dans llm_calls, dans l'ordre : agent, étape, statut et coût de chacun."""
+    return _read("""SELECT agent, etape, status, cost_usd FROM llm_calls
+                    WHERE passage_id = %s ORDER BY called_at, id""", (passage_id,))
+
+
+def passage_ids(status: str, limit: int) -> list:
+    """Les identifiants des passages dans cet état, du plus récent au plus ancien."""
+    rows = _read("SELECT passage_id FROM passages WHERE status = %s ORDER BY requested_at DESC LIMIT %s",
+                 (status, limit))
+    return [row["passage_id"] for row in rows]
+
+
+def recent_ids(limit: int) -> list:
+    """Les identifiants des derniers passages finis ou en échec, du plus récent au plus ancien."""
+    rows = _read("""SELECT passage_id FROM passages WHERE status IN ('fini', 'echec')
+                    ORDER BY requested_at DESC LIMIT %s""", (limit,))
+    return [row["passage_id"] for row in rows]
+
+
+def resumed_by(passage_id: str) -> str | None:
+    """Le passage qui reprend celui-ci (sa colonne resumed_from le désigne), ou None s'il n'a pas été repris."""
+    rows = _read("SELECT passage_id FROM passages WHERE resumed_from = %s", (passage_id,))
+    return rows[0]["passage_id"] if rows else None

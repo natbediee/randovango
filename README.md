@@ -46,6 +46,9 @@ graph TD
   API -- "Lecture/écriture" --> SQLITE
 ```
 
+L'architecture des agents, de la route de la supervision jusqu'aux mesures de chaque appel :
+[docs/architecture_agents.md](docs/architecture_agents.md).
+
 ## Prérequis
 
 ### Environnement Docker (recommandé)

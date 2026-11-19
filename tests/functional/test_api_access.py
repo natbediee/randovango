@@ -62,11 +62,16 @@ ACCESS = {
     ("GET", "/api/supervision/search/spots"): ADMIN,
     ("GET", "/api/supervision/services/{poi_id}"): ADMIN,
     ("PUT", "/api/supervision/services/{poi_id}"): ADMIN,
+    # Les passages des chaînes d'agents (issue #204) : lancer, suivre, reprendre.
+    ("POST", "/api/supervision/passages"): ADMIN,
+    ("GET", "/api/supervision/passages"): ADMIN,
+    ("GET", "/api/supervision/passages/{passage_id}"): ADMIN,
+    ("POST", "/api/supervision/passages/{passage_id}/reprise"): ADMIN,
 }
 
 # Les paramètres de chemin et de requête des routes, pour les appeler vraiment.
 PATH_VALUES = {"{plan_id}": "1", "{city_id}": "1", "{hike_id}": "1", "{filename}": "trace.gpx",
-               "{decision_id}": "1", "{poi_id}": "1"}
+               "{decision_id}": "1", "{poi_id}": "1", "{passage_id}": "0123456789abcdef0123456789abcdef"}
 QUERY = "?plan_id=1&day_number=1&hike_ids=1&city_id=1"
 
 
