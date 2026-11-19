@@ -205,7 +205,7 @@ def test_a_passage_holds_the_lock_and_gives_it_back(monkeypatch, database):
     _passage(monkeypatch)
     find_services.run_passage(CITY)
     assert [query.split("(")[0] for query in database.queries] == ["SELECT GET_LOCK", "SELECT RELEASE_LOCK"]
-    assert database.opened == database.closed == 1 and find_services._lock_connection is None
+    assert database.opened == database.closed == 1 and find_services.lock_connection() is None
 
 
 def test_a_second_launch_stops_at_once_and_searches_nothing(monkeypatch, database):
@@ -218,7 +218,7 @@ def test_a_second_launch_stops_at_once_and_searches_nothing(monkeypatch, databas
     monkeypatch.setattr(service_store, "load_city", lambda name: CITY)
     with pytest.raises(SystemExit):
         find_services.main()
-    assert calls["searched"] == [] and database.closed == database.opened and find_services._lock_connection is None
+    assert calls["searched"] == [] and database.closed == database.opened and find_services.lock_connection() is None
 
 
 def test_a_launch_keeps_one_lock_for_all_its_communes(monkeypatch, database):
@@ -237,4 +237,70 @@ def test_the_lock_is_given_back_when_a_passage_fails(monkeypatch, database):
     monkeypatch.setattr(service_chain, "search_commune", lambda category, city, resume=None: 1 / 0)
     with pytest.raises(ZeroDivisionError):
         find_services.run_passage(CITY)
-    assert database.queries[-1].startswith("SELECT RELEASE_LOCK") and find_services._lock_connection is None
+    assert database.queries[-1].startswith("SELECT RELEASE_LOCK") and find_services.lock_connection() is None
+
+
+class _SharedLock:
+    """MySQL vu par deux fils : GET_LOCK ne rend 1 qu'à la première connexion qui le demande, jusqu'à RELEASE_LOCK."""
+    def __init__(self):
+        self.holder = None
+
+    def connect(self):
+        return _SharedLockConnection(self)
+
+    def disconnect(self, connection):
+        pass
+
+
+class _SharedLockConnection:
+    """Une connexion à _SharedLock : son curseur demande ou rend le verrou commun."""
+    def __init__(self, base):
+        self.base, self.answer = base, (1,)
+
+    def cursor(self):
+        return self
+
+    def execute(self, sql, params=None):
+        if "GET_LOCK" in sql:
+            free = self.base.holder is None
+            self.base.holder = self.base.holder or self
+            self.answer = (int(free),)
+        elif "RELEASE_LOCK" in sql:
+            self.base.holder = None
+
+    def fetchone(self):
+        return self.answer
+
+    def close(self):
+        pass
+
+
+def test_a_launch_from_another_thread_is_refused_while_a_passage_runs(monkeypatch):
+    """Deux lancements depuis deux fils (deux requêtes de l'API) : le second est refusé, il ne se croit pas déjà dans le verrou."""
+    import threading
+    base = _SharedLock()
+    monkeypatch.setattr(find_services.MySQLUtils, "connect", staticmethod(base.connect))
+    monkeypatch.setattr(find_services.MySQLUtils, "disconnect", staticmethod(base.disconnect))
+    inside, done, refused = threading.Event(), threading.Event(), []
+
+    def first():
+        with find_services.single_passage():
+            inside.set()
+            done.wait(5)
+
+    def second():
+        try:
+            with find_services.single_passage():
+                pass
+        except find_services.PassageRunning:
+            refused.append(True)
+
+    holder = threading.Thread(target=first)
+    holder.start()
+    inside.wait(5)
+    other = threading.Thread(target=second)
+    other.start()
+    other.join(5)
+    done.set()
+    holder.join(5)
+    assert refused == [True] and base.holder is None
