@@ -181,3 +181,15 @@ def test_the_reason_of_a_change_goes_with_it(api, settings):
     """La raison libre écrite dans la supervision part avec le changement ; elle n'est pas prise pour un réglage."""
     api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_usd": 5, "raison": "test du budget atteint"})
     assert settings == [({"daily_budget_usd": 5}, "camille", "test du budget atteint")]
+
+
+def test_the_chains_say_which_are_free_and_which_are_paid(api):
+    """La route des chaînes dit chacune, gratuite (OSM, FINESS, carburants) ou payante (services), et ses parties à lancer."""
+    response = api.client.get("/api/supervision/passages/chaines")
+    assert response.status_code == 200
+    chains = {chain["chaine"]: chain for chain in response.json()}
+    assert {key: chain["payant"] for key, chain in chains.items()} == {
+        "services": True, "osm": False, "finess": False, "carburants": False}
+    assert [part["cle"] for part in chains["services"]["categories"]] == [
+        "restaurants", "commerces", "supermarches", "laveries"]
+    assert chains["osm"]["libelle"] == "Lieux d'OpenStreetMap"

@@ -80,3 +80,18 @@ def test_finished_parts_are_read_in_every_passage_of_the_commune(base):
     # L'état du passage n'est pas regardé : une catégorie finie avant une coupure reste faite.
     assert "pp.status = 'fini'" in sql and "p.status IN" not in sql
     assert values == ("services", 12)
+
+
+def test_the_running_passages_are_read_for_one_chain_only(base):
+    """Le passage en cours se cherche dans la chaîne lancée : un passage d'une autre chaîne n'est pas nommé à sa place."""
+    base.rows = [{"passage_id": "p1"}]
+    assert passage_store.running_ids("services") == ["p1"]
+    sql, values = base.queries[0]
+    assert "chain = %s" in sql and values == ("en_cours", "services")
+
+
+def test_the_queue_is_read_from_the_oldest_passage(base):
+    """La file se lit du plus ancien passage au plus récent : c'est l'ordre dans lequel ils partent."""
+    base.rows = [{"passage_id": "p1"}, {"passage_id": "p2"}]
+    assert passage_store.queued_ids() == ["p1", "p2"]
+    assert "ORDER BY requested_at, passage_id" in base.queries[0][0] and base.queries[0][1] == ("en_file",)
