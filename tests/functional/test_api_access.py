@@ -70,6 +70,8 @@ ACCESS = {
     # Le réglage des agents et leur budget (issue #211).
     ("GET", "/api/supervision/passages/reglage"): ADMIN,
     ("PUT", "/api/supervision/passages/reglage"): ADMIN,
+    # Les chaînes qu'on peut lancer, gratuites ou payantes (issue #276).
+    ("GET", "/api/supervision/passages/chaines"): ADMIN,
 }
 
 # Les paramètres de chemin et de requête des routes, pour les appeler vraiment.

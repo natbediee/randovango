@@ -15,7 +15,9 @@ SECTIONS = {
     "Supervision · Passages des agents": {"/api/supervision/passages", "/api/supervision/passages/{passage_id}",
                                           "/api/supervision/passages/{passage_id}/reprise",
                                           # Issue #211 : le réglage des agents et leur budget.
-                                          "/api/supervision/passages/reglage"},
+                                          "/api/supervision/passages/reglage",
+                                          # Issue #276 : les chaînes qu'on peut lancer, gratuites ou payantes.
+                                          "/api/supervision/passages/chaines"},
 }
 
 

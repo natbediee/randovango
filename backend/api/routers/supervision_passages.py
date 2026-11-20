@@ -33,6 +33,7 @@ def post_passage(body: PassageRequest, background: BackgroundTasks, _admin=Depen
     Écrit le passage demandé et le lance en tâche de fond ; répond tout de suite par son état (« en_file »), avec son
     identifiant (passage_id), à relire ensuite avec GET /passages/{passage_id}.
     {"chaine": "services", "ville_id": 12, "categories": ["restaurants", "laveries"]}
+    Les chaînes et leurs catégories se lisent dans GET /passages/chaines : {"chaine": "osm", "ville_id": 12} relance OSM.
     Une chaîne, une ville ou une catégorie inconnue est refusée (422). Si un passage de la chaîne tourne déjà, le
     lancement est refusé (409) avec un message qui le nomme : un seul passage à la fois.
     """
@@ -58,8 +59,18 @@ def get_passages(limite: int = 20, _admin=Depends(require_admin)):
     return passage_service.list_passages(limite)
 
 
-# Les deux routes du réglage sont déclarées avant /passages/{passage_id} : sinon « reglage » serait lu comme
-# l'identifiant d'un passage.
+# Les routes des chaînes et du réglage sont déclarées avant /passages/{passage_id} : sinon « chaines » ou « reglage »
+# serait lu comme l'identifiant d'un passage.
+@router.get("/passages/chaines", summary="Les chaînes qu'on peut lancer sur une ville, gratuites ou payantes.")
+def get_chains(_admin=Depends(require_admin)):
+    """
+    Chaque chaîne, avec sa clé à envoyer dans « chaine » de POST /passages, son libellé, si elle est payante (des agents,
+    retenue par le budget du jour) ou gratuite (OSM, fichiers de l'État), et ses parties, à envoyer dans « categories ».
+    [{"chaine": "osm", "libelle": "Lieux d'OpenStreetMap", "payant": false, "categories": [{"cle": "osm", ...}]}, ...]
+    """
+    return passage_service.list_chains()
+
+
 @router.get("/passages/reglage", summary="Le réglage des agents et le budget : réglé, dépensé, restant.")
 def get_settings(_admin=Depends(require_admin)):
     """

@@ -384,6 +384,16 @@ def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:
 
 # --- Dire où il en est ---
 
+def list_chains() -> list:
+    """
+    Les chaînes qu'on peut lancer, dans l'ordre de CHAINS : leur clé (à envoyer dans « chaine »), leur libellé, si elles
+    sont payantes (des agents, retenues par le budget) ou gratuites, et leurs parties (à envoyer dans « categories »).
+    """
+    return [{"chaine": chain.key, "libelle": chain.label, "payant": chain.paid,
+             "categories": [{"cle": key, "libelle": label} for key, label in chain.parts.items()]}
+            for chain in CHAINS.values()]
+
+
 AUTO_OFF = "mise à jour automatique coupée : à lancer depuis la supervision"
 
 
