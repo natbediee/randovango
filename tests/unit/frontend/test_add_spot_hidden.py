@@ -18,3 +18,10 @@ def test_contributor_space_offers_no_spot_to_add():
     page = load_front().test_client().get("/contributor").get_data(as_text=True)
     assert "Ajouter un spot" not in page
     assert "+ Ajouter une randonnée" in page
+
+
+def test_login_page_no_longer_invites_to_share_spots():
+    """La page de connexion invite à partager des randonnées seulement, puisqu'un spot ne peut plus être proposé."""
+    page = load_front().test_client().get("/contributor/login").get_data(as_text=True)
+    assert "Connecte-toi pour partager tes randonnées." in page
+    assert "partager tes spots" not in page
