@@ -33,8 +33,7 @@ from agents import find_services
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMRefused, LLMTimeout, mesure_passage, new_passage_id
 from agents.service_chain import RegisterUnavailable, interrupted_trace, latest_traces
-from services import budget_service, llm_calls_service, passage_store, service_store
-from services import budget_service, etl_chains, passage_store, service_store
+from services import budget_service, etl_chains, llm_calls_service, passage_store, service_store
 from services.etl_chains import StepFailed
 from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO, WAITING
 from utils.geo_utils import city_commune

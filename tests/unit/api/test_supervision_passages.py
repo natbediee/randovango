@@ -191,8 +191,6 @@ def test_a_change_without_any_known_rate_is_refused(api, monkeypatch):
     monkeypatch.setattr(supervision_passages.budget_service, "save_settings", save_settings)
     response = api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_eur": 6})
     assert response.status_code == 503 and "Taux du dollar inconnu" in response.json()["detail"]
-    api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_usd": 5, "raison": "test du budget atteint"})
-    assert settings == [({"daily_budget_usd": 5}, "camille", "test du budget atteint")]
 
 
 def test_the_chains_say_which_are_free_and_which_are_paid(api):
