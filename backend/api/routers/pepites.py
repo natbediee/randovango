@@ -8,6 +8,7 @@ touchent un plan vérifient en plus qu'il appartient au voyageur (require_plan_o
 from fastapi import APIRouter, Body, Depends, Query
 
 from api.dependencies import get_current_traveller, require_plan_owner
+from api.trip_limits import check_trail_tips_count
 from services import pepite_service
 
 router = APIRouter(dependencies=[Depends(get_current_traveller)])
@@ -25,13 +26,15 @@ def get_pepites(plan_id: int = Query(...), day_number: int = Query(...)):
 
 
 @router.get("/trail-tips", summary="Vany's « on the way » recommendations for hikes.")
-def get_trail_tips(hike_ids: str = Query(..., description="Identifiants des randos, séparés par des virgules")):
+def get_trail_tips(hike_ids: str = Query(..., description="Identifiants des randos, séparés par des virgules (7 au plus)")):
     """
     Lieux repérés par Vany à moins de 400 m du tracé de chaque rando, pour les
     recommander dès le choix de la rando (étape 2) : {"12": [{nom, description,
     latitude, longitude}, ...]}.
     """
     ids = [int(part) for part in hike_ids.split(",") if part.strip().isdigit()]
+    # Une rando par jour d'un séjour gratuit : 7 au plus, sinon refus 422 avant de lire la base (issue #263).
+    check_trail_tips_count(ids)
     return pepite_service.trail_tips_for_hikes(ids)
 
 

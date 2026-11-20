@@ -35,6 +35,24 @@ inconnu). Une connexion réussie ne compte jamais.
   et le code 429, comme les échecs (`failed_login`, 401) et les connexions réussies (`login`, 200).
 - Message : « Trop d'essais de connexion manqués. Réessaie dans 15 minutes au plus. »
 
+## Les bornes des valeurs
+
+Un plafond compte les appels ; une borne limite ce qu'un seul appel peut demander. Au-delà, la route répond
+**422** avec un message en français, avant de lire ou d'écrire en base et avant de lancer Vany.
+Le code est dans `backend/api/trip_limits.py`.
+
+| Valeur | Routes | Borne | Pourquoi |
+| --- | --- | --- | --- |
+| Durée du séjour (`duration_days`) | `POST /api/step1/create_plan` | 7 jours au plus | L'offre gratuite ; chaque jour devient une ligne en base, et la météo couvre 7 jours. |
+| Numéro du jour (`day_number`) | `update_day_city`, `update_plan` des étapes 2, 3 et 4 | de 1 à la durée du séjour | Sinon le jour 999 était créé, et Vany le préparait. |
+| Rayon de recherche (`distance_km`) | `/cities`, `/hikes`, `/spots`, `/poi` | plus de 0, 25 km au plus (5 par défaut) | Ces routes sont ouvertes à tous : un rayon de 5 000 km lirait toute la base d'un coup. |
+| Randos (`hike_ids`) | `GET /api/pepites/trail-tips` | 7 au plus | Une rando par jour d'un séjour gratuit. |
+| Carnet PDF | `GET /api/result/pdf` | 3 fabrications par voyage | Le carnet, puis deux nouvelles versions après des modifications ; sans limite avec l'offre payante, à venir. Fabriquer un carnet occupe le serveur plusieurs secondes. |
+
+Le carnet est compté en base (`trip_plans.pdf_downloads`) : le compte tient au redémarrage de l'API.
+Au-delà de 3, la route répond **403** avec un message qui renvoie à l'offre payante.
+Une fabrication en panne ne compte pas.
+
 ## L'adresse IP
 
 Derrière nginx, l'API ne voit que l'adresse de nginx : nginx transmet la vraie dans l'en-tête `X-Real-IP`

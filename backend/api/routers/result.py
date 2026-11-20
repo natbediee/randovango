@@ -1,5 +1,5 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from api.dependencies import require_plan_owner
 from fastapi.responses import Response
 from utils.db_utils import MySQLUtils
@@ -8,6 +8,7 @@ from services.supervision.spots_review import reworked_a_savoir
 from utils.display_utils import result_day_display, spot_description_label, spot_name_label, with_a_savoir
 from services.pepite_service import fetch_chosen_pepites, fetch_trail_tips
 from services.pdf_service import render_trip_pdf_html
+from services.plan_service import MAX_FREE_PDF_BOOKLETS, release_pdf_booklet, reserve_pdf_booklet
 
 router = APIRouter()
 
@@ -129,20 +130,32 @@ def get_plan(
     return plan
 
 
+# Le message quand les 3 carnets du voyage sont faits : ce qui s'est passé, et ce que l'offre payante changera.
+PDF_BOOKLETS_USED_MESSAGE = (f"Tu as déjà préparé ton carnet {MAX_FREE_PDF_BOOKLETS} fois pour ce voyage, "
+                             "le maximum de l'offre gratuite. Les carnets sans limite viendront avec l'offre payante.")
+
+
 @router.get("/pdf", summary="Download the trip plan as a printable PDF booklet.",
             dependencies=[Depends(require_plan_owner)])
 def get_plan_pdf(plan_id: int = Query(...)):
+    """
+    Le carnet PDF du voyage. Il se fabrique 3 fois au plus par voyage (offre gratuite, issue #263) :
+    le voyageur le refait après ses modifications. Au-delà, refus 403 avec un message qui l'explique.
+    Fabriquer un carnet (cartes dessinées, mise en page) occupe le serveur plusieurs secondes :
+    sans limite, un script pourrait le demander sans fin.
+    """
     plan = _fetch_plan_data(plan_id)
     if not plan:
         return Response(content="Plan introuvable", status_code=404)
 
-    # Ne garder que les jours réellement complétés (create_plan pré-crée tous les
-    # jours du séjour, vides, dès le départ).
-    plan["days"] = [d for d in plan["days"] if d.get("hike_id") or d.get("spot_id")]
-
-    html = render_trip_pdf_html(plan)
-    from weasyprint import HTML
-    pdf_bytes = HTML(string=html).write_pdf()
+    # La place est réservée avant la fabrication, et rendue si elle échoue.
+    if not reserve_pdf_booklet(plan_id):
+        raise HTTPException(status_code=403, detail=PDF_BOOKLETS_USED_MESSAGE)
+    try:
+        pdf_bytes = make_pdf_booklet(plan)
+    except Exception:
+        release_pdf_booklet(plan_id)
+        raise
 
     city_name = (plan.get("city_name") or "voyage").lower().replace(" ", "-")
     filename = f"carnet-voyage-{city_name}-{plan_id}.pdf"
@@ -151,3 +164,13 @@ def get_plan_pdf(plan_id: int = Query(...)):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+def make_pdf_booklet(plan: dict) -> bytes:
+    """Fabrique le PDF du carnet à partir du voyage lu en base (les jours complétés seulement)."""
+    # Ne garder que les jours réellement complétés (create_plan pré-crée tous les
+    # jours du séjour, vides, dès le départ).
+    plan["days"] = [d for d in plan["days"] if d.get("hike_id") or d.get("spot_id")]
+    html = render_trip_pdf_html(plan)
+    from weasyprint import HTML
+    return HTML(string=html).write_pdf()
