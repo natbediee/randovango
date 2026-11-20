@@ -16,17 +16,17 @@ def render(path):
 
 
 def test_duration_page_says_vany_is_a_preview():
-    """Sur la page Durée, l'encart de Vany porte l'étiquette « aperçu » et son bouton ne promet plus une discussion."""
+    """Sur la page Durée, le bouton de l'encart de Vany annonce un aperçu, sans étiquette en double au-dessus du titre."""
     page = render("/duration")
-    assert PREVIEW_TAG in page
+    assert PREVIEW_TAG not in page
     assert PREVIEW_BUTTON in page
     assert "Discuter avec Vany" not in page
 
 
 def test_trip_summary_says_vany_is_a_preview():
-    """Sur le récap du voyage, l'encart de Vany porte l'étiquette « aperçu » avant le clic."""
+    """Sur le récap du voyage, le bouton de l'encart de Vany annonce un aperçu, sans étiquette en double au-dessus du titre."""
     page = render("/results")
-    assert PREVIEW_TAG in page
+    assert PREVIEW_TAG not in page
     assert PREVIEW_BUTTON in page
     assert "Découvrir Vany" not in page
 
