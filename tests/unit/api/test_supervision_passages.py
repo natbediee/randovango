@@ -191,3 +191,17 @@ def test_a_change_without_any_known_rate_is_refused(api, monkeypatch):
     monkeypatch.setattr(supervision_passages.budget_service, "save_settings", save_settings)
     response = api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_eur": 6})
     assert response.status_code == 503 and "Taux du dollar inconnu" in response.json()["detail"]
+    api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_usd": 5, "raison": "test du budget atteint"})
+    assert settings == [({"daily_budget_usd": 5}, "camille", "test du budget atteint")]
+
+
+def test_the_chains_say_which_are_free_and_which_are_paid(api):
+    """La route des chaînes dit chacune, gratuite (OSM, FINESS, carburants) ou payante (services), et ses parties à lancer."""
+    response = api.client.get("/api/supervision/passages/chaines")
+    assert response.status_code == 200
+    chains = {chain["chaine"]: chain for chain in response.json()}
+    assert {key: chain["payant"] for key, chain in chains.items()} == {
+        "services": True, "osm": False, "finess": False, "carburants": False}
+    assert [part["cle"] for part in chains["services"]["categories"]] == [
+        "restaurants", "commerces", "supermarches", "laveries"]
+    assert chains["osm"]["libelle"] == "Lieux d'OpenStreetMap"

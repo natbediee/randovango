@@ -92,7 +92,7 @@ class PassageRequest(BaseModel):
     """
     Lancer un passage d'une chaîne d'agents sur une ville (POST /passages, issue #204), toujours en vraie mise à jour :
     {"chaine": "services", "ville_id": 12, "categories": ["restaurants", "laveries"]}
-    chaine : la chaîne à lancer ; seule « services » est branchée aujourd'hui, les autres viendront avec #276.
+    chaine : la chaîne à lancer : « services » (payante), « osm », « finess » ou « carburants » (gratuites).
     ville_id : la ville de l'appli (cities.id). categories : celles à mettre à jour ; absentes, toutes celles de la chaîne.
     """
     chaine: str
