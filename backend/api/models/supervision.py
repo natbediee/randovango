@@ -98,3 +98,19 @@ class PassageRequest(BaseModel):
     chaine: str
     ville_id: int
     categories: list[str] | None = None
+
+
+class AgentSettingsRequest(BaseModel):
+    """
+    Changer le réglage des agents (PUT /passages/reglage, issue #211). Seuls les champs envoyés changent :
+    {"services_apres_etl": false} coupe la mise à jour automatique sans toucher au budget.
+    services_apres_etl : la chaîne des services se lance-t-elle seule à la fin de l'ETL d'une nouvelle ville ?
+    Les montants sont en dollars, au prix équivalent API des appels (abonnement compris), jamais négatifs :
+    enveloppe_du_mois_usd, plafond_du_jour_usd, et reserve_vany_usd, la part du mois gardée pour Vany.
+    raison : pourquoi l'admin change le réglage, en texte libre (facultatif), gardé avec le changement.
+    """
+    services_apres_etl: bool | None = None
+    enveloppe_du_mois_usd: float | None = Field(default=None, ge=0)
+    plafond_du_jour_usd: float | None = Field(default=None, ge=0)
+    reserve_vany_usd: float | None = Field(default=None, ge=0)
+    raison: str | None = Field(default=None, max_length=255)

@@ -13,7 +13,9 @@ SECTIONS = {
     "Supervision · Services": {"/api/supervision/services/{poi_id}"},
     # Issue #204 : lancer, suivre et reprendre un passage d'une chaîne d'agents.
     "Supervision · Passages des agents": {"/api/supervision/passages", "/api/supervision/passages/{passage_id}",
-                                          "/api/supervision/passages/{passage_id}/reprise"},
+                                          "/api/supervision/passages/{passage_id}/reprise",
+                                          # Issue #211 : le réglage des agents et leur budget.
+                                          "/api/supervision/passages/reglage"},
 }
 
 

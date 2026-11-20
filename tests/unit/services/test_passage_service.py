@@ -10,7 +10,7 @@ import pytest
 
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMTimeout, LLMUnavailable, passage_courant
-from services import passage_service, passage_store
+from services import passage_queue, passage_service, passage_store
 from services.passage_service import PassageConflict
 
 CITY = {"id": 12, "name": "Guidel", "commune": "Guidel", "insee": "56078"}
@@ -21,9 +21,9 @@ class _Store:
     def __init__(self):
         self.passages, self.parts, self.calls = {}, {}, {}
 
-    def insert_passage(self, passage_id, chain, city_id, origin, parts, resumed_from=None):
+    def insert_passage(self, passage_id, chain, city_id, origin, parts, resumed_from=None, status=passage_store.QUEUED):
         self.passages[passage_id] = {"passage_id": passage_id, "chain": chain, "city_id": city_id, "origin": origin,
-                                     "status": passage_store.QUEUED, "requested_at": datetime(2026, 11, 19, 10),
+                                     "status": status, "requested_at": datetime(2026, 11, 19, 10),
                                      "started_at": None, "finished_at": None, "error": None,
                                      "resumed_from": resumed_from, "city_name": CITY["name"], "city_commune": CITY["commune"]}
         self.parts[passage_id] = [{"part": part, "position": n, "status": passage_store.TO_DO, "step": None,
@@ -54,6 +54,25 @@ class _Store:
     def resumed_by(self, passage_id):
         return next((key for key, row in self.passages.items() if row["resumed_from"] == passage_id), None)
 
+    def oldest_queued(self):
+        # Les passages sont gardés dans l'ordre où ils ont été demandés (un dictionnaire garde l'ordre d'écriture).
+        return next((key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED), None)
+
+    def open_parts(self, chain, city_ids):
+        # Comme la requête : un passage en file, en attente ou en cours, ou un échec pas encore repris.
+        def still_open(key, passage):
+            return (passage["status"] in ("en_file", "en_attente", "en_cours")
+                    or (passage["status"] == "echec" and self.resumed_by(key) is None))
+        return {row["part"] for key, passage in self.passages.items()
+                if passage["chain"] == chain and passage["city_id"] in city_ids and still_open(key, passage)
+                for row in self.parts[key]}
+
+    def finished_parts(self, chain, city_ids):
+        # Comme la requête : les parties finies, dans n'importe quel passage de ces villes.
+        return {row["part"] for key, passage in self.passages.items()
+                if passage["chain"] == chain and passage["city_id"] in city_ids
+                for row in self.parts[key] if row["status"] == "fini"}
+
     def recent_ids(self, limit):
         return [key for key, row in self.passages.items() if row["status"] in ("fini", "echec")][:limit]
 
@@ -63,10 +82,13 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by"):
+                 "passage_ids", "recent_ids", "resumed_by", "oldest_queued", "open_parts", "finished_parts"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
     monkeypatch.setattr(passage_service.service_store, "load_city", lambda name: CITY)
+    # Le budget des agents le permet, sauf si un test pose une raison de blocage dans fake.budget_reason.
+    fake.budget_reason = None
+    monkeypatch.setattr(passage_service.budget_service, "budget_block", lambda: fake.budget_reason)
     return fake
 
 
@@ -76,10 +98,12 @@ def chain(monkeypatch):
     La chaîne des services simulée : chaque catégorie note ce qu'on lui demande et le passage en cours, puis rend un
     bilan ; `fail` donne l'erreur à lever pour une catégorie. Le verrou est libre, sauf si `busy` est vrai.
     """
-    state = {"ran": [], "fail": {}, "busy": False}
+    state = {"ran": [], "fail": {}, "busy": False, "zone_budget": set()}
 
-    def run_part(passage_id, key, city, resume):
+    def run_part(passage_id, key, city, resume, check_budget):
         state["ran"].append((key, resume, passage_courant()))
+        if key in state["zone_budget"]:
+            check_budget()      # une grande ville regarde le budget avant sa zone suivante
         if key in state["fail"]:
             raise state["fail"][key]
         return {"fiches": 3}
@@ -135,6 +159,14 @@ def test_a_launch_while_a_passage_runs_names_the_running_one(store, chain):
     assert len(store.passages) == 1
 
 
+def test_a_launch_is_refused_when_the_budget_is_reached(store, chain):
+    """Quand le budget des agents est atteint, un lancement à la main est refusé avec la raison, et rien n'est écrit."""
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    with pytest.raises(PassageConflict, match="Budget des agents atteint .plafond du jour atteint"):
+        passage_service.create_passage("services", 12)
+    assert store.passages == {}
+
+
 def test_a_lock_held_from_the_command_line_is_named_too(store, chain):
     """Un verrou tenu sans trace vient d'un lancement dans le conteneur : le message le dit."""
     chain["busy"] = True
@@ -164,13 +196,35 @@ def test_a_quota_reached_keeps_the_finished_categories_and_stops(store, chain):
     assert store.parts[passage_id][1]["error"] == reason
 
 
-def test_a_passage_refused_by_the_lock_fails_with_a_clear_reason(store, chain):
-    """Un passage qui trouve le verrou pris au moment de partir échoue, avec la raison, sans rien chercher."""
+def test_a_passage_that_finds_the_lock_taken_keeps_its_place_in_the_queue(store, chain):
+    """Un passage qui trouve le verrou pris au moment de partir reste en file, sans échec ni recherche : la file le relancera (#211)."""
     passage_id = passage_service.create_passage("services", 12)
     chain["busy"] = True
     passage_service.run_passage(passage_id)
-    assert chain["ran"] == [] and store.passages[passage_id]["status"] == "echec"
-    assert store.passages[passage_id]["error"] == "un autre passage tournait déjà : relancer après sa fin"
+    assert chain["ran"] == [] and store.passages[passage_id]["status"] == "en_file"
+    assert store.passages[passage_id]["error"] is None
+
+
+def test_a_passage_already_run_is_not_run_twice(store, chain):
+    """Si la file et la tâche de fond de la supervision visent le même passage, le second le trouve fini et ne le refait pas."""
+    passage_id = passage_service.create_passage("services", 12)
+    passage_service.run_passage(passage_id)
+    passage_service.run_passage(passage_id)
+    assert len(chain["ran"]) == 4 and store.passages[passage_id]["status"] == "fini"
+
+
+def test_an_etl_request_is_queued_even_while_a_passage_runs_or_the_budget_is_reached(store, chain):
+    """Une ville de l'ETL n'est jamais refusée : son passage prend sa place dans la file, verrou pris et budget atteint."""
+    chain["busy"] = True
+    store.budget_reason = "plafond du jour atteint"
+    passage_id = passage_service.create_passage("services", 12, origin="etl")
+    assert store.passages[passage_id]["status"] == "en_file" and store.passages[passage_id]["origin"] == "etl"
+
+
+def test_an_etl_request_waits_for_the_admin_when_the_automatic_update_is_off(store, chain):
+    """Mise à jour automatique coupée : le passage de l'ETL est écrit « en attente », pour que l'admin le lance."""
+    passage_id = passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
+    assert store.passages[passage_id]["status"] == "en_attente"
 
 
 # --- Reprendre ---
@@ -204,10 +258,10 @@ def test_a_failed_passage_is_resumed_only_once_and_knows_its_resumption(store, c
 
 
 def test_only_a_failed_passage_can_be_resumed(store, chain):
-    """Un passage fini ne se reprend pas : la reprise est refusée avec un message."""
+    """Un passage fini ne se relance pas : la relance est refusée avec un message."""
     passage_id = passage_service.create_passage("services", 12)
     passage_service.run_passage(passage_id)
-    with pytest.raises(PassageConflict, match="seul un passage en échec se reprend"):
+    with pytest.raises(PassageConflict, match="seul un passage en échec ou en attente se relance"):
         passage_service.resume_passage(passage_id)
 
 
@@ -298,14 +352,14 @@ def test_a_service_category_resumes_from_its_stopped_file_and_notes_the_saving_s
     seen, steps = {}, []
     monkeypatch.setattr(passage_service, "interrupted_trace", lambda category, city: {"zones": ["finie"]})
 
-    def search_and_save(category, city, stopped=None, before_saving=None):
+    def search_and_save(category, city, stopped=None, before_saving=None, check_budget=None):
         seen.update(category=category.key, stopped=stopped)
         before_saving()
         return {"fiches": 2}
 
     monkeypatch.setattr(passage_service.find_services, "search_and_save", search_and_save)
     monkeypatch.setattr(passage_store, "set_part", lambda passage_id, key, status, step=None: steps.append((key, status, step)))
-    summary = passage_service.run_service_category("p1", "laveries", CITY, resume=True)
+    summary = passage_service.run_service_category("p1", "laveries", CITY, resume=True, check_budget=lambda: None)
     assert summary == {"fiches": 2} and seen == {"category": "laveries", "stopped": {"zones": ["finie"]}}
     assert steps == [("laveries", "en_cours", "enregistrement")]
 
@@ -333,3 +387,249 @@ def test_the_state_of_a_category_carries_its_summary_sentence(store, chain):
     store.set_part(passage_id, "supermarches", "fini", summary={"fiches": 3})
     finished, waiting = passage_service.read_passage(passage_id)["categories"]
     assert finished["bilan_texte"] == "3 services enregistrés." and waiting["bilan_texte"] is None
+
+
+# --- La file (services/passage_queue.py, issue #211) ---
+
+def test_two_cities_added_one_after_the_other_pass_in_order(store, chain):
+    """Deux villes ajoutées coup sur coup par l'ETL passent l'une après l'autre, dans l'ordre d'arrivée : la seconde n'est pas perdue."""
+    first = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    second = passage_service.create_passage("services", 12, ["laveries"], origin="etl")
+    assert passage_queue.run_next() is True
+    assert store.passages[first]["status"] == "fini" and store.passages[second]["status"] == "en_file"
+    assert passage_queue.run_next() is True
+    assert store.passages[second]["status"] == "fini"
+    assert [ran[0] for ran in chain["ran"]] == ["restaurants", "laveries"]
+    assert passage_queue.run_next() is False
+
+
+def test_the_queue_waits_while_a_passage_runs(store, chain):
+    """Tant qu'un passage tient le verrou, la ville en file attend, avec la raison, et rien n'est cherché."""
+    queued = passage_service.create_passage("services", 12, origin="etl")
+    chain["busy"] = True
+    assert passage_queue.why_waiting(queued) == "attend la fin du passage en cours"
+    assert passage_queue.run_next() is False and chain["ran"] == []
+
+
+def test_the_queue_waits_for_the_budget_then_goes_by_itself(store, chain):
+    """Budget atteint : la ville reste en file avec la raison ; dès que le budget le permet, elle part seule."""
+    queued = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    assert passage_queue.run_next() is False
+    assert passage_queue.why_waiting(queued).startswith("plafond du jour atteint")
+    store.budget_reason = None          # le lendemain, ou le plafond relevé par l'admin
+    assert passage_queue.run_next() is True and store.passages[queued]["status"] == "fini"
+
+
+def test_a_passage_waiting_for_the_admin_is_not_taken_by_the_queue(store, chain):
+    """Une ville en attente (mise à jour automatique coupée) n'est pas lancée par la file : elle attend l'admin."""
+    passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
+    assert passage_queue.run_next() is False and chain["ran"] == []
+
+
+def test_an_error_while_reading_the_queue_does_not_stop_the_worker(store, chain, monkeypatch):
+    """Une base injoignable un instant est notée dans le journal ; le fil de la file attend le tour suivant au lieu de s'arrêter."""
+    turns = []
+
+    def broken():
+        turns.append(1)
+        raise ConnectionError("base injoignable")
+
+    def stop_after_one_turn(seconds):
+        raise SystemExit         # arrête la boucle sans fin du fil, pour le test
+    monkeypatch.setattr(passage_queue, "run_next", broken)
+    monkeypatch.setattr(passage_queue._wake, "wait", stop_after_one_turn)
+    with pytest.raises(SystemExit):
+        passage_queue.work_forever()
+    assert turns == [1]
+
+
+# --- La demande de l'ETL d'une nouvelle ville (issue #211) ---
+
+# Le Conquet et Lochrist, un lieu-dit du Conquet (même code INSEE), comme dans cities.
+CONQUET = {"id": 30, "name": "Le Conquet", "commune": "Le Conquet", "insee": "29040"}
+LOCHRIST = {"id": 31, "name": "Lochrist", "commune": "Le Conquet", "insee": "29040"}
+
+
+@pytest.fixture
+def etl(store, chain, monkeypatch):
+    """
+    Les villes du Conquet, les fichiers des passages déjà allés au bout (searched : {catégorie : noms des fichiers})
+    et le réglage de la mise à jour automatique (activée), tels que l'ETL les trouve.
+    """
+    state = {"searched": {}, "auto": True}
+    cities = [CITY, CONQUET, LOCHRIST]
+    monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: cities)
+    # load_city rend la ville qui porte le nom de la commune : Lochrist se cherche depuis Le Conquet.
+    monkeypatch.setattr(passage_service.service_store, "load_city",
+                        lambda name: CONQUET if name in ("Lochrist", "Le Conquet") else CITY)
+    monkeypatch.setattr(passage_service, "latest_traces",
+                        lambda category: {name: {} for name in state["searched"].get(category.key, ())})
+    monkeypatch.setattr(passage_service.budget_service, "load_settings",
+                        lambda: {"services_after_etl": state["auto"]})
+    return state
+
+
+def test_the_etl_city_name_becomes_its_official_commune(store, etl):
+    """Une rando partie de Lochrist fait chercher la commune officielle, Le Conquet, avec l'origine « etl »."""
+    passage_id = passage_service.request_etl_passage("Lochrist")
+    passage = store.passages[passage_id]
+    assert (passage["city_id"], passage["origin"], passage["status"]) == (CONQUET["id"], "etl", "en_file")
+    assert [row["part"] for row in store.parts[passage_id]] == ["restaurants", "commerces", "supermarches", "laveries"]
+
+
+def test_only_the_categories_never_searched_are_requested(store, etl):
+    """Guidel, dont restaurants, supermarchés et laveries sont déjà cherchés : l'ETL ne demande que les commerces."""
+    etl["searched"] = {"restaurants": ["Guidel"], "supermarches": ["Guidel"], "laveries": ["Guidel"]}
+    passage_id = passage_service.request_etl_passage("Guidel")
+    assert [row["part"] for row in store.parts[passage_id]] == ["commerces"]
+
+
+def test_a_category_finished_in_the_shared_base_is_not_asked_again(store, etl):
+    """Guidel, dont supermarchés et laveries sont finis dans la base sans fichier visible (fait depuis une autre branche) : l'ETL ne les redemande pas."""
+    store.insert_passage("ancien", "services", CITY["id"], "supervision", ["supermarches", "laveries"])
+    passage_store.set_part("ancien", "supermarches", "fini")
+    passage_store.set_part("ancien", "laveries", "fini")
+    etl["searched"] = {"restaurants": ["Guidel"]}
+    passage_id = passage_service.request_etl_passage("Guidel")
+    assert [row["part"] for row in store.parts[passage_id]] == ["commerces"]
+
+
+def test_a_category_finished_before_a_failure_stays_done(store, etl):
+    """Une catégorie finie avant la coupure (restaurants) et celle finie par la reprise (commerces) comptent : seules les autres sont demandées."""
+    store.insert_passage("coupe", "services", CONQUET["id"], "etl", ["restaurants", "commerces"])
+    passage_store.set_part("coupe", "restaurants", "fini")
+    passage_store.set_passage_status("coupe", "echec", "quota de l'abonnement Claude atteint")
+    store.insert_passage("reprise", "services", CONQUET["id"], "supervision", ["commerces"], resumed_from="coupe")
+    passage_store.set_part("reprise", "commerces", "fini")
+    passage_store.set_passage_status("reprise", "fini")
+    passage_id = passage_service.request_etl_passage("Lochrist")
+    assert [row["part"] for row in store.parts[passage_id]] == ["supermarches", "laveries"]
+
+
+def test_an_old_file_named_after_the_place_counts_for_its_commune(store, etl):
+    """Un fichier d'avant le 8 novembre, au nom de Lochrist, compte pour Le Conquet : rien n'est cherché deux fois."""
+    etl["searched"] = {key: ["Lochrist"] for key in passage_service.SERVICE_LABELS}
+    assert passage_service.request_etl_passage("Le Conquet") is None
+    assert store.passages == {}
+
+
+def test_a_second_hike_in_the_same_commune_asks_nothing_more(store, etl):
+    """Deux randos au Conquet coup sur coup : la seconde ne redemande pas les catégories déjà en file."""
+    first = passage_service.request_etl_passage("Le Conquet")
+    assert passage_service.request_etl_passage("Lochrist") is None
+    assert list(store.passages) == [first]
+
+
+def test_a_second_hike_does_not_ask_again_a_city_whose_failure_waits_for_its_resume(store, etl):
+    """Un échec pas encore repris garde ses catégories : une seconde rando n'en redemande pas (Paimpont, 19 novembre 2026), sa reprise les refera."""
+    failed = passage_service.request_etl_passage("Le Conquet")
+    passage_store.set_passage_status(failed, "echec", "quota de l'abonnement Claude atteint")
+    assert passage_service.request_etl_passage("Lochrist") is None
+    assert list(store.passages) == [failed]
+
+
+def test_once_the_failure_is_resumed_its_categories_no_longer_block(store, etl):
+    """Un échec déjà repris ne compte plus : seule sa reprise dit ce qui est demandé."""
+    failed = passage_service.request_etl_passage("Le Conquet")
+    passage_store.set_passage_status(failed, "echec", "quota de l'abonnement Claude atteint")
+    store.insert_passage("reprise", "services", CONQUET["id"], "supervision", ["laveries"], resumed_from=failed)
+    passage_store.set_passage_status("reprise", "fini")
+    assert passage_service.request_etl_passage("Lochrist") is not None
+
+
+def test_with_the_automatic_update_off_the_city_waits_for_the_admin(store, etl):
+    """Mise à jour automatique coupée : la ville est gardée « en attente », elle n'est pas perdue et la file ne la lance pas."""
+    etl["auto"] = False
+    passage_id = passage_service.request_etl_passage("Guidel")
+    assert store.passages[passage_id]["status"] == "en_attente"
+    assert passage_queue.run_next() is False
+
+
+def test_the_etl_wakes_the_queue_after_its_request(monkeypatch):
+    """À la fin de l'ETL, la demande de passage est faite, puis la file est réveillée pour la lancer sans attendre."""
+    from etl import etl_pipeline
+    calls = []
+    monkeypatch.setattr(passage_service, "request_etl_passage", lambda city: calls.append(("demande", city)) or "abc")
+    monkeypatch.setattr(passage_queue, "wake", lambda: calls.append(("réveil",)))
+    etl_pipeline.launch_services("Guidel")
+    assert calls == [("demande", "Guidel"), ("réveil",)]
+
+
+def test_a_failed_request_does_not_stop_the_etl(monkeypatch):
+    """Une base injoignable au moment de la demande est notée dans le journal ; l'ETL de la ville finit quand même."""
+    from etl import etl_pipeline
+
+    def broken(city):
+        raise ConnectionError("base injoignable")
+    monkeypatch.setattr(passage_service, "request_etl_passage", broken)
+    etl_pipeline.launch_services("Guidel")
+
+
+# --- Les villes non faites et leur relance (issue #211) ---
+
+def test_a_city_waiting_for_the_admin_is_launched_by_the_resume_route(store, chain):
+    """Une ville en attente (mise à jour coupée) est lancée par la relance : le même passage repart, sans en créer un autre."""
+    waiting = passage_service.create_passage("services", 12, ["laveries"], origin="etl", status=passage_store.WAITING)
+    assert passage_service.resume_passage(waiting) == waiting
+    passage_service.run_passage(waiting)
+    assert list(store.passages) == [waiting] and store.passages[waiting]["status"] == "fini"
+    assert store.passages[waiting]["origin"] == "etl"
+
+
+def test_a_waiting_city_is_not_launched_when_the_budget_is_reached(store, chain):
+    """Budget atteint : lancer une ville en attente est refusé avec la raison, et elle reste en attente."""
+    waiting = passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
+    store.budget_reason = "enveloppe du mois atteinte"
+    with pytest.raises(PassageConflict, match="Budget des agents atteint"):
+        passage_service.resume_passage(waiting)
+    assert store.passages[waiting]["status"] == "en_attente"
+
+
+def test_the_cities_not_done_are_listed_with_their_reason(store, chain):
+    """L'API donne les villes non faites avec leur raison : budget atteint, mise à jour coupée, échec ; un échec repris n'y est plus."""
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    queued = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    waiting = passage_service.create_passage("services", 12, ["commerces"], origin="etl", status=passage_store.WAITING)
+    store.budget_reason = None
+    chain["fail"]["laveries"] = LLMTimeout("trop long")
+    failed = passage_service.create_passage("services", 12, ["laveries"])
+    passage_service.run_passage(failed)
+    resumed_failure = passage_service.create_passage("services", 12, ["supermarches"])
+    chain["fail"]["supermarches"] = LLMTimeout("trop long")
+    passage_service.run_passage(resumed_failure)
+    store.insert_passage("reprise", "services", 12, "supervision", ["supermarches"], resumed_from=resumed_failure)
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    rows = {row["passage_id"]: row for row in passage_service.list_passages()["villes_en_attente"]}
+    assert rows[queued]["raison"].startswith("plafond du jour atteint") and rows[queued]["origine"] == "etl"
+    assert rows[waiting]["raison"] == "mise à jour automatique coupée : à lancer depuis la supervision"
+    assert rows[failed]["raison"] == "échec : délai dépassé : Claude n'a pas répondu à temps"
+    assert resumed_failure not in rows
+
+
+# --- Le budget regardé pendant le passage (issue #211, essai de Rennes) ---
+
+def test_a_passage_stops_between_two_categories_when_the_budget_is_reached(store, chain, monkeypatch):
+    """Budget atteint après les restaurants : le passage retourne en file, les restaurants restent faits, les commerces attendent."""
+    passage_id = passage_service.create_passage("services", 12, ["restaurants", "commerces"], origin="etl")
+    calls = iter([None, "plafond du jour atteint"])      # libre avant les restaurants, atteint avant les commerces
+    monkeypatch.setattr(passage_service.budget_service, "budget_block", lambda: next(calls))
+    passage_service.run_passage(passage_id)
+    assert store.passages[passage_id]["status"] == "en_file"
+    assert [(row["part"], row["status"], row["step"]) for row in store.parts[passage_id]] == [
+        ("restaurants", "fini", None), ("commerces", "a_faire", "budget")]
+    assert [ran[0] for ran in chain["ran"]] == ["restaurants"]
+
+
+def test_a_big_city_stopped_between_two_zones_resumes_its_file_when_the_budget_returns(store, chain, monkeypatch):
+    """Rennes arrêtée entre deux zones : elle retourne en file sans échec, puis reprend son fichier, sans repayer ses zones finies."""
+    passage_id = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    chain["zone_budget"] = {"restaurants"}
+    budget = iter([None, "plafond du jour atteint"])     # libre au départ, atteint avant la zone suivante
+    monkeypatch.setattr(passage_service.budget_service, "budget_block", lambda: next(budget, None))
+    passage_service.run_passage(passage_id)
+    assert store.passages[passage_id]["status"] == "en_file" and store.passages[passage_id]["error"] is None
+    chain["zone_budget"] = set()
+    assert passage_queue.run_next() is True
+    assert store.passages[passage_id]["status"] == "fini"
+    assert [(key, resume) for key, resume, _ in chain["ran"]] == [("restaurants", False), ("restaurants", True)]

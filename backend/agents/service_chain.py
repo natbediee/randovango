@@ -462,10 +462,12 @@ def note_register_facts(category, rows: list, register: dict | None, commune: st
             row["a_relire"] = reason
 
 
-def search_commune(category, city: dict, resume: dict | None = None) -> dict:
+def search_commune(category, city: dict, resume: dict | None = None, check_budget=lambda: None) -> dict:
     """
     La commune entière, ou zone par zone pour une grande ville. Lève LLMUnavailable si l'agent n'a pas pu répondre, et
     RegisterUnavailable si le registre d'une grande ville n'a pas pu être lu (rien n'est alors payé).
+    `check_budget` est appelé avant chaque zone à payer : il lève une erreur quand le budget des agents est atteint
+    (services/passage_service.py, #211). Le fichier garde alors les zones finies, et la reprise ne les repaie pas.
     Tous les appels portent l'identifiant du passage en cours (find_services.run_passage), ou un nouveau si la commune
     est cherchée seule.
 
@@ -504,6 +506,9 @@ def search_commune(category, city: dict, resume: dict | None = None) -> dict:
                         category.logger.info(f"[{category.key}] {name} : zone {number} / {len(zones)} reprise du passage arrêté")
                         answers.append(copy.deepcopy({category.key: zone_trace["final"], "ecartes": zone_trace.get("ecartes", [])}))
                         continue
+                    # Une grande ville coûte des dizaines de dollars : le budget est regardé avant chaque zone, pas
+                    # seulement au départ (Rennes, essai du 19 novembre 2026).
+                    check_budget()
                     with mesure_etape(f"zone {number} / {len(zones)}, "):
                         answers.append(search_zone(category, city, register, zone, zone_trace))
                 answer = merge_zones(category, answers)
