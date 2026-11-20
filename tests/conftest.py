@@ -62,3 +62,19 @@ def no_postcode_api(monkeypatch):
 
     monkeypatch.setattr(geo_utils, "communes_of_postcode", lambda postcode: [])
     monkeypatch.setattr(geo_utils, "LOCALITY_COMMUNES", {})
+
+
+@pytest.fixture(autouse=True)
+def exchange_rates(monkeypatch):
+    """
+    Aucun test ne lit le site de la BCE ni la table exchange_rates (#275) : le taux est toujours 1,20 $ pour un euro, du
+    jour demandé et déjà lu aujourd'hui. Ce taux compense exactement la TVA de 20 % : un dollar fait un euro TTC.
+    Les tests du taux lui-même (tests/unit/services/test_exchange_rate_service.py) posent leurs propres valeurs.
+    """
+    from datetime import datetime
+
+    from services import exchange_rate_store
+
+    monkeypatch.setattr(exchange_rate_store, "last_fetch", lambda: datetime.now())
+    monkeypatch.setattr(exchange_rate_store, "rate_on_or_before", lambda day: {"rate_date": day, "usd_per_eur": 1.20})
+    monkeypatch.setattr(exchange_rate_store, "oldest_rate", lambda: None)

@@ -2,8 +2,11 @@
 Le bilan des appels d'agents, lu dans llm_calls (écrite par agents/llm_service.py).
 
 Source du futur tableau de monitorage et du calcul du modèle économique. Chaque bilan
-donne, par groupe : le nombre d'appels, les échecs, le coût équivalent API, la durée et
+donne, par groupe : le nombre d'appels, les échecs, le coût en dollars, la durée et
 les tokens. Un appel raté compte aussi : il a consommé du quota.
+
+Le coût en euros (#275) : calls_cost et run_cost_text convertissent les dollars en euros TTC estimés, au taux de la
+BCE, et disent ce que vaut le coût (dépense réelle par l'API, ou équivalent API pour l'abonnement).
 
 Un passage de la chaîne des services (agents/find_services.py) se relit de deux façons : le bilan « passage », une
 ligne par passage, et passage_calls, tous ses appels dans l'ordre.
@@ -13,7 +16,15 @@ Un appel est rattaché à une commune de trois façons, selon son objet :
     - spot    : la commune du spot dans histo_scrap (la plus petite s'il y en a plusieurs) ;
     - plan    : la commune de départ du voyage, trip_plans.city_id.
 """
+from datetime import date
+
+from services import exchange_rate_service
+from services.exchange_rate_service import RateUnavailable
 from utils.db_utils import MySQLUtils
+
+# Ce que vaut le coût d'un appel, selon son moteur (llm_calls.engine) : l'API facture vraiment ce prix ; le programme
+# `claude` passe par l'abonnement, et son coût n'est que ce qu'aurait coûté l'appel par l'API.
+NATURES = {"api": "dépense réelle", "api-batch": "dépense réelle", "claude-code": "équivalent API, abonnement"}
 
 TOTALS = """
     COUNT(*) AS appels,
@@ -109,3 +120,58 @@ def load_cost_report(by: str) -> list:
         return rows
     finally:
         MySQLUtils.disconnect(connection)
+
+
+# --- Le coût en euros (#275) ---
+
+def cost_nature(engines) -> str:
+    """
+    Ce que vaut un coût, d'après les moteurs des appels qu'il additionne : « dépense réelle », « équivalent API,
+    abonnement », ou « en partie réelle, en partie équivalent API » quand les deux se mêlent.
+    """
+    natures = {NATURES.get(engine, "équivalent API, abonnement") for engine in engines}
+    if len(natures) > 1:
+        return "en partie réelle, en partie équivalent API"
+    return natures.pop() if natures else NATURES["claude-code"]
+
+
+def calls_cost(calls: list) -> dict:
+    """
+    Le coût d'une liste d'appels de llm_calls (avec called_at, engine et cost_usd) : en dollars, en euros TTC estimés,
+    chaque appel au taux de la BCE de son jour, le taux du dernier jour en clair, et ce que vaut le coût (cost_nature).
+    Sans aucun taux connu, cout_eur vaut None et taux dit pourquoi.
+    """
+    usd_by_day = {}
+    for call in calls:
+        day = call["called_at"].date()
+        usd_by_day[day] = usd_by_day.get(day, 0.0) + float(call["cost_usd"] or 0)
+    cost = {"cout_usd": round(sum(usd_by_day.values()), 4), "cout_eur": None, "taux": None,
+            "nature_du_cout": cost_nature({call["engine"] for call in calls})}
+    if not usd_by_day:
+        cost["cout_eur"] = 0.0
+        return cost
+    try:
+        rates = {day: exchange_rate_service.rate_for(day) for day in usd_by_day}
+    except RateUnavailable as error:
+        cost["taux"] = f"euros inconnus : {error}"
+        return cost
+    cost["cout_eur"] = round(sum(exchange_rate_service.usd_to_eur(usd, rates[day]) for day, usd in usd_by_day.items()), 2)
+    cost["taux"] = exchange_rate_service.rate_label(rates[max(rates)])
+    return cost
+
+
+def run_cost_text(run: dict) -> str:
+    """
+    La fin d'une ligne du journal d'un agent : durée et coût d'un appel qui vient de finir (last_run du service), en
+    dollars et en euros TTC estimés au taux du jour, avec ce que vaut ce coût. « 42 s, 0.53 $ ≈ 0.58 € TTC (équivalent
+    API, abonnement ; taux BCE du 19/11/2026 : 1 € = 1.0992 $ (dernier connu)) ».
+    """
+    nature = NATURES.get(run.get("engine"), NATURES["claude-code"])
+    usd = run.get("cost_usd") or 0
+    seconds = (run.get("duration_ms") or 0) / 1000
+    try:
+        rate = exchange_rate_service.rate_for(date.today())
+    except RateUnavailable:
+        return f"{seconds:.0f} s, {usd:.2f} $ ({nature} ; euros inconnus, aucun taux de la BCE)"
+    eur = exchange_rate_service.usd_to_eur(usd, rate)
+    return f"{seconds:.0f} s, {usd:.2f} $ ≈ {eur:.2f} € TTC ({nature} ; {exchange_rate_service.rate_label(rate)})"

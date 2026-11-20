@@ -40,6 +40,7 @@ from agents.llm_service import LLMUnavailable
 from agents.locate_pepites import is_search_page
 from agents.pepite_common import BROWSER_HEADERS, EXCLUDED_SITES_PROMPT, check_links, is_excluded_site
 from etl.load.load_poi_checks import save_check, save_signal
+from services.llm_calls_service import run_cost_text
 from services.pepite_service import GENERIC_WORDS, name_key
 from utils.db_utils import MySQLUtils
 from utils.logger_util import LoggerUtil
@@ -429,9 +430,8 @@ def process_batch(places: list) -> None:
         results.append((place["id"], summary, result_signals(row, links)))
     save_results(results)
     found = sum(1 for _, _, signals in results if any(name == "lien_agent" for name, _ in signals))
-    run = service.last_run
     logger.info(f"[liens] {len(results)}/{len(places)} lieu(x) ({places[0]['ville']}) : {found} lien(s),"
-                f" {(run.get('duration_ms') or 0) / 1000:.0f} s, {run.get('cost_usd') or 0:.2f} $ en équivalent API")
+                f" {run_cost_text(service.last_run)}")
 
 
 def main():

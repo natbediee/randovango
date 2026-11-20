@@ -14,6 +14,7 @@ from services import passage_queue, passage_service, passage_store
 from services.passage_service import PassageConflict
 
 CITY = {"id": 12, "name": "Guidel", "commune": "Guidel", "insee": "56078"}
+CALLED_AT = datetime(2026, 11, 19, 10, 10)  # le jour des appels de llm_calls, pour convertir leur coût en euros
 
 
 class _Store:
@@ -279,14 +280,17 @@ def test_the_state_gives_the_step_and_cost_of_each_category_from_llm_calls(store
     store.set_part(passage_id, "restaurants", "fini", summary={"fiches": 5})
     store.set_part(passage_id, "laveries", "en_cours")
     store.calls[passage_id] = [
-        {"agent": "find_restaurants", "etape": "année 1", "status": "reussi", "cost_usd": 0.5},
-        {"agent": "find_laveries", "etape": "année 1", "status": "reussi", "cost_usd": 0.25},
-        {"agent": "prove_laveries", "etape": "preuves, lot 2", "status": "delai", "cost_usd": 0.1},
+        {"agent": "find_restaurants", "etape": "année 1", "status": "reussi", "cost_usd": 0.5, "called_at": CALLED_AT, "engine": "claude-code"},
+        {"agent": "find_laveries", "etape": "année 1", "status": "reussi", "cost_usd": 0.25, "called_at": CALLED_AT, "engine": "claude-code"},
+        {"agent": "prove_laveries", "etape": "preuves, lot 2", "status": "delai", "cost_usd": 0.1, "called_at": CALLED_AT, "engine": "claude-code"},
     ]
     chain["busy"] = True        # le passage tient le verrou : il tourne vraiment
     state = passage_service.read_passage(passage_id)
     assert state["ville"] == {"id": 12, "nom": "Guidel", "commune": "Guidel"} and state["origine"] == "supervision"
     assert (state["etat"], state["payant"], state["appels"], state["cout_usd"]) == ("en_cours", True, 3, 0.85)
+    # Le taux des tests (1,20 $ pour un euro) compense la TVA : 0,85 $ font 0,85 € TTC, en équivalent API.
+    assert (state["cout_eur"], state["nature_du_cout"]) == (0.85, "équivalent API, abonnement")
+    assert state["taux"] == "taux BCE du 19/11/2026 : 1 € = 1.2000 $"
     restaurants, laveries = state["categories"]
     assert (restaurants["etat"], restaurants["etape"], restaurants["cout_usd"], restaurants["bilan"]) == ("fini", None, 0.5, {"fiches": 5})
     assert (laveries["etape"], laveries["detail_etape"], laveries["agent"]) == ("preuves", "preuves, lot 2", "prove_laveries")
@@ -298,7 +302,7 @@ def test_the_saving_step_is_shown_though_no_agent_announces_it(store, chain):
     passage_id = passage_service.create_passage("services", 12, ["restaurants"])
     store.set_passage_status(passage_id, "en_cours")
     store.set_part(passage_id, "restaurants", "en_cours", step="enregistrement")
-    store.calls[passage_id] = [{"agent": "prove_restaurants", "etape": "preuves, lot 1", "status": "reussi", "cost_usd": 0.2}]
+    store.calls[passage_id] = [{"agent": "prove_restaurants", "etape": "preuves, lot 1", "status": "reussi", "cost_usd": 0.2, "called_at": CALLED_AT, "engine": "claude-code"}]
     chain["busy"] = True
     part = passage_service.read_passage(passage_id)["categories"][0]
     assert (part["etape"], part["agent"]) == ("enregistrement", None)
