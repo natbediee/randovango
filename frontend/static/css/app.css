@@ -1856,10 +1856,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   font-size: 12px; font-weight: 800; color: var(--muted);
   background: var(--cream); border: 1px solid #E0DED2; border-radius: var(--r-pill); padding: 6px 10px;
 }
-.unlock-msg {
-  background: #FBEAE7; border: 1px solid #E9C4BD; color: #B4432E;
-  border-radius: 10px; padding: 9px 14px; font-size: 13px; font-weight: 600;
-}
 
 @media (max-width: 920px) {
   .unlock-cards { grid-template-columns: 1fr; gap: 16px; max-width: 460px; }

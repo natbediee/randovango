@@ -1,17 +1,11 @@
 /* Front RandoVanGo - Chat « Voyage 100% IA » avec Vany.
    Démo scriptée front-only (aucun appel LLM) : bulles, indicateur de saisie,
    quick-replies, carte de proposition jour par jour. Le vrai service IA viendra plus tard.
-   Accès conditionné au déverrouillage (paiement / code) : sinon redirection vers /unlock-vany. */
+   Ouvert à tous : ce n'est qu'un aperçu, il n'y a rien à débloquer (issue #265). */
 (function () {
   'use strict';
   var root = document.querySelector('[data-chat]');
   if (!root) return;
-
-  // Garde : le chat est la fonctionnalité payante.
-  if (!(window.RVG && window.RVG.isVanyUnlocked && window.RVG.isVanyUnlocked())) {
-    window.location.href = window.APP_URLS.unlockVany;
-    return;
-  }
 
   var thread = document.getElementById('chatThread');
   var quick = document.getElementById('chatQuick');
