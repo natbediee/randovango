@@ -96,9 +96,10 @@
     addUser('Valide, passe au jour ' + (n + 1));
     if (n >= 2) {
       vanyThink(function () {
-        addVany('Ton week-end est complet ! 🎉 Tu peux le retrouver dans ton carnet de voyage.');
+        // Fin de l'aperçu : rien n'est enregistré, on ne parle donc pas d'un carnet qui n'existe pas (issue #265).
+        addVany('Fin de l\'aperçu. Dans la vraie version, ton voyage irait dans ton carnet ; ici, rien n\'a été enregistré.');
         setQuick([]);
-      }, 'Vany finalise ton carnet…');
+      }, 'Vany termine l\'aperçu…');
       return;
     }
     vanyThink(function () {

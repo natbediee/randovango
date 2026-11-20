@@ -29,7 +29,12 @@
 {% block page_content %}
 <div class="chat" data-chat>
   <div class="chat-thread" id="chatThread">
-    <div class="chat-daysep">Aujourd'hui · nouveau voyage</div>
+    {# Le chat n'est qu'un aperçu (issue #265) : chat.js joue une conversation écrite à l'avance, sans modèle d'IA.
+       On le dit avant le premier message, pour qu'un voyageur ne la prenne pas pour une vraie réponse. #}
+    <div class="chat-preview">
+      <span class="tag tag--warn">Aperçu · bientôt disponible</span>
+      <p>Vany ne répond pas encore pour de vrai. Cette conversation est un exemple écrit à l'avance : elle parle toujours du Pays Bigouden, quoi que tu écrives, et n'enregistre aucun voyage.</p>
+    </div>
   </div>
 
   <div class="chat-quickreplies" id="chatQuick"></div>
@@ -39,7 +44,7 @@
       <input type="text" id="chatInput" placeholder="Écris à Vany - destination, durée, envies…" autocomplete="off">
       <button type="submit" class="chat-send" aria-label="Envoyer">→</button>
     </form>
-    <p class="chat-disclaimer">Vany propose, tu décides - chaque étape reste modifiable à la main.</p>
+    <p class="chat-disclaimer">Aperçu : les réponses de Vany sont écrites à l'avance.</p>
   </div>
 </div>
 {% endblock %}

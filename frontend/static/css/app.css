@@ -1788,10 +1788,13 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   flex-direction: column;
   gap: 18px;
 }
-.chat-daysep {
-  align-self: center;
-  font-size: 11.5px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted-3);
+/* Avertissement en tête du chat : la conversation n'est qu'un aperçu (issue #265). */
+.chat-preview {
+  align-self: center; max-width: 560px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; font-size: 13px; color: var(--muted);
 }
+.chat-preview p { margin: 0; }
 .chat-row { display: flex; gap: 12px; align-items: flex-start; }
 .chat-avatar { width: 38px; height: 38px; border-radius: 50%; display: block; flex-shrink: 0; }
 .bubble { padding: 13px 18px; font-size: 14.5px; line-height: 1.55; color: var(--ink); max-width: 560px; }
