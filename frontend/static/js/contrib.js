@@ -131,40 +131,6 @@
     }
   }
 
-  // ===== Page ajout de spot (démo : aucun endpoint spot n'existe encore) =====
-  function initAddSpot() {
-    var root = document.querySelector('[data-add-spot]');
-    if (!root) return;
-
-    // Garde : réservé aux contributeurs connectés.
-    if (!window.RVG.isLoggedIn()) {
-      window.location.href = window.APP_URLS.contributorLogin;
-      return;
-    }
-
-    var msg = document.getElementById('spotMsg');
-    function showMsg(text, ok) {
-      msg.textContent = text;
-      msg.className = 'addspot-msg ' + (ok ? 'is-ok' : 'is-error');
-      msg.style.display = 'block';
-    }
-
-    var submit = document.getElementById('submitSpot');
-    if (submit) {
-      submit.addEventListener('click', function () {
-        var name = document.getElementById('spotName').value.trim();
-        var city = document.getElementById('spotCity').value.trim();
-        if (!name || !city) { showMsg('Renseigne au moins le nom du spot et la commune.', false); return; }
-        showMsg('Merci ! Ton spot part en relecture (démo).', true);
-      });
-    }
-
-    var draft = document.getElementById('saveSpotDraft');
-    if (draft) {
-      draft.addEventListener('click', function () { showMsg('Brouillon enregistré (démo).', true); });
-    }
-  }
-
   // ===== Page ajout de randonnée : upload GPX réel (/api/etl/upload_gpx) =====
   function initAddHike() {
     var root = document.querySelector('[data-add-hike]');
@@ -258,7 +224,6 @@
     initDashboardGuard();
     initPickTags();
     initVanyCodes();
-    initAddSpot();
     initAddHike();
   });
 })();

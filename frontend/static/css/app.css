@@ -1747,23 +1747,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   .addhike-actions .btn { width: 100%; }
 }
 
-/* ===== AJOUT DE SPOT ===== */
-.addspot-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
-.addspot-triple { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-.dropzone--map { cursor: pointer; display: flex; flex-direction: column; gap: 3px; padding: 18px; transition: border-color .15s, background .15s; }
-.dropzone--map:hover { border-color: var(--teal); background: var(--mint); }
-.addspot-story { width: 100%; min-height: 96px; align-items: flex-start; resize: vertical; font-family: var(--font-body); }
-/* Vigilance : l'état actif vire à l'ambre, pour le distinguer des équipements */
-.pick-tags--warn .equip-tag.is-on { color: var(--warn-tx); background: var(--warn-bg); border-color: var(--warn-bd); }
-.addspot-msg { border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; }
-.addspot-msg.is-ok { background: var(--ok-bg); border: 1px solid var(--ok-bd); color: var(--ok-tx); }
-.addspot-msg.is-error { background: #FBEAE7; border: 1px solid #E9C4BD; color: #B4432E; }
-
-@media (max-width: 768px) {
-  .addspot-grid { grid-template-columns: 1fr; }
-  .addspot-triple { grid-template-columns: 1fr; }
-}
-
 /* ===== CHAT VANY ===== */
 .chat-header-right { display: flex; align-items: center; gap: 14px; }
 .chat-badge {
