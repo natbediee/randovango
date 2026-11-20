@@ -89,6 +89,11 @@
         <span class="duration-card__desc muted">Personnalisée</span>
       </div>
     </div>
+    {# Les flèches de la case « Personnalisée » s'arrêtent à 7 jours (offre gratuite, issue #263) : ce lien montre
+       au voyageur qui veut partir plus longtemps où aller, sans qu'il doive deviner qu'il peut taper un chiffre. #}
+    <p class="muted" style="font-size:13px; margin:10px 0 0; text-align:right;">
+      <a href="{{ url_for('free_limit', reason='duration') }}">Plus de 7 jours ?</a>
+    </p>
 
     <div class="duration-footer">
       <div class="duration-date">

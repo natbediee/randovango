@@ -35,3 +35,8 @@ def test_custom_duration_offers_seven_days_at_most():
     """La case « Personnalisée » propose de 1 à 7 jours, la durée d'un séjour gratuit (issue #263) ; avant, elle allait à 30."""
     page = duration_page()
     assert 'id="customDays" class="duration-card__num" min="1" max="7"' in page
+
+
+def test_longer_trip_link_leads_to_the_offer():
+    """Sous les durées, « Plus de 7 jours ? » mène à la page de l'offre qui annonce les séjours plus longs (issue #263)."""
+    assert '<a href="/limite-gratuite?reason=duration">Plus de 7 jours ?</a>' in duration_page()
