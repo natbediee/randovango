@@ -128,6 +128,21 @@ def oldest_queued() -> str | None:
 
 
 
+def finished_parts(chain: str, city_ids: list) -> set:
+    """
+    Les parties déjà finies pour ces villes (les villes d'une même commune), dans n'importe quel passage, même un échec
+    (une catégorie finie avant la coupure reste faite).
+    La base est commune à toutes les branches, alors que chaque worktree a son propre dossier de fichiers des passages :
+    un backend de branche ne voyait pas Combrit et Ergué-Gabéric, cherchées depuis main, et les a payées une seconde
+    fois (nuit du 19 au 20 novembre 2026).
+    """
+    placeholders = ",".join(["%s"] * len(city_ids))
+    rows = _read(f"""SELECT DISTINCT pp.part FROM passages p JOIN passage_parts pp ON pp.passage_id = p.passage_id
+                     WHERE p.chain = %s AND p.city_id IN ({placeholders}) AND pp.status = 'fini'""",
+                 (chain, *city_ids))
+    return {row["part"] for row in rows}
+
+
 def open_parts(chain: str, city_ids: list) -> set:
     """
     Les parties déjà demandées pour ces villes (les villes d'une même commune) dans un passage en file, en attente ou

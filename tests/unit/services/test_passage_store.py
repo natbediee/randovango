@@ -70,3 +70,13 @@ def test_open_parts_count_a_failure_not_yet_resumed(base):
     sql, values = base.queries[0]
     assert "p.status = 'echec' AND NOT EXISTS" in sql and "r.resumed_from = p.passage_id" in sql
     assert values == ("services", 12, 13)
+
+
+def test_finished_parts_are_read_in_every_passage_of_the_commune(base):
+    """Les catégories finies se lisent dans tous les passages des villes de la commune, même un échec, d'après l'état de la partie."""
+    base.rows = [{"part": "laveries"}]
+    assert passage_store.finished_parts("services", [12]) == {"laveries"}
+    sql, values = base.queries[0]
+    # L'état du passage n'est pas regardé : une catégorie finie avant une coupure reste faite.
+    assert "pp.status = 'fini'" in sql and "p.status IN" not in sql
+    assert values == ("services", 12)

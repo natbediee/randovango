@@ -67,6 +67,12 @@ class _Store:
                 if passage["chain"] == chain and passage["city_id"] in city_ids and still_open(key, passage)
                 for row in self.parts[key]}
 
+    def finished_parts(self, chain, city_ids):
+        # Comme la requête : les parties finies, dans n'importe quel passage de ces villes.
+        return {row["part"] for key, passage in self.passages.items()
+                if passage["chain"] == chain and passage["city_id"] in city_ids
+                for row in self.parts[key] if row["status"] == "fini"}
+
     def recent_ids(self, limit):
         return [key for key, row in self.passages.items() if row["status"] in ("fini", "echec")][:limit]
 
@@ -76,7 +82,7 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by", "oldest_queued", "open_parts"):
+                 "passage_ids", "recent_ids", "resumed_by", "oldest_queued", "open_parts", "finished_parts"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
     monkeypatch.setattr(passage_service.service_store, "load_city", lambda name: CITY)
@@ -477,6 +483,28 @@ def test_only_the_categories_never_searched_are_requested(store, etl):
     etl["searched"] = {"restaurants": ["Guidel"], "supermarches": ["Guidel"], "laveries": ["Guidel"]}
     passage_id = passage_service.request_etl_passage("Guidel")
     assert [row["part"] for row in store.parts[passage_id]] == ["commerces"]
+
+
+def test_a_category_finished_in_the_shared_base_is_not_asked_again(store, etl):
+    """Guidel, dont supermarchés et laveries sont finis dans la base sans fichier visible (fait depuis une autre branche) : l'ETL ne les redemande pas."""
+    store.insert_passage("ancien", "services", CITY["id"], "supervision", ["supermarches", "laveries"])
+    passage_store.set_part("ancien", "supermarches", "fini")
+    passage_store.set_part("ancien", "laveries", "fini")
+    etl["searched"] = {"restaurants": ["Guidel"]}
+    passage_id = passage_service.request_etl_passage("Guidel")
+    assert [row["part"] for row in store.parts[passage_id]] == ["commerces"]
+
+
+def test_a_category_finished_before_a_failure_stays_done(store, etl):
+    """Une catégorie finie avant la coupure (restaurants) et celle finie par la reprise (commerces) comptent : seules les autres sont demandées."""
+    store.insert_passage("coupe", "services", CONQUET["id"], "etl", ["restaurants", "commerces"])
+    passage_store.set_part("coupe", "restaurants", "fini")
+    passage_store.set_passage_status("coupe", "echec", "quota de l'abonnement Claude atteint")
+    store.insert_passage("reprise", "services", CONQUET["id"], "supervision", ["commerces"], resumed_from="coupe")
+    passage_store.set_part("reprise", "commerces", "fini")
+    passage_store.set_passage_status("reprise", "fini")
+    passage_id = passage_service.request_etl_passage("Lochrist")
+    assert [row["part"] for row in store.parts[passage_id]] == ["supermarches", "laveries"]
 
 
 def test_an_old_file_named_after_the_place_counts_for_its_commune(store, etl):

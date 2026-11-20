@@ -284,7 +284,9 @@ def request_etl_passage(city_name: str) -> str | None:
     1. Le nom de l'ETL est converti en commune officielle (code INSEE) : une rando partie de Lochrist fait chercher
        Le Conquet, depuis la ville qui porte le nom de la commune.
     2. Seules les catégories jamais cherchées pour cette commune, et pas déjà demandées, sont demandées : une seconde
-       rando dans une commune déjà faite ne coûte rien.
+       rando dans une commune déjà faite ne coûte rien. « Déjà cherchée » se lit à deux endroits : les fichiers des
+       passages (les communes cherchées en ligne de commande n'ont rien dans la base) et les parties finies de la base
+       (commune à toutes les branches, quand les fichiers ne le sont pas).
     3. Le passage entre dans la file ; si la mise à jour automatique est coupée, il attend l'admin (« en attente »).
     """
     city = service_store.load_city(city_name)
@@ -293,7 +295,9 @@ def request_etl_passage(city_name: str) -> str | None:
         return None
     commune = [other for other in service_store.load_cities()
                if service_store.commune_key(other) == service_store.commune_key(city)]
-    already = searched_service_categories(commune) | passage_store.open_parts("services", [c["id"] for c in commune])
+    city_ids = [c["id"] for c in commune]
+    already = (searched_service_categories(commune) | passage_store.finished_parts("services", city_ids)
+               | passage_store.open_parts("services", city_ids))
     left = [key for key in SERVICE_LABELS if key not in already]
     if not left:
         logger.info(f"[passages] {city_name} : {city_commune(city)} déjà cherchée, aucun passage des services demandé")
