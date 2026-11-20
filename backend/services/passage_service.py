@@ -31,19 +31,25 @@ from typing import Callable
 from agents import find_services
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMRefused, LLMTimeout, mesure_passage, new_passage_id
-from agents.service_chain import RegisterUnavailable, interrupted_trace
-from services import passage_store, service_store
-from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO
+from agents.service_chain import RegisterUnavailable, interrupted_trace, latest_traces
+from services import budget_service, passage_store, service_store
+from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO, WAITING
+from utils.geo_utils import city_commune
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("passages")
 
 ORIGINS = ("supervision", "etl")    # qui a demandé le passage : l'administratrice, ou l'ETL d'une nouvelle ville (#211)
 SAVING = "enregistrement"            # l'étape de l'enregistrement, que le code note lui-même : elle n'appelle aucun agent
+PAUSED = "budget"                    # l'étape d'une catégorie arrêtée en route par le budget : elle reprendra son fichier
 
 
 class PassageConflict(RuntimeError):
     """Le passage ne peut pas partir maintenant : un autre tourne, ou il n'y a rien à reprendre. Le message le dit."""
+
+
+class BudgetReached(RuntimeError):
+    """Le budget des agents est atteint pendant un passage : il s'arrête avant la prochaine catégorie ou zone (#211)."""
 
 
 @dataclass(frozen=True)
@@ -55,7 +61,7 @@ class Chain:
     paid: bool                  # payante (des agents) ou gratuite (OSM, fichiers de l'État)
     lock: Callable              # le verrou « un seul passage à la fois » : un bloc « with »
     lock_is_free: Callable      # () -> le verrou est-il libre ?
-    run_part: Callable          # (passage_id, clé, ville, reprise) -> le bilan de la catégorie
+    run_part: Callable          # (passage_id, clé, ville, reprise, vérification du budget) -> le bilan de la catégorie
     steps_of: Callable          # (clé) -> {agent : l'étape qu'il fait}, pour lire l'étape dans llm_calls
 
 
@@ -66,16 +72,17 @@ SERVICE_LABELS = {"restaurants": "Recherche des restaurants", "commerces": "Rech
                   "supermarches": "Recherche des supermarchés", "laveries": "Recherche des laveries"}
 
 
-def run_service_category(passage_id: str, key: str, city: dict, resume: bool) -> dict:
+def run_service_category(passage_id: str, key: str, city: dict, resume: bool, check_budget) -> dict:
     """
     Une catégorie de la chaîne des services : ses trois agents cherchent, analysent et prouvent, puis le code enregistre.
     En reprise, le fichier d'un passage arrêté en route est repris : ses zones finies ne sont pas repayées.
+    `check_budget` arrête la recherche d'une grande ville entre deux zones quand le budget est atteint.
     """
     category = SERVICE_CATEGORIES[key]
     stopped = interrupted_trace(category, city) if resume else None
     return find_services.search_and_save(
         category, city, stopped=stopped,
-        before_saving=lambda: passage_store.set_part(passage_id, key, RUNNING, step=SAVING))
+        before_saving=lambda: passage_store.set_part(passage_id, key, RUNNING, step=SAVING), check_budget=check_budget)
 
 
 def service_steps(key: str) -> dict:
@@ -153,12 +160,41 @@ def check_free(chain: Chain) -> None:
     raise PassageConflict(f"Un passage « {chain.label} » tourne déjà, lancé en ligne de commande : attendre sa fin.")
 
 
+def check_budget(chain: Chain) -> None:
+    """
+    Lève PassageConflict, avec la raison, si le budget des agents est atteint (issue #211) : un passage payant ne part
+    pas, même lancé à la main, tant que le budget ne le permet pas de nouveau ou que l'admin ne le relève pas.
+    Une chaîne gratuite (OSM, fichiers de l'État) n'est jamais retenue par le budget.
+    """
+    if not chain.paid:
+        return
+    reason = budget_service.budget_block()
+    if reason:
+        raise PassageConflict(f"Budget des agents atteint ({reason}).")
+
+
+def stop_if_over_budget(chain: Chain) -> None:
+    """
+    Pendant un passage, avant chaque catégorie et chaque zone d'une grande ville : lève BudgetReached si le budget des
+    agents est atteint. Le budget n'est donc jamais dépassé de plus d'une zone, ou d'une catégorie d'une petite ville.
+    """
+    if not chain.paid:
+        return
+    reason = budget_service.budget_block()
+    if reason:
+        raise BudgetReached(reason)
+
+
 def create_passage(chain_key: str, city_id: int, parts: list | None = None, origin: str = "supervision",
-                   resumed_from: str | None = None) -> str:
+                   resumed_from: str | None = None, status: str = QUEUED) -> str:
     """
     Écrit un passage demandé, en file, et renvoie son identifiant. Sans catégories, toutes celles de la chaîne.
-    Lève ValueError pour une chaîne, une ville, une catégorie ou une origine inconnue, et PassageConflict si un
-    passage de la chaîne tourne déjà. Le faire tourner : run_passage.
+    Lève ValueError pour une chaîne, une ville, une catégorie ou une origine inconnue.
+    Lancé depuis la supervision, il est refusé (PassageConflict) si un passage de la chaîne tourne déjà ou si le budget
+    des agents est atteint : l'admin le sait tout de suite. Demandé par l'ETL, il n'est jamais refusé : il prend sa
+    place dans la file, et la file le lance quand le verrou et le budget le permettent (passage_queue.py, #211).
+    `status` : WAITING pour un passage de l'ETL quand la mise à jour automatique est coupée ; il attend l'admin.
+    Le faire tourner : run_passage.
     """
     chain = CHAINS.get(chain_key)
     if chain is None:
@@ -170,20 +206,25 @@ def create_passage(chain_key: str, city_id: int, parts: list | None = None, orig
         raise ValueError(f"Origine inconnue : {origin} (attendu : {', '.join(ORIGINS)})")
     if find_city(city_id) is None:
         raise ValueError(f"Ville inconnue : {city_id}")
-    check_free(chain)
+    if origin == "supervision":
+        check_free(chain)
+        check_budget(chain)
     # Les catégories passent toujours dans l'ordre de la chaîne : la suivante trouve en base ce que la précédente a écrit.
     chosen = [part for part in chain.parts if not parts or part in parts]
     passage_id = new_passage_id()
-    passage_store.insert_passage(passage_id, chain_key, city_id, origin, chosen, resumed_from)
-    logger.info(f"[passages] {passage_id} demandé : {chain_key}, ville {city_id}, {chosen}, origine {origin}")
+    passage_store.insert_passage(passage_id, chain_key, city_id, origin, chosen, resumed_from, status)
+    logger.info(f"[passages] {passage_id} demandé ({status}) : {chain_key}, ville {city_id}, {chosen}, origine {origin}")
     return passage_id
 
 
 def run_passage(passage_id: str) -> None:
     """
-    Fait tourner un passage demandé, catégorie après catégorie, sous le verrou de sa chaîne. Ne lève jamais : c'est une
+    Fait tourner un passage en file, catégorie après catégorie, sous le verrou de sa chaîne. Ne lève jamais : c'est une
     tâche de fond, personne n'attend sa réponse. Un échec est écrit dans la trace, avec sa raison ; les catégories
     finies avant lui restent enregistrées, et celles d'après restent « à faire », pour la reprise.
+    Si le verrou est pris, le passage reste en file, sans échec : la file le relancera après le passage en cours (#211).
+    Si le budget est atteint en route, le passage s'arrête avant la catégorie ou la zone suivante et retourne en file :
+    ce qui est fini reste enregistré, et la file le reprendra là où il en était quand le budget le permettra.
     """
     passage = passage_store.load_passage(passage_id)
     chain = CHAINS[passage["chain"]]
@@ -193,14 +234,30 @@ def run_passage(passage_id: str) -> None:
         # La chaîne des services cherche une commune depuis une seule de ses villes : Morgat se cherche comme Crozon.
         city = service_store.load_city(passage["city_name"])
         with chain.lock(), mesure_passage(passage_id):
+            # Relu sous le verrou : la file et la tâche de fond de la supervision peuvent viser le même passage ;
+            # le second à prendre le verrou le trouve déjà fini et ne le refait pas.
+            if passage_store.load_passage(passage_id)["status"] != QUEUED:
+                return
             passage_store.set_passage_status(passage_id, RUNNING)
-            for part in [row["part"] for row in passage_store.load_parts(passage_id) if row["status"] == TO_DO]:
+            for row in [row for row in passage_store.load_parts(passage_id) if row["status"] == TO_DO]:
+                part = row["part"]
+                stop_if_over_budget(chain)
                 passage_store.set_part(passage_id, part, RUNNING)
-                summary = chain.run_part(passage_id, part, city, resume)
+                # Une catégorie arrêtée par le budget reprend son fichier : ses zones finies ne sont pas repayées.
+                summary = chain.run_part(passage_id, part, city, resume or row["step"] == PAUSED,
+                                         lambda: stop_if_over_budget(chain))
                 passage_store.set_part(passage_id, part, DONE, summary=summary)
             part = None
         passage_store.set_passage_status(passage_id, DONE)
         logger.info(f"[passages] {passage_id} fini")
+    except PassageRunning:
+        # Le verrou était pris avant que le passage commence : il garde sa place dans la file.
+        logger.info(f"[passages] {passage_id} attend : un autre passage tient le verrou")
+    except BudgetReached as reason:
+        # Pas un échec : le passage retourne en file, et la catégorie arrêtée garde l'étape « budget » pour la reprise.
+        logger.info(f"[passages] {passage_id} arrêté avant {part} : {reason}")
+        passage_store.set_part(passage_id, part, TO_DO, step=PAUSED)
+        passage_store.set_passage_status(passage_id, QUEUED)
     except Exception as error:
         reason = failure_reason(error)
         logger.exception(f"[passages] {passage_id} en échec ({part or 'avant la première catégorie'}) : {reason}")
@@ -209,16 +266,74 @@ def run_passage(passage_id: str) -> None:
         passage_store.set_passage_status(passage_id, FAILED, reason)
 
 
+def searched_service_categories(cities: list) -> set:
+    """
+    Les catégories de services déjà cherchées jusqu'au bout pour une commune (ses villes : `cities`), d'après les
+    fichiers des passages des agents. Les fichiers, et pas la table passages : les communes cherchées en ligne de
+    commande, avant la supervision, n'ont aucune ligne dans passages. Un fichier porte le nom de la commune, ou celui de
+    la ville pour un passage d'avant le 8 novembre 2026 (Morgat pour Crozon) : les deux sont regardés.
+    """
+    names = {city_commune(city) for city in cities} | {city["name"] for city in cities}
+    return {key for key, category in SERVICE_CATEGORIES.items() if names & set(latest_traces(category))}
+
+
+def request_etl_passage(city_name: str) -> str | None:
+    """
+    À la fin de l'ETL d'une ville : demande le passage de la chaîne des services pour sa commune, et rend son
+    identifiant ; None s'il n'y a rien à chercher.
+    1. Le nom de l'ETL est converti en commune officielle (code INSEE) : une rando partie de Lochrist fait chercher
+       Le Conquet, depuis la ville qui porte le nom de la commune.
+    2. Seules les catégories jamais cherchées pour cette commune, et pas déjà demandées, sont demandées : une seconde
+       rando dans une commune déjà faite ne coûte rien. « Déjà cherchée » se lit à deux endroits : les fichiers des
+       passages (les communes cherchées en ligne de commande n'ont rien dans la base) et les parties finies de la base
+       (commune à toutes les branches, quand les fichiers ne le sont pas).
+    3. Le passage entre dans la file ; si la mise à jour automatique est coupée, il attend l'admin (« en attente »).
+    """
+    city = service_store.load_city(city_name)
+    if city is None:
+        logger.warning(f"[passages] {city_name} : ville inconnue, aucun passage des services demandé")
+        return None
+    commune = [other for other in service_store.load_cities()
+               if service_store.commune_key(other) == service_store.commune_key(city)]
+    city_ids = [c["id"] for c in commune]
+    already = (searched_service_categories(commune) | passage_store.finished_parts("services", city_ids)
+               | passage_store.open_parts("services", city_ids))
+    left = [key for key in SERVICE_LABELS if key not in already]
+    if not left:
+        logger.info(f"[passages] {city_name} : {city_commune(city)} déjà cherchée, aucun passage des services demandé")
+        return None
+    status = QUEUED if budget_service.load_settings()["services_after_etl"] else WAITING
+    return create_passage("services", city["id"], left, origin="etl", status=status)
+
+
+def launch_waiting(passage: dict) -> str:
+    """
+    Lance une ville que l'ETL a laissée en attente (mise à jour automatique coupée) : le passage est remis en file,
+    à sa place, et l'admin le fait partir. Mêmes refus qu'un lancement à la main : verrou pris ou budget atteint.
+    """
+    chain = CHAINS[passage["chaine"]]
+    check_free(chain)
+    check_budget(chain)
+    passage_store.set_passage_status(passage["passage_id"], QUEUED)
+    logger.info(f"[passages] {passage['passage_id']} lancé par l'admin après l'attente")
+    return passage["passage_id"]
+
+
 def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:
     """
-    Crée la reprise d'un passage en échec et renvoie son identifiant : seules ses catégories non finies repassent.
-    None si le passage n'existe pas ; PassageConflict s'il n'est pas en échec, ou si un autre passage tourne.
+    La relance d'une ville non faite, par l'admin, et l'identifiant du passage à faire tourner :
+    - un passage en échec est repris par un nouveau passage, qui ne refait que ses catégories non finies ;
+    - un passage en attente (mise à jour automatique coupée, #211) part lui-même, sans nouveau passage.
+    None si le passage n'existe pas ; PassageConflict s'il n'est ni en échec ni en attente, si un autre passage tourne,
+    ou si le budget est atteint.
     """
     passage = read_passage(passage_id)
     if passage is None:
         return None
+    if passage["etat"] == WAITING:
+        return launch_waiting(passage)
     if passage["etat"] != FAILED:
-        raise PassageConflict(f"Ce passage est « {passage['etat']} » : seul un passage en échec se reprend.")
+        raise PassageConflict(f"Ce passage est « {passage['etat']} » : seul un passage en échec ou en attente se relance.")
     # Une reprise à la fois : les reprises forment une seule ligne (aaa, puis bbb qui reprend aaa, puis ccc qui reprend
     # bbb). L'écran sait ainsi qu'un échec déjà repris n'attend plus rien : sa reprise dit où en est la ville.
     if passage["repris_par"]:
@@ -228,6 +343,24 @@ def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:
 
 
 # --- Dire où il en est ---
+
+AUTO_OFF = "mise à jour automatique coupée : à lancer depuis la supervision"
+
+
+def waiting_reason(passage: dict) -> str | None:
+    """
+    Pourquoi un passage n'a pas encore tourné, en phrase lisible ; None s'il tourne, a fini, ou peut partir.
+    En file : le verrou d'abord (un passage qui tourne passera de toute façon avant lui), puis le budget.
+    """
+    if passage["status"] == WAITING:
+        return AUTO_OFF
+    if passage["status"] != QUEUED:
+        return None
+    chain = CHAINS[passage["chain"]]
+    if not chain.lock_is_free():
+        return "attend la fin du passage en cours"
+    return budget_service.budget_block() if chain.paid else None
+
 
 def mark_interrupted(passage: dict, parts: list) -> None:
     """
@@ -323,17 +456,36 @@ def read_passage(passage_id: str) -> dict | None:
             "ville": {"id": passage["city_id"], "nom": passage["city_name"], "commune": passage["city_commune"]},
             "origine": passage["origin"], "etat": passage["status"], "payant": chain.paid,
             "demande_le": passage["requested_at"], "debut": passage["started_at"], "fin": passage["finished_at"],
-            "raison_echec": passage["error"], "reprise_de": passage["resumed_from"],
+            "raison_echec": passage["error"], "raison_attente": waiting_reason(passage),
+            "reprise_de": passage["resumed_from"],
             "repris_par": passage_store.resumed_by(passage_id), **call_totals(calls),
             "categories": [part_state(chain, part, calls) for part in parts]}
 
 
+def not_done(queued: list, waiting: list, failed: list) -> list:
+    """
+    Les villes non faites, avec leur raison, pour le tableau « Villes en attente » de l'espace Agents (#211) :
+    celles en file (budget atteint, passage en cours), celles en attente de l'admin (mise à jour coupée), et celles en
+    échec que personne n'a encore reprises. Un échec repris n'y est plus : c'est sa reprise qui dit où en est la ville.
+    """
+    rows = [{**passage, "raison": passage["raison_attente"]} for passage in queued + waiting]
+    rows += [{**passage, "raison": f"échec : {passage['raison_echec']}"} for passage in failed if not passage["repris_par"]]
+    return rows
+
+
 def list_passages(limit: int = 20) -> dict:
-    """Le passage en cours, la file d'attente (remplie par #211) et les derniers passages finis ou en échec."""
+    """
+    Le passage en cours, la file d'attente, les derniers passages finis ou en échec, et les villes non faites avec
+    leur raison (villes_en_attente, #211).
+    """
     def read_all(ids: list) -> list:
         return [passage for passage in map(read_passage, ids) if passage]
 
     running = read_all(passage_store.passage_ids(RUNNING, limit))
+    queued = read_all(passage_store.passage_ids(QUEUED, limit))
+    waiting = read_all(passage_store.passage_ids(WAITING, limit))
+    failed = read_all(passage_store.passage_ids(FAILED, limit))
     return {"en_cours": [passage for passage in running if passage["etat"] == RUNNING],
-            "en_file": read_all(passage_store.passage_ids(QUEUED, limit)),
-            "derniers": read_all(passage_store.recent_ids(limit))}
+            "en_file": queued,
+            "derniers": read_all(passage_store.recent_ids(limit)),
+            "villes_en_attente": not_done(queued, waiting, failed)}

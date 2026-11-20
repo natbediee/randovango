@@ -124,14 +124,15 @@ def lock_is_free() -> bool:
 
 
 def search_and_save(category, city: dict, trial: bool = False, stopped: dict | None = None,
-                    before_saving=lambda: None) -> dict:
+                    before_saving=lambda: None, check_budget=lambda: None) -> dict:
     """
     Une catégorie d'une commune : la chaîne des agents cherche, puis le code enregistre. À l'essai, rien n'est écrit :
     on renvoie les lieux trouvés. `stopped` est le fichier d'un passage arrêté en route, à reprendre sans repayer ses
     zones finies. `before_saving` est appelé juste avant l'enregistrement, qui n'appelle aucun agent : la supervision
-    y note l'étape « enregistrement » (services/passage_service.py).
+    y note l'étape « enregistrement » (services/passage_service.py). `check_budget` est appelé avant chaque zone d'une
+    grande ville : il arrête la recherche quand le budget des agents est atteint (#211).
     """
-    answer = service_chain.search_commune(category, city, stopped)
+    answer = service_chain.search_commune(category, city, stopped, check_budget)
     if trial:
         return {"lieux": [row["nom"] for row in answer[category.key]]}
     before_saving()

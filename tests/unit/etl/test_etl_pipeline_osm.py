@@ -23,6 +23,7 @@ def _run_background(monkeypatch, city, osm=lambda city: None, pharmacies=lambda 
     cursor.fetchone.return_value = (1,)  # P4N déjà scrapé : pas de Selenium ici
     monkeypatch.setattr(etl_pipeline.MySQLUtils, "get_cursor", lambda conn: cursor)
     monkeypatch.setitem(sys.modules, "services.pepite_service", MagicMock())
+    monkeypatch.setattr(etl_pipeline, "launch_services", lambda city: None)
     etl_pipeline.scraping_background(city)
     return logger, extract_wikidata
 
