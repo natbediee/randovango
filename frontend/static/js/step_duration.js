@@ -94,6 +94,12 @@ document.addEventListener('DOMContentLoaded', function () {
   nextButton.addEventListener('click', function (e) {
     e.preventDefault();
     if (!selectedDays) return;
+    // Plus de 7 jours tapés dans la case « Personnalisée » (son max="7" n'empêche pas de les taper) :
+    // la page de l'offre explique que les séjours plus longs viendront avec l'offre payante (issue #263).
+    if (window.RVG.isTripTooLong(selectedDays)) {
+      window.RVG.showTripTooLong();
+      return;
+    }
     // Ici, le voyageur part sur un nouveau voyage : soit il l'a choisi dans l'encadré, soit aucun
     // voyage ne lui était proposé (l'API ne le rendait plus). Un planId resté dans le navigateur
     // ferait croire à l'étape 1 qu'un voyage est en cours, et elle n'en créerait pas : on l'oublie.
