@@ -43,9 +43,9 @@ def test_without_any_known_rate_the_dollars_stay_and_the_euros_are_unknown(monke
 
 
 def test_a_category_without_calls_costs_nothing():
-    """Une catégorie sans aucun appel coûte 0 $ et 0 €."""
+    """Une catégorie sans aucun appel (une chaîne gratuite, OSM par exemple) coûte 0 $ et 0 €, sans se dire réelle ni équivalent API."""
     cost = llm_calls_service.calls_cost([])
-    assert (cost["cout_usd"], cost["cout_eur"]) == (0, 0)
+    assert (cost["cout_usd"], cost["cout_eur"], cost["nature_du_cout"]) == (0, 0, None)
 
 
 def test_the_log_line_of_a_call_gives_dollars_euros_nature_and_rate():

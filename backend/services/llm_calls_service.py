@@ -124,15 +124,16 @@ def load_cost_report(by: str) -> list:
 
 # --- Le coût en euros (#275) ---
 
-def cost_nature(engines) -> str:
+def cost_nature(engines) -> str | None:
     """
     Ce que vaut un coût, d'après les moteurs des appels qu'il additionne : « dépense réelle », « équivalent API,
-    abonnement », ou « en partie réelle, en partie équivalent API » quand les deux se mêlent.
+    abonnement », ou « en partie réelle, en partie équivalent API » quand les deux se mêlent. None sans aucun appel :
+    un passage d'une chaîne gratuite (OSM, FINESS, carburants) n'appelle aucun agent, son coût n'est ni l'un ni l'autre.
     """
     natures = {NATURES.get(engine, "équivalent API, abonnement") for engine in engines}
     if len(natures) > 1:
         return "en partie réelle, en partie équivalent API"
-    return natures.pop() if natures else NATURES["claude-code"]
+    return natures.pop() if natures else None
 
 
 def calls_cost(calls: list) -> dict:
