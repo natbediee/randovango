@@ -3,11 +3,17 @@
      - vany_eyebrow : libellé majuscule (défaut 'Voyage 100% IA')
      - vany_title   : titre
      - vany_text    : description
-     - vany_cta_label / vany_cta_url : bouton (optionnel) #}
+     - vany_cta_label / vany_cta_url : bouton (optionnel)
+     - vany_preview : vrai quand le bouton mène à un écran qui n'est qu'un aperçu (chat de Vany, déblocage).
+       Une étiquette le dit avant le clic, pour qu'on ne prenne pas la démonstration pour une
+       fonction en service (issue #265). #}
 <div class="vany-banner">
   <img class="vany-banner__img" src="{{ url_for('static', filename='images/vany/' ~ (vany_pose | default('front-soft.png'))) }}" alt="Vany, l'assistant IA de RandoVanGo">
   <div class="vany-banner__body">
     <span class="eyebrow">{{ vany_eyebrow | default('Voyage 100% IA') }}</span>
+    {% if vany_preview %}
+      <span class="tag tag--warn" style="align-self:flex-start;">Aperçu · bientôt disponible</span>
+    {% endif %}
     <div class="vany-banner__title">{{ vany_title }}</div>
     <div class="vany-banner__text">{{ vany_text }}</div>
   </div>

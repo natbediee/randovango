@@ -90,14 +90,16 @@
         <div>
           <span class="eyebrow">Voyage 100% IA</span>
           <h3 style="font-size:20px; font-weight:700;">Ou laisse Vany composer.</h3>
+          {# Le chat de Vany n'est qu'un aperçu : on le dit avant le clic (issue #265). #}
+          <span class="tag tag--warn">Aperçu · bientôt disponible</span>
         </div>
       </div>
       <ul class="hiw-check">
         <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Il propose les journées complètes, en discutant</li>
         <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Tu valides ou ajustes chaque étape</li>
-        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> 4,90 € par voyage - offert aux contributeurs</li>
+        <li><span class="hiw-check__mark hiw-check__mark--teal">✓</span> Bientôt : 4,90 € par voyage, offert aux contributeurs</li>
       </ul>
-      <a href="{{ url_for('unlock_vany') }}" class="btn btn--outline btn--sm" style="margin-top:auto;">Discuter avec Vany</a>
+      <a href="{{ url_for('unlock_vany') }}" class="btn btn--outline btn--sm" style="margin-top:auto;">Voir l'aperçu de Vany</a>
     </div>
   </div>
 
