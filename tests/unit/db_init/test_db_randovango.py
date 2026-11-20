@@ -61,3 +61,17 @@ def test_an_existing_index_is_left_alone():
     cursor = FakeCursor(["PRIMARY", "idx_nom"])
     assert add_missing_indexes(cursor, "base", STATEMENT) == []
     assert len(cursor.calls) == 1
+
+
+def test_named_check_constraints_are_not_read_as_columns():
+    """Les contrôles nommés des réglages des agents (CONSTRAINT … CHECK) ne sont pas pris pour des colonnes à ajouter."""
+    statement = """
+            CREATE TABLE IF NOT EXISTS agent_settings (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                daily_budget_usd DECIMAL(10,2) NOT NULL,
+                CONSTRAINT chk_agent_settings_positive CHECK (daily_budget_usd >= 0)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """
+    table, columns, foreign_keys = parse_create_table(statement)
+    assert table == "agent_settings"
+    assert list(columns) == ["id", "daily_budget_usd"]

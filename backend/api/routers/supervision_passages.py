@@ -6,16 +6,21 @@ une ville sans ouvrir le conteneur. Le lancement répond tout de suite (202) : l
 parfois des heures pour une grande ville, et l'écran relit son état. Les règles sont dans services/passage_service.py.
 
 Un lancement fait toujours une vraie mise à jour, payante : l'essai et le rejeu des règles restent des outils de la
-ligne de commande. Toutes les routes sont réservées aux admins (require_admin).
+ligne de commande. Le budget des agents (issue #211, services/budget_service.py) se règle ici aussi, et un lancement
+est refusé quand il est atteint. Toutes les routes sont réservées aux admins (require_admin).
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from api.dependencies import require_admin
-from api.models.supervision import PassageRequest
-from services import passage_service
+from api.models.supervision import AgentSettingsRequest, PassageRequest
+from services import budget_service, passage_service
 from services.passage_service import PassageConflict
 
 router = APIRouter()
+
+# Les champs du réglage, tels que la page les envoie (en français), et la colonne de agent_settings de chacun.
+SETTING_COLUMNS = {"services_apres_etl": "services_after_etl", "enveloppe_du_mois_usd": "monthly_budget_usd",
+                   "plafond_du_jour_usd": "daily_budget_usd", "reserve_vany_usd": "vany_reserve_usd"}
 
 CONFLICT = {409: {"description": "Un passage de la chaîne tourne déjà, ou ce passage ne se reprend pas : le message dit pourquoi."}}
 NOT_FOUND = {404: {"description": "Ce passage n'existe pas."}}
@@ -44,11 +49,44 @@ def post_passage(body: PassageRequest, background: BackgroundTasks, _admin=Depen
 @router.get("/passages", summary="Les passages en cours, en file d'attente, et les derniers finis ou en échec.")
 def get_passages(limite: int = 20, _admin=Depends(require_admin)):
     """
-    Ce que montre le panneau « En cours et file d'attente » de l'espace Agents, et la liste des derniers passages :
-    {"en_cours": [...], "en_file": [...], "derniers": [...]}, chacun au format de GET /passages/{passage_id}.
-    La file reste vide tant que #211 n'y met pas les villes ajoutées par l'ETL.
+    Ce que montre le panneau « En cours et file d'attente » de l'espace Agents, la liste des derniers passages, et le
+    tableau des villes non faites avec leur raison (budget atteint, attend la fin du passage en cours, mise à jour
+    automatique coupée, échec) : {"en_cours": [...], "en_file": [...], "derniers": [...], "villes_en_attente": [...]},
+    chacun au format de GET /passages/{passage_id}, avec son origine (supervision, etl) ; une ville non faite y ajoute
+    sa « raison ». Les villes ajoutées par l'ETL entrent dans la file et partent seules, l'une après l'autre.
     """
     return passage_service.list_passages(limite)
+
+
+# Les deux routes du réglage sont déclarées avant /passages/{passage_id} : sinon « reglage » serait lu comme
+# l'identifiant d'un passage.
+@router.get("/passages/reglage", summary="Le réglage des agents et le budget : réglé, dépensé, restant.")
+def get_settings(_admin=Depends(require_admin)):
+    """
+    Ce que montre le panneau « Budget du jour » de l'espace Agents : la mise à jour automatique à la fin de l'ETL
+    (activée ou coupée), l'enveloppe du mois, le plafond du jour, la part gardée pour Vany, ce qui est dépensé et ce
+    qui reste le jour et le mois, et, si le budget est atteint, la raison (budget_atteint), sinon null.
+    Les montants sont en dollars, au prix équivalent API des appels d'agents, abonnement compris.
+    """
+    return budget_service.budget_state()
+
+
+@router.put("/passages/reglage", responses={422: {"description": "Un montant négatif, ou des montants qui ne vont pas ensemble."}},
+            summary="Change le réglage des agents : mise à jour automatique, enveloppe, plafond, part de Vany.")
+def put_settings(body: AgentSettingsRequest, admin=Depends(require_admin)):
+    """
+    Seuls les champs envoyés changent ; le changement vaut tout de suite, sans redémarrer l'application. L'ancien
+    réglage reste en base, avec le nom de l'admin qui l'a changé. Répond par le nouvel état, comme GET /passages/reglage.
+    {"services_apres_etl": false} ou {"plafond_du_jour_usd": 5, "raison": "test du budget atteint"}
+    Un plafond du jour ou une part de Vany plus grands que l'enveloppe du mois sont refusés (422).
+    """
+    sent = body.model_dump(exclude_none=True)
+    reason = sent.pop("raison", None)
+    changes = {SETTING_COLUMNS[field]: value for field, value in sent.items()}
+    try:
+        return budget_service.save_settings(changes, admin["username"], reason)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
 
 
 @router.get("/passages/{passage_id}", responses=NOT_FOUND, summary="L'état d'un passage, catégorie par catégorie.")
@@ -65,12 +103,14 @@ def get_passage(passage_id: str, _admin=Depends(require_admin)):
 
 
 @router.post("/passages/{passage_id}/reprise", status_code=202, responses=NOT_FOUND | CONFLICT,
-             summary="Reprend un passage en échec, sans repayer les catégories finies.")
+             summary="Relance une ville non faite : reprend un échec sans repayer, ou lance une ville en attente.")
 def post_resume(passage_id: str, background: BackgroundTasks, _admin=Depends(require_admin)):
     """
-    Crée un nouveau passage qui ne refait que les catégories non finies du passage en échec (reprise_de le relie à
+    Un passage en échec : crée un nouveau passage qui ne refait que ses catégories non finies (reprise_de le relie à
     lui), et le lance en tâche de fond. Une grande ville cherchée par zones reprend aussi ses zones finies sans les
-    repayer. Un passage qui n'est pas en échec, ou un autre passage en cours, est refusé (409) avec le motif.
+    repayer. Un échec n'est jamais relancé tout seul : c'est cette route qui le reprend.
+    Un passage en attente (l'ETL l'a gardé quand la mise à jour automatique était coupée) : il part lui-même.
+    Refusé (409), avec le motif : un passage ni en échec ni en attente, un autre passage en cours, un budget atteint.
     """
     try:
         resumed = passage_service.resume_passage(passage_id, origin="supervision")

@@ -1648,7 +1648,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   font-size: 11px; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
 }
-.login-quote { border-top: 1px solid var(--mint-border); padding-top: 14px; font-size: 12.5px; line-height: 1.55; color: #4A6A6C; margin: 0; }
 
 @media (max-width: 900px) {
   .login-layout { grid-template-columns: 1fr; max-width: 460px; margin: 0 auto; }
@@ -1662,6 +1661,8 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .dash-stat__num { font-family: var(--font-head); font-weight: 800; font-size: 28px; }
 .dash-stat__label { font-size: 13px; font-weight: 600; color: var(--muted); }
 .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+/* Bloc « Bientôt dans ton espace » : un cadre pointillé sépare l'aperçu de ce qui marche déjà (issue #265). */
+.dash-preview { border: 1.5px dashed var(--mint-border); border-radius: var(--r-card); padding: 22px; }
 .dash-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .contrib-list { display: flex; flex-direction: column; }
 .contrib-item {
@@ -1687,18 +1688,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .code-item.is-used { opacity: .55; }
 .code-item__code { font-size: 14px; font-weight: 700; letter-spacing: 1px; }
 .code-item__actions { flex: none; display: flex; align-items: center; gap: 12px; }
-.code-copy {
-  font-size: 12.5px; font-weight: 700; color: var(--teal);
-  background: none; border: 0; padding: 0; cursor: pointer;
-}
-.code-copy:hover { text-decoration: underline; }
 .codes-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
-.equip-tag {
-  font-size: 12.5px; font-weight: 600; color: var(--muted);
-  background: var(--white); border: 1.5px solid var(--card-border);
-  border-radius: var(--r-pill); padding: 5px 13px; transition: all .15s;
-}
-.equip-tag.is-on { color: var(--teal); background: var(--mint); border-color: var(--teal); font-weight: 700; }
 .dropzone {
   border: 1.5px dashed #C9D2CE; border-radius: 10px;
   padding: 16px; text-align: center; font-size: 13px; color: var(--muted);
@@ -1712,17 +1702,8 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 
 /* ===== AJOUT DE RANDONNÉE ===== */
-.addhike-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
-.addhike-triple { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-.pick-tags { display: flex; gap: 7px; flex-wrap: wrap; }
 .dropzone--gpx { cursor: pointer; display: flex; flex-direction: column; gap: 3px; padding: 18px; transition: border-color .15s, background .15s; }
 .dropzone--gpx.is-drag { border-color: var(--teal); background: var(--mint); }
-.gpx-preview {
-  height: 132px; border: 1px solid var(--card-border); border-radius: 10px;
-  background: repeating-linear-gradient(45deg, #EEF4F1 0 14px, #E7EEEA 14px 28px);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; color: #5E7375;
-}
 .gpx-advice {
   display: flex; align-items: center; gap: 10px;
   background: var(--mint); border: 1px solid var(--mint-border);
@@ -1736,32 +1717,11 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .addhike-msg { border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; }
 .addhike-msg.is-ok { background: var(--ok-bg); border: 1px solid var(--ok-bd); color: var(--ok-tx); }
 .addhike-msg.is-error { background: #FBEAE7; border: 1px solid #E9C4BD; color: #B4432E; }
-.addhike-story { display: grid; grid-template-columns: 1fr 320px; gap: 22px; align-items: start; }
-.addhike-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.addhike-story textarea { width: 100%; resize: vertical; font-family: var(--font-body); }
+.addhike-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 @media (max-width: 768px) {
-  .addhike-grid, .addhike-story { grid-template-columns: 1fr; }
-  .addhike-triple { grid-template-columns: 1fr; }
   .addhike-actions { flex-direction: column; align-items: stretch; }
   .addhike-actions .btn { width: 100%; }
-}
-
-/* ===== AJOUT DE SPOT ===== */
-.addspot-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
-.addspot-triple { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-.dropzone--map { cursor: pointer; display: flex; flex-direction: column; gap: 3px; padding: 18px; transition: border-color .15s, background .15s; }
-.dropzone--map:hover { border-color: var(--teal); background: var(--mint); }
-.addspot-story { width: 100%; min-height: 96px; align-items: flex-start; resize: vertical; font-family: var(--font-body); }
-/* Vigilance : l'état actif vire à l'ambre, pour le distinguer des équipements */
-.pick-tags--warn .equip-tag.is-on { color: var(--warn-tx); background: var(--warn-bg); border-color: var(--warn-bd); }
-.addspot-msg { border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; }
-.addspot-msg.is-ok { background: var(--ok-bg); border: 1px solid var(--ok-bd); color: var(--ok-tx); }
-.addspot-msg.is-error { background: #FBEAE7; border: 1px solid #E9C4BD; color: #B4432E; }
-
-@media (max-width: 768px) {
-  .addspot-grid { grid-template-columns: 1fr; }
-  .addspot-triple { grid-template-columns: 1fr; }
 }
 
 /* ===== CHAT VANY ===== */
@@ -1788,10 +1748,13 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   flex-direction: column;
   gap: 18px;
 }
-.chat-daysep {
-  align-self: center;
-  font-size: 11.5px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted-3);
+/* Avertissement en tête du chat : la conversation n'est qu'un aperçu (issue #265). */
+.chat-preview {
+  align-self: center; max-width: 560px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; font-size: 13px; color: var(--muted);
 }
+.chat-preview p { margin: 0; }
 .chat-row { display: flex; gap: 12px; align-items: flex-start; }
 .chat-avatar { width: 38px; height: 38px; border-radius: 50%; display: block; flex-shrink: 0; }
 .bubble { padding: 13px 18px; font-size: 14.5px; line-height: 1.55; color: var(--ink); max-width: 560px; }
@@ -1855,10 +1818,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .unlock-or__label {
   font-size: 12px; font-weight: 800; color: var(--muted);
   background: var(--cream); border: 1px solid #E0DED2; border-radius: var(--r-pill); padding: 6px 10px;
-}
-.unlock-msg {
-  background: #FBEAE7; border: 1px solid #E9C4BD; color: #B4432E;
-  border-radius: 10px; padding: 9px 14px; font-size: 13px; font-weight: 600;
 }
 
 @media (max-width: 920px) {

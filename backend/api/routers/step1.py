@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from api.dependencies import get_current_traveller, require_plan_owner
 from api.rate_limit import CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT, limiter
+from api.trip_limits import DEFAULT_RADIUS_KM, check_day_in_trip, check_radius, check_trip_duration
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 from etl.etl_meteo import run_meteo_etl
@@ -270,8 +271,9 @@ def load_communes(cursor) -> list:
 @router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
 async def get_ville_list(
     request: Request,
-    distance_km: float = Query(5, description="Rayon de recherche en km")
+    distance_km: float = Query(DEFAULT_RADIUS_KM, description="Rayon de recherche en km (25 au plus)")
 ):
+    check_radius(distance_km)   # avant toute lecture en base (issue #263)
     # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
     with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
         # Vérification si les données météo J+6 existent (7 jours de prévisions : J+0 à J+6)
@@ -356,6 +358,8 @@ def create_plan(
     # plan : 500 »). On préfère un 400 explicite et actionnable.
     if duration_days is None or duration_days < 1:
         raise HTTPException(status_code=400, detail="La durée du séjour doit être d'au moins 1 jour.")
+    # Et 7 jours au plus, ceux de l'offre gratuite : sinon une seule requête écrirait des milliers de jours (issue #263).
+    check_trip_duration(duration_days)
     try:
         # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
         with MySQLUtils.open_cursor() as (cnx, cursor):
@@ -409,6 +413,8 @@ def update_day_city(request: Request, plan_id: int, data: dict = Body(...)):
     city_id = data.get("city_id")
     if day_number is None or city_id is None:
         raise HTTPException(status_code=400, detail="day_number et city_id sont requis.")
+    # Un jour hors du séjour est refusé avant d'écrire et avant de lancer Vany (issue #263).
+    check_day_in_trip(plan_id, day_number)
     set_day_city(plan_id, day_number, city_id)
     start_zone_search(plan_id, day_number)   # voir create_plan
     return {"status": "updated", "plan_id": plan_id, "day_number": day_number, "city_id": city_id}

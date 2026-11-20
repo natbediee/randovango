@@ -528,6 +528,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             // (la durée est déjà en localStorage depuis /duration)
             localStorage.setItem('selectedCityId', cityId);
 
+            // Une durée de plus de 7 jours (restée dans le navigateur, ou écrite à la main) : l'API la
+            // refuserait. Le voyageur va sur la page de l'offre, qui lui explique pourquoi (issue #263).
+            if (window.RVG.isTripTooLong(selectedDays)) {
+                window.RVG.showTripTooLong();
+                return;
+            }
+
             // Lancer la création du plan via API
             createPlan(cityId, selectedDays);
         });

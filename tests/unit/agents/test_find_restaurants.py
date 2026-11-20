@@ -636,3 +636,26 @@ def test_a_city_with_boroughs_reads_its_register_around_its_zones_only(monkeypat
                         lambda city, codes, zones=(), radius_km=0: asked.append((len(zones), radius_km)) or {"actifs": [_line("NOUS", 43.24)]})
     service_chain.search_commune(RESTAURANTS, MARSEILLE)
     assert asked == [(2, service_chain.ZONE_KM)] and len(_trace(tmp_path)["zones"]) == 2
+
+
+
+def test_a_big_city_stops_before_the_next_zone_when_the_budget_is_reached(monkeypatch, tmp_path):
+    """Budget atteint après la première zone : la recherche s'arrête, et le fichier garde la zone finie pour la reprise (#211, Rennes)."""
+    agent = _ZoneAgent()
+    _chain(monkeypatch, tmp_path, agent, registered="NOUS")
+    big = {"actifs": [_line("NOUS", 48.38), *[_line(f"Table {number}", 48.38) for number in range(RESTAURANTS.zone_from)]],
+           "enseignes_fermees": [], "radies": []}
+    monkeypatch.setattr(service_chain.api_registre, "load_register", lambda city, codes, *zones: big)
+    monkeypatch.setattr(service_store, "commune_spots", lambda name: [
+        {"latitude": 48.38, "longitude": -4.5, "address": "A"}, {"latitude": 48.42, "longitude": -4.5, "address": "C"}])
+    checks = []
+
+    def check_budget():
+        checks.append(1)
+        if len(checks) == 2:
+            raise RuntimeError("plafond du jour atteint")
+    with pytest.raises(RuntimeError, match="plafond du jour atteint"):
+        service_chain.search_commune(RESTAURANTS, CITY, check_budget=check_budget)
+    trace = _trace(tmp_path)
+    assert "final" not in trace or trace["final"] is None
+    assert [zone.get("final") is not None for zone in trace["zones"]] == [True, False]

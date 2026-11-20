@@ -474,6 +474,7 @@ def init_database():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 12. trip_plans (dépend de cities)
+            # pdf_downloads : les carnets PDF déjà fabriqués pour ce voyage, 3 au plus avec l'offre gratuite (issue #263).
             """
             CREATE TABLE IF NOT EXISTS trip_plans (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -483,6 +484,7 @@ def init_database():
                 city_id INT NOT NULL,
                 user_token VARCHAR(64),
                 user_id INT,
+                pdf_downloads INT NOT NULL DEFAULT 0,
                 FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
@@ -696,6 +698,32 @@ def init_database():
                 error VARCHAR(255),
                 PRIMARY KEY (passage_id, part),
                 FOREIGN KEY (passage_id) REFERENCES passages(passage_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 23. agent_settings : les réglages des agents, que l'administratrice change depuis la supervision (#211).
+            # services_after_etl : la chaîne des services se lance-t-elle seule à la fin de l'ETL d'une nouvelle ville ?
+            # Les montants sont en dollars, au prix équivalent API de llm_calls.cost_usd (abonnement compris) :
+            # monthly_budget_usd, l'enveloppe du mois ; daily_budget_usd, le plafond du jour ; vany_reserve_usd, la part
+            # de l'enveloppe gardée pour Vany, que les chaînes d'agents ne peuvent pas dépenser.
+            # Une ligne par changement, jamais modifiée : la plus récente (id le plus grand) est le réglage en vigueur,
+            # les autres disent qui a changé quoi et quand. Sans ligne, les valeurs par défaut du code s'appliquent.
+            # changed_by : le nom de l'admin, comme decisions.decided_by ; pas de clé étrangère, les comptes sont dans
+            # une autre base. reason : pourquoi l'admin a changé le réglage, champ libre rempli depuis la supervision
+            # (« test de la file avec deux villes », « fin du mois serrée »), facultatif. Les CHECK refusent un montant absurde dans la base elle-même, pas seulement dans la route.
+            # Les contraintes sont nommées (CONSTRAINT) : add_missing_columns ne les prend pas pour des colonnes.
+            """
+            CREATE TABLE IF NOT EXISTS agent_settings (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                services_after_etl BOOLEAN NOT NULL,
+                monthly_budget_usd DECIMAL(10,2) NOT NULL,
+                daily_budget_usd DECIMAL(10,2) NOT NULL,
+                vany_reserve_usd DECIMAL(10,2) NOT NULL,
+                changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                changed_by VARCHAR(100) NOT NULL,
+                reason VARCHAR(255),
+                CONSTRAINT chk_agent_settings_positive CHECK (monthly_budget_usd >= 0 AND daily_budget_usd >= 0 AND vany_reserve_usd >= 0),
+                CONSTRAINT chk_agent_settings_daily CHECK (daily_budget_usd <= monthly_budget_usd),
+                CONSTRAINT chk_agent_settings_reserve CHECK (vany_reserve_usd <= monthly_budget_usd)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
         ]
