@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query, Body, Depends
 from api.dependencies import require_plan_owner
+from api.trip_limits import DEFAULT_RADIUS_KM, check_day_in_trip, check_radius
 from services.plan_service import insert_or_update_plan
 from utils.db_utils import MySQLUtils
 from utils.display_utils import enrich_hike
@@ -12,7 +13,7 @@ logger = LoggerUtil.get_logger(__name__)
 @router.get("/hikes", summary="Returns the hikes for a given city with details.")
 def get_hikes(
     city_id: int = Query(..., description="ID de la ville"),
-    distance_km: float = Query(5, description="Rayon de recherche en km autour de la ville")
+    distance_km: float = Query(DEFAULT_RADIUS_KM, description="Rayon de recherche en km autour de la ville (25 au plus)")
 ):
     """
     Retourne les randonnées pour une ville donnée avec tous les détails :
@@ -21,6 +22,7 @@ def get_hikes(
 
     Vérifiées ou non, quel que soit le statut de connexion de l'utilisateur.
     """
+    check_radius(distance_km)   # avant toute lecture en base (issue #263)
     logger.info(f"Route /hikes appelée avec city_id={city_id}")
     from utils.geo_utils import get_bounding_box, haversine_distance_km
 
@@ -105,5 +107,7 @@ def get_hike_trace(hike_id: int):
 @router.put("/update_plan/{plan_id}", summary="Update an existing trip plan with new data.",
             dependencies=[Depends(require_plan_owner)])
 def update_plan(plan_id: int, data: dict = Body(...)):
+    # Un jour hors du séjour est refusé : insert_or_update_plan en créerait la ligne (issue #263).
+    check_day_in_trip(plan_id, data.get("day_number", 1))
     plan_id = insert_or_update_plan(plan_id, data)
     return {"status": "updated", "plan_id": plan_id, "recap": data}

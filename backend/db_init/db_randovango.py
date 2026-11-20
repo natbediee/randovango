@@ -474,6 +474,7 @@ def init_database():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 12. trip_plans (dépend de cities)
+            # pdf_downloads : les carnets PDF déjà fabriqués pour ce voyage, 3 au plus avec l'offre gratuite (issue #263).
             """
             CREATE TABLE IF NOT EXISTS trip_plans (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -483,6 +484,7 @@ def init_database():
                 city_id INT NOT NULL,
                 user_token VARCHAR(64),
                 user_id INT,
+                pdf_downloads INT NOT NULL DEFAULT 0,
                 FOREIGN KEY (city_id) REFERENCES cities(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,

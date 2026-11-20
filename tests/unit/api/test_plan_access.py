@@ -12,7 +12,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api import dependencies
+from api import dependencies, trip_limits
 from api.routers import pepites, result, step1, step2, step3, step4
 from services.authentification import AUTH_COOKIE_NAME, create_access_token
 
@@ -58,6 +58,8 @@ def world(monkeypatch):
         return {}
 
     monkeypatch.setattr(dependencies, "get_plan_owner", OWNERS.get)
+    # Chaque plan dure 7 jours : le jour 1 des requêtes ci-dessous fait partie du séjour (issue #263).
+    monkeypatch.setattr(trip_limits, "get_trip_duration", lambda plan_id: 7)
     monkeypatch.setattr(step1, "set_day_city", write)
     monkeypatch.setattr(step1, "start_zone_search", write)
     monkeypatch.setattr(step2, "insert_or_update_plan", write)

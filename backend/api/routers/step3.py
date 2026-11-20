@@ -2,6 +2,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Query, Body, Depends, Request
 from api.dependencies import require_plan_owner
+from api.trip_limits import DEFAULT_RADIUS_KM, check_day_in_trip, check_radius
 from api.rate_limit import DAY_CHOICE_MESSAGE, DAY_SPOT_LIMIT, limiter
 from services.pepite_service import start_preparation
 from services.plan_service import insert_or_update_plan
@@ -18,7 +19,7 @@ logger = LoggerUtil.get_logger(__name__)
 @router.get("/spots", summary="Returns the spots for a given city.")
 def get_spots(
     city_id: int = Query(..., description="ID de la ville"),
-    distance_km: float = Query(5, description="Rayon de la zone en km"),
+    distance_km: float = Query(DEFAULT_RADIUS_KM, description="Rayon de la zone en km (25 au plus)"),
     hike_id: int | None = Query(None, description="Rando du jour : spots triés selon leur distance à son tracé"),
     plan_id: int | None = Query(None, description="Séjour : avec day_number, donne la date de la nuit"),
     day_number: int = Query(1, description="Jour du séjour")
@@ -30,6 +31,7 @@ def get_spots(
     500 m (SPOT_ON_HIKE_KM) sont « sur ta rando », même un peu au-delà du rayon de
     la ville, et la liste va du plus proche au plus loin de la rando.
     """
+    check_radius(distance_km)   # avant toute lecture en base (issue #263)
     logger.info(f"Route /spots appelée avec city_id={city_id}, distance_km={distance_km}")
 
     # Connexion DB
@@ -140,6 +142,8 @@ def _spots_around_city(connection, cursor, city_id, distance_km, get_bounding_bo
 # Le spot choisi lance la préparation des pépites de Vany (carte #21).
 @limiter.limit(DAY_SPOT_LIMIT, error_message=DAY_CHOICE_MESSAGE)
 def update_plan(request: Request, plan_id: int, data: dict = Body(...)):
+    # Un jour hors du séjour est refusé avant d'écrire et avant de lancer Vany (issue #263).
+    check_day_in_trip(plan_id, data.get("day_number", 1))
     plan_id = insert_or_update_plan(plan_id, data)
     # Le spot est choisi, ou « autre hébergement » (spot_id à None) : on prépare tout de
     # suite, en tâche de fond, les idées (pépites de Vany) du jour, autour du spot ou du
