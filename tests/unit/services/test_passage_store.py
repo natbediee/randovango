@@ -61,3 +61,12 @@ def test_the_summary_of_a_part_is_kept_as_json_and_read_back(base):
     assert '{"fiches": 4}' in base.queries[0][1]
     base.rows = [{"part": "restaurants", "summary": '{"fiches": 4}'}, {"part": "laveries", "summary": None}]
     assert [row["summary"] for row in passage_store.load_parts("p1")] == [{"fiches": 4}, None]
+
+
+def test_open_parts_count_a_failure_not_yet_resumed(base):
+    """Les catégories déjà demandées comptent aussi celles d'un échec pas encore repris, pour ne pas payer une ville deux fois."""
+    base.rows = [{"part": "restaurants"}]
+    assert passage_store.open_parts("services", [12, 13]) == {"restaurants"}
+    sql, values = base.queries[0]
+    assert "p.status = 'echec' AND NOT EXISTS" in sql and "r.resumed_from = p.passage_id" in sql
+    assert values == ("services", 12, 13)

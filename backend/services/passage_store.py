@@ -131,10 +131,17 @@ def oldest_queued() -> str | None:
 def open_parts(chain: str, city_ids: list) -> set:
     """
     Les parties déjà demandées pour ces villes (les villes d'une même commune) dans un passage en file, en attente ou
-    en cours : l'ETL ne les redemande pas, une seconde rando dans la même commune ne fait pas payer deux fois.
+    en cours, ou dans un échec pas encore repris : l'ETL ne les redemande pas, une seconde rando dans la même commune
+    ne fait pas payer deux fois.
+    Un échec pas encore repris compte aussi : c'est l'admin qui le reprend, et sa reprise refait ces catégories. Sans
+    cela, une seconde rando à Paimpont avait demandé un nouveau passage pendant que le premier attendait sa reprise,
+    et reprendre l'échec aurait payé la ville deux fois (19 novembre 2026).
     """
     placeholders = ",".join(["%s"] * len(city_ids))
     rows = _read(f"""SELECT DISTINCT pp.part FROM passages p JOIN passage_parts pp ON pp.passage_id = p.passage_id
                      WHERE p.chain = %s AND p.city_id IN ({placeholders})
-                       AND p.status IN ('en_file', 'en_attente', 'en_cours')""", (chain, *city_ids))
+                       AND (p.status IN ('en_file', 'en_attente', 'en_cours')
+                            OR (p.status = 'echec' AND NOT EXISTS
+                                (SELECT 1 FROM passages r WHERE r.resumed_from = p.passage_id)))""",
+                 (chain, *city_ids))
     return {row["part"] for row in rows}

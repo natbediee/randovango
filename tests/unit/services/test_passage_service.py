@@ -59,9 +59,13 @@ class _Store:
         return next((key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED), None)
 
     def open_parts(self, chain, city_ids):
+        # Comme la requête : un passage en file, en attente ou en cours, ou un échec pas encore repris.
+        def still_open(key, passage):
+            return (passage["status"] in ("en_file", "en_attente", "en_cours")
+                    or (passage["status"] == "echec" and self.resumed_by(key) is None))
         return {row["part"] for key, passage in self.passages.items()
-                if passage["chain"] == chain and passage["city_id"] in city_ids
-                and passage["status"] in ("en_file", "en_attente", "en_cours") for row in self.parts[key]}
+                if passage["chain"] == chain and passage["city_id"] in city_ids and still_open(key, passage)
+                for row in self.parts[key]}
 
     def recent_ids(self, limit):
         return [key for key, row in self.passages.items() if row["status"] in ("fini", "echec")][:limit]
@@ -487,6 +491,23 @@ def test_a_second_hike_in_the_same_commune_asks_nothing_more(store, etl):
     first = passage_service.request_etl_passage("Le Conquet")
     assert passage_service.request_etl_passage("Lochrist") is None
     assert list(store.passages) == [first]
+
+
+def test_a_second_hike_does_not_ask_again_a_city_whose_failure_waits_for_its_resume(store, etl):
+    """Un échec pas encore repris garde ses catégories : une seconde rando n'en redemande pas (Paimpont, 19 novembre 2026), sa reprise les refera."""
+    failed = passage_service.request_etl_passage("Le Conquet")
+    passage_store.set_passage_status(failed, "echec", "quota de l'abonnement Claude atteint")
+    assert passage_service.request_etl_passage("Lochrist") is None
+    assert list(store.passages) == [failed]
+
+
+def test_once_the_failure_is_resumed_its_categories_no_longer_block(store, etl):
+    """Un échec déjà repris ne compte plus : seule sa reprise dit ce qui est demandé."""
+    failed = passage_service.request_etl_passage("Le Conquet")
+    passage_store.set_passage_status(failed, "echec", "quota de l'abonnement Claude atteint")
+    store.insert_passage("reprise", "services", CONQUET["id"], "supervision", ["laveries"], resumed_from=failed)
+    passage_store.set_passage_status("reprise", "fini")
+    assert passage_service.request_etl_passage("Lochrist") is not None
 
 
 def test_with_the_automatic_update_off_the_city_waits_for_the_admin(store, etl):
