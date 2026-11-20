@@ -112,14 +112,14 @@ def chain(monkeypatch):
             raise state["fail"][key]
         return {"fiches": 3}
 
-    def lock():
+    def lock(city_id):
         if state["busy"]:
             raise PassageRunning("verrou tenu")
         from contextlib import nullcontext
         return nullcontext()
 
     fake = passage_service.Chain(key="services", label="Recherche des services", parts=passage_service.SERVICE_LABELS,
-                                 paid=True, lock=lock, lock_is_free=lambda: not state["busy"], run_part=run_part,
+                                 paid=True, lock=lock, lock_is_free=lambda city_id: not state["busy"], run_part=run_part,
                                  steps_of=passage_service.service_steps)
     monkeypatch.setitem(passage_service.CHAINS, "services", fake)
     return state
@@ -438,7 +438,7 @@ def test_a_free_passage_does_not_wait_behind_a_passage_held_by_the_budget(store,
     """Un passage gratuit en file part même si un passage des services, plus ancien, attend le budget du lendemain."""
     ran = []
     free = passage_service.Chain(key="gratuite", label="Chaîne gratuite", parts={"lieux": "Lieux"}, paid=False,
-                                 lock=chain_lock_free, lock_is_free=lambda: True,
+                                 lock=chain_lock_free, lock_is_free=lambda city_id: True,
                                  run_part=lambda *args: ran.append(args[1]) or {"lieux": 4}, steps_of=lambda key: {})
     monkeypatch.setitem(passage_service.CHAINS, "gratuite", free)
     held = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
@@ -449,7 +449,7 @@ def test_a_free_passage_does_not_wait_behind_a_passage_held_by_the_budget(store,
     assert store.passages[held]["status"] == "en_file" and chain["ran"] == []
 
 
-def chain_lock_free():
+def chain_lock_free(city_id):
     """Un verrou toujours libre, pour une chaîne simulée."""
     from contextlib import nullcontext
     return nullcontext()
@@ -667,3 +667,95 @@ def test_a_big_city_stopped_between_two_zones_resumes_its_file_when_the_budget_r
     assert passage_queue.run_next() is True
     assert store.passages[passage_id]["status"] == "fini"
     assert [(key, resume) for key, resume, _ in chain["ran"]] == [("restaurants", False), ("restaurants", True)]
+
+
+# --- Les chaînes gratuites de l'ajout d'une ville : OSM, FINESS, carburants (issue #276) ---
+
+@pytest.fixture
+def free(monkeypatch):
+    """
+    Les chaînes OSM et carburants, avec leurs vraies règles, mais sans réseau ni base : l'étape de l'ETL rend ce qu'on
+    lui donne dans `loaded` (None : échec), et le verrou de chaque ville est libre, sauf celles de `busy`.
+    """
+    state = {"loaded": {"osm": 42, "carburants": 3}, "asked": [], "busy": set()}
+
+    def etl_step(key):
+        def run(city_name):
+            state["asked"].append((key, city_name))
+            return state["loaded"][key]
+        return run
+
+    def lock(key, city_id):
+        if (key, city_id) in state["busy"]:
+            raise PassageRunning("verrou tenu")
+        from contextlib import nullcontext
+        return nullcontext()
+
+    monkeypatch.setattr(passage_service.etl_chains, "run_osm_etl", etl_step("osm"))
+    monkeypatch.setattr(passage_service.etl_chains, "run_fuel_etl", etl_step("carburants"))
+    monkeypatch.setattr(passage_service.etl_chains, "city_lock", lock)
+    monkeypatch.setattr(passage_service.etl_chains, "city_lock_is_free",
+                        lambda key, city_id: (key, city_id) not in state["busy"])
+    return state
+
+
+def test_osm_is_launched_on_a_city_like_any_chain(store, free):
+    """La route de lancement relance OSM pour une ville : le passage passe, avec ce qu'il a chargé en bilan lisible."""
+    passage_id = passage_service.create_passage("osm", 12)
+    passage_service.run_passage(passage_id)
+    passage = passage_service.read_passage(passage_id)
+    assert passage["etat"] == "fini" and passage["payant"] is False
+    assert passage["categories"][0]["bilan_texte"] == "42 lieux chargés."
+    assert free["asked"] == [("osm", "Guidel")]
+
+
+def test_a_free_chain_loads_the_city_itself_not_its_commune(store, free, monkeypatch):
+    """OSM de Morgat se charge sur Morgat : seule la chaîne des services cherche depuis la ville de la commune (Crozon)."""
+    morgat = {"id": 13, "name": "Morgat", "commune": "Crozon", "insee": "29042"}
+    monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY, morgat])
+    passage_id = passage_service.create_passage("osm", 13)
+    store.passages[passage_id]["city_name"] = "Morgat"
+    passage_service.run_passage(passage_id)
+    assert free["asked"] == [("osm", "Morgat")]
+
+
+def test_an_osm_failure_is_kept_with_its_reason_and_resumed_without_a_script(store, free):
+    """Saint-Philibert sans réponse d'OSM : l'échec est gardé avec sa raison, puis la reprise le recharge, sans script."""
+    free["loaded"]["osm"] = None
+    failed = passage_service.create_passage("osm", 12, origin="etl")
+    passage_service.run_passage(failed)
+    passage = passage_service.read_passage(failed)
+    assert passage["etat"] == "echec" and passage["raison_echec"].startswith("OpenStreetMap n'a pas répondu")
+    assert passage["categories"][0]["raison_echec"] == passage["raison_echec"]
+    assert passage_service.list_passages()["villes_en_attente"][0]["passage_id"] == failed
+    free["loaded"]["osm"] = 40
+    resumed = passage_service.resume_passage(failed)
+    passage_service.run_passage(resumed)
+    assert store.passages[resumed]["status"] == "fini" and store.passages[resumed]["resumed_from"] == failed
+
+
+def test_a_free_chain_is_never_held_by_the_budget(store, free):
+    """Budget des agents atteint : OSM et les carburants se lancent quand même, ils ne coûtent rien."""
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    passage_id = passage_service.create_passage("carburants", 12)
+    passage_service.run_passage(passage_id)
+    assert store.passages[passage_id]["status"] == "fini"
+
+
+def test_a_free_chain_is_refused_only_on_the_same_city(store, free):
+    """OSM qui tourne sur Guidel refuse un second OSM sur Guidel, en le nommant, mais pas OSM sur une autre ville."""
+    running = passage_service.create_passage("osm", 12)
+    store.set_passage_status(running, "en_cours")
+    free["busy"].add(("osm", 12))
+    with pytest.raises(PassageConflict, match="« Lieux d'OpenStreetMap » tourne déjà sur Guidel"):
+        passage_service.create_passage("osm", 12)
+    passage_service.check_free(passage_service.CHAINS["osm"], 13)       # Morgat : rien ne la retient
+
+
+def test_a_running_free_chain_shows_the_loading_step(store, free):
+    """Une partie d'OSM en cours montre l'étape « chargement » : elle n'a aucun agent dont lire l'étape."""
+    passage_id = passage_service.create_passage("osm", 12)
+    store.set_passage_status(passage_id, "en_cours")
+    store.set_part(passage_id, "osm", "en_cours")
+    free["busy"].add(("osm", 12))       # le verrou est tenu : le passage tourne vraiment
+    assert passage_service.read_passage(passage_id)["categories"][0]["etape"] == "chargement"

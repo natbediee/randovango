@@ -1,8 +1,8 @@
 """
 Les passages des chaînes d'agents, lancés et suivis depuis la supervision (issue #204, section « Passages » de /docs).
 
-Une chaîne d'agents (aujourd'hui, la chaîne des services : restaurants, commerces, supermarchés, laveries) se lance sur
-une ville sans ouvrir le conteneur. Le lancement répond tout de suite (202) : le passage tourne ensuite en tâche de fond,
+Une chaîne (la chaîne des services : restaurants, commerces, supermarchés, laveries ; et, depuis #276, les chaînes
+gratuites de l'ajout d'une ville : OSM, pharmacies FINESS, carburants) se lance sur une ville sans ouvrir le conteneur. Le lancement répond tout de suite (202) : le passage tourne ensuite en tâche de fond,
 parfois des heures pour une grande ville, et l'écran relit son état. Les règles sont dans services/passage_service.py.
 
 Un lancement fait toujours une vraie mise à jour, payante : l'essai et le rejeu des règles restent des outils de la
