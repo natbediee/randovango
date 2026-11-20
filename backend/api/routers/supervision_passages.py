@@ -14,13 +14,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from api.dependencies import require_admin
 from api.models.supervision import AgentSettingsRequest, PassageRequest
 from services import budget_service, passage_service
+from services.exchange_rate_service import RateUnavailable
 from services.passage_service import PassageConflict
 
 router = APIRouter()
 
 # Les champs du réglage, tels que la page les envoie (en français), et la colonne de agent_settings de chacun.
-SETTING_COLUMNS = {"services_apres_etl": "services_after_etl", "enveloppe_du_mois_usd": "monthly_budget_usd",
-                   "plafond_du_jour_usd": "daily_budget_usd", "reserve_vany_usd": "vany_reserve_usd"}
+SETTING_COLUMNS = {"services_apres_etl": "services_after_etl", "enveloppe_du_mois_eur": "monthly_budget_eur",
+                   "plafond_du_jour_eur": "daily_budget_eur", "reserve_vany_eur": "vany_reserve_eur"}
 
 CONFLICT = {409: {"description": "Un passage de la chaîne tourne déjà, ou ce passage ne se reprend pas : le message dit pourquoi."}}
 NOT_FOUND = {404: {"description": "Ce passage n'existe pas."}}
@@ -66,19 +67,22 @@ def get_settings(_admin=Depends(require_admin)):
     Ce que montre le panneau « Budget du jour » de l'espace Agents : la mise à jour automatique à la fin de l'ETL
     (activée ou coupée), l'enveloppe du mois, le plafond du jour, la part gardée pour Vany, ce qui est dépensé et ce
     qui reste le jour et le mois, et, si le budget est atteint, la raison (budget_atteint), sinon null.
-    Les montants sont en dollars, au prix équivalent API des appels d'agents, abonnement compris.
+    Les montants sont en euros TTC estimés ; la dépense est aussi donnée en dollars, la monnaie du fournisseur, avec le
+    taux de la BCE utilisé (taux). Sans aucun taux connu, les montants en euros sont null et budget_atteint le dit.
     """
     return budget_service.budget_state()
 
 
-@router.put("/passages/reglage", responses={422: {"description": "Un montant négatif, ou des montants qui ne vont pas ensemble."}},
+@router.put("/passages/reglage", responses={422: {"description": "Un montant négatif, ou des montants qui ne vont pas ensemble."},
+                                            503: {"description": "Aucun taux de la BCE connu : les euros ne peuvent pas être convertis."}},
             summary="Change le réglage des agents : mise à jour automatique, enveloppe, plafond, part de Vany.")
 def put_settings(body: AgentSettingsRequest, admin=Depends(require_admin)):
     """
     Seuls les champs envoyés changent ; le changement vaut tout de suite, sans redémarrer l'application. L'ancien
     réglage reste en base, avec le nom de l'admin qui l'a changé. Répond par le nouvel état, comme GET /passages/reglage.
-    {"services_apres_etl": false} ou {"plafond_du_jour_usd": 5, "raison": "test du budget atteint"}
-    Un plafond du jour ou une part de Vany plus grands que l'enveloppe du mois sont refusés (422).
+    {"services_apres_etl": false} ou {"plafond_du_jour_eur": 5, "raison": "test du budget atteint"}
+    Les montants sont en euros TTC. Un plafond du jour ou une part de Vany plus grands que l'enveloppe du mois sont
+    refusés (422). Sans aucun taux de la BCE connu, rien n'est écrit (503).
     """
     sent = body.model_dump(exclude_none=True)
     reason = sent.pop("raison", None)
@@ -87,6 +91,8 @@ def put_settings(body: AgentSettingsRequest, admin=Depends(require_admin)):
         return budget_service.save_settings(changes, admin["username"], reason)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))
+    except RateUnavailable as error:
+        raise HTTPException(status_code=503, detail=f"Taux du dollar inconnu : {error}.")
 
 
 @router.get("/passages/{passage_id}", responses=NOT_FOUND, summary="L'état d'un passage, catégorie par catégorie.")
