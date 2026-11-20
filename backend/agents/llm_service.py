@@ -32,6 +32,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime
 
+from agents.llm_prices import api_cost_usd
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
 
@@ -325,8 +326,11 @@ class LLMService:
             raise
         finally:
             # finally : exécuté que l'appel réussisse ou lève une erreur.
-            self.last_run = {"duration_ms": round((time.monotonic() - started) * 1000),
-                             **usage_measures(_field(response, "usage"))}
+            measures = usage_measures(_field(response, "usage"))
+            # L'API ne donne pas de prix : on le calcule avec le tarif du modèle (llm_prices.py, #275).
+            # "engine" dit, dans le journal des agents, si ce coût est une dépense réelle (llm_calls_service.run_cost_text).
+            self.last_run = {"duration_ms": round((time.monotonic() - started) * 1000), **measures,
+                             "cost_usd": api_cost_usd(self.model, measures), "engine": ENGINE_API}
             record_call(build_call_row(self.agent, ENGINE_API, self.model, EFFORT, self.last_run, error, called_at))
 
     # Appels groupés (Batch API)
@@ -378,8 +382,9 @@ class LLMService:
                     logger.warning(f"[llm] {item.custom_id} : réponse inutilisable ({raised})")
                     error = raised
             # Une ligne par réponse du lot ; l'objet vient de l'étiquette ("spot-12").
-            record_call(build_call_row(self.agent, ENGINE_API_BATCH, self.model, EFFORT,
-                                       usage_measures(_field(message, "usage")), error, datetime.now(),
+            measures = usage_measures(_field(message, "usage"))
+            measures["cost_usd"] = api_cost_usd(self.model, measures, batch=True)
+            record_call(build_call_row(self.agent, ENGINE_API_BATCH, self.model, EFFORT, measures, error, datetime.now(),
                                        objet=object_of_label(item.custom_id)))
 
         logger.info(f"[llm] Lot {batch_id} : {len(results)} réponse(s) exploitable(s)")
@@ -476,6 +481,7 @@ class ClaudeCodeLLMService:
             raise
         finally:
             self.last_run.setdefault("duration_ms", round((time.monotonic() - started) * 1000))
+            self.last_run["engine"] = ENGINE_CLAUDE_CODE  # son coût n'est qu'un équivalent API (llm_calls_service.py)
             record_call(build_call_row(self.agent, ENGINE_CLAUDE_CODE, self.model, self.effort,
                                        self.last_run, error, called_at))
 

@@ -19,11 +19,11 @@ SCHEMA = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required
 
 # --- Moteur API ----------------------------------------------------------------
 
-def api_service(stop_reason="end_turn", text='{"ok": true}'):
+def api_service(stop_reason="end_turn", text='{"ok": true}', model="modele-test"):
     usage = SimpleNamespace(input_tokens=120, output_tokens=30, cache_read_input_tokens=100,
                             cache_creation_input_tokens=0, server_tool_use=None)
     reply = SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason=stop_reason, usage=usage)
-    service = LLMService("modele-test", api_key="test", agent="harmonize_spots")
+    service = LLMService(model, api_key="test", agent="harmonize_spots")
     service.client = SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: reply))
     return service
 
@@ -41,6 +41,14 @@ def test_a_successful_api_call_is_recorded_with_its_object(llm_calls) -> None:
     assert (row["input_tokens"], row["output_tokens"], row["cache_read_tokens"]) == (120, 30, 100)
     assert (row["objet_type"], row["objet_id"]) == ("spot", 42)
     assert row["error"] is None
+
+
+def test_an_api_call_is_recorded_with_its_price(llm_calls) -> None:
+    """Un appel par l'API garde son prix en dollars, calculé au tarif du modèle : avant #275, cost_usd restait vide et le budget le comptait pour rien."""
+    api_service(model="claude-sonnet-5-5").complete_json("sys", "user", SCHEMA)
+    # 120 tokens envoyés à 2 $, 30 écrits à 10 $ et 100 relus à 0,10 $ le million : 0,00055 $, arrondi au
+    # dix-millième de dollar comme la colonne cost_usd.
+    assert llm_calls[0]["cost_usd"] == 0.0006
 
 
 @pytest.mark.parametrize("stop_reason, status", [("refusal", "refus"), ("max_tokens", "coupe")])

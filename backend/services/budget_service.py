@@ -1,5 +1,5 @@
 """
-Le réglage des agents et le budget qui limite leurs passages (issue #211).
+Le réglage des agents et le budget qui limite leurs passages (issues #211 et #275).
 
 LE RÉGLAGE
 L'administratrice décide depuis la supervision :
@@ -8,53 +8,87 @@ L'administratrice décide depuis la supervision :
 Le réglage est relu en base à chaque décision : un changement vaut tout de suite, sans redémarrer l'application.
 Tant que personne n'a rien réglé, DEFAULTS s'applique.
 
-LE BUDGET
-Les montants sont en dollars, au prix équivalent API que llm_calls garde pour chaque appel, abonnement compris : en
-phase de test, tout passe par l'abonnement, et le budget doit quand même se voir agir. Les euros viendront avec #275.
+LE BUDGET, EN EUROS
+L'admin règle les montants en euros TTC. Le fournisseur facture en dollars : llm_calls garde le prix de chaque appel en
+dollars (réel pour l'API, équivalent API pour l'abonnement), et la dépense est convertie en euros TTC jour par jour, au
+taux de la BCE de chaque jour (exchange_rate_service.py). Le plafond ne bouge donc pas quand le dollar varie.
+Les colonnes en dollars d'agent_settings restent remplies, converties au taux du jour du réglage, pour les branches
+qui les lisent encore. Une ligne d'avant les euros n'a que des dollars : on la convertit au taux du jour où elle a été
+écrite.
 Un passage d'une chaîne d'agents ne part que si les deux conditions tiennent :
     - ce qui est dépensé depuis le 1er du mois reste sous l'enveloppe, moins la part de Vany ;
     - ce qui est dépensé depuis minuit reste sous le plafond du jour.
-Le passage en cours n'est jamais coupé : on peut dépasser d'un passage, soit une ville (2 à 4 $).
+Le passage en cours n'est jamais coupé : on peut dépasser d'un passage, soit une ville (2 à 4 €).
+Sans aucun taux connu (site de la BCE jamais lu), la dépense ne peut pas se compter en euros : les passages attendent.
 Vany elle-même n'est pas bloquée ici : sa réserve la protège des chaînes, son propre plafond viendra avec #198.
 """
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
-from services import agent_settings_store
+from services import agent_settings_store, exchange_rate_service
+from services.exchange_rate_service import RateUnavailable
 
-# Les réglages de la phase de test, choisis le 19 novembre 2026 : une enveloppe large en équivalent API (novembre en
-# était déjà à 72,59 $), deux à trois villes par jour, et la part que Vany a dépensée en novembre (18 $), arrondie.
-DEFAULTS = {"services_after_etl": True, "monthly_budget_usd": 100.0, "daily_budget_usd": 10.0,
-            "vany_reserve_usd": 25.0}
+# Les montants réglables, sans leur monnaie : chacun a une colonne _eur et une colonne _usd dans agent_settings.
+AMOUNTS = ("monthly_budget", "daily_budget", "vany_reserve")
+
+# Les réglages de la phase de test, en euros TTC, quand personne n'a encore rien réglé : une enveloppe large, deux à
+# trois villes par jour, et à peu près la part que Vany a dépensée en novembre 2026.
+DEFAULTS = {"services_after_etl": True, "monthly_budget_eur": 100.0, "daily_budget_eur": 10.0,
+            "vany_reserve_eur": 25.0}
+
+
+def amounts_in_euros(row: dict) -> dict:
+    """
+    Les montants d'une ligne d'agent_settings en euros. Une ligne d'avant les euros n'a que des dollars : ils sont
+    convertis au taux du jour où l'admin les a réglés. Lève RateUnavailable si aucun taux n'est connu.
+    """
+    amounts = {}
+    for name in AMOUNTS:
+        if row[f"{name}_eur"] is not None:
+            amounts[f"{name}_eur"] = float(row[f"{name}_eur"])
+        else:
+            rate = exchange_rate_service.rate_for(row["changed_at"].date())
+            amounts[f"{name}_eur"] = exchange_rate_service.usd_to_eur(float(row[f"{name}_usd"]), rate)
+    return amounts
 
 
 def load_settings() -> dict:
-    """Le réglage en vigueur, avec qui l'a fait et quand ; les valeurs par défaut si personne n'a encore rien réglé."""
+    """
+    Le réglage en vigueur, avec qui l'a fait et quand ; les valeurs par défaut si personne n'a encore rien réglé.
+    Si une ligne en dollars ne peut pas être convertie (aucun taux connu), ses montants en euros valent None :
+    services_after_etl reste lisible, pour que la fin de l'ETL ne casse pas.
+    """
     row = agent_settings_store.load_latest()
     if row is None:
         return {**DEFAULTS, "changed_at": None, "changed_by": None, "reason": None}
-    return {"services_after_etl": bool(row["services_after_etl"]),
-            "monthly_budget_usd": float(row["monthly_budget_usd"]), "daily_budget_usd": float(row["daily_budget_usd"]),
-            "vany_reserve_usd": float(row["vany_reserve_usd"]),
+    try:
+        amounts = amounts_in_euros(row)
+    except RateUnavailable:
+        amounts = {f"{name}_eur": None for name in AMOUNTS}
+    return {"services_after_etl": bool(row["services_after_etl"]), **amounts,
             "changed_at": row["changed_at"], "changed_by": row["changed_by"], "reason": row["reason"]}
 
 
 def check_amounts(settings: dict) -> None:
     """Lève ValueError, avec une phrase qui dit quoi corriger, si les montants ne vont pas ensemble."""
-    if settings["daily_budget_usd"] > settings["monthly_budget_usd"]:
+    if settings["daily_budget_eur"] > settings["monthly_budget_eur"]:
         raise ValueError("Le plafond du jour ne peut pas dépasser l'enveloppe du mois.")
-    if settings["vany_reserve_usd"] > settings["monthly_budget_usd"]:
+    if settings["vany_reserve_eur"] > settings["monthly_budget_eur"]:
         raise ValueError("La part gardée pour Vany ne peut pas dépasser l'enveloppe du mois.")
 
 
 def save_settings(changes: dict, changed_by: str, reason: str | None = None) -> dict:
     """
-    Change le réglage : `changes` ne donne que ce qui change, le reste garde sa valeur. Écrit une nouvelle ligne, avec
-    la raison du changement si l'admin en donne une, et rend le nouvel état du budget. Lève ValueError si les montants
-    ne vont pas ensemble.
+    Change le réglage : `changes` ne donne que ce qui change (montants en euros), le reste garde sa valeur. Écrit une
+    nouvelle ligne, avec la raison du changement si l'admin en donne une, et rend le nouvel état du budget.
+    Les montants sont aussi écrits en dollars, au taux du jour. Lève ValueError si les montants ne vont pas ensemble,
+    RateUnavailable si aucun taux n'est connu.
     """
     current = load_settings()
     settings = {key: changes.get(key, current[key]) for key in DEFAULTS}
     check_amounts(settings)
+    rate = exchange_rate_service.rate_for(date.today())
+    for name in AMOUNTS:
+        settings[f"{name}_usd"] = exchange_rate_service.eur_to_usd(settings[f"{name}_eur"], rate)
     agent_settings_store.insert(settings, changed_by, reason)
     return budget_state()
 
@@ -70,46 +104,70 @@ def next_month(day: datetime) -> datetime:
     return (day.replace(day=28) + timedelta(days=4)).replace(day=1)
 
 
+def spent_since(start: datetime) -> dict:
+    """
+    Ce qu'ont coûté les appels d'agents depuis `start` : {"eur": euros TTC, "usd": dollars}. Chaque jour est converti
+    à son propre taux. Lève RateUnavailable si aucun taux n'est connu.
+    """
+    by_day = agent_settings_store.spent_by_day(start)
+    euros = sum(exchange_rate_service.usd_to_eur(usd, exchange_rate_service.rate_for(day)) for day, usd in by_day.items())
+    return {"eur": round(euros, 2), "usd": round(sum(by_day.values()), 2)}
+
+
 def block_reason(settings: dict, spent_today: float, spent_month: float, now: datetime) -> str | None:
     """
     Pourquoi un passage ne peut pas partir maintenant, en phrase lisible ; None si le budget le permet.
-    L'enveloppe du mois est regardée d'abord : si elle est atteinte, attendre demain ne suffit pas.
+    Les montants sont en euros. L'enveloppe du mois est regardée d'abord : si elle est atteinte, attendre demain ne
+    suffit pas.
     """
-    usable = settings["monthly_budget_usd"] - settings["vany_reserve_usd"]
+    usable = settings["monthly_budget_eur"] - settings["vany_reserve_eur"]
     if spent_month >= usable:
         back = next_month(now)
-        return (f"enveloppe du mois atteinte : {spent_month:.2f} $ dépensés, {usable:.2f} $ permis aux agents "
-                f"({settings['vany_reserve_usd']:.2f} $ gardés pour Vany) ; les passages reprennent le "
+        return (f"enveloppe du mois atteinte : {spent_month:.2f} € dépensés, {usable:.2f} € permis aux agents "
+                f"({settings['vany_reserve_eur']:.2f} € gardés pour Vany) ; les passages reprennent le "
                 f"{back:%d/%m/%Y}, ou plus tôt si l'enveloppe est relevée")
-    if spent_today >= settings["daily_budget_usd"]:
-        return (f"plafond du jour atteint : {spent_today:.2f} $ dépensés sur {settings['daily_budget_usd']:.2f} $ ; "
+    if spent_today >= settings["daily_budget_eur"]:
+        return (f"plafond du jour atteint : {spent_today:.2f} € dépensés sur {settings['daily_budget_eur']:.2f} € ; "
                 f"les passages reprennent demain, ou plus tôt si le plafond est relevé")
     return None
 
 
 def budget_state(now: datetime | None = None) -> dict:
     """
-    Ce que la supervision montre du réglage et du budget : les montants réglés, ce qui est dépensé et ce qui reste,
-    le jour et le mois, et la raison du blocage si le budget est atteint (None sinon).
+    Ce que la supervision montre du réglage et du budget : les montants réglés en euros, ce qui est dépensé (en euros
+    TTC estimés et en dollars) et ce qui reste, le jour et le mois, le taux de la BCE utilisé pour aujourd'hui, et la
+    raison du blocage si le budget est atteint (None sinon).
+    Sans aucun taux connu, les montants en euros valent None et la raison du blocage le dit.
     """
     now = now or datetime.now()
     settings = load_settings()
-    day_start, month_start = period_starts(now)
-    # Arrondies au centime d'abord : ce qui reste se calcule sur les montants affichés, sinon 10 − 2,725 donnerait
-    # « 2,73 dépensés » et « 7,28 restants » (essai du 19 novembre 2026).
-    spent_today = round(agent_settings_store.spent_since(day_start), 2)
-    spent_month = round(agent_settings_store.spent_since(month_start), 2)
-    usable = settings["monthly_budget_usd"] - settings["vany_reserve_usd"]
-    return {"services_apres_etl": settings["services_after_etl"],
-            "enveloppe_du_mois_usd": settings["monthly_budget_usd"],
-            "plafond_du_jour_usd": settings["daily_budget_usd"],
-            "reserve_vany_usd": settings["vany_reserve_usd"],
-            "depense_du_jour_usd": spent_today, "depense_du_mois_usd": spent_month,
-            "reste_du_jour_usd": round(max(0.0, settings["daily_budget_usd"] - spent_today), 2),
-            "reste_du_mois_usd": round(max(0.0, usable - spent_month), 2),
-            "budget_atteint": block_reason(settings, spent_today, spent_month, now),
-            "modifie_le": settings["changed_at"], "modifie_par": settings["changed_by"],
-            "raison_du_changement": settings["reason"]}
+    state = {"services_apres_etl": settings["services_after_etl"],
+             "enveloppe_du_mois_eur": settings["monthly_budget_eur"],
+             "plafond_du_jour_eur": settings["daily_budget_eur"],
+             "reserve_vany_eur": settings["vany_reserve_eur"],
+             "depense_du_jour_eur": None, "depense_du_mois_eur": None,
+             "depense_du_jour_usd": None, "depense_du_mois_usd": None,
+             "reste_du_jour_eur": None, "reste_du_mois_eur": None, "taux": None,
+             "modifie_le": settings["changed_at"], "modifie_par": settings["changed_by"],
+             "raison_du_changement": settings["reason"]}
+    try:
+        if settings["daily_budget_eur"] is None:
+            raise RateUnavailable("le réglage en dollars ne peut pas être converti")
+        day_start, month_start = period_starts(now)
+        today, month = spent_since(day_start), spent_since(month_start)
+        state["taux"] = exchange_rate_service.rate_label(exchange_rate_service.rate_for(now.date()))
+    except RateUnavailable as error:
+        state["budget_atteint"] = f"taux du dollar inconnu ({error}) ; les passages attendent que le site de la BCE réponde"
+        return state
+    # Dépensé et restant se calculent sur les montants arrondis au centime : sinon 10 − 2,725 donnerait « 2,73 dépensés »
+    # et « 7,28 restants » (essai du 19 novembre 2026).
+    usable = settings["monthly_budget_eur"] - settings["vany_reserve_eur"]
+    state.update({"depense_du_jour_eur": today["eur"], "depense_du_mois_eur": month["eur"],
+                  "depense_du_jour_usd": today["usd"], "depense_du_mois_usd": month["usd"],
+                  "reste_du_jour_eur": round(max(0.0, settings["daily_budget_eur"] - today["eur"]), 2),
+                  "reste_du_mois_eur": round(max(0.0, usable - month["eur"]), 2),
+                  "budget_atteint": block_reason(settings, today["eur"], month["eur"], now)})
+    return state
 
 
 def budget_block() -> str | None:

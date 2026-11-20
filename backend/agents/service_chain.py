@@ -67,6 +67,7 @@ from agents.llm_service import (LLMTimeout, etape_courante, map_in_context, mesu
 from agents.pepite_common import is_excluded_site
 from etl.extract import api_registre
 from services import service_store
+from services.llm_calls_service import run_cost_text
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import city_commune, haversine_distance_km
 
@@ -350,8 +351,9 @@ def in_commune(latitude: float, longitude: float, code: str | None) -> bool:
 
 # --- Les recherches d'une commune ---
 
-def _cost(run: dict) -> str:
-    return f"{(run.get('duration_ms') or 0) / 1000:.0f} s, {run.get('cost_usd') or 0:.2f} $ en équivalent API"
+def _cost(service) -> str:
+    """La durée et le coût du dernier appel d'un agent, en dollars et en euros TTC, pour la fin d'une ligne du journal."""
+    return run_cost_text(service.last_run)
 
 
 def ask(category, city: dict, search: str, prompt: str, message: str) -> dict:
@@ -364,7 +366,7 @@ def ask(category, city: dict, search: str, prompt: str, message: str) -> dict:
         for row in rows:
             row["nom"] = clean_name(row["nom"])
     category.logger.info(f"[{category.key}] {city['name']} ({label}) : retenus {[row['nom'] for row in answer[category.key]]},"
-                         f" fermés {[row['nom'] for row in answer['ecartes'] if row['ferme']]}, {_cost(service.last_run)}")
+                         f" fermés {[row['nom'] for row in answer['ecartes'] if row['ferme']]}, {_cost(service)}")
     return answer
 
 
@@ -637,7 +639,7 @@ def analyze_commune(category, city: dict, rows: list, register: dict | None = No
         trace["analyse"] = answer
     category.logger.info(f"[{category.key}] {city['name']} (analyse) : fermés {closed}, doublons {duplicates},"
                         f" {category.not_for_travellers_log} {useless}, alertes {[row['nom'] for row in kept if row['alerte_registre']]},"
-                        f" {sum(len(row['details']) for row in kept)} détails proposés, {_cost(service.last_run)}")
+                        f" {sum(len(row['details']) for row in kept)} détails proposés, {_cost(service)}")
     return kept
 
 
@@ -649,7 +651,7 @@ def ask_proofs(category, city: dict, batch: list) -> list:
     with mesure_objet("commune", city.get("id")):
         answer = service.complete_json(category.proof_prompt, f"COMMUNE : {city_commune(city)}\nLIEUX : {json.dumps(places, ensure_ascii=False)}", PROOF_SCHEMA)
     by_number = {place["numero"]: place for place in answer["lieux"]}
-    category.logger.info(f"[{category.key}] {city['name']} (preuves) : {[row['nom'] for row in batch]}, {_cost(service.last_run)}")
+    category.logger.info(f"[{category.key}] {city['name']} (preuves) : {[row['nom'] for row in batch]}, {_cost(service)}")
     return [by_number.get(number, {}) for number in range(1, len(batch) + 1)]
 
 

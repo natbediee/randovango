@@ -33,7 +33,7 @@ from agents import find_services
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMRefused, LLMTimeout, mesure_passage, new_passage_id
 from agents.service_chain import RegisterUnavailable, interrupted_trace, latest_traces
-from services import budget_service, etl_chains, passage_store, service_store
+from services import budget_service, etl_chains, llm_calls_service, passage_store, service_store
 from services.etl_chains import StepFailed
 from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO, WAITING
 from utils.geo_utils import city_commune
@@ -427,9 +427,12 @@ def mark_interrupted(passage: dict, parts: list) -> None:
 
 
 def call_totals(calls: list) -> dict:
-    """Le nombre d'appels, d'appels ratés et le coût d'une liste d'appels de llm_calls."""
+    """
+    Le nombre d'appels, d'appels ratés et le coût d'une liste d'appels de llm_calls : en dollars, en euros TTC estimés
+    au taux de la BCE, avec le taux et ce que vaut le coût (llm_calls_service.calls_cost, #275).
+    """
     return {"appels": len(calls), "echecs_appels": sum(call["status"] != "reussi" for call in calls),
-            "cout_usd": round(sum(float(call["cost_usd"] or 0) for call in calls), 4)}
+            **llm_calls_service.calls_cost(calls)}
 
 
 # Le bilan d'une catégorie (service_store.save_commune), clé par clé, en morceau de phrase : (singulier, pluriel).

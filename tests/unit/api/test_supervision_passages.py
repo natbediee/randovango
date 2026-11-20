@@ -146,7 +146,7 @@ def settings(api, monkeypatch):
     saved = []
 
     def save_settings(changes, changed_by, reason=None):
-        if changes.get("daily_budget_usd", 0) > 100:
+        if changes.get("daily_budget_eur", 0) > 100:
             raise ValueError("Le plafond du jour ne peut pas dépasser l'enveloppe du mois.")
         saved.append((changes, changed_by) if reason is None else (changes, changed_by, reason))
         return {"services_apres_etl": changes.get("services_after_etl", True), "modifie_par": changed_by}
@@ -170,7 +170,7 @@ def test_a_change_sends_only_the_fields_given_with_the_admin_name(api, settings)
     assert settings == [({"services_after_etl": False}, "camille")]
 
 
-@pytest.mark.parametrize("body", [{"plafond_du_jour_usd": -1}, {"plafond_du_jour_usd": 150}])
+@pytest.mark.parametrize("body", [{"plafond_du_jour_eur": -1}, {"plafond_du_jour_eur": 150}])
 def test_a_wrong_amount_is_refused(api, settings, body):
     """Un montant négatif, ou un plafond du jour plus grand que l'enveloppe, est refusé (422) et rien ne change."""
     assert api.client.put("/api/supervision/passages/reglage", json=body).status_code == 422
@@ -179,8 +179,18 @@ def test_a_wrong_amount_is_refused(api, settings, body):
 
 def test_the_reason_of_a_change_goes_with_it(api, settings):
     """La raison libre écrite dans la supervision part avec le changement ; elle n'est pas prise pour un réglage."""
-    api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_usd": 5, "raison": "test du budget atteint"})
-    assert settings == [({"daily_budget_usd": 5}, "camille", "test du budget atteint")]
+    api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_eur": 5, "raison": "test du budget atteint"})
+    assert settings == [({"daily_budget_eur": 5}, "camille", "test du budget atteint")]
+
+
+def test_a_change_without_any_known_rate_is_refused(api, monkeypatch):
+    """Sans aucun taux de la BCE, un montant en euros ne peut pas être converti : la route répond 503 et le dit."""
+    def save_settings(changes, changed_by, reason=None):
+        raise supervision_passages.RateUnavailable("aucun taux de la BCE connu")
+
+    monkeypatch.setattr(supervision_passages.budget_service, "save_settings", save_settings)
+    response = api.client.put("/api/supervision/passages/reglage", json={"plafond_du_jour_eur": 6})
+    assert response.status_code == 503 and "Taux du dollar inconnu" in response.json()["detail"]
 
 
 def test_the_chains_say_which_are_free_and_which_are_paid(api):

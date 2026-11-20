@@ -95,8 +95,11 @@ def load_parts(passage_id: str) -> list:
 
 
 def load_calls(passage_id: str) -> list:
-    """Les appels d'agents du passage, lus dans llm_calls, dans l'ordre : agent, étape, statut et coût de chacun."""
-    return _read("""SELECT agent, etape, status, cost_usd FROM llm_calls
+    """
+    Les appels d'agents du passage, lus dans llm_calls, dans l'ordre : agent, étape, statut et coût de chacun, avec
+    leur jour et leur moteur pour convertir le coût en euros et dire s'il est réel ou un équivalent API.
+    """
+    return _read("""SELECT agent, etape, status, cost_usd, called_at, engine FROM llm_calls
                     WHERE passage_id = %s ORDER BY called_at, id""", (passage_id,))
 
 

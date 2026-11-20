@@ -711,6 +711,9 @@ def init_database():
             # une autre base. reason : pourquoi l'admin a changé le réglage, champ libre rempli depuis la supervision
             # (« test de la file avec deux villes », « fin du mois serrée »), facultatif. Les CHECK refusent un montant absurde dans la base elle-même, pas seulement dans la route.
             # Les contraintes sont nommées (CONSTRAINT) : add_missing_columns ne les prend pas pour des colonnes.
+            # Depuis #275, l'admin règle les montants en euros : monthly_budget_eur, daily_budget_eur et
+            # vany_reserve_eur. Les colonnes _usd restent remplies, converties au taux du jour du réglage, pour les
+            # branches qui les lisent encore. Les colonnes _eur acceptent NULL : une ligne d'avant #275 n'a que des dollars.
             """
             CREATE TABLE IF NOT EXISTS agent_settings (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -718,12 +721,27 @@ def init_database():
                 monthly_budget_usd DECIMAL(10,2) NOT NULL,
                 daily_budget_usd DECIMAL(10,2) NOT NULL,
                 vany_reserve_usd DECIMAL(10,2) NOT NULL,
+                monthly_budget_eur DECIMAL(10,2),
+                daily_budget_eur DECIMAL(10,2),
+                vany_reserve_eur DECIMAL(10,2),
                 changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 changed_by VARCHAR(100) NOT NULL,
                 reason VARCHAR(255),
                 CONSTRAINT chk_agent_settings_positive CHECK (monthly_budget_usd >= 0 AND daily_budget_usd >= 0 AND vany_reserve_usd >= 0),
                 CONSTRAINT chk_agent_settings_daily CHECK (daily_budget_usd <= monthly_budget_usd),
                 CONSTRAINT chk_agent_settings_reserve CHECK (vany_reserve_usd <= monthly_budget_usd)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 24. exchange_rates : le taux de change du dollar publié par la Banque centrale européenne (#275).
+            # Une ligne par jour de publication (rate_date) ; usd_per_eur dit combien de dollars vaut un euro
+            # (1,08 par exemple), donc euros = dollars / usd_per_eur. La BCE ne publie pas le week-end ni les jours
+            # fériés : ces jours-là, on prend le dernier taux connu avant la date (services/exchange_rate_service.py).
+            # fetched_at : quand le taux a été lu, pour ne le demander qu'une fois par jour.
+            """
+            CREATE TABLE IF NOT EXISTS exchange_rates (
+                rate_date DATE NOT NULL PRIMARY KEY,
+                usd_per_eur DECIMAL(10,4) NOT NULL,
+                fetched_at DATETIME NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
         ]
