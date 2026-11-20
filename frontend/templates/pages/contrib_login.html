@@ -16,7 +16,8 @@
       <div class="stack-sm" style="gap:6px;">
         <span class="eyebrow">Espace contributeur</span>
         <h1 style="font-size:26px;">Content de te revoir.</h1>
-        <p class="muted" style="font-size:14px;">Connecte-toi pour partager tes spots et tes randonnées.</p>
+        {# Seules les randonnées se partagent : l'ajout d'un spot est masqué (issue #265). #}
+        <p class="muted" style="font-size:14px;">Connecte-toi pour partager tes randonnées.</p>
       </div>
 
       <label class="stack-sm" style="gap:5px;">
@@ -50,10 +51,11 @@
     {# Carte bénéfices #}
     <aside class="card card--mint login-benefits">
       <h2 style="font-size:18px; font-weight:700;">Contribuer, ça change quoi ?</h2>
-      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Tes spots et randonnées guident de vrais voyageurs, chaque semaine.</span></div>
-      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Tu suis ton impact : nuits passées sur tes spots, carnets générés.</span></div>
-      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Le chat 100% IA avec Vany t'est offert, via ton code contributeur.</span></div>
-      <p class="login-quote">« 214 nuits passées sur les spots de Gwen ce mois-ci. » - chaque contribution compte.</p>
+      {# Seule la première promesse est tenue aujourd'hui ; les deux autres sont annoncées « bientôt », et la
+         citation d'une contributrice inventée a été retirée (issue #265). #}
+      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Tes randonnées guident de vrais voyageurs.</span></div>
+      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Bientôt : tu suivras ton impact, nuits passées sur tes spots et carnets générés.</span></div>
+      <div class="login-benefit"><span class="login-benefit__check">✓</span><span>Bientôt : le chat 100% IA avec Vany t'est offert, grâce à tes codes contributeur.</span></div>
     </aside>
 
   </div>

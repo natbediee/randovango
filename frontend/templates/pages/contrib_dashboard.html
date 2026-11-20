@@ -15,12 +15,22 @@
       {# Réservé aux admins : révélé par common.js (l'API vérifie le rôle de son côté). On entre par le Bilan, qui résume
          ce qui reste à trancher et mène à chaque file. #}
       <a href="{{ url_for('supervision_bilan') }}" class="btn btn--dark btn--sm" data-admin-only style="display:none;">Supervision</a>
-      <a href="{{ url_for('contributor_add_spot') }}" class="btn btn--primary btn--sm">+ Ajouter un spot</a>
-      <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--outline btn--sm">+ Ajouter une randonnée</a>
+      {# Pas de bouton « Ajouter un spot » : rien n'enregistre encore un spot proposé (issue #265). #}
+      <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--primary btn--sm">+ Ajouter une randonnée</a>
     </div>
   </div>
 
-  {# Stats (factices) #}
+  {# Tout ce qui suit est un aperçu (issue #265) : les compteurs, les contributions, les codes Vany et le mot de
+     Vany montrent ce que sera l'espace, avec des valeurs d'exemple. Le bloc le dit dès l'ouverture, et ses
+     boutons ont été retirés : aucun ne fait croire à un code copié ou à un chat débloqué. #}
+  <section class="dash-preview stack" style="gap:20px;">
+  <div class="stack-sm" style="gap:6px;">
+    <span class="tag tag--warn" style="align-self:flex-start;">Aperçu · exemple</span>
+    <h2 style="font-size:20px; font-weight:700;">Bientôt dans ton espace</h2>
+    <p class="muted" style="font-size:14px;">Voici ce que tu verras quand tes contributions seront comptées. Les chiffres et les codes ci-dessous sont des exemples.</p>
+  </div>
+
+  {# Compteurs (exemples) #}
   <div class="dash-stats">
     <div class="card card--sm dash-stat"><span class="dash-stat__num">12</span><span class="dash-stat__label">spots partagés</span></div>
     <div class="card card--sm dash-stat"><span class="dash-stat__num">5</span><span class="dash-stat__label">randonnées décrites</span></div>
@@ -28,11 +38,10 @@
   </div>
 
   <div class="dash-grid">
-    {# Contributions récentes (factices) #}
+    {# Contributions récentes (exemples) #}
     <div class="card">
       <div class="dash-card-head">
         <h2 style="font-size:17px; font-weight:700;">Tes contributions récentes</h2>
-        <a href="#" class="login-link">Tout voir</a>
       </div>
       <div class="contrib-list">
         {% set contribs = [
@@ -52,12 +61,12 @@
       </div>
     </div>
 
-    {# Codes Vany (valeurs de démo, en attendant un endpoint) #}
+    {# Codes Vany (exemples, en attendant qu'une contribution validée en donne un vraiment) #}
     <div class="card" id="codes-vany">
       <div class="dash-card-head">
         <div class="stack-sm" style="gap:3px;">
           <h2 style="font-size:17px; font-weight:700;">Tes codes Vany</h2>
-          <span class="muted" style="font-size:12.5px;">1 contribution validée = 1 code · 1 mois de chat avec Vany</span>
+          <span class="muted" style="font-size:12.5px;">Bientôt : 1 contribution validée = 1 code · 1 mois de chat avec Vany</span>
         </div>
         <span class="codes-count"><strong>2</strong><span>dispo</span></span>
       </div>
@@ -77,7 +86,6 @@
             <div class="code-item__actions">
               {% if available %}
                 <span class="tag tag--ok">Disponible</span>
-                <button type="button" class="code-copy" data-code="{{ code }}">Copier</button>
               {% else %}
                 <span class="tag">Utilisé</span>
               {% endif %}
@@ -87,8 +95,7 @@
       </div>
 
       <div class="codes-footer">
-        <button type="button" class="btn btn--primary btn--sm" id="useVanyCode">Parler à Vany</button>
-        <span class="muted" style="font-size:12px;">Le code s'applique automatiquement à ton prochain voyage.</span>
+        <span class="muted" style="font-size:12px;">Le code s'appliquera automatiquement à ton prochain voyage.</span>
       </div>
     </div>
   </div>
@@ -97,11 +104,10 @@
   {% with vany_pose='celebrating-soft.png',
           vany_eyebrow='Le mot de Vany',
           vany_title='38 voyageurs ont dormi sur tes spots ce mois-ci',
-          vany_text="Chaque spot que tu vérifies améliore les recommandations que je propose aux autres voyageurs.",
-          vany_cta_label='Voir ton impact',
-          vany_cta_url='#' %}
+          vany_text="Chaque spot que tu vérifies améliore les recommandations que je propose aux autres voyageurs." %}
     {% include 'partials/vany_banner.html' %}
   {% endwith %}
+  </section>
 
 </div>
 {% endblock %}

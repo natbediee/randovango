@@ -287,12 +287,4 @@
   window.RVG.showTripTooLong = function () {
     window.location.href = window.APP_URLS.freeLimit + '?reason=duration';
   };
-
-  // Déblocage du chat Vany (payé ou code contributeur validé) - mock front-only pour l'instant.
-  window.RVG.isVanyUnlocked = function () {
-    return localStorage.getItem('vanyUnlocked') === '1';
-  };
-  window.RVG.unlockVany = function () {
-    localStorage.setItem('vanyUnlocked', '1');
-  };
 })();

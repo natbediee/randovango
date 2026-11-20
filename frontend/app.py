@@ -94,8 +94,11 @@ def contributor_dashboard():
 
 @app.route('/contributor/add-spot')
 def contributor_add_spot():
-    """Ajout d'un spot par un contributeur"""
-    return page('add_spot')
+    """Ajout d'un spot : masqué tant que rien n'enregistre le spot en base (issue #265).
+
+    La page montrait un formulaire et répondait « Merci ! » sans rien envoyer. L'adresse reste connue
+    (favoris, anciens liens) : elle ramène à l'espace contributeur, où l'ajout d'une randonnée marche."""
+    return redirect(url_for('contributor_dashboard'))
 
 @app.route('/contributor/add-hike')
 def contributor_add_hike():

@@ -82,89 +82,6 @@
     }
   }
 
-  // ===== Tags cliquables (équipements, difficulté, type…) =====
-  function initPickTags() {
-    // .equip-tag isolés ou groupés dans .pick-tags (data-single = un seul actif)
-    document.querySelectorAll('.pick-tags').forEach(function (group) {
-      var single = group.hasAttribute('data-single');
-      group.querySelectorAll('.equip-tag').forEach(function (tag) {
-        tag.addEventListener('click', function () {
-          if (single) {
-            group.querySelectorAll('.equip-tag').forEach(function (t) { t.classList.remove('is-on'); });
-            tag.classList.add('is-on');
-          } else {
-            tag.classList.toggle('is-on');
-          }
-        });
-      });
-    });
-  }
-
-  // ===== Codes Vany du dashboard (démo : liste rendue par le template) =====
-  function initVanyCodes() {
-    document.querySelectorAll('.code-copy').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var code = btn.getAttribute('data-code');
-        var original = btn.textContent;
-        function done(ok) {
-          btn.textContent = ok ? 'Copié !' : 'Échec';
-          setTimeout(function () { btn.textContent = original; }, 1600);
-        }
-        // navigator.clipboard n'existe qu'en contexte sécurisé (https ou localhost)
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); });
-        } else {
-          done(false);
-        }
-      });
-    });
-
-    // Démo : le code disponible est appliqué directement, comme le fera le backend
-    // au moment de composer le voyage (cf. unlock.js pour le parcours payant).
-    var useBtn = document.getElementById('useVanyCode');
-    if (useBtn) {
-      useBtn.addEventListener('click', function () {
-        if (window.RVG && window.RVG.unlockVany) window.RVG.unlockVany();
-        else localStorage.setItem('vanyUnlocked', '1');
-        window.location.href = window.APP_URLS.chat;
-      });
-    }
-  }
-
-  // ===== Page ajout de spot (démo : aucun endpoint spot n'existe encore) =====
-  function initAddSpot() {
-    var root = document.querySelector('[data-add-spot]');
-    if (!root) return;
-
-    // Garde : réservé aux contributeurs connectés.
-    if (!window.RVG.isLoggedIn()) {
-      window.location.href = window.APP_URLS.contributorLogin;
-      return;
-    }
-
-    var msg = document.getElementById('spotMsg');
-    function showMsg(text, ok) {
-      msg.textContent = text;
-      msg.className = 'addspot-msg ' + (ok ? 'is-ok' : 'is-error');
-      msg.style.display = 'block';
-    }
-
-    var submit = document.getElementById('submitSpot');
-    if (submit) {
-      submit.addEventListener('click', function () {
-        var name = document.getElementById('spotName').value.trim();
-        var city = document.getElementById('spotCity').value.trim();
-        if (!name || !city) { showMsg('Renseigne au moins le nom du spot et la commune.', false); return; }
-        showMsg('Merci ! Ton spot part en relecture (démo).', true);
-      });
-    }
-
-    var draft = document.getElementById('saveSpotDraft');
-    if (draft) {
-      draft.addEventListener('click', function () { showMsg('Brouillon enregistré (démo).', true); });
-    }
-  }
-
   // ===== Page ajout de randonnée : upload GPX réel (/api/etl/upload_gpx) =====
   function initAddHike() {
     var root = document.querySelector('[data-add-hike]');
@@ -181,7 +98,6 @@
     var label = document.getElementById('gpxDropLabel');
     var msg = document.getElementById('gpxMsg');
     var submit = document.getElementById('submitHike');
-    var draft = document.getElementById('saveDraft');
     var selectedFile = null;
 
     function showMsg(text, ok) {
@@ -246,19 +162,12 @@
         }
       });
     }
-
-    if (draft) {
-      draft.addEventListener('click', function () { showMsg('Brouillon enregistré (démo).', true); });
-    }
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     initLogin();
     initDashboardGreeting();
     initDashboardGuard();
-    initPickTags();
-    initVanyCodes();
-    initAddSpot();
     initAddHike();
   });
 })();
