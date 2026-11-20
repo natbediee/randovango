@@ -82,24 +82,6 @@
     }
   }
 
-  // ===== Tags cliquables (équipements, difficulté, type…) =====
-  function initPickTags() {
-    // .equip-tag isolés ou groupés dans .pick-tags (data-single = un seul actif)
-    document.querySelectorAll('.pick-tags').forEach(function (group) {
-      var single = group.hasAttribute('data-single');
-      group.querySelectorAll('.equip-tag').forEach(function (tag) {
-        tag.addEventListener('click', function () {
-          if (single) {
-            group.querySelectorAll('.equip-tag').forEach(function (t) { t.classList.remove('is-on'); });
-            tag.classList.add('is-on');
-          } else {
-            tag.classList.toggle('is-on');
-          }
-        });
-      });
-    });
-  }
-
   // ===== Page ajout de randonnée : upload GPX réel (/api/etl/upload_gpx) =====
   function initAddHike() {
     var root = document.querySelector('[data-add-hike]');
@@ -116,7 +98,6 @@
     var label = document.getElementById('gpxDropLabel');
     var msg = document.getElementById('gpxMsg');
     var submit = document.getElementById('submitHike');
-    var draft = document.getElementById('saveDraft');
     var selectedFile = null;
 
     function showMsg(text, ok) {
@@ -181,17 +162,12 @@
         }
       });
     }
-
-    if (draft) {
-      draft.addEventListener('click', function () { showMsg('Brouillon enregistré (démo).', true); });
-    }
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     initLogin();
     initDashboardGreeting();
     initDashboardGuard();
-    initPickTags();
     initAddHike();
   });
 })();
