@@ -94,5 +94,27 @@ flowchart TB
 - **Une chaîne en paramètre.** Seule la chaîne des services est branchée (`CHAINS` dans `passage_service.py`) ;
   les autres chaînes (OSM, pépites, carburants) s'y ajouteront sans nouvelle route. Le lancement à la fin
   de l'ETL d'une nouvelle ville appellera les mêmes fonctions, avec l'origine `etl` et la file d'attente.
-- **Les mesures.** `llm_calls` garde chaque appel, réussi ou non : son coût en équivalent API, sa durée, ses tokens,
+- **Les mesures.** `llm_calls` garde chaque appel, réussi ou non : son coût en dollars, sa durée, ses tokens,
   ses recherches web, son passage et son étape. C'est la source du suivi des coûts dans la supervision.
+
+## Le coût en euros et le budget
+
+- **En dollars dans la base.** Le fournisseur des agents facture en dollars : `llm_calls.cost_usd` garde le coût de
+  chaque appel dans cette monnaie. Par l'abonnement (moteur `claude-code`), c'est ce qu'aurait coûté l'appel par l'API,
+  donné par le programme `claude` : un équivalent, pas une dépense. Par l'API (moteurs `api` et `api-batch`), c'est
+  une dépense réelle, calculée avec le tarif de chaque modèle (`agents/llm_prices.py`, à tenir à jour à la main).
+- **En euros à l'écran.** La conversion se fait à la lecture, jamais dans `llm_calls` : dollars ÷ taux × 1,20 (TVA),
+  au taux de référence de la Banque centrale européenne du jour de l'appel. C'est une estimation : la banque applique
+  son propre taux et ses frais. Le taux est lu une fois par jour sur le fichier public de la BCE (90 derniers jours) et
+  gardé dans `exchange_rates` (`services/exchange_rate_service.py`). Un jour sans taux (week-end, jour férié, taux du
+  jour pas encore publié), le dernier taux connu sert, et le libellé le dit (« dernier connu »).
+- **Ce qui s'affiche.** Le coût d'un passage et de chaque catégorie (`GET /api/supervision/passages/ID`) et les
+  lignes du journal des agents donnent les dollars, les euros TTC, le taux avec sa date, et ce que vaut le coût :
+  « dépense réelle » ou « équivalent API, abonnement ».
+- **Le budget.** L'administratrice règle en euros TTC l'enveloppe du mois, le plafond du jour et la part gardée pour
+  Vany (`GET` et `PUT /api/supervision/passages/reglage`). La dépense du jour et du mois est convertie jour par jour,
+  chacun à son taux : le plafond ne bouge pas quand le dollar varie. Un passage payant ne part pas quand le budget
+  est atteint (`services/budget_service.py`). Les montants sont aussi écrits en dollars dans `agent_settings`, pour le
+  code qui lit encore les anciennes colonnes.
+- **Sans aucun taux.** Si le site de la BCE n'a jamais pu être lu, la dépense ne peut pas se compter en euros : les
+  passages payants attendent, un changement de montant est refusé (503), et les coûts gardent leurs seuls dollars.
