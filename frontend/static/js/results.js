@@ -273,6 +273,13 @@ async function downloadPdfBooklet() {
 
     try {
         const response = await window.RVG.apiFetch(`/api/result/pdf?plan_id=${planId}`);
+        // 403 : les 3 carnets du voyage sont faits (offre gratuite, issue #263). Le message de l'API
+        // l'explique ; « la préparation a échoué » ferait croire à une panne.
+        if (response.status === 403) {
+            const body = await response.json().catch(() => ({}));
+            msg.textContent = body.detail || 'Tu as déjà préparé les carnets de ce voyage compris dans l\'offre gratuite.';
+            return;
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
 

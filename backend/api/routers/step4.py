@@ -9,6 +9,7 @@ from services.commerce_selection_service import (COMMERCE_SERVICES, OWN_TAB, PRO
 from fastapi import APIRouter, Query, Body, Depends, HTTPException
 from api.dependencies import get_current_traveller, require_plan_owner
 from api.models.fuel_choices import FuelChoice
+from api.trip_limits import DEFAULT_RADIUS_KM, check_day_in_trip, check_radius
 from services.fuel_choice_service import ALLOWED_FUELS, get_fuel_choice, save_fuel_choice
 from services.commerce_selection_service import COMMERCE_SERVICES, OWN_TAB, SHOP_CATEGORY_LABELS, SHOPS_SHOWN
 from services.plan_service import insert_or_update_plan
@@ -245,7 +246,7 @@ def _build_subtitles(categorized_poi: dict) -> dict:
 @router.get("/poi", summary="Returns the POI (points of interest/services) categorized by service type.")
 def get_poi(
     city_id: int = Query(..., description="ID de la ville"),
-    distance_km: float = Query(5, description="Rayon de recherche en km autour de la ville"),
+    distance_km: float = Query(DEFAULT_RADIUS_KM, description="Rayon de recherche en km autour de la ville (25 au plus)"),
     spot_lat: float = Query(None, description="Latitude du spot choisi, utilisée comme point de référence"),
     spot_lon: float = Query(None, description="Longitude du spot choisi, utilisée comme point de référence"),
     day_date: date = Query(None, description="Date du jour du voyage (AAAA-MM-JJ) : un lieu fermé en cette saison n'est pas montré")
@@ -262,6 +263,7 @@ def get_poi(
     POI les plus proches du spot choisi (ou du centre-ville à défaut), afin
     d'éviter une liste trop longue dans les grandes villes.
     """
+    check_radius(distance_km)   # avant toute lecture en base (issue #263)
     # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
     with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
         # Récupérer les coordonnées de la ville
@@ -459,6 +461,8 @@ def get_poi(
 @router.put("/update_plan/{plan_id}", summary="Update an existing trip plan with new data.",
             dependencies=[Depends(require_plan_owner)])
 def update_plan(plan_id: int, data: dict = Body(...)):
+    # Un jour hors du séjour est refusé : insert_or_update_plan en créerait la ligne (issue #263).
+    check_day_in_trip(plan_id, data.get("day_number", 1))
     plan_id = insert_or_update_plan(plan_id, data)
     return {"status": "updated", "plan_id": plan_id, "recap": data}
 

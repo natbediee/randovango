@@ -3,7 +3,8 @@
   un deuxième plan dans la journée (réponse 429, voir step1_city.js createPlan). Elle explique la
   limite et annonce l'offre illimitée, encore fictive : le bouton reste désactivé tant que l'offre
   payante n'existe pas (carte « Offre gratuite et offre payante »). Elle propose aussi de reprendre
-  le voyage déjà composé aujourd'hui (issue #262).
+  le voyage déjà composé aujourd'hui (issue #262). Le voyageur y arrive aussi quand il demande plus de 7 jours
+  (?reason=duration, issue #263) : la page lui dit alors que les séjours plus longs viendront avec l'offre payante.
 #}
 {% extends "base.html" %}
 {% block title %}Ton voyage gratuit du jour - RandoVanGo{% endblock %}
@@ -15,13 +16,22 @@
 {% endblock %}
 
 {% block page_content %}
+{# Deux raisons d'arriver ici : le voyage gratuit du jour est déjà composé (par défaut), ou le voyageur
+   a demandé plus de 7 jours (?reason=duration, issue #263). Seuls l'introduction et le bas de la carte
+   « Gratuit » changent ; les deux offres restent les mêmes. #}
+{% set trip_too_long = request.args.get('reason') == 'duration' %}
 <div class="container unlock" data-free-limit>
 
   <div class="unlock-intro">
     <img src="{{ url_for('static', filename='images/vany/pensive.png') }}" alt="Vany, pensive" class="unlock-vany">
     <span class="eyebrow">Voyage gratuit</span>
+    {% if trip_too_long %}
+    <h1 style="font-size:30px;">Ton séjour dépasse les 7 jours de l'offre gratuite</h1>
+    <p class="muted" style="max-width:540px;">Avec l'offre gratuite, un séjour dure 7 jours au plus. <br>Les séjours plus longs viendront avec l'offre payante.</p>
+    {% else %}
     <h1 style="font-size:30px;">Ton voyage gratuit du jour est déjà composé</h1>
     <p class="muted" style="max-width:540px;">Chaque jour, tu peux composer un voyage gratuitement. <br>Reviens demain pour en composer un autre.</p>
+    {% endif %}
   </div>
 
   <div class="unlock-cards">
@@ -37,12 +47,16 @@
          ce voyage (en cours, ou en secours après un choix « nouveau voyage ») et que l'API le rend
          encore au voyageur ; sinon, la phrase qui dit pourquoi on ne peut pas le reprendre. #}
       <div style="margin-top:auto;">
+        {% if trip_too_long %}
+        <a class="btn btn--primary btn--block" href="{{ url_for('duration') }}">Revenir au choix de la durée</a>
+        {% else %}
         <button type="button" class="btn btn--primary btn--block" id="tripResumeButton" hidden>
           Reprendre mon voyage du jour <i class="fas fa-arrow-right"></i>
         </button>
         <p class="muted" id="tripResumeMissing" style="font-size:13px; margin:0;" hidden>
           Ce navigateur ne garde plus ton voyage du jour.
         </p>
+        {% endif %}
       </div>
     </div>
 

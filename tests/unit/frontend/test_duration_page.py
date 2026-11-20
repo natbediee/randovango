@@ -29,3 +29,9 @@ def test_duration_page_loads_the_trip_helpers_before_its_script():
     """trip_resume.js est chargé avant step_duration.js, qui s'en sert dès l'ouverture de la page."""
     page = duration_page()
     assert page.index("js/trip_resume.js") < page.index("js/step_duration.js")
+
+
+def test_custom_duration_offers_seven_days_at_most():
+    """La case « Personnalisée » propose de 1 à 7 jours, la durée d'un séjour gratuit (issue #263) ; avant, elle allait à 30."""
+    page = duration_page()
+    assert 'id="customDays" class="duration-card__num" min="1" max="7"' in page

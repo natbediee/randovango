@@ -30,6 +30,46 @@ def get_plan_owner(plan_id: int) -> dict | None:
         MySQLUtils.disconnect(cnx)
 
 
+def get_trip_duration(plan_id: int) -> int | None:
+    """La durée du séjour en jours, choisie à sa création (trip_plans.duration_days), ou None si le plan n'existe pas."""
+    with MySQLUtils.open_cursor() as (cnx, cursor):
+        cursor.execute("SELECT duration_days FROM trip_plans WHERE id = %s", (plan_id,))
+        row = cursor.fetchone()
+    return row[0] if row else None
+
+
+# Le carnet PDF d'un voyage se fabrique 3 fois au plus avec l'offre gratuite : le premier, puis deux
+# nouvelles versions après des modifications. Sans limite avec l'offre payante, à venir (issue #263).
+MAX_FREE_PDF_BOOKLETS = 3
+
+
+def reserve_pdf_booklet(plan_id: int) -> bool:
+    """
+    Réserve une fabrication du carnet PDF de ce voyage : True si le voyage en a encore une, False sinon.
+    Le compte (trip_plans.pdf_downloads) est en base pour tenir au redémarrage de l'API.
+
+    Une seule requête vérifie et compte en même temps (« + 1 seulement si moins de 3 ») : deux
+    demandes envoyées au même instant ne peuvent pas passer toutes les deux sur la dernière place.
+    """
+    with MySQLUtils.open_cursor() as (cnx, cursor):
+        cursor.execute(
+            "UPDATE trip_plans SET pdf_downloads = pdf_downloads + 1 WHERE id = %s AND pdf_downloads < %s",
+            (plan_id, MAX_FREE_PDF_BOOKLETS)
+        )
+        cnx.commit()
+        # rowcount : le nombre de lignes modifiées, 0 si le voyage avait déjà ses 3 carnets.
+        return cursor.rowcount == 1
+
+
+def release_pdf_booklet(plan_id: int) -> None:
+    """Rend la place réservée quand la fabrication du carnet a échoué : une panne ne coûte pas un carnet au voyageur."""
+    with MySQLUtils.open_cursor() as (cnx, cursor):
+        cursor.execute(
+            "UPDATE trip_plans SET pdf_downloads = pdf_downloads - 1 WHERE id = %s AND pdf_downloads > 0",
+            (plan_id,)
+        )
+        cnx.commit()
+
 
 def insert_or_update_plan(plan_id, data):
     """

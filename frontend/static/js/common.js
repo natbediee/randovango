@@ -278,6 +278,16 @@
   window.RVG.isLoggedIn = isLoggedIn;
   window.RVG.logout = logout;
 
+  // Un séjour gratuit dure 7 jours au plus, comme l'API le vérifie (backend/api/trip_limits.py, issue #263).
+  // Au-delà, le voyageur arrive sur la page de l'offre, avec le message propre aux séjours trop longs.
+  window.RVG.MAX_FREE_TRIP_DAYS = 7;
+  window.RVG.isTripTooLong = function (days) {
+    return days > window.RVG.MAX_FREE_TRIP_DAYS;
+  };
+  window.RVG.showTripTooLong = function () {
+    window.location.href = window.APP_URLS.freeLimit + '?reason=duration';
+  };
+
   // Déblocage du chat Vany (payé ou code contributeur validé) - mock front-only pour l'instant.
   window.RVG.isVanyUnlocked = function () {
     return localStorage.getItem('vanyUnlocked') === '1';
