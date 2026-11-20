@@ -100,37 +100,6 @@
     });
   }
 
-  // ===== Codes Vany du dashboard (démo : liste rendue par le template) =====
-  function initVanyCodes() {
-    document.querySelectorAll('.code-copy').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var code = btn.getAttribute('data-code');
-        var original = btn.textContent;
-        function done(ok) {
-          btn.textContent = ok ? 'Copié !' : 'Échec';
-          setTimeout(function () { btn.textContent = original; }, 1600);
-        }
-        // navigator.clipboard n'existe qu'en contexte sécurisé (https ou localhost)
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); });
-        } else {
-          done(false);
-        }
-      });
-    });
-
-    // Démo : le code disponible est appliqué directement, comme le fera le backend
-    // au moment de composer le voyage (cf. unlock.js pour le parcours payant).
-    var useBtn = document.getElementById('useVanyCode');
-    if (useBtn) {
-      useBtn.addEventListener('click', function () {
-        if (window.RVG && window.RVG.unlockVany) window.RVG.unlockVany();
-        else localStorage.setItem('vanyUnlocked', '1');
-        window.location.href = window.APP_URLS.chat;
-      });
-    }
-  }
-
   // ===== Page ajout de randonnée : upload GPX réel (/api/etl/upload_gpx) =====
   function initAddHike() {
     var root = document.querySelector('[data-add-hike]');
@@ -223,7 +192,6 @@
     initDashboardGreeting();
     initDashboardGuard();
     initPickTags();
-    initVanyCodes();
     initAddHike();
   });
 })();
