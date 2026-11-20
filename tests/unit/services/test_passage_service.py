@@ -54,9 +54,13 @@ class _Store:
     def resumed_by(self, passage_id):
         return next((key for key, row in self.passages.items() if row["resumed_from"] == passage_id), None)
 
-    def oldest_queued(self):
+    def queued_ids(self):
         # Les passages sont gardés dans l'ordre où ils ont été demandés (un dictionnaire garde l'ordre d'écriture).
-        return next((key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED), None)
+        return [key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED]
+
+    def running_ids(self, chain):
+        return [key for key, row in self.passages.items()
+                if row["status"] == passage_store.RUNNING and row["chain"] == chain]
 
     def open_parts(self, chain, city_ids):
         # Comme la requête : un passage en file, en attente ou en cours, ou un échec pas encore repris.
@@ -82,7 +86,7 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by", "oldest_queued", "open_parts", "finished_parts"):
+                 "passage_ids", "recent_ids", "resumed_by", "queued_ids", "running_ids", "open_parts", "finished_parts"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
     monkeypatch.setattr(passage_service.service_store, "load_city", lambda name: CITY)
@@ -169,6 +173,15 @@ def test_a_launch_is_refused_when_the_budget_is_reached(store, chain):
 
 def test_a_lock_held_from_the_command_line_is_named_too(store, chain):
     """Un verrou tenu sans trace vient d'un lancement dans le conteneur : le message le dit."""
+    chain["busy"] = True
+    with pytest.raises(PassageConflict, match="lancé en ligne de commande"):
+        passage_service.create_passage("services", 12)
+
+
+def test_a_launch_refused_does_not_name_a_passage_of_another_chain(store, chain):
+    """Le refus nomme le passage de la même chaîne : un passage d'une autre chaîne en cours n'est pas pris pour lui."""
+    store.insert_passage("autre", "carburants", 12, "etl", ["carburants"])
+    store.set_passage_status("autre", "en_cours")
     chain["busy"] = True
     with pytest.raises(PassageConflict, match="lancé en ligne de commande"):
         passage_service.create_passage("services", 12)
@@ -419,6 +432,27 @@ def test_the_queue_waits_for_the_budget_then_goes_by_itself(store, chain):
     assert passage_queue.why_waiting(queued).startswith("plafond du jour atteint")
     store.budget_reason = None          # le lendemain, ou le plafond relevé par l'admin
     assert passage_queue.run_next() is True and store.passages[queued]["status"] == "fini"
+
+
+def test_a_free_passage_does_not_wait_behind_a_passage_held_by_the_budget(store, chain, monkeypatch):
+    """Un passage gratuit en file part même si un passage des services, plus ancien, attend le budget du lendemain."""
+    ran = []
+    free = passage_service.Chain(key="gratuite", label="Chaîne gratuite", parts={"lieux": "Lieux"}, paid=False,
+                                 lock=chain_lock_free, lock_is_free=lambda: True,
+                                 run_part=lambda *args: ran.append(args[1]) or {"lieux": 4}, steps_of=lambda key: {})
+    monkeypatch.setitem(passage_service.CHAINS, "gratuite", free)
+    held = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    behind = passage_service.create_passage("gratuite", 12, origin="etl")
+    store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
+    assert passage_queue.run_next() is True
+    assert ran == ["lieux"] and store.passages[behind]["status"] == "fini"
+    assert store.passages[held]["status"] == "en_file" and chain["ran"] == []
+
+
+def chain_lock_free():
+    """Un verrou toujours libre, pour une chaîne simulée."""
+    from contextlib import nullcontext
+    return nullcontext()
 
 
 def test_a_passage_waiting_for_the_admin_is_not_taken_by_the_queue(store, chain):

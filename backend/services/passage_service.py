@@ -151,7 +151,8 @@ def check_free(chain: Chain) -> None:
     """Lève PassageConflict, avec un message qui le nomme, si un passage de cette chaîne tourne déjà."""
     if chain.lock_is_free():
         return
-    running = passage_store.passage_ids(RUNNING, 1)
+    # Le passage en cours de cette chaîne, et pas d'une autre : le message nomme celui qui tient le verrou.
+    running = passage_store.running_ids(chain.key)
     passage = passage_store.load_passage(running[0]) if running else None
     if passage:
         raise PassageConflict(f"Un passage « {chain.label} » tourne déjà sur {passage['city_name']}, depuis le "

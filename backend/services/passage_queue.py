@@ -35,19 +35,20 @@ def why_waiting(passage_id: str) -> str | None:
 
 def run_next() -> bool:
     """
-    Fait partir le plus ancien passage en file, s'il le peut, et attend sa fin. Renvoie True s'il en a fait partir un
-    (il y en a peut-être un autre derrière), False si la file est vide ou si le premier doit encore attendre.
+    Fait partir le plus ancien passage en file qui peut partir, et attend sa fin. Renvoie True s'il en a fait partir un
+    (il y en a peut-être un autre derrière), False si la file est vide ou si tous doivent encore attendre.
+    Un passage qui attend ne retient pas ceux d'après : un passage gratuit (OSM, carburants) part même quand un passage
+    des services, plus ancien, attend le budget du lendemain.
     """
-    passage_id = passage_store.oldest_queued()
-    if passage_id is None:
-        return False
-    reason = why_waiting(passage_id)
-    if reason:
-        logger.info(f"[file] {passage_id} attend : {reason}")
-        return False
-    logger.info(f"[file] {passage_id} part")
-    passage_service.run_passage(passage_id)
-    return True
+    for passage_id in passage_store.queued_ids():
+        reason = why_waiting(passage_id)
+        if reason:
+            logger.info(f"[file] {passage_id} attend : {reason}")
+            continue
+        logger.info(f"[file] {passage_id} part")
+        passage_service.run_passage(passage_id)
+        return True
+    return False
 
 
 def work_forever() -> None:

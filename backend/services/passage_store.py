@@ -120,12 +120,17 @@ def resumed_by(passage_id: str) -> str | None:
     return rows[0]["passage_id"] if rows else None
 
 
-def oldest_queued() -> str | None:
-    """Le passage en file depuis le plus longtemps : c'est lui qui part en premier. None si la file est vide."""
-    rows = _read("SELECT passage_id FROM passages WHERE status = %s ORDER BY requested_at, passage_id LIMIT 1",
-                 (QUEUED,))
-    return rows[0]["passage_id"] if rows else None
+def queued_ids() -> list:
+    """Les passages en file, du plus ancien au plus récent : c'est l'ordre dans lequel ils partent."""
+    rows = _read("SELECT passage_id FROM passages WHERE status = %s ORDER BY requested_at, passage_id", (QUEUED,))
+    return [row["passage_id"] for row in rows]
 
+
+def running_ids(chain: str) -> list:
+    """Les passages en cours d'une chaîne, du plus récent au plus ancien."""
+    rows = _read("SELECT passage_id FROM passages WHERE status = %s AND chain = %s ORDER BY requested_at DESC",
+                 (RUNNING, chain))
+    return [row["passage_id"] for row in rows]
 
 
 def finished_parts(chain: str, city_ids: list) -> set:
