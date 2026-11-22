@@ -194,15 +194,18 @@ def test_a_change_without_any_known_rate_is_refused(api, monkeypatch):
 
 
 def test_the_chains_say_which_are_free_and_which_are_paid(api):
-    """La route des chaînes dit chacune, gratuite (OSM, FINESS, carburants) ou payante (services), et ses parties à lancer."""
+    """La route des chaînes dit chacune, gratuite (OSM, FINESS, carburants) ou payante (services, spots), et chaque partie."""
     response = api.client.get("/api/supervision/passages/chaines")
     assert response.status_code == 200
     chains = {chain["chaine"]: chain for chain in response.json()}
     assert {key: chain["payant"] for key, chain in chains.items()} == {
-        "services": True, "osm": False, "finess": False, "carburants": False}
+        "services": True, "spots": True, "osm": False, "finess": False, "carburants": False}
     assert [part["cle"] for part in chains["services"]["categories"]] == [
         "restaurants", "commerces", "supermarches", "laveries"]
     assert chains["osm"]["libelle"] == "Lieux d'OpenStreetMap"
+    # La source des spots est gratuite dans une chaîne payante : le budget ne la retient pas.
+    assert {part["cle"]: part["payant"] for part in chains["spots"]["categories"]} == {
+        "source": False, "harmonisation": True, "ouvertures": True, "verification": True}
 
 
 def test_the_docs_show_a_real_launch_as_example():
