@@ -7,6 +7,12 @@ from utils.service_utils import ServiceUtil
 ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT/".env")
 
+# Les spots d'une ville, à ajouter au WHERE d'une requête sur spots (paramètre : l'id de la ville) : ceux trouvés en
+# lisant la source des spots autour d'elle (histo_scrap, une ligne par spot et par ville). Un spot entre deux villes
+# voisines appartient aux deux. `{id}` est la colonne de l'id du spot (« id », ou « s.id » avec un alias).
+# Sert aux agents des spots lancés sur une ville (chaîne « spots », issue #276).
+CITY_SPOTS_CLAUSE = "AND {id} IN (SELECT spot_id FROM histo_scrap WHERE city_id = %s)"
+
 
 class MySQLUtils:
     """Utilitaire statique pour MySQL."""

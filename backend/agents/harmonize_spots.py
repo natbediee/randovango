@@ -47,7 +47,7 @@ from datetime import date
 
 from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, engine, make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet
-from utils.db_utils import MySQLUtils
+from utils.db_utils import CITY_SPOTS_CLAUSE, MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
 from utils.review_utils import PROMPT_SELECTION, select_reviews
@@ -321,7 +321,8 @@ def harmonize_one(service, spot: dict) -> dict:
 # =============================================================================
 
 # Colonnes d'une ancienne version de l'harmonisation, plus utilisées par personne.
-def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None, only_new: bool = False) -> list:
+def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None, only_new: bool = False,
+                             city_id: int = None) -> list:
     """
     Renvoie les spots à harmoniser : jamais traités, ou traités avec une ancienne
     version du prompt. `limit` permet de n'en prendre que les N premiers.
@@ -338,6 +339,10 @@ def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None, o
 
     `only_new` (ETL) : seulement les spots jamais traités. Repasser les anciens
     sur une nouvelle version du prompt reste une décision, pas un effet du scraping.
+
+    `city_id` (chaîne « spots » d'une ville, issue #276) : seulement les spots trouvés
+    en lisant cette ville (histo_scrap). La règle « pas encore fait » reste la même :
+    relancer une ville ne repaie aucun spot déjà harmonisé.
 
     Chaque spot renvoyé contient aussi ses commentaires sélectionnés ("reviews").
     """
@@ -363,9 +368,12 @@ def fetch_spots_to_harmonize(cursor, limit: int = None, spot_ids: list = None, o
               AND p4n_removed = 0
               AND type IS NOT NULL
               AND type NOT IN ({type_placeholders})
+              {CITY_SPOTS_CLAUSE.format(id="id") if city_id else ""}
             ORDER BY id
         """
         params = HIDDEN_SPOT_TYPES if only_new else (PROMPT_VERSION, *HIDDEN_SPOT_TYPES)
+        if city_id:
+            params = (*params, city_id)
         if limit:
             query += " LIMIT %s"
             params = (*params, limit)
@@ -469,7 +477,8 @@ def write_services(cursor, spot_id: int, service_names: list) -> None:
 # 3. LES TROIS FAÇONS DE LANCER L'HARMONISATION
 # =============================================================================
 
-def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new: bool = False) -> None:
+def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new: bool = False,
+               city_id: int = None, check_budget=lambda: None) -> dict:
     """
     Harmonise les spots UN PAR UN (une requête à Claude par spot).
 
@@ -481,22 +490,35 @@ def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new
     On enregistre en base (commit) après chaque spot : si le script s'arrête en
     route (Ctrl+C, quota atteint...), rien n'est perdu, et au prochain lancement
     les spots déjà faits sont passés grâce à leur `prompt_version`.
+
+    - city_id = 12        -> seulement les spots de cette ville (chaîne « spots », issue #276)
+    - check_budget        -> appelé avant chaque spot : lève une exception quand le budget des
+                             agents est atteint, et l'harmonisation s'arrête là (#211)
+
+    Renvoie le bilan {"faits", "rates", "erreur"} : les spots harmonisés, ceux ratés, et la
+    dernière erreur d'un raté (None sinon), pour que la chaîne dise pourquoi.
     """
     if service is None:
         service = make_llm_service("harmonize_spots")
 
+    summary = {"faits": 0, "rates": 0, "erreur": None}
     # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
     with MySQLUtils.open_cursor() as (connection, cursor):
-        for spot in fetch_spots_to_harmonize(cursor, limit=sample, spot_ids=spot_ids, only_new=only_new):
+        for spot in fetch_spots_to_harmonize(cursor, limit=sample, spot_ids=spot_ids, only_new=only_new,
+                                             city_id=city_id):
+            check_budget()
             try:
                 payload = harmonize_one(service, spot)
             except (LLMUnavailable, json.JSONDecodeError) as error:
-                # Un échec sur un spot ne doit pas arrêter tout le traitement.
+                # Un échec sur un spot ne doit pas arrêter tout le traitement : il est compté, et retenté plus tard.
                 logger.warning(f"[harmonize] Spot {spot['id']} ignoré : {error}")
+                summary["rates"] += 1
+                summary["erreur"] = error
                 continue
 
             write_harmonization(cursor, spot["id"], payload)
             connection.commit()
+            summary["faits"] += 1
             logger.info(
                 f"[harmonize] #{spot['id']} {payload.get('description') or '(rien d’utile)'}"
                 f" | services cités : {', '.join(payload.get('services') or []) or 'aucun'}"
@@ -504,6 +526,7 @@ def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new
                 f"{' | ⛔ NUIT INTERDITE' if payload.get('nuit_interdite') else ''}"
                 f"{' | ❓ DOUTE NUIT : ' + payload.get('doute_nuit_raison', '') if payload.get('doute_nuit') else ''}"
             )
+    return summary
 
 
 def submit_backfill() -> str:

@@ -42,7 +42,7 @@ from pathlib import Path
 
 from agents.llm_config import make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet
-from utils.db_utils import MySQLUtils
+from utils.db_utils import CITY_SPOTS_CLAUSE, MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, spot_name_label
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
@@ -233,7 +233,8 @@ def build_user_message(spot: dict) -> str:
 # 2. LIRE ET ÉCRIRE DANS LA BASE MYSQL
 # =============================================================================
 
-def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None, only_new: bool = False) -> list:
+def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None, only_new: bool = False,
+                          city_id: int = None) -> list:
     """
     Spots marqués `a_verifier` à (re)vérifier : jamais vérifiés depuis leur
     dernière harmonisation, ou vérifiés avec une ancienne version du prompt.
@@ -241,6 +242,8 @@ def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None, only
     `spot_ids` (option --id) : ces spots-là, sans condition.
     `only_new` (ETL) : seulement les spots jamais vérifiés. Revérifier les anciens
     sur une nouvelle version du prompt reste une décision, pas un effet du scraping.
+    `city_id` (chaîne « spots » d'une ville, issue #276) : seulement les spots de cette ville (histo_scrap), avec la
+    même règle « pas encore vérifié » : relancer une ville ne revérifie aucun spot.
     Chaque spot contient aussi ses commentaires les plus récents ("recent_reviews").
     """
     columns = """
@@ -266,9 +269,12 @@ def fetch_spots_to_verify(cursor, limit: int = None, spot_ids: list = None, only
                   WHERE v.spot_id = s.id
                     {recent}
               )
+              {CITY_SPOTS_CLAUSE.format(id="s.id") if city_id else ""}
             ORDER BY s.id
         """
         params = HIDDEN_SPOT_TYPES if only_new else (*HIDDEN_SPOT_TYPES, VERIFY_PROMPT_VERSION)
+        if city_id:
+            params = (*params, city_id)
         if limit:
             query += " LIMIT %s"
             params = (*params, limit)
@@ -379,19 +385,26 @@ def mark_doubt(cursor, spot_id: int) -> None:
 # 3. LANCEMENT
 # =============================================================================
 
-def run(limit: int = None, spot_ids: list = None, only_new: bool = False) -> None:
-    """Vérifie les spots un par un ; chaque résultat est enregistré dès qu'il arrive."""
+def run(limit: int = None, spot_ids: list = None, only_new: bool = False, city_id: int = None,
+        check_budget=lambda: None) -> dict:
+    """
+    Vérifie les spots un par un ; chaque résultat est enregistré dès qu'il arrive.
+    `city_id` : seulement les spots de cette ville (chaîne « spots », issue #276). `check_budget` est appelé avant
+    chaque spot : il lève une exception quand le budget des agents est atteint, et la vérification s'arrête là (#211).
+    Renvoie le bilan {"faits", "rates", "erreur"} : les spots vérifiés, ceux ratés, et la dernière erreur d'un raté.
+    """
     service = make_llm_service("verify_spots", mcp_servers=MCP_SERVERS, mcp_tools=MCP_TOOLS)
 
     ServiceUtil.load_env()
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
 
-    spots = fetch_spots_to_verify(cursor, limit=limit, spot_ids=spot_ids, only_new=only_new)
+    summary = {"faits": 0, "rates": 0, "erreur": None}
+    spots = fetch_spots_to_verify(cursor, limit=limit, spot_ids=spot_ids, only_new=only_new, city_id=city_id)
     if not spots:  # l'ETL passe ici à chaque ville : pas de navigateur pour rien
         cursor.close()
         MySQLUtils.disconnect(connection)
-        return
+        return summary
 
     from selenium.webdriver.support.ui import WebDriverWait
 
@@ -404,12 +417,15 @@ def run(limit: int = None, spot_ids: list = None, only_new: bool = False) -> Non
     failures_in_a_row = 0
     try:
         for number, spot in enumerate(spots):
+            check_budget()
             read_recent_reviews(driver, wait, spot, first_page=number == 0)
             try:
                 with mesure_objet("spot", spot.get("id")):
                     payload = service.complete_json(SYSTEM_PROMPT, build_user_message(spot), VERIFY_SCHEMA)
             except (LLMUnavailable, json.JSONDecodeError) as error:
                 counts["erreur"] += 1
+                summary["rates"] += 1
+                summary["erreur"] = error
                 logger.warning(f"[verify] #{spot['id']} non vérifié, retenté au prochain lancement : {error}")
                 failures_in_a_row += 1
                 # Quota atteint ou agent en panne : inutile de relire les fiches suivantes.
@@ -422,6 +438,7 @@ def run(limit: int = None, spot_ids: list = None, only_new: bool = False) -> Non
             if is_doubtful(payload):
                 mark_doubt(cursor, spot["id"])
             connection.commit()
+            summary["faits"] += 1
             counts[payload["statut"]] += 1
             counts["non_utilisable"] += payload["utilisable"] == "non"
             logger.info(
@@ -438,6 +455,7 @@ def run(limit: int = None, spot_ids: list = None, only_new: bool = False) -> Non
         MySQLUtils.disconnect(connection)
 
     logger.info(f"[verify] Terminé : {counts}")
+    return summary
 
 
 def main():
