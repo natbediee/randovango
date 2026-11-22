@@ -1,6 +1,6 @@
 """
-Le passage d'une ville ajoutée (etl_pipeline.scraping_background) : OSM, les carburants et les pharmacies FINESS
-passent comme des passages d'origine « etl » (issue #276), dans cet ordre, et un échec n'arrête jamais la suite.
+Le passage d'une ville ajoutée (etl_pipeline.scraping_background) : OSM, les carburants, les pharmacies FINESS puis
+la chaîne des spots passent comme des passages d'origine « etl » (issue #276), et un échec n'arrête jamais la suite.
 """
 import sys
 from unittest.mock import MagicMock
@@ -11,28 +11,26 @@ from etl import etl_pipeline
 from services import passage_service, passage_store, service_store
 
 
-def _run_background(monkeypatch, city, free_chain=lambda key, city: None):
+def _run_background(monkeypatch, city, free_chain=lambda key, city: None, spot_chain=lambda city: None):
     """Lance scraping_background sans réseau ni base ; renvoie extract_wikidata pour les vérifications."""
     extract_wikidata = MagicMock(side_effect=RuntimeError("fin du test"))
     monkeypatch.setattr(etl_pipeline, "logger", MagicMock())
     monkeypatch.setattr(etl_pipeline, "run_free_chain", free_chain)
+    monkeypatch.setattr(etl_pipeline, "run_spot_chain", spot_chain)
     monkeypatch.setattr(etl_pipeline, "extract_wikidata", extract_wikidata)
-    cursor = MagicMock()
-    cursor.fetchone.return_value = (1,)  # P4N déjà scrapé : pas de Selenium ici
-    monkeypatch.setattr(etl_pipeline.MySQLUtils, "connect", lambda: MagicMock())
-    monkeypatch.setattr(etl_pipeline.MySQLUtils, "disconnect", lambda conn: None)
-    monkeypatch.setattr(etl_pipeline.MySQLUtils, "get_cursor", lambda conn: cursor)
     monkeypatch.setitem(sys.modules, "services.pepite_service", MagicMock())
     monkeypatch.setattr(etl_pipeline, "launch_services", lambda city: None)
     etl_pipeline.scraping_background(city)
     return extract_wikidata
 
 
-def test_a_new_city_runs_osm_then_fuel_then_finess(monkeypatch) -> None:
-    """Une ville ajoutée passe OSM, puis les carburants, puis FINESS (après OSM : leurs noms), sans geste de l'administratrice."""
+def test_a_new_city_runs_osm_then_fuel_then_finess_then_its_spots(monkeypatch) -> None:
+    """Une ville ajoutée passe OSM, les carburants, FINESS (après OSM : leurs noms), puis la chaîne des spots, sans geste de l'administratrice."""
     order = []
-    extract_wikidata = _run_background(monkeypatch, "Plougonvelin", lambda key, city: order.append((key, city)))
-    assert order == [("osm", "Plougonvelin"), ("carburants", "Plougonvelin"), ("finess", "Plougonvelin")]
+    extract_wikidata = _run_background(monkeypatch, "Plougonvelin", lambda key, city: order.append((key, city)),
+                                       lambda city: order.append(("spots", city)))
+    assert order == [("osm", "Plougonvelin"), ("carburants", "Plougonvelin"), ("finess", "Plougonvelin"),
+                     ("spots", "Plougonvelin")]
     extract_wikidata.assert_called_once_with("Plougonvelin")
 
 
@@ -43,7 +41,8 @@ def passages(monkeypatch):
     monkeypatch.setattr(etl_pipeline, "logger", MagicMock())
     monkeypatch.setattr(service_store, "load_cities", lambda: state["cities"])
     monkeypatch.setattr(passage_service, "create_passage",
-                        lambda key, city_id, origin: state["asked"].append((key, city_id, origin)) or "p1")
+                        lambda key, city_id, parts, origin: state["asked"].append((key, city_id, origin)
+                                                                                  + ((parts,) if parts else ())) or "p1")
     monkeypatch.setattr(passage_service, "run_passage", lambda passage_id: None)
     monkeypatch.setattr(passage_store, "load_passage", lambda passage_id: {
         "status": state["status"], "error": "OpenStreetMap n'a pas répondu (Overpass muet ou en erreur)"})
@@ -74,8 +73,27 @@ def test_a_city_missing_from_cities_launches_nothing(passages) -> None:
 
 def test_an_error_in_a_free_chain_never_stops_the_new_city(passages, monkeypatch) -> None:
     """Une base injoignable pendant la chaîne FINESS est notée, sans lever : la ville continue ses étapes."""
-    def broken(key, city_id, origin):
+    def broken(key, city_id, parts, origin):
         raise ConnectionError("base injoignable")
     monkeypatch.setattr(passage_service, "create_passage", broken)
     etl_pipeline.run_free_chain("finess", "Saint-Philibert")
     assert any("finess ignorée" in call.args[0] for call in etl_pipeline.logger.warning.call_args_list)
+
+
+@pytest.mark.parametrize("already_read,parts", [
+    (False, None),
+    (True, ["harmonisation", "ouvertures", "verification"]),
+])
+def test_a_city_already_read_skips_the_source_of_the_spots(monkeypatch, already_read, parts) -> None:
+    """Une ville jamais lue passe toute la chaîne des spots ; une ville déjà lue (seconde rando) ne relit pas la source, seuls ses spots encore à faire passent par les agents."""
+    asked = []
+    monkeypatch.setattr(etl_pipeline, "city_already_scraped", lambda city: already_read)
+    monkeypatch.setattr(etl_pipeline, "run_etl_passage", lambda key, city, parts=None: asked.append((key, city, parts)))
+    etl_pipeline.run_spot_chain("Guidel")
+    assert asked == [("spots", "Guidel", parts)]
+
+
+def test_the_spots_of_the_etl_are_a_passage_with_the_parts_asked(passages) -> None:
+    """La chaîne des spots d'une ville ajoutée devient un passage d'origine « etl », avec seulement les parties demandées."""
+    etl_pipeline.run_etl_passage("spots", "Saint-Philibert", ["harmonisation"])
+    assert passages["asked"] == [("spots", 12, "etl", ["harmonisation"])]
