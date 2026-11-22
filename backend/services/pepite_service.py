@@ -65,7 +65,7 @@ import threading
 import unicodedata
 from datetime import date, datetime, timedelta
 
-from agents.llm_service import mesure_objet
+from agents.llm_service import mesure_objet, mesure_passage, new_passage_id
 from services.map_service import fetch_hike_trace
 from utils.db_utils import MySQLUtils
 from utils.display_utils import (HIKE_START_H, pepite_news_text, pepite_section, pepite_day_texts, pepite_display, pepite_nothing_texts, pepite_reference_label, spot_name_label,
@@ -1126,7 +1126,12 @@ def _choice_lock(plan_id: int) -> threading.Lock:
 
 
 def _start_in_background(task, running: set, lock_of_plan, plan_id: int, day_number: int) -> None:
-    """Lance task(plan_id, day_number) en tâche de fond, sauf si elle tourne déjà."""
+    """
+    Lance task(plan_id, day_number) en tâche de fond, sauf si elle tourne déjà.
+    Chaque action d'un voyageur (ville choisie, spot choisi, complément du jour) reçoit son identifiant de passage :
+    tous ses appels à Vany le portent dans llm_calls, et on sait ce qu'a coûté la préparation d'un jour (issue #276).
+    Pas de ligne dans la table passages : ce ne sont pas des chaînes qu'on relance depuis la supervision.
+    """
     key = (plan_id, day_number)
     with _running_lock:
         if key in running:
@@ -1135,7 +1140,7 @@ def _start_in_background(task, running: set, lock_of_plan, plan_id: int, day_num
 
     def run():
         try:
-            with lock_of_plan(plan_id):
+            with lock_of_plan(plan_id), mesure_passage(new_passage_id()):
                 task(plan_id, day_number)
         except Exception as error:   # une tâche de fond ne doit jamais planter l'API
             logger.error(f"[pépites] plan {plan_id} jour {day_number} : {task.__name__} a échoué : {error}")

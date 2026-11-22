@@ -338,3 +338,24 @@ def test_without_a_spot_no_paid_search_is_run(monkeypatch) -> None:
 
     pepite_service.complete_day(9001, 1)
     assert "saison" in top_ups and "sejour" in top_ups
+
+
+def test_each_action_of_a_traveler_gets_its_own_passage_id():
+    """Ville choisie puis spot choisi : chaque action du voyageur porte son identifiant de passage, que ses appels à Vany notent dans llm_calls."""
+    import threading
+
+    from agents.llm_service import passage_courant
+
+    seen, done = [], threading.Event()
+
+    def task(plan_id, day_number):
+        seen.append(passage_courant())
+        if len(seen) == 2:
+            done.set()
+
+    lock = threading.Lock()
+    pepite_service._start_in_background(task, set(), lambda plan_id: lock, 15, 1)
+    pepite_service._start_in_background(task, set(), lambda plan_id: lock, 15, 2)
+    assert done.wait(5)
+    assert all(passage_id and len(passage_id) == 32 for passage_id in seen)
+    assert seen[0] != seen[1]
