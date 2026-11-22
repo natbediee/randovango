@@ -763,3 +763,41 @@ def test_a_running_free_chain_shows_the_loading_step(store, free):
     store.set_part(passage_id, "osm", "en_cours")
     free["busy"].add(("osm", 12))       # le verrou est tenu : le passage tourne vraiment
     assert passage_service.read_passage(passage_id)["categories"][0]["etape"] == "chargement"
+
+
+# --- Une chaîne inconnue de cette version du code (base commune aux branches, issue #276) ---
+
+def _unknown_passage(store, status):
+    """Un passage « spots » écrit par une version plus récente du code, que celle-ci ne connaît pas."""
+    store.insert_passage("inconnu", "spots", 12, "etl", ["harmonisation"])
+    store.set_passage_status("inconnu", status)
+    return "inconnu"
+
+
+def test_a_passage_of_an_unknown_chain_is_shown_without_crashing_the_list(store, chain):
+    """Un passage d'une chaîne qu'une branche en retard ne connaît pas se lit tel quel : la liste des passages ne plante pas."""
+    _unknown_passage(store, "en_cours")
+    listed = passage_service.list_passages()
+    running = listed["en_cours"][0]
+    assert running["chaine"] == "spots" and running["categories"][0]["libelle"] == "harmonisation"
+    # Il tourne peut-être sous une autre version : il n'est pas marqué interrompu ici.
+    assert store.passages["inconnu"]["status"] == "en_cours"
+
+
+def test_a_queued_passage_of_an_unknown_chain_is_never_run_here(store, chain):
+    """La file laisse de côté un passage d'une chaîne inconnue, avec la raison, et fait partir ceux d'après."""
+    _unknown_passage(store, "en_file")
+    known = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    assert passage_queue.why_waiting("inconnu") == passage_service.UNKNOWN_CHAIN
+    assert passage_queue.run_next() is True
+    assert store.passages[known]["status"] == "fini" and store.passages["inconnu"]["status"] == "en_file"
+    passage_service.run_passage("inconnu")
+    assert store.passages["inconnu"]["status"] == "en_file"
+
+
+def test_a_failed_passage_of_an_unknown_chain_is_not_resumed_here(store, chain):
+    """La reprise d'un échec d'une chaîne inconnue est refusée avec la raison, sans rien écrire."""
+    _unknown_passage(store, "echec")
+    with pytest.raises(PassageConflict, match="chaîne inconnue de cette version"):
+        passage_service.resume_passage("inconnu")
+    assert len(store.passages) == 1

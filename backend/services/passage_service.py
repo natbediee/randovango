@@ -120,6 +120,29 @@ CHAINS = {
 }
 
 
+# --- Une chaîne que ce code ne connaît pas ---
+# La base est commune à toutes les branches : un passage peut y avoir été écrit par une version plus récente du code,
+# avec une chaîne que celle-ci ne connaît pas encore (une branche qui n'a pas ramené main). Il est montré tel quel, sans
+# faire planter la supervision ; il n'est ni lancé, ni repris, ni marqué interrompu par cette version.
+UNKNOWN_CHAIN = "chaîne inconnue de cette version du code : à suivre et relancer depuis main à jour"
+
+
+def unknown_chain(key: str) -> Chain:
+    """
+    Une chaîne de remplacement, pour lire un passage d'une chaîne inconnue. Son verrou se dit toujours pris : ainsi
+    personne ici ne croit le passage interrompu (il tourne peut-être sous une autre version), et la file ne le prend pas.
+    """
+    def refuse(city_id):
+        raise PassageConflict(UNKNOWN_CHAIN)
+    return Chain(key=key, label=key, parts={}, paid=True, lock=refuse, lock_is_free=lambda city_id: False,
+                 run_part=None, steps_of=lambda part: {})
+
+
+def chain_of(key: str) -> Chain:
+    """La chaîne de cette clé, ou une chaîne de remplacement si ce code ne la connaît pas."""
+    return CHAINS.get(key) or unknown_chain(key)
+
+
 # --- La raison d'un échec, en phrase lisible ---
 
 # Trois façons de manquer de Claude, qui ne se règlent pas de la même façon : la raison dit quoi faire et quand.
@@ -268,6 +291,9 @@ def run_passage(passage_id: str) -> None:
     ce qui est fini reste enregistré, et la file le reprendra là où il en était quand le budget le permettra.
     """
     passage = passage_store.load_passage(passage_id)
+    if passage["chain"] not in CHAINS:
+        logger.warning(f"[passages] {passage_id} laissé tel quel : {UNKNOWN_CHAIN}")
+        return
     chain = CHAINS[passage["chain"]]
     resume = passage["resumed_from"] is not None
     part = None
@@ -370,6 +396,8 @@ def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:
     passage = read_passage(passage_id)
     if passage is None:
         return None
+    if passage["chaine"] not in CHAINS:
+        raise PassageConflict(f"Ce passage ne se relance pas ici : {UNKNOWN_CHAIN}.")
     if passage["etat"] == WAITING:
         return launch_waiting(passage)
     if passage["etat"] != FAILED:
@@ -406,6 +434,8 @@ def waiting_reason(passage: dict) -> str | None:
         return AUTO_OFF
     if passage["status"] != QUEUED:
         return None
+    if passage["chain"] not in CHAINS:
+        return UNKNOWN_CHAIN
     chain = CHAINS[passage["chain"]]
     if not chain.lock_is_free(passage["city_id"]):
         return "attend la fin du passage en cours"
@@ -505,7 +535,7 @@ def part_state(chain: Chain, part: dict, calls: list) -> dict:
         # Une chaîne sans agent (OSM, FINESS, carburants) n'a qu'une étape : le chargement.
         step = steps[last["agent"]] if last else ("recherches" if steps else LOADING)
         detail = last["etape"] if last else None
-    return {"cle": part["part"], "libelle": chain.parts[part["part"]], "payant": chain.paid, "etat": part["status"],
+    return {"cle": part["part"], "libelle": chain.parts.get(part["part"], part["part"]), "payant": chain.paid, "etat": part["status"],
             "etape": step, "detail_etape": detail, "agent": last["agent"] if last and step != SAVING else None,
             **call_totals(mine), "bilan": part["summary"], "bilan_texte": summary_text(part["summary"]),
             "raison_echec": part["error"],
@@ -517,7 +547,7 @@ def read_passage(passage_id: str) -> dict | None:
     passage = passage_store.load_passage(passage_id)
     if passage is None:
         return None
-    chain = CHAINS[passage["chain"]]
+    chain = chain_of(passage["chain"])
     parts = passage_store.load_parts(passage_id)
     if passage["status"] == RUNNING and chain.lock_is_free(passage["city_id"]):
         mark_interrupted(passage, parts)
