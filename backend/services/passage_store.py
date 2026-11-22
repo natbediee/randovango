@@ -212,6 +212,11 @@ def load_items(passage_id: str, item_type: str | None = None, item_id: int | Non
                  (passage_id, item_type, item_id))
 
 
+def count_items(passage_id: str) -> int:
+    """Le nombre d'écritures du passage dans le journal : services, spots et pépites ajoutés ou modifiés."""
+    return _read("SELECT COUNT(*) AS n FROM passage_items WHERE passage_id = %s", (passage_id,))[0]["n"]
+
+
 def passages_of_item(item_type: str, item_id: int) -> list:
     """Les passages qui ont ajouté ou modifié cet objet, du plus récent au plus ancien."""
     rows = _read("""SELECT passage_id, MAX(written_at) AS last_written FROM passage_items

@@ -48,16 +48,26 @@ def post_passage(body: PassageRequest, background: BackgroundTasks, _admin=Depen
     return passage_service.read_passage(passage_id)
 
 
-@router.get("/passages", summary="Les passages en cours, en file d'attente, et les derniers finis ou en échec.")
-def get_passages(limite: int = 20, _admin=Depends(require_admin)):
+@router.get("/passages", responses={422: {"description": "Un objet d'un type inconnu, ou sans son objet_id."}},
+            summary="Les passages en cours, en file d'attente, et les derniers finis ou en échec.")
+def get_passages(limite: int = 20, objet: str | None = None, objet_id: int | None = None, _admin=Depends(require_admin)):
     """
     Ce que montre le panneau « En cours et file d'attente » de l'espace Agents, la liste des derniers passages, et le
     tableau des villes non faites avec leur raison (budget atteint, attend la fin du passage en cours, mise à jour
     automatique coupée, échec) : {"en_cours": [...], "en_file": [...], "derniers": [...], "villes_en_attente": [...]},
     chacun au format de GET /passages/{passage_id}, avec son origine (supervision, etl) ; une ville non faite y ajoute
     sa « raison ». Les villes ajoutées par l'ETL entrent dans la file et partent seules, l'une après l'autre.
+    Chaque passage donne le nombre de ses trouvailles (nombre_trouvailles) ; leur détail est dans GET /passages/{passage_id}.
+
+    Pour une information, le passage qui l'a apportée : ?objet=spot&objet_id=3893 (objet : service, spot ou pepite).
+    La réponse garde la même forme, réduite aux passages qui ont ajouté ou modifié cet objet, du plus récent au plus
+    ancien ; chacun donne ses trouvailles sur cet objet seul (la partie qui l'a fait, ajout ou modification, quand).
+    Un lancement en ligne de commande ou une action d'un voyageur y figure aussi, dans « derniers », sans chaîne ni ville.
     """
-    return passage_service.list_passages(limite)
+    try:
+        return passage_service.list_passages(limite, objet, objet_id)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
 
 
 # Les routes des chaînes et du réglage sont déclarées avant /passages/{passage_id} : sinon « chaines » ou « reglage »
@@ -112,6 +122,8 @@ def get_passage(passage_id: str, _admin=Depends(require_admin)):
     Où en est un passage : la ville, l'origine (supervision, etl), l'état (en_file, en_cours, fini, echec), le coût et
     les appels lus dans llm_calls, la raison d'un échec, et pour chaque catégorie son état, son étape (recherches,
     analyse, preuves, enregistrement), son coût et le bilan de son enregistrement.
+    Ce qu'il a trouvé (trouvailles) : chaque service, spot ou pépite qu'il a ajouté ou modifié, avec son nom, la partie
+    qui l'a fait et l'heure.
     """
     passage = passage_service.read_passage(passage_id)
     if passage is None:

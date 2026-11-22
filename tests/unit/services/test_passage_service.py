@@ -20,7 +20,7 @@ CALLED_AT = datetime(2026, 11, 19, 10, 10)  # le jour des appels de llm_calls, p
 class _Store:
     """La trace des passages en mémoire, avec les mêmes fonctions que passage_store, et les appels de llm_calls."""
     def __init__(self):
-        self.passages, self.parts, self.calls = {}, {}, {}
+        self.passages, self.parts, self.calls, self.items = {}, {}, {}, []
 
     def insert_passage(self, passage_id, chain, city_id, origin, parts, resumed_from=None, status=passage_store.QUEUED):
         self.passages[passage_id] = {"passage_id": passage_id, "chain": chain, "city_id": city_id, "origin": origin,
@@ -78,6 +78,19 @@ class _Store:
                 if passage["chain"] == chain and passage["city_id"] in city_ids
                 for row in self.parts[key] if row["status"] == "fini"}
 
+    def load_items(self, passage_id, item_type=None, item_id=None):
+        # Comme la requête : le journal du passage, réduit à un objet si on le donne.
+        return [row for row in self.items if row["passage_id"] == passage_id
+                and (item_type is None or (row["item_type"], row["item_id"]) == (item_type, item_id))]
+
+    def count_items(self, passage_id):
+        return len(self.load_items(passage_id))
+
+    def passages_of_item(self, item_type, item_id):
+        # Du plus récent au plus ancien : le journal est gardé dans l'ordre d'écriture.
+        ids = [row["passage_id"] for row in reversed(self.items) if (row["item_type"], row["item_id"]) == (item_type, item_id)]
+        return list(dict.fromkeys(ids))
+
     def recent_ids(self, limit):
         return [key for key, row in self.passages.items() if row["status"] in ("fini", "echec")][:limit]
 
@@ -87,7 +100,8 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by", "queued_ids", "running_ids", "open_parts", "finished_parts"):
+                 "passage_ids", "recent_ids", "resumed_by", "queued_ids", "running_ids", "open_parts", "finished_parts",
+                 "load_items", "count_items", "passages_of_item"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
     monkeypatch.setattr(passage_service.service_store, "load_city", lambda name: CITY)
@@ -900,3 +914,63 @@ def test_the_pepites_of_a_city_are_a_paid_chain_held_by_the_budget(store, monkey
     assert passage["categories"][0]["bilan_texte"] == "12 pépites trouvées."
     assert passage_service.summary_text({"pepites_trouvees": 0, "zones_deja_couvertes": 1}) == (
         "0 pépite trouvée ; 1 zone déjà couverte par une recherche récente.")
+
+
+
+# --- Ce qu'un passage a trouvé (le journal passage_items, issue #276) ---
+
+def _journal(store, passage_id, item_id, action, part):
+    """Une ligne du journal, telle que la requête la rend, avec le nom du spot."""
+    store.items.append({"passage_id": passage_id, "item_type": "spot", "item_id": item_id, "action": action,
+                        "part": part, "written_at": datetime(2026, 11, 22, 16, 39), "item_name": f"spot {item_id}"})
+
+
+def test_a_passage_gives_what_it_found(store, chain):
+    """Un passage donne ses trouvailles : chaque spot ajouté ou modifié, avec son nom et la partie qui l'a fait."""
+    passage_id = passage_service.create_passage("services", 12)
+    _journal(store, passage_id, 3893, "ajout", "source")
+    _journal(store, passage_id, 3893, "modification", "harmonisation")
+    passage = passage_service.read_passage(passage_id)
+    assert passage["nombre_trouvailles"] == 2
+    assert [(item["id"], item["action"], item["partie"]) for item in passage["trouvailles"]] == [
+        (3893, "ajout", "source"), (3893, "modification", "harmonisation")]
+
+
+def test_the_list_of_passages_counts_the_findings_without_detailing_them(store, chain):
+    """La liste des passages donne le nombre de trouvailles de chacun, sans les détailler : une grande ville en a des centaines."""
+    passage_id = passage_service.create_passage("services", 12, origin="etl")
+    _journal(store, passage_id, 3893, "ajout", "source")
+    listed = passage_service.list_passages()["en_file"][0]
+    assert listed["nombre_trouvailles"] == 1 and listed["trouvailles"] is None
+
+
+def test_for_an_information_the_passages_that_brought_it_are_given(store, chain):
+    """Pour le spot 3893, les passages qui l'ont apporté se lisent du plus récent au plus ancien, avec ce que chacun a fait sur lui seul."""
+    source = passage_service.create_passage("services", 12)
+    store.set_passage_status(source, "fini")
+    _journal(store, source, 3893, "ajout", "source")
+    _journal(store, source, 3894, "ajout", "source")
+    agents = passage_service.create_passage("services", 12)
+    store.set_passage_status(agents, "fini")
+    _journal(store, agents, 3893, "modification", "harmonisation")
+    listed = passage_service.list_passages(item_type="spot", item_id=3893)
+    assert [passage["passage_id"] for passage in listed["derniers"]] == [agents, source]
+    assert [item["partie"] for item in listed["derniers"][1]["trouvailles"]] == ["source"]
+    assert set(listed) == {"en_cours", "en_file", "derniers", "villes_en_attente"}
+
+
+def test_a_command_line_passage_is_given_as_an_origin_too(store, chain):
+    """Un spot harmonisé en ligne de commande a pour origine un passage sans trace dans passages : il est donné quand même, avec son coût."""
+    _journal(store, "ligne_de_commande", 1435, "modification", "harmonisation")
+    store.calls["ligne_de_commande"] = [{"agent": "harmonize_spots", "etape": None, "status": "reussi",
+                                         "cost_usd": 0.02, "called_at": datetime(2026, 11, 10), "engine": "api"}]
+    origin = passage_service.list_passages(item_type="spot", item_id=1435)["derniers"][0]
+    assert origin["passage_id"] == "ligne_de_commande" and origin["chaine"] is None and origin["appels"] == 1
+    assert origin["trouvailles"][0]["partie"] == "harmonisation"
+
+
+@pytest.mark.parametrize("item_type,item_id", [("restaurant", 3), ("spot", None)])
+def test_an_unknown_or_incomplete_object_is_refused(store, chain, item_type, item_id):
+    """Un objet d'un type inconnu, ou sans son id, est refusé avec les types attendus."""
+    with pytest.raises(ValueError, match="service, spot, pepite"):
+        passage_service.list_passages(item_type=item_type, item_id=item_id)
