@@ -95,3 +95,35 @@ def test_the_queue_is_read_from_the_oldest_passage(base):
     base.rows = [{"passage_id": "p1"}, {"passage_id": "p2"}]
     assert passage_store.queued_ids() == ["p1", "p2"]
     assert "ORDER BY requested_at, passage_id" in base.queries[0][0] and base.queries[0][1] == ("en_file",)
+
+
+def test_an_item_is_noted_under_the_running_passage_without_committing(base):
+    """Un spot harmonisé est noté sous le passage en cours, avec le curseur de l'écriture : la ligne entre avec elle."""
+    from agents.llm_service import mesure_passage
+    with mesure_passage("p1"):
+        passage_store.note_item(base, "spot", 3893, passage_store.CHANGED, "harmonisation")
+    sql, values = base.queries[0]
+    assert sql.startswith("INSERT INTO passage_items") and values[:5] == ("p1", "spot", 3893, "modification", "harmonisation")
+    assert base.commits == 0
+
+
+def test_nothing_is_noted_outside_a_passage(base):
+    """Une écriture faite hors de tout passage (un essai) n'est pas notée dans le journal."""
+    passage_store.note_item(base, "spot", 3893, passage_store.CHANGED, "harmonisation")
+    assert base.queries == []
+
+
+def test_the_items_of_a_passage_come_with_their_names(base):
+    """Ce qu'un passage a trouvé se lit avec le nom de chaque service, spot ou pépite, et se filtre sur un objet."""
+    passage_store.load_items("p1")
+    passage_store.load_items("p1", "spot", 3893)
+    (all_sql, all_values), (one_sql, one_values) = base.queries
+    assert "COALESCE(p.name, s.name, pe.nom) AS item_name" in all_sql and all_values == ("p1",)
+    assert "i.item_type = %s AND i.item_id = %s" in one_sql and one_values == ("p1", "spot", 3893)
+
+
+def test_the_passages_of_an_item_are_read_from_the_most_recent(base):
+    """Pour une information, les passages qui l'ont apportée se lisent du plus récent au plus ancien."""
+    base.rows = [{"passage_id": "p2"}, {"passage_id": "p1"}]
+    assert passage_store.passages_of_item("spot", 3893) == ["p2", "p1"]
+    assert "ORDER BY last_written DESC" in base.queries[0][0] and base.queries[0][1] == ("spot", 3893)

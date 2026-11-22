@@ -168,3 +168,53 @@ def open_parts(chain: str, city_ids: list) -> set:
                                 (SELECT 1 FROM passages r WHERE r.resumed_from = p.passage_id)))""",
                  (chain, *city_ids))
     return {row["part"] for row in rows}
+
+
+# --- Le journal de ce que les passages ont ajouté ou modifié (table passage_items, issue #276) ---
+
+ITEM_TYPES = ("service", "spot", "pepite")
+ADDED = "ajout"
+CHANGED = "modification"
+
+# Le nom de l'objet, lu dans sa table selon son type : poi pour un service, spots, pepites.
+ITEM_COLUMNS = """i.passage_id, i.item_type, i.item_id, i.action, i.part, i.written_at,
+                  COALESCE(p.name, s.name, pe.nom) AS item_name
+                  FROM passage_items i
+                  LEFT JOIN poi p ON i.item_type = 'service' AND p.id = i.item_id
+                  LEFT JOIN spots s ON i.item_type = 'spot' AND s.id = i.item_id
+                  LEFT JOIN pepites pe ON i.item_type = 'pepite' AND pe.id = i.item_id"""
+
+
+def note_item(cursor, item_type: str, item_id: int | None, action: str, part: str) -> None:
+    """
+    Note dans le journal qu'un objet vient d'être ajouté ou modifié par le passage en cours. Écrit avec le curseur de
+    l'appelant, sans valider : la ligne entre en base avec l'écriture qu'elle raconte, ou pas du tout.
+    Sans passage en cours (un appel hors de tout passage, un essai), rien n'est noté.
+    """
+    # Import ici : agents.llm_service importe des services, qui importent ce module.
+    from agents.llm_service import passage_courant
+    passage_id = passage_courant()
+    if passage_id is None or item_id is None:
+        return
+    cursor.execute("""INSERT INTO passage_items (passage_id, item_type, item_id, action, part, written_at)
+                      VALUES (%s, %s, %s, %s, %s, %s)""",
+                   (passage_id, item_type, item_id, action, part, datetime.now()))
+
+
+def load_items(passage_id: str, item_type: str | None = None, item_id: int | None = None) -> list:
+    """
+    Ce que le passage a ajouté ou modifié, dans l'ordre où il l'a fait, avec le nom de chaque objet. Avec un objet
+    (type et id), seulement ce que le passage a fait sur lui.
+    """
+    if item_type is None:
+        return _read(f"SELECT {ITEM_COLUMNS} WHERE i.passage_id = %s ORDER BY i.id", (passage_id,))
+    return _read(f"SELECT {ITEM_COLUMNS} WHERE i.passage_id = %s AND i.item_type = %s AND i.item_id = %s ORDER BY i.id",
+                 (passage_id, item_type, item_id))
+
+
+def passages_of_item(item_type: str, item_id: int) -> list:
+    """Les passages qui ont ajouté ou modifié cet objet, du plus récent au plus ancien."""
+    rows = _read("""SELECT passage_id, MAX(written_at) AS last_written FROM passage_items
+                    WHERE item_type = %s AND item_id = %s GROUP BY passage_id ORDER BY last_written DESC""",
+                 (item_type, item_id))
+    return [row["passage_id"] for row in rows]
