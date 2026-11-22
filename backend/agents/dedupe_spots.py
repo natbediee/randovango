@@ -32,7 +32,7 @@ import argparse
 import json
 
 from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, make_llm_service
-from agents.llm_service import LLMUnavailable, mesure_objet
+from agents.llm_service import LLMUnavailable, mesure_objet, mesure_passage, new_passage_id
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import haversine_distance_km
 from utils.logger_util import LoggerUtil
@@ -365,4 +365,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Un lancement en ligne de commande est un passage : tous ses appels d'agents portent le même identifiant dans
+    # llm_calls (issue #276), et on sait ce qu'il a coûté. Il n'a pas de ligne dans la table passages.
+    with mesure_passage(new_passage_id()):
+        main()

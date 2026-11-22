@@ -22,7 +22,7 @@ jour déjà planifié (le spot doit être choisi) :
 """
 import argparse
 
-from agents.llm_service import mesure_objet
+from agents.llm_service import mesure_objet, mesure_passage, new_passage_id
 from agents.pepite_common import COMMON_RULES, known_ideas_lines, pepite_schema, run_search, search_header
 from services import pepite_service
 
@@ -105,4 +105,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Un lancement en ligne de commande est un passage : tous ses appels d'agents portent le même identifiant dans
+    # llm_calls (issue #276), et on sait ce qu'il a coûté. Il n'a pas de ligne dans la table passages.
+    with mesure_passage(new_passage_id()):
+        main()
