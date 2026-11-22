@@ -759,12 +759,14 @@ def trail_tips_for_hikes(hike_ids: list) -> dict:
 # 5. CHERCHER (AGENT) ET PRÉPARER LES IDÉES D'UN JOUR
 # =============================================================================
 
-def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None) -> int | None:
+def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None, raise_errors: bool = False) -> int | None:
     """
     Lance une recherche de l'agent ("lieux" ou "agenda") pour la zone et enregistre
     ce qu'il trouve. Renvoie le nombre d'idées, ou None si l'agent n'a pas répondu
     (quota épuisé, délai dépassé...) : rien n'est alors enregistré, la recherche
     sera retentée à la prochaine occasion.
+    `raise_errors` (chaîne « pepites », issue #276) : l'erreur de l'agent remonte au lieu
+    d'être écrite dans le journal, pour que le passage la garde comme raison de son échec.
     """
     # Import ici et non en haut du fichier : les agents importent eux-mêmes ce module.
     from agents.discover_places import search_places
@@ -779,6 +781,8 @@ def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None) -> i
         search = search_places if mode == "lieux" else search_agenda
         ideas, model, version = search(day, known_names)
     except (LLMUnavailable, json.JSONDecodeError) as error:
+        if raise_errors:
+            raise
         logger.warning(f"[pépites] {mode} {day.get('spot_name') or day.get('city_name')} : recherche échouée : {error}")
         return None
     for idea in ideas:
@@ -853,6 +857,34 @@ def search_city_places(city_name: str) -> None:
             return
         _search_places(cursor, city)
         connection.commit()
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(connection)
+
+
+def search_city_for_chain(city_id: int) -> dict:
+    """
+    La partie « lieux » de la chaîne des pépites d'une ville (services/pepite_chain.py, issue #276) : les lieux
+    incontournables autour de la ville, cherchés par Vany puis placés, comme à l'ajout de la ville. Renvoie le bilan
+    {"pepites_trouvees": n}, ou {"pepites_trouvees": 0, "zones_deja_couvertes": 1} quand une recherche récente couvre
+    déjà sa zone : rien n'est alors recherché, et cela ne coûte rien.
+    L'erreur de Vany (quota, surcharge) remonte : le passage la garde comme raison de son échec.
+    """
+    connection = MySQLUtils.connect()
+    cursor = connection.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id, name, latitude, longitude FROM cities WHERE id = %s", (city_id,))
+        city = cursor.fetchone()
+        if _places_covered(cursor, city):
+            return {"pepites_trouvees": 0, "zones_deja_couvertes": 1}
+        zone = _city_context(cursor, city)
+        with mesure_objet("commune", city["id"]):
+            found = search_and_store(cursor, zone, "lieux", raise_errors=True)
+            # La position exacte des lieux que le code n'a pas su recaler ; un échec ici ne fait pas échouer la
+            # partie : relocate_missing reprendra ces lieux.
+            relocate_zone(cursor, zone)
+        connection.commit()
+        return {"pepites_trouvees": found}
     finally:
         cursor.close()
         MySQLUtils.disconnect(connection)

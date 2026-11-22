@@ -17,8 +17,8 @@ ligne de commande, pour la développeuse (python -m agents.find_services --essai
 LA CHAÎNE EST UN PARAMÈTRE
 CHAINS donne, pour chaque chaîne, ses catégories, son verrou et la façon de faire passer une catégorie. Y sont branchées
 la chaîne des services (payante) et, depuis #276, les chaînes gratuites de l'ajout d'une ville : OSM, pharmacies FINESS,
-carburants (services/etl_chains.py), et la chaîne des spots (services/spot_chain.py), payante sauf sa source. Les
-pépites s'y ajouteront, toujours sans nouvelle route.
+carburants (services/etl_chains.py), la chaîne des spots (services/spot_chain.py), payante sauf sa source, et celle
+des pépites d'une ville (services/pepite_chain.py), payante. Toujours sans nouvelle route.
 
 REPRENDRE SANS REPAYER
 Un passage en échec garde ce qui est fini. resume_passage en crée un nouveau, qui ne refait que les catégories non
@@ -34,7 +34,8 @@ from agents import find_services
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMRefused, LLMTimeout, mesure_passage, new_passage_id
 from agents.service_chain import RegisterUnavailable, interrupted_trace, latest_traces
-from services import budget_service, etl_chains, llm_calls_service, passage_store, service_store, spot_chain
+from services import (budget_service, etl_chains, llm_calls_service, passage_store, pepite_chain, service_store,
+                      spot_chain)
 from services.etl_chains import StepFailed
 from services.spot_chain import SpotsMissed
 from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO, WAITING
@@ -123,6 +124,11 @@ CHAINS = {
     "spots": Chain(key="spots", label="Chaîne des spots", parts=spot_chain.PARTS, paid=True,
                    lock=spot_chain.lock, lock_is_free=spot_chain.lock_is_free, run_part=spot_chain.run_part,
                    steps_of=spot_chain.steps_of, free_parts=spot_chain.FREE_PARTS),
+    # La chaîne des pépites d'une ville (services/pepite_chain.py) : payante, comptée comme une chaîne dans le budget.
+    "pepites": Chain(key="pepites", label="Pépites de la ville", parts=pepite_chain.PARTS, paid=True,
+                     lock=lambda city_id: etl_chains.city_lock("pepites", city_id),
+                     lock_is_free=lambda city_id: etl_chains.city_lock_is_free("pepites", city_id),
+                     run_part=pepite_chain.run_part, steps_of=pepite_chain.steps_of, per_city=True),
     "osm": free_chain("osm", "Lieux d'OpenStreetMap", "Lieux d'OpenStreetMap", etl_chains.run_osm),
     "finess": free_chain("finess", "Pharmacies du registre FINESS", "Pharmacies du registre FINESS",
                          etl_chains.run_finess),
@@ -510,6 +516,10 @@ LOADED_WORDS = {"lieux": ("lieu chargé", "lieux chargés"), "pharmacies": ("pha
                 # La chaîne des spots (services/spot_chain.py).
                 "spots_lus": ("spot lu", "spots lus"), "harmonises": ("spot harmonisé", "spots harmonisés"),
                 "ouvertures_lues": ("ouverture lue", "ouvertures lues"), "verifies": ("spot vérifié", "spots vérifiés"),
+                # La chaîne des pépites (services/pepite_chain.py).
+                "pepites_trouvees": ("pépite trouvée", "pépites trouvées"),
+                "zones_deja_couvertes": ("zone déjà couverte par une recherche récente",
+                                         "zones déjà couvertes par une recherche récente"),
                 "stations": ("station chargée", "stations chargées")}
 
 

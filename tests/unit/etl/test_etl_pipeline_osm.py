@@ -2,7 +2,6 @@
 Le passage d'une ville ajoutée (etl_pipeline.scraping_background) : OSM, les carburants, les pharmacies FINESS puis
 la chaîne des spots passent comme des passages d'origine « etl » (issue #276), et un échec n'arrête jamais la suite.
 """
-import sys
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,26 +10,28 @@ from etl import etl_pipeline
 from services import passage_service, passage_store, service_store
 
 
-def _run_background(monkeypatch, city, free_chain=lambda key, city: None, spot_chain=lambda city: None):
+def _run_background(monkeypatch, city, free_chain=lambda key, city: None, spot_chain=lambda city: None,
+                    passage=lambda key, city, parts=None: None):
     """Lance scraping_background sans réseau ni base ; renvoie extract_wikidata pour les vérifications."""
     extract_wikidata = MagicMock(side_effect=RuntimeError("fin du test"))
     monkeypatch.setattr(etl_pipeline, "logger", MagicMock())
     monkeypatch.setattr(etl_pipeline, "run_free_chain", free_chain)
     monkeypatch.setattr(etl_pipeline, "run_spot_chain", spot_chain)
+    monkeypatch.setattr(etl_pipeline, "run_etl_passage", passage)
     monkeypatch.setattr(etl_pipeline, "extract_wikidata", extract_wikidata)
-    monkeypatch.setitem(sys.modules, "services.pepite_service", MagicMock())
     monkeypatch.setattr(etl_pipeline, "launch_services", lambda city: None)
     etl_pipeline.scraping_background(city)
     return extract_wikidata
 
 
-def test_a_new_city_runs_osm_then_fuel_then_finess_then_its_spots(monkeypatch) -> None:
-    """Une ville ajoutée passe OSM, les carburants, FINESS (après OSM : leurs noms), puis la chaîne des spots, sans geste de l'administratrice."""
+def test_a_new_city_runs_osm_then_fuel_then_finess_then_its_spots_then_its_pepites(monkeypatch) -> None:
+    """Une ville ajoutée passe OSM, les carburants, FINESS (après OSM : leurs noms), les spots puis les pépites, sans geste de l'administratrice."""
     order = []
     extract_wikidata = _run_background(monkeypatch, "Plougonvelin", lambda key, city: order.append((key, city)),
-                                       lambda city: order.append(("spots", city)))
+                                       lambda city: order.append(("spots", city)),
+                                       lambda key, city, parts=None: order.append((key, city)))
     assert order == [("osm", "Plougonvelin"), ("carburants", "Plougonvelin"), ("finess", "Plougonvelin"),
-                     ("spots", "Plougonvelin")]
+                     ("spots", "Plougonvelin"), ("pepites", "Plougonvelin")]
     extract_wikidata.assert_called_once_with("Plougonvelin")
 
 

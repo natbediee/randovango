@@ -96,9 +96,9 @@ def test_a_launch_without_a_valid_city_is_refused(api, body):
 
 def test_an_unknown_chain_is_refused_with_its_reason(api):
     """Une chaîne pas encore branchée est refusée (422) avec le motif du service."""
-    api.refusal = "Chaîne inconnue : pepites (attendu : services)"
-    response = api.client.post("/api/supervision/passages", json={"chaine": "pepites", "ville_id": 12})
-    assert response.status_code == 422 and response.json()["detail"].startswith("Chaîne inconnue : pepites")
+    api.refusal = "Chaîne inconnue : chaine_future (attendu : services)"
+    response = api.client.post("/api/supervision/passages", json={"chaine": "chaine_future", "ville_id": 12})
+    assert response.status_code == 422 and response.json()["detail"].startswith("Chaîne inconnue : chaine_future")
 
 
 def test_the_state_of_a_passage_is_read(api):
@@ -194,12 +194,12 @@ def test_a_change_without_any_known_rate_is_refused(api, monkeypatch):
 
 
 def test_the_chains_say_which_are_free_and_which_are_paid(api):
-    """La route des chaînes dit chacune, gratuite (OSM, FINESS, carburants) ou payante (services, spots), et chaque partie."""
+    """La route des chaînes dit chacune, gratuite (OSM, FINESS, carburants) ou payante (services, spots, pépites), et chaque partie."""
     response = api.client.get("/api/supervision/passages/chaines")
     assert response.status_code == 200
     chains = {chain["chaine"]: chain for chain in response.json()}
     assert {key: chain["payant"] for key, chain in chains.items()} == {
-        "services": True, "spots": True, "osm": False, "finess": False, "carburants": False}
+        "services": True, "spots": True, "pepites": True, "osm": False, "finess": False, "carburants": False}
     assert [part["cle"] for part in chains["services"]["categories"]] == [
         "restaurants", "commerces", "supermarches", "laveries"]
     assert chains["osm"]["libelle"] == "Lieux d'OpenStreetMap"
