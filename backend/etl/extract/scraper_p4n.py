@@ -276,6 +276,12 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
             # df peut être passé à transform et load
             logger.info(f"[Extract] : Sortie run_p4n_scraper: type=DataFrame, shape={df.shape}")
             return df
+        elif place_urls and n_skipped == n_total:
+            # La page a été lue et tous ses spots sont déjà en base : rien de nouveau, ce n'est pas une panne.
+            # Un tableau vide le dit à l'appelant ; None reste réservé à une page qui n'a pas pu être lue.
+            # Cas réel : Ploumoguer, 113 spots trouvés, tous connus, notés en échec (essai du 22 novembre 2026).
+            logger.info("[Extract] : Aucun spot nouveau : tous les spots de la page sont déjà en base.")
+            return pd.DataFrame()
         else:
             logger.warning("[Extract] : Aucune donnée valide à traiter.")
             return None

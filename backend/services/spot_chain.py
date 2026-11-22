@@ -71,10 +71,15 @@ def agent_summary(summary: dict, key: str) -> dict:
 # Chacune a la forme attendue par passage_service.Chain.run_part : (passage, partie, ville, reprise, budget) -> bilan.
 
 def run_source(passage_id: str, key: str, city: dict, resume: bool, check_budget) -> dict:
-    """La source des spots relue autour de la ville, puis chargée ; le nombre de spots lus en bilan."""
+    """
+    La source des spots relue autour de la ville, puis chargée ; le nombre de spots nouveaux lus en bilan.
+    Une page lue dont tous les spots sont déjà en base donne un tableau vide : la partie finit avec 0 spot lu.
+    """
     raw = run_p4n_scraper(city["name"], is_headless=True, save_csv=False)
     if raw is None:
         raise StepFailed("source des spots illisible (ville sans position, ou page qui ne répond pas) : relancer plus tard")
+    if raw.empty:
+        return {"spots_lus": 0}
     spots = transform_p4n(raw)
     load_p4n_to_mysql(spots, city["name"])
     return {"spots_lus": len(spots)}
