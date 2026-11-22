@@ -514,11 +514,14 @@ LOADED_WORDS = {"lieux": ("lieu chargé", "lieux chargés"), "pharmacies": ("pha
 
 
 def loaded_text(summary: dict) -> str:
-    """Le bilan d'une partie en une phrase, hors services : « 42 lieux chargés. », « 12 spots harmonisés. »"""
+    """
+    Le bilan d'une partie en une phrase, hors services : « 42 lieux chargés. », « 0 spot vérifié. »
+    En français, 0 et 1 prennent le singulier (« 0 spot vérifié », « 1 ouverture lue ») ; le pluriel commence à 2.
+    """
     pieces = []
     for key, count in summary.items():
         one, many = LOADED_WORDS.get(key, (key, key))
-        pieces.append(f"{count} {one if count == 1 else many}" if count else f"0 {many}")
+        pieces.append(f"{count} {one if count <= 1 else many}")
     return " ; ".join(pieces) + "."
 
 

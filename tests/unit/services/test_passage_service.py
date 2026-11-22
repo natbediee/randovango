@@ -870,3 +870,13 @@ def test_spots_missed_are_a_failure_resumed_without_the_finished_parts(store, sp
     resumed = passage_service.resume_passage(failed)
     passage_service.run_passage(resumed)
     assert [ran[0] for ran in spots["ran"]] == ["verification"]
+
+
+@pytest.mark.parametrize("summary,text", [
+    ({"verifies": 0}, "0 spot vérifié."),
+    ({"ouvertures_lues": 1}, "1 ouverture lue."),
+    ({"harmonises": 7}, "7 spots harmonisés."),
+])
+def test_zero_and_one_take_the_singular_in_a_summary(summary, text):
+    """Le bilan d'une partie écrit « 0 spot vérifié » et « 1 ouverture lue » au singulier, le pluriel à partir de 2 (Argol, 22 novembre 2026)."""
+    assert passage_service.summary_text(summary) == text
