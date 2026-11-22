@@ -2,6 +2,7 @@
 La chaîne des spots d'une ville (services/spot_chain.py, issue #276) : la source relue, puis les trois agents limités
 aux spots de la ville encore à faire. Ni base, ni navigateur, ni agent : chaque étape est remplacée.
 """
+import pandas as pd
 import pytest
 
 from services import spot_chain
@@ -14,7 +15,7 @@ GUIDEL = {"id": 12, "name": "Guidel"}
 def test_the_source_reads_the_city_and_gives_the_number_of_spots(monkeypatch):
     """La source des spots est relue autour de Guidel, chargée sous son nom, et le bilan dit combien de spots ont été lus."""
     loaded = []
-    monkeypatch.setattr(spot_chain, "run_p4n_scraper", lambda name, is_headless, save_csv: ["brut"])
+    monkeypatch.setattr(spot_chain, "run_p4n_scraper", lambda name, is_headless, save_csv: pd.DataFrame([{"brut": 1}]))
     monkeypatch.setattr(spot_chain, "transform_p4n", lambda raw: ["spot 1", "spot 2"])
     monkeypatch.setattr(spot_chain, "load_p4n_to_mysql", lambda spots, name: loaded.append((spots, name)))
     assert spot_chain.run_source("p1", "source", GUIDEL, False, lambda: None) == {"spots_lus": 2}
@@ -26,6 +27,15 @@ def test_an_unreadable_source_fails_with_its_reason(monkeypatch):
     monkeypatch.setattr(spot_chain, "run_p4n_scraper", lambda name, is_headless, save_csv: None)
     with pytest.raises(StepFailed, match="source des spots illisible"):
         spot_chain.run_source("p1", "source", GUIDEL, False, lambda: None)
+
+
+def test_a_source_without_new_spots_finishes_with_zero_spots_read(monkeypatch):
+    """Une source relue dont tous les spots sont déjà en base finit avec 0 spot lu, sans échec ni chargement (Ploumoguer, 22 novembre 2026)."""
+    loaded = []
+    monkeypatch.setattr(spot_chain, "run_p4n_scraper", lambda name, is_headless, save_csv: pd.DataFrame())
+    monkeypatch.setattr(spot_chain, "load_p4n_to_mysql", lambda spots, name: loaded.append(name))
+    assert spot_chain.run_source("p1", "source", GUIDEL, False, lambda: None) == {"spots_lus": 0}
+    assert loaded == []
 
 
 @pytest.mark.parametrize("part,module,function,key", [
