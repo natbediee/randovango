@@ -81,3 +81,50 @@ def test_write_keeps_the_text_that_was_read_and_never_touches_the_source() -> No
     query, params = cursor.calls[0]
     assert "opening_period =" not in query
     assert params == ("periode", "04-01", "09-30", "Avril à septembre", 1)
+
+
+def test_a_city_keeps_only_its_spots_not_read_yet() -> None:
+    """Pour une ville, seuls ses spots (histo_scrap) au texte d'ouverture pas encore lu sont pris : rien n'est relu."""
+    cursor = FakeCursor()
+    read_openings.fetch_spots_to_read(cursor, city_id=12)
+    query, params = cursor.calls[0]
+    assert "ouverture_lue IS NULL OR ouverture_lue <> opening_period" in query
+    assert "AND id IN (SELECT spot_id FROM histo_scrap WHERE city_id = %s)" in query
+    assert params[-1] == 12
+
+
+def test_a_city_run_gives_its_summary_and_stops_on_the_budget(monkeypatch) -> None:
+    """Le bilan dit les textes lus et ratés ; quand le budget des agents est atteint, la lecture s'arrête avant le spot suivant."""
+    import pytest
+    from unittest.mock import MagicMock
+
+    class BudgetReached(RuntimeError):
+        pass
+
+    class Service:
+        def complete_json(self, system, user, schema):
+            if "panne" in user:
+                raise read_openings.LLMUnavailable("Error code: 529 overloaded_error")
+            return {"statut": "toute_annee"}
+
+    written = []
+    spots = [{"id": 1, "opening_period": "Avril à septembre", "description": None},
+             {"id": 2, "opening_period": "panne", "description": None},
+             {"id": 3, "opening_period": "Juin", "description": None}]
+    monkeypatch.setattr(read_openings.MySQLUtils, "connect", lambda: MagicMock())
+    monkeypatch.setattr(read_openings.MySQLUtils, "disconnect", lambda connection: None)
+    monkeypatch.setattr(read_openings, "fetch_spots_to_read", lambda cursor, limit, spot_ids, city_id: spots[:2])
+    monkeypatch.setattr(read_openings, "write_opening", lambda cursor, spot_id, text, payload: written.append(spot_id))
+    summary = read_openings.run(service=Service(), city_id=12)
+    assert written == [1] and summary["faits"] == 1 and summary["rates"] == 1
+    assert "overloaded" in str(summary["erreur"])
+
+    monkeypatch.setattr(read_openings, "fetch_spots_to_read", lambda cursor, limit, spot_ids, city_id: spots)
+
+    def check_budget():
+        if written:
+            raise BudgetReached("plafond du jour atteint")
+    written.clear()
+    with pytest.raises(BudgetReached):
+        read_openings.run(service=Service(), city_id=12, check_budget=check_budget)
+    assert written == [1]

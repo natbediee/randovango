@@ -31,7 +31,7 @@ from datetime import date
 from agents.llm_config import make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet
 from services.supervision.spots_review import OPENING_OBJECT
-from utils.db_utils import MySQLUtils
+from utils.db_utils import CITY_SPOTS_CLAUSE, MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
 
@@ -128,8 +128,12 @@ def normalize(payload: dict) -> dict:
     return {"statut": PERIODE, "debut": start, "fin": end}
 
 
-def fetch_spots_to_read(cursor, limit: int = None, spot_ids: list = None) -> list:
-    """Les spots dont le texte d'ouverture n'a pas encore été lu, ou a changé depuis, sauf décision humaine."""
+def fetch_spots_to_read(cursor, limit: int = None, spot_ids: list = None, city_id: int = None) -> list:
+    """
+    Les spots dont le texte d'ouverture n'a pas encore été lu, ou a changé depuis, sauf décision humaine.
+    `city_id` (chaîne « spots » d'une ville, issue #276) : seulement les spots de cette ville (histo_scrap), avec la
+    même règle « pas encore lu » : relancer une ville ne relit aucun texte déjà lu.
+    """
     if spot_ids:
         placeholders = ",".join(["%s"] * len(spot_ids))
         cursor.execute(f"SELECT id, opening_period, description FROM spots WHERE id IN ({placeholders})"
@@ -144,9 +148,10 @@ def fetch_spots_to_read(cursor, limit: int = None, spot_ids: list = None) -> lis
           AND duplicate_of_spot_id IS NULL AND p4n_removed = 0
           AND type IS NOT NULL AND type NOT IN ({placeholders})
           AND {NOT_DECIDED_BY_HUMAN}
+          {CITY_SPOTS_CLAUSE.format(id="id") if city_id else ""}
         ORDER BY id
     """
-    params = (ALL_YEAR, *HIDDEN_SPOT_TYPES)
+    params = (ALL_YEAR, *HIDDEN_SPOT_TYPES, *((city_id,) if city_id else ()))
     if limit:
         query += " LIMIT %s"
         params = (*params, limit)
@@ -166,22 +171,32 @@ def write_opening(cursor, spot_id: int, opening_period: str, payload: dict) -> N
     )
 
 
-def run(limit: int = None, spot_ids: list = None, service=None) -> None:
-    """Un spot à la fois, enregistré aussitôt : un arrêt en route ne perd rien."""
+def run(limit: int = None, spot_ids: list = None, service=None, city_id: int = None,
+        check_budget=lambda: None) -> dict:
+    """
+    Un spot à la fois, enregistré aussitôt : un arrêt en route ne perd rien.
+    `city_id` : seulement les spots de cette ville (chaîne « spots », issue #276). `check_budget` est appelé avant
+    chaque spot : il lève une exception quand le budget des agents est atteint, et la lecture s'arrête là (#211).
+    Renvoie le bilan {"faits", "rates", "erreur"} : les textes lus, ceux ratés, et la dernière erreur d'un raté.
+    """
     if service is None:
         service = make_llm_service("read_openings")
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
     failures_in_a_row = 0
+    summary = {"faits": 0, "rates": 0, "erreur": None}
     try:
-        spots = fetch_spots_to_read(cursor, limit, spot_ids)
+        spots = fetch_spots_to_read(cursor, limit, spot_ids, city_id)
         logger.info(f"[ouvertures] {len(spots)} spot(s) à lire")
         for spot in spots:
+            check_budget()
             try:
                 with mesure_objet("spot", spot.get("id")):
                     payload = read_opening(service, spot["opening_period"], spot["description"])
             except (LLMUnavailable, json.JSONDecodeError) as error:
                 logger.warning(f"[ouvertures] Spot {spot['id']} ignoré : {error}")
+                summary["rates"] += 1
+                summary["erreur"] = error
                 failures_in_a_row += 1
                 if failures_in_a_row >= MAX_FAILURES_IN_A_ROW:
                     logger.error(f"[ouvertures] {failures_in_a_row} échecs de suite : arrêt, relancer plus tard")
@@ -190,10 +205,12 @@ def run(limit: int = None, spot_ids: list = None, service=None) -> None:
             failures_in_a_row = 0
             write_opening(cursor, spot["id"], spot["opening_period"], payload)
             connection.commit()
+            summary["faits"] += 1
             logger.info(f"[ouvertures] #{spot['id']} {spot['opening_period']!r} -> {normalize(payload)}")
     finally:
         cursor.close()
         MySQLUtils.disconnect(connection)
+    return summary
 
 
 def main():

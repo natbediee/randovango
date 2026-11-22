@@ -135,6 +135,7 @@ def test_a_doubt_removes_the_verified_badge_and_nothing_else() -> None:
 
 
 def test_three_failures_in_a_row_stop_the_pass(monkeypatch) -> None:
+    """Trois échecs de suite (quota) arrêtent la vérification, et le bilan les compte avec l'erreur, pour la chaîne « spots »."""
     calls = []
 
     class Unavailable:
@@ -168,9 +169,11 @@ def test_three_failures_in_a_row_stop_the_pass(monkeypatch) -> None:
     monkeypatch.setattr(verify_spots, "read_recent_reviews", lambda *args, **kwargs: None)
     monkeypatch.setattr("etl.extract.scraper_p4n.create_driver", lambda: Driver())
 
-    verify_spots.run()
+    summary = verify_spots.run(city_id=12)
 
     assert len(calls) == verify_spots.MAX_FAILURES_IN_A_ROW
+    assert summary["faits"] == 0 and summary["rates"] == verify_spots.MAX_FAILURES_IN_A_ROW
+    assert str(summary["erreur"]) == "quota"
 
 
 def test_only_new_leaves_the_spots_already_verified_alone() -> None:
@@ -180,3 +183,12 @@ def test_only_new_leaves_the_spots_already_verified_alone() -> None:
     assert "v.prompt_version" not in query
     assert "v.verified_at" not in query
     assert verify_spots.VERIFY_PROMPT_VERSION not in params
+
+
+def test_a_city_keeps_only_its_spots_never_verified() -> None:
+    """Pour une ville, seuls ses spots (histo_scrap) jamais vérifiés sont pris : relancer Guidel ne revérifie rien."""
+    cursor = FakeCursor()
+    verify_spots.fetch_spots_to_verify(cursor, only_new=True, city_id=12)
+    query, params = cursor.calls[0]
+    assert "AND s.id IN (SELECT spot_id FROM histo_scrap WHERE city_id = %s)" in query
+    assert params[-1] == 12 and "v.verified_at" not in query

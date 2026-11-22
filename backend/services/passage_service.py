@@ -17,7 +17,8 @@ ligne de commande, pour la développeuse (python -m agents.find_services --essai
 LA CHAÎNE EST UN PARAMÈTRE
 CHAINS donne, pour chaque chaîne, ses catégories, son verrou et la façon de faire passer une catégorie. Y sont branchées
 la chaîne des services (payante) et, depuis #276, les chaînes gratuites de l'ajout d'une ville : OSM, pharmacies FINESS,
-carburants (services/etl_chains.py). Les autres (spots, pépites) s'y ajouteront, toujours sans nouvelle route.
+carburants (services/etl_chains.py), et la chaîne des spots (services/spot_chain.py), payante sauf sa source. Les
+pépites s'y ajouteront, toujours sans nouvelle route.
 
 REPRENDRE SANS REPAYER
 Un passage en échec garde ce qui est fini. resume_passage en crée un nouveau, qui ne refait que les catégories non
@@ -33,8 +34,9 @@ from agents import find_services
 from agents.find_services import PassageRunning
 from agents.llm_service import LLMRefused, LLMTimeout, mesure_passage, new_passage_id
 from agents.service_chain import RegisterUnavailable, interrupted_trace, latest_traces
-from services import budget_service, etl_chains, llm_calls_service, passage_store, service_store
+from services import budget_service, etl_chains, llm_calls_service, passage_store, service_store, spot_chain
 from services.etl_chains import StepFailed
+from services.spot_chain import SpotsMissed
 from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO, WAITING
 from utils.geo_utils import city_commune
 from utils.logger_util import LoggerUtil
@@ -66,9 +68,14 @@ class Chain:
     lock_is_free: Callable      # (id de la ville) -> le verrou est-il libre ?
     run_part: Callable          # (passage_id, clé, ville, reprise, vérification du budget) -> le bilan de la catégorie
     steps_of: Callable          # (clé) -> {agent : l'étape qu'il fait}, pour lire l'étape dans llm_calls
-    # False : un seul passage à la fois, toutes villes confondues, sur la commune de la ville (Morgat se cherche comme
-    # Crozon). True : un passage à la fois par ville, sur la ville elle-même (les chaînes gratuites de l'ETL).
+    # False : un seul passage à la fois, toutes villes confondues (services, spots). True : un passage à la fois par
+    # ville (les chaînes gratuites de l'ETL : deux villes ajoutées coup sur coup gardent leur OSM en même temps).
     per_city: bool = False
+    # True : la chaîne travaille sur la commune de la ville, depuis une seule de ses villes (Morgat se cherche comme
+    # Crozon : la chaîne des services). False : sur la ville elle-même (l'OSM et les spots de Morgat sont les siens).
+    searches_commune: bool = False
+    # Les parties gratuites d'une chaîne payante : le budget des agents ne les retient pas (la source des spots).
+    free_parts: tuple = ()
 
 
 # --- La chaîne des services ---
@@ -111,13 +118,40 @@ CHAINS = {
     "services": Chain(key="services", label="Recherche des services", parts=SERVICE_LABELS, paid=True,
                       lock=lambda city_id: find_services.single_passage(),
                       lock_is_free=lambda city_id: find_services.lock_is_free(),
-                      run_part=run_service_category, steps_of=service_steps),
+                      run_part=run_service_category, steps_of=service_steps, searches_commune=True),
+    # La chaîne des spots (services/spot_chain.py) : la source, gratuite, puis trois agents payants.
+    "spots": Chain(key="spots", label="Chaîne des spots", parts=spot_chain.PARTS, paid=True,
+                   lock=spot_chain.lock, lock_is_free=spot_chain.lock_is_free, run_part=spot_chain.run_part,
+                   steps_of=spot_chain.steps_of, free_parts=spot_chain.FREE_PARTS),
     "osm": free_chain("osm", "Lieux d'OpenStreetMap", "Lieux d'OpenStreetMap", etl_chains.run_osm),
     "finess": free_chain("finess", "Pharmacies du registre FINESS", "Pharmacies du registre FINESS",
                          etl_chains.run_finess),
     "carburants": free_chain("carburants", "Stations-service et carburants", "Stations-service et prix des carburants",
                              etl_chains.run_fuel),
 }
+
+
+# --- Une chaîne que ce code ne connaît pas ---
+# La base est commune à toutes les branches : un passage peut y avoir été écrit par une version plus récente du code,
+# avec une chaîne que celle-ci ne connaît pas encore (une branche qui n'a pas ramené main). Il est montré tel quel, sans
+# faire planter la supervision ; il n'est ni lancé, ni repris, ni marqué interrompu par cette version.
+UNKNOWN_CHAIN = "chaîne inconnue de cette version du code : à suivre et relancer depuis main à jour"
+
+
+def unknown_chain(key: str) -> Chain:
+    """
+    Une chaîne de remplacement, pour lire un passage d'une chaîne inconnue. Son verrou se dit toujours pris : ainsi
+    personne ici ne croit le passage interrompu (il tourne peut-être sous une autre version), et la file ne le prend pas.
+    """
+    def refuse(city_id):
+        raise PassageConflict(UNKNOWN_CHAIN)
+    return Chain(key=key, label=key, parts={}, paid=True, lock=refuse, lock_is_free=lambda city_id: False,
+                 run_part=None, steps_of=lambda part: {})
+
+
+def chain_of(key: str) -> Chain:
+    """La chaîne de cette clé, ou une chaîne de remplacement si ce code ne la connaît pas."""
+    return CHAINS.get(key) or unknown_chain(key)
 
 
 # --- La raison d'un échec, en phrase lisible ---
@@ -142,7 +176,12 @@ def failure_reason(error: Exception) -> str:
     message d'origine, pour qu'on puisse le chercher dans les journaux.
     """
     message = str(error)
-    if isinstance(error, StepFailed):
+    if isinstance(error, SpotsMissed):
+        # Une partie de la chaîne des spots finie avec des ratés : combien, et pourquoi le dernier a raté.
+        cause = failure_reason(error.cause) if error.cause else "raison inconnue"
+        reason = (f"{error.missed} spot{'s' if error.missed > 1 else ''} raté{'s' if error.missed > 1 else ''} sur "
+                  f"{error.missed + error.done} ({cause}) : reprendre, les spots faits ne seront pas repayés")
+    elif isinstance(error, StepFailed):
         reason = message        # déjà écrite pour l'administratrice (services/etl_chains.py)
     elif isinstance(error, PassageRunning):
         reason = "un autre passage tournait déjà : relancer après sa fin"
@@ -191,25 +230,31 @@ def check_free(chain: Chain, city_id: int) -> None:
     raise PassageConflict(f"Un passage « {chain.label} » tourne déjà, lancé en ligne de commande : attendre sa fin.")
 
 
-def check_budget(chain: Chain) -> None:
+def part_is_paid(chain: Chain, part: str) -> bool:
+    """Une partie est payante si sa chaîne l'est et qu'elle n'en est pas une partie gratuite (la source des spots)."""
+    return chain.paid and part not in chain.free_parts
+
+
+def check_budget(chain: Chain, parts: list) -> None:
     """
     Lève PassageConflict, avec la raison, si le budget des agents est atteint (issue #211) : un passage payant ne part
     pas, même lancé à la main, tant que le budget ne le permet pas de nouveau ou que l'admin ne le relève pas.
-    Une chaîne gratuite (OSM, fichiers de l'État) n'est jamais retenue par le budget.
+    Un passage sans partie payante (OSM, fichiers de l'État, la seule source des spots) n'est jamais retenu.
     """
-    if not chain.paid:
+    if not any(part_is_paid(chain, part) for part in parts):
         return
     reason = budget_service.budget_block()
     if reason:
         raise PassageConflict(f"Budget des agents atteint ({reason}).")
 
 
-def stop_if_over_budget(chain: Chain) -> None:
+def stop_if_over_budget(chain: Chain, part: str) -> None:
     """
-    Pendant un passage, avant chaque catégorie et chaque zone d'une grande ville : lève BudgetReached si le budget des
-    agents est atteint. Le budget n'est donc jamais dépassé de plus d'une zone, ou d'une catégorie d'une petite ville.
+    Pendant un passage, avant chaque catégorie et chaque zone d'une grande ville (ou chaque spot) : lève BudgetReached
+    si le budget des agents est atteint. Le budget n'est donc jamais dépassé de plus d'une zone ou d'un spot.
+    Une partie gratuite n'est jamais arrêtée.
     """
-    if not chain.paid:
+    if not part_is_paid(chain, part):
         return
     reason = budget_service.budget_block()
     if reason:
@@ -237,11 +282,11 @@ def create_passage(chain_key: str, city_id: int, parts: list | None = None, orig
         raise ValueError(f"Origine inconnue : {origin} (attendu : {', '.join(ORIGINS)})")
     if find_city(city_id) is None:
         raise ValueError(f"Ville inconnue : {city_id}")
-    if origin == "supervision":
-        check_free(chain, city_id)
-        check_budget(chain)
     # Les catégories passent toujours dans l'ordre de la chaîne : la suivante trouve en base ce que la précédente a écrit.
     chosen = [part for part in chain.parts if not parts or part in parts]
+    if origin == "supervision":
+        check_free(chain, city_id)
+        check_budget(chain, chosen)
     passage_id = new_passage_id()
     passage_store.insert_passage(passage_id, chain_key, city_id, origin, chosen, resumed_from, status)
     logger.info(f"[passages] {passage_id} demandé ({status}) : {chain_key}, ville {city_id}, {chosen}, origine {origin}")
@@ -251,11 +296,12 @@ def create_passage(chain_key: str, city_id: int, parts: list | None = None, orig
 def city_to_run(chain: Chain, passage: dict) -> dict:
     """
     La ville sur laquelle la chaîne travaille. La chaîne des services cherche une commune depuis une seule de ses
-    villes : Morgat se cherche comme Crozon. Une chaîne gratuite charge la ville elle-même : l'OSM de Morgat est le sien.
+    villes : Morgat se cherche comme Crozon. Les autres chaînes travaillent sur la ville elle-même : l'OSM de Morgat
+    et ses spots sont les siens.
     """
-    if chain.per_city:
-        return {"id": passage["city_id"], "name": passage["city_name"]}
-    return service_store.load_city(passage["city_name"])
+    if chain.searches_commune:
+        return service_store.load_city(passage["city_name"])
+    return {"id": passage["city_id"], "name": passage["city_name"]}
 
 
 def run_passage(passage_id: str) -> None:
@@ -268,6 +314,9 @@ def run_passage(passage_id: str) -> None:
     ce qui est fini reste enregistré, et la file le reprendra là où il en était quand le budget le permettra.
     """
     passage = passage_store.load_passage(passage_id)
+    if passage["chain"] not in CHAINS:
+        logger.warning(f"[passages] {passage_id} laissé tel quel : {UNKNOWN_CHAIN}")
+        return
     chain = CHAINS[passage["chain"]]
     resume = passage["resumed_from"] is not None
     part = None
@@ -281,11 +330,11 @@ def run_passage(passage_id: str) -> None:
             passage_store.set_passage_status(passage_id, RUNNING)
             for row in [row for row in passage_store.load_parts(passage_id) if row["status"] == TO_DO]:
                 part = row["part"]
-                stop_if_over_budget(chain)
+                stop_if_over_budget(chain, part)
                 passage_store.set_part(passage_id, part, RUNNING)
                 # Une catégorie arrêtée par le budget reprend son fichier : ses zones finies ne sont pas repayées.
                 summary = chain.run_part(passage_id, part, city, resume or row["step"] == PAUSED,
-                                         lambda: stop_if_over_budget(chain))
+                                         lambda: stop_if_over_budget(chain, part))
                 passage_store.set_part(passage_id, part, DONE, summary=summary)
             part = None
         passage_store.set_passage_status(passage_id, DONE)
@@ -353,7 +402,7 @@ def launch_waiting(passage: dict) -> str:
     """
     chain = CHAINS[passage["chaine"]]
     check_free(chain, passage["ville"]["id"])
-    check_budget(chain)
+    check_budget(chain, [part["cle"] for part in passage["categories"] if part["etat"] != DONE])
     passage_store.set_passage_status(passage["passage_id"], QUEUED)
     logger.info(f"[passages] {passage['passage_id']} lancé par l'admin après l'attente")
     return passage["passage_id"]
@@ -370,6 +419,8 @@ def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:
     passage = read_passage(passage_id)
     if passage is None:
         return None
+    if passage["chaine"] not in CHAINS:
+        raise PassageConflict(f"Ce passage ne se relance pas ici : {UNKNOWN_CHAIN}.")
     if passage["etat"] == WAITING:
         return launch_waiting(passage)
     if passage["etat"] != FAILED:
@@ -390,7 +441,8 @@ def list_chains() -> list:
     sont payantes (des agents, retenues par le budget) ou gratuites, et leurs parties (à envoyer dans « categories »).
     """
     return [{"chaine": chain.key, "libelle": chain.label, "payant": chain.paid,
-             "categories": [{"cle": key, "libelle": label} for key, label in chain.parts.items()]}
+             "categories": [{"cle": key, "libelle": label, "payant": part_is_paid(chain, key)}
+                            for key, label in chain.parts.items()]}
             for chain in CHAINS.values()]
 
 
@@ -406,10 +458,14 @@ def waiting_reason(passage: dict) -> str | None:
         return AUTO_OFF
     if passage["status"] != QUEUED:
         return None
+    if passage["chain"] not in CHAINS:
+        return UNKNOWN_CHAIN
     chain = CHAINS[passage["chain"]]
     if not chain.lock_is_free(passage["city_id"]):
         return "attend la fin du passage en cours"
-    return budget_service.budget_block() if chain.paid else None
+    # Le budget ne retient que si la prochaine partie à faire est payante : la source des spots part quand même.
+    to_do = [row["part"] for row in passage_store.load_parts(passage["passage_id"]) if row["status"] == TO_DO]
+    return budget_service.budget_block() if to_do and part_is_paid(chain, to_do[0]) else None
 
 
 def mark_interrupted(passage: dict, parts: list) -> None:
@@ -449,13 +505,16 @@ SUMMARY_WORDS = {
 DISCARDED_WORDS = {"sans_page": "sans preuve", "liquidation": "société liquidée ou fermée"}
 
 
-# Le bilan d'une chaîne gratuite (services/etl_chains.py) : ce qu'elle a chargé, (singulier, pluriel).
+# Le bilan des autres chaînes que les services (etl_chains.py, spot_chain.py) : ce qu'elles ont fait, (singulier, pluriel).
 LOADED_WORDS = {"lieux": ("lieu chargé", "lieux chargés"), "pharmacies": ("pharmacie chargée", "pharmacies chargées"),
+                # La chaîne des spots (services/spot_chain.py).
+                "spots_lus": ("spot lu", "spots lus"), "harmonises": ("spot harmonisé", "spots harmonisés"),
+                "ouvertures_lues": ("ouverture lue", "ouvertures lues"), "verifies": ("spot vérifié", "spots vérifiés"),
                 "stations": ("station chargée", "stations chargées")}
 
 
 def loaded_text(summary: dict) -> str:
-    """Le bilan d'une chaîne gratuite en une phrase : « 42 lieux chargés. », « 0 stations chargées. »"""
+    """Le bilan d'une partie en une phrase, hors services : « 42 lieux chargés. », « 12 spots harmonisés. »"""
     pieces = []
     for key, count in summary.items():
         one, many = LOADED_WORDS.get(key, (key, key))
@@ -505,7 +564,7 @@ def part_state(chain: Chain, part: dict, calls: list) -> dict:
         # Une chaîne sans agent (OSM, FINESS, carburants) n'a qu'une étape : le chargement.
         step = steps[last["agent"]] if last else ("recherches" if steps else LOADING)
         detail = last["etape"] if last else None
-    return {"cle": part["part"], "libelle": chain.parts[part["part"]], "payant": chain.paid, "etat": part["status"],
+    return {"cle": part["part"], "libelle": chain.parts.get(part["part"], part["part"]), "payant": part_is_paid(chain, part["part"]), "etat": part["status"],
             "etape": step, "detail_etape": detail, "agent": last["agent"] if last and step != SAVING else None,
             **call_totals(mine), "bilan": part["summary"], "bilan_texte": summary_text(part["summary"]),
             "raison_echec": part["error"],
@@ -517,7 +576,7 @@ def read_passage(passage_id: str) -> dict | None:
     passage = passage_store.load_passage(passage_id)
     if passage is None:
         return None
-    chain = CHAINS[passage["chain"]]
+    chain = chain_of(passage["chain"])
     parts = passage_store.load_parts(passage_id)
     if passage["status"] == RUNNING and chain.lock_is_free(passage["city_id"]):
         mark_interrupted(passage, parts)

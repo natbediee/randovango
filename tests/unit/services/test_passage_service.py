@@ -763,3 +763,110 @@ def test_a_running_free_chain_shows_the_loading_step(store, free):
     store.set_part(passage_id, "osm", "en_cours")
     free["busy"].add(("osm", 12))       # le verrou est tenu : le passage tourne vraiment
     assert passage_service.read_passage(passage_id)["categories"][0]["etape"] == "chargement"
+
+
+# --- Une chaîne inconnue de cette version du code (base commune aux branches, issue #276) ---
+
+def _unknown_passage(store, status):
+    """Un passage d'une chaîne écrite par une version plus récente du code, que celle-ci ne connaît pas."""
+    store.insert_passage("inconnu", "chaine_future", 12, "etl", ["harmonisation"])
+    store.set_passage_status("inconnu", status)
+    return "inconnu"
+
+
+def test_a_passage_of_an_unknown_chain_is_shown_without_crashing_the_list(store, chain):
+    """Un passage d'une chaîne qu'une branche en retard ne connaît pas se lit tel quel : la liste des passages ne plante pas."""
+    _unknown_passage(store, "en_cours")
+    listed = passage_service.list_passages()
+    running = listed["en_cours"][0]
+    assert running["chaine"] == "chaine_future" and running["categories"][0]["libelle"] == "harmonisation"
+    # Il tourne peut-être sous une autre version : il n'est pas marqué interrompu ici.
+    assert store.passages["inconnu"]["status"] == "en_cours"
+
+
+def test_a_queued_passage_of_an_unknown_chain_is_never_run_here(store, chain):
+    """La file laisse de côté un passage d'une chaîne inconnue, avec la raison, et fait partir ceux d'après."""
+    _unknown_passage(store, "en_file")
+    known = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    assert passage_queue.why_waiting("inconnu") == passage_service.UNKNOWN_CHAIN
+    assert passage_queue.run_next() is True
+    assert store.passages[known]["status"] == "fini" and store.passages["inconnu"]["status"] == "en_file"
+    passage_service.run_passage("inconnu")
+    assert store.passages["inconnu"]["status"] == "en_file"
+
+
+def test_a_failed_passage_of_an_unknown_chain_is_not_resumed_here(store, chain):
+    """La reprise d'un échec d'une chaîne inconnue est refusée avec la raison, sans rien écrire."""
+    _unknown_passage(store, "echec")
+    with pytest.raises(PassageConflict, match="chaîne inconnue de cette version"):
+        passage_service.resume_passage("inconnu")
+    assert len(store.passages) == 1
+
+
+# --- La chaîne des spots (services/spot_chain.py, issue #276) ---
+
+@pytest.fixture
+def spots(monkeypatch):
+    """Les parties de la chaîne des spots simulées : chacune note ce qu'on lui demande ; le verrou est libre."""
+    state = {"ran": [], "fail": {}}
+
+    def run_part(passage_id, key, city, resume, check_budget):
+        state["ran"].append((key, city["name"], passage_courant()))
+        if key != "source":
+            check_budget()      # un agent regarde le budget avant chaque spot
+        if key in state["fail"]:
+            raise state["fail"][key]
+        return {"spots_lus": 9} if key == "source" else {"harmonises": 3}
+
+    from contextlib import nullcontext
+    monkeypatch.setattr(passage_service.spot_chain, "run_part", run_part)
+    monkeypatch.setitem(passage_service.CHAINS, "spots", passage_service.Chain(
+        key="spots", label="Chaîne des spots", parts=passage_service.spot_chain.PARTS, paid=True,
+        lock=lambda city_id: nullcontext(), lock_is_free=lambda city_id: True, run_part=run_part,
+        steps_of=passage_service.spot_chain.steps_of, free_parts=passage_service.spot_chain.FREE_PARTS))
+    return state
+
+
+def test_the_spot_chain_runs_its_four_parts_in_order_on_the_city_itself(store, spots):
+    """La chaîne des spots passe la source, puis l'harmonisation, les ouvertures et la vérification, sous l'identifiant du passage."""
+    passage_id = passage_service.create_passage("spots", 12)
+    passage_service.run_passage(passage_id)
+    assert [ran[0] for ran in spots["ran"]] == ["source", "harmonisation", "ouvertures", "verification"]
+    assert all(ran[1] == "Guidel" and ran[2] == passage_id for ran in spots["ran"])
+    passage = passage_service.read_passage(passage_id)
+    assert passage["etat"] == "fini" and passage["categories"][0]["bilan_texte"] == "9 spots lus."
+
+
+def test_the_source_of_the_spots_is_never_held_by_the_budget(store, spots):
+    """Budget atteint : une ville ajoutée par l'ETL a quand même ses spots lus, puis le passage attend avant l'harmonisation."""
+    store.budget_reason = "plafond du jour atteint : 10.40 € dépensés sur 10.00 €"
+    passage_id = passage_service.create_passage("spots", 12, origin="etl")
+    passage_service.run_passage(passage_id)
+    assert [ran[0] for ran in spots["ran"]] == ["source"]
+    assert store.passages[passage_id]["status"] == "en_file"
+    assert passage_queue.why_waiting(passage_id).startswith("plafond du jour atteint")
+
+
+def test_a_launch_of_agent_parts_is_refused_when_the_budget_is_reached(store, spots):
+    """Budget atteint : relancer seulement l'harmonisation est refusé, relancer seulement la source ne l'est pas."""
+    store.budget_reason = "plafond du jour atteint : 10.40 € dépensés sur 10.00 €"
+    with pytest.raises(PassageConflict, match="Budget des agents atteint"):
+        passage_service.create_passage("spots", 12, ["harmonisation"])
+    assert passage_service.create_passage("spots", 12, ["source"])
+
+
+def test_spots_missed_are_a_failure_resumed_without_the_finished_parts(store, spots):
+    """Deux spots ratés à la vérification : la partie échoue avec la raison traduite, et la reprise ne refait qu'elle."""
+    from services.spot_chain import SpotsMissed
+    quota = RuntimeError("You've hit your session limit · resets 1:40pm (UTC)")
+    spots["fail"]["verification"] = SpotsMissed(2, 5, quota)
+    failed = passage_service.create_passage("spots", 12)
+    passage_service.run_passage(failed)
+    passage = passage_service.read_passage(failed)
+    assert passage["etat"] == "echec"
+    assert passage["raison_echec"].startswith("2 spots ratés sur 7 (quota de l'abonnement Claude atteint")
+    del spots["fail"]["verification"]
+    spots["ran"].clear()
+    resumed = passage_service.resume_passage(failed)
+    passage_service.run_passage(resumed)
+    assert [ran[0] for ran in spots["ran"]] == ["verification"]

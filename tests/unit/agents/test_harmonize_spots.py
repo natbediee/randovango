@@ -1,3 +1,5 @@
+import pytest
+
 from agents import harmonize_spots
 
 
@@ -225,3 +227,70 @@ def test_no_cited_service_only_clears_previous_ia_services() -> None:
     cursor = FakeCursor()
     harmonize_spots.write_harmonization(cursor, 1, {"description": "Parking.", "services": []})
     assert not any(query.startswith("INSERT") for query, _ in cursor.calls)
+
+
+# --- La chaîne « spots » d'une ville (issue #276) ---
+
+def test_a_city_keeps_only_its_spots_and_the_rule_not_done_yet() -> None:
+    """Pour une ville, seuls ses spots (histo_scrap) jamais harmonisés sont pris : relancer Guidel ne repaie rien."""
+    from utils.display_utils import HIDDEN_SPOT_TYPES
+
+    cursor = FakeCursor()
+    harmonize_spots.fetch_spots_to_harmonize(cursor, only_new=True, city_id=12)
+    query, params = cursor.calls[0]
+    assert "WHERE prompt_version IS NULL AND" in query
+    assert "id IN (SELECT spot_id FROM histo_scrap WHERE city_id = %s)" in query
+    assert tuple(params) == (*HIDDEN_SPOT_TYPES, 12)
+
+
+def _run_on(monkeypatch, spots):
+    """Lance run_sample sur ces spots, sans base : rend le bilan et les spots écrits."""
+    from contextlib import contextmanager
+    from unittest.mock import MagicMock
+
+    written = []
+
+    @contextmanager
+    def open_cursor(dictionary=False, buffered=False):
+        yield MagicMock(), MagicMock()
+
+    monkeypatch.setattr(harmonize_spots.MySQLUtils, "open_cursor", open_cursor)
+    monkeypatch.setattr(harmonize_spots, "fetch_spots_to_harmonize", lambda cursor, **kwargs: spots)
+    monkeypatch.setattr(harmonize_spots, "write_harmonization", lambda cursor, spot_id, payload: written.append(spot_id))
+    return written
+
+
+def test_a_city_run_gives_its_summary_with_the_last_error(monkeypatch) -> None:
+    """Le bilan dit les spots harmonisés et ratés, avec l'erreur d'un raté : la chaîne dit pourquoi la partie a échoué."""
+    from agents.llm_service import LLMUnavailable
+
+    class HalfBroken(FakeLLM):
+        def complete_json(self, system, user, schema):
+            if "panne" in user:
+                raise LLMUnavailable("You've hit your session limit · resets 1:40pm (UTC)")
+            return self.payload
+
+    spots = [{**SPOT, "id": 1, "reviews": []}, {**SPOT, "id": 2, "description": "panne", "reviews": []}]
+    written = _run_on(monkeypatch, spots)
+    summary = harmonize_spots.run_sample(service=HalfBroken(), only_new=True, city_id=12)
+    assert written == [1]
+    assert summary["faits"] == 1 and summary["rates"] == 1 and "session limit" in str(summary["erreur"])
+
+
+def test_the_budget_stops_the_harmonization_before_the_next_spot(monkeypatch) -> None:
+    """Budget des agents atteint : l'harmonisation s'arrête avant le spot suivant, et le spot fait reste écrit."""
+    class BudgetReached(RuntimeError):
+        pass
+
+    checks = []
+
+    def check_budget():
+        checks.append(1)
+        if len(checks) == 2:
+            raise BudgetReached("plafond du jour atteint")
+
+    spots = [{**SPOT, "id": 1, "reviews": []}, {**SPOT, "id": 2, "reviews": []}]
+    written = _run_on(monkeypatch, spots)
+    with pytest.raises(BudgetReached):
+        harmonize_spots.run_sample(service=FakeLLM(), only_new=True, city_id=12, check_budget=check_budget)
+    assert written == [1]

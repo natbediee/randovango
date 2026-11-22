@@ -1,9 +1,6 @@
 
 import threading
 from utils.db_utils import MySQLUtils
-from etl.extract.scraper_p4n import run_p4n_scraper
-from etl.transform.transform_p4n import transform_p4n
-from etl.load.load_p4n import load_p4n_to_mysql
 from etl.extract.api_wikidata import extract_wikidata
 from etl.transform.transform_wikidata import transform_wikidata
 from etl.load.load_poi import load_wikidata_poi
@@ -15,9 +12,6 @@ from etl.extract.gpx import extract_all_gpx_files, remove_file, ALREADY_LOADED, 
 
 
 logger = LoggerUtil.get_logger("etl_pipeline")
-
-# Verrou pour empêcher plusieurs scrapings P4N en parallèle
-scraping_lock = threading.Lock()
 
 def scraping_background(city):
     """Fonction de scraping à exécuter en arrière-plan (thread séparé)"""
@@ -45,52 +39,11 @@ def scraping_background(city):
     except Exception as e:
         logger.error(f"[ETL-BG] Erreur Wikidata: {e}")
 
-    # 3. Extraction P4N en dernier (lent - Selenium ~4min) si la ville n'est pas déjà présente dans histo_scrap
-    def city_already_scraped(city_name):
-        # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
-        with MySQLUtils.open_cursor() as (conn, cursor):
-            cursor.execute("SELECT COUNT(*) FROM histo_scrap hs JOIN cities c ON hs.city_id = c.id WHERE c.name = %s", (city_name,))
-            count = cursor.fetchone()[0]
-        return count > 0
-
-    # Verrou uniquement pour le scraping P4N (Selenium) pour éviter les conflits
-    with scraping_lock:
-        if city_already_scraped(city):
-            logger.info(f"[ETL-SC] Ville déjà présente dans histo_scrap : {city}. Extraction P4N sautée.")
-        else:
-            try:
-                logger.info(f"[ETL-SC] Extraction P4N pour la ville : {city} (scraping en cours...)")
-                df_p4n = run_p4n_scraper(city, is_headless=True, save_csv=False)
-                if df_p4n is not None:
-                    df_transformed = transform_p4n(df_p4n)
-                    load_p4n_to_mysql(df_transformed, city)
-                    logger.info(f"[ETL-SC] P4N chargé pour la ville : {city}")
-                    # Transformation post-chargement : harmonisation des
-                    # descriptions des spots qui viennent d'entrer (agents/).
-                    # Volontairement non bloquant - un scraping réussi ne
-                    # doit pas échouer parce que la clé d'API manque ou que le
-                    # modèle est indisponible ; les spots restent affichables sans.
-                    try:
-                        from agents.harmonize_spots import run_sample
-                        run_sample(only_new=True)
-                    except Exception as harmonize_error:
-                        logger.warning(f"[ETL-SC] Harmonisation IA ignorée : {harmonize_error}")
-                    # Dates d'ouverture des fiches nouvelles ou modifiées : sans elles, le spot reste proposé.
-                    try:
-                        from agents.read_openings import run as read_openings
-                        read_openings()
-                    except Exception as opening_error:
-                        logger.warning(f"[ETL-SC] Lecture des ouvertures ignorée : {opening_error}")
-                    # Vérification des fiches que l'harmonisation a marquées à vérifier : un doute part en relecture.
-                    try:
-                        from agents.verify_spots import run as verify_spots
-                        verify_spots(only_new=True)
-                    except Exception as verify_error:
-                        logger.warning(f"[ETL-SC] Vérification des spots ignorée : {verify_error}")
-                else:
-                    logger.warning(f"[ETL-SC] Scraping P4N a échoué pour la ville : {city}")
-            except Exception as e:
-                logger.error(f"[ETL-SC] Erreur lors de l'extraction/chargement P4N: {e}")
+    # 3. La chaîne des spots (issue #276) : la source des spots relue autour de la ville (lent : un navigateur, environ
+    # 4 minutes), puis les agents sur les spots de la ville encore à faire (harmonisation, ouvertures, vérification).
+    # Une ville déjà lue n'est pas relue par l'ETL : seuls ses spots encore à faire passent par les agents. Son échec
+    # est gardé en base avec sa raison, et la supervision le reprend. Non bloquant, comme les autres étapes.
+    run_spot_chain(city)
 
     # 4. Pépites de Vany : les lieux incontournables autour de la ville, cherchés une
     # fois pour toutes par l'agent (quelques minutes). En dernier : la position des
@@ -114,10 +67,43 @@ def scraping_background(city):
 FREE_CHAINS = ("osm", "carburants", "finess")
 
 
-def run_free_chain(chain_key, city):
+# Les parties d'agents de la chaîne des spots, pour une ville déjà lue (services/spot_chain.py).
+AGENT_SPOT_PARTS = ["harmonisation", "ouvertures", "verification"]
+
+
+def city_already_scraped(city_name):
+    """La source des spots a-t-elle déjà été lue pour cette ville (une ligne dans histo_scrap) ?"""
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (conn, cursor):
+        cursor.execute("SELECT COUNT(*) FROM histo_scrap hs JOIN cities c ON hs.city_id = c.id WHERE c.name = %s",
+                       (city_name,))
+        return cursor.fetchone()[0] > 0
+
+
+def run_spot_chain(city):
     """
-    Fait passer une chaîne gratuite sur la ville, comme un passage d'origine « etl », et attend sa fin : la suivante
-    a besoin de ce qu'elle a chargé. Le passage garde son échec en base ; ici, on l'écrit seulement dans le journal.
+    Fait passer la chaîne des spots sur la ville : toutes ses parties pour une ville jamais lue, seulement les parties
+    d'agents pour une ville déjà lue (une seconde rando au même endroit ne relit pas la source des spots).
+    """
+    try:
+        parts = AGENT_SPOT_PARTS if city_already_scraped(city) else None
+    except Exception as read_error:
+        logger.warning(f"[ETL-SC] spots ignorés pour {city} : {read_error}")
+        return
+    run_etl_passage("spots", city, parts)
+
+
+def run_free_chain(chain_key, city):
+    """Fait passer une chaîne gratuite (OSM, carburants, FINESS) sur la ville, toutes ses parties."""
+    run_etl_passage(chain_key, city)
+
+
+def run_etl_passage(chain_key, city, parts=None):
+    """
+    Fait passer une chaîne sur la ville, comme un passage d'origine « etl », et attend sa fin : l'étape suivante a
+    besoin de ce qu'elle a chargé. Sans `parts`, toutes les parties de la chaîne. Le passage garde son échec en base ;
+    ici, on l'écrit seulement dans le journal. Si le verrou de la chaîne est pris (un autre passage tourne), le passage
+    reste en file et la file le fera partir après.
     """
     try:
         from services import passage_service, passage_store, service_store
@@ -125,7 +111,7 @@ def run_free_chain(chain_key, city):
         if city_id is None:
             logger.error(f"[ETL-BG] {chain_key} non lancée pour {city} : ville absente de la table cities")
             return
-        passage_id = passage_service.create_passage(chain_key, city_id, origin="etl")
+        passage_id = passage_service.create_passage(chain_key, city_id, parts, origin="etl")
         passage_service.run_passage(passage_id)
         passage = passage_store.load_passage(passage_id)
         if passage["status"] == passage_store.FAILED:

@@ -34,19 +34,18 @@ def lock_name(chain_key: str, city_id: int) -> str:
 
 
 @contextmanager
-def city_lock(chain_key: str, city_id: int):
+def named_lock(name: str, busy_message: str):
     """
-    Tient le verrou de la chaîne sur la ville pendant le bloc, ou lève PassageRunning s'il est déjà tenu. Comme celui des
-    services, le verrou appartient à une connexion MySQL (GET_LOCK) : il se libère à la fin du bloc, et tout seul si le
-    serveur s'arrête en route. PassageRunning laisse le passage en file : la file le relancera (passage_queue.py).
+    Tient le verrou de MySQL de ce nom pendant le bloc, ou lève PassageRunning (avec `busy_message`) s'il est déjà tenu.
+    Comme celui des services, le verrou appartient à une connexion MySQL (GET_LOCK) : il se libère à la fin du bloc, et
+    tout seul si le serveur s'arrête en route. PassageRunning laisse le passage en file : la file le relancera.
     """
-    name = lock_name(chain_key, city_id)
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
     try:
         cursor.execute("SELECT GET_LOCK(%s, 0)", (name,))
         if cursor.fetchone()[0] != 1:
-            raise PassageRunning(f"La chaîne {chain_key} tourne déjà sur cette ville : attendre sa fin.")
+            raise PassageRunning(busy_message)
         try:
             yield
         finally:
@@ -57,16 +56,26 @@ def city_lock(chain_key: str, city_id: int):
         MySQLUtils.disconnect(connection)
 
 
-def city_lock_is_free(chain_key: str, city_id: int) -> bool:
-    """Le verrou de la chaîne sur la ville est-il libre ? Demandé à MySQL sans le prendre (IS_FREE_LOCK)."""
+def named_lock_is_free(name: str) -> bool:
+    """Le verrou de MySQL de ce nom est-il libre ? Demandé sans le prendre (IS_FREE_LOCK)."""
     connection = MySQLUtils.connect()
     cursor = connection.cursor()
     try:
-        cursor.execute("SELECT IS_FREE_LOCK(%s)", (lock_name(chain_key, city_id),))
+        cursor.execute("SELECT IS_FREE_LOCK(%s)", (name,))
         return cursor.fetchone()[0] == 1
     finally:
         cursor.close()
         MySQLUtils.disconnect(connection)
+
+
+def city_lock(chain_key: str, city_id: int):
+    """Le verrou de la chaîne sur la ville : un bloc « with », qui lève PassageRunning s'il est déjà tenu."""
+    return named_lock(lock_name(chain_key, city_id), f"La chaîne {chain_key} tourne déjà sur cette ville : attendre sa fin.")
+
+
+def city_lock_is_free(chain_key: str, city_id: int) -> bool:
+    """Le verrou de la chaîne sur la ville est-il libre ?"""
+    return named_lock_is_free(lock_name(chain_key, city_id))
 
 
 # --- Les parties : une par chaîne ---

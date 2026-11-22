@@ -92,9 +92,14 @@ class PassageRequest(BaseModel):
     """
     Lancer un passage d'une chaîne d'agents sur une ville (POST /passages, issue #204), toujours en vraie mise à jour :
     {"chaine": "services", "ville_id": 12, "categories": ["restaurants", "laveries"]}
-    chaine : la chaîne à lancer : « services » (payante), « osm », « finess » ou « carburants » (gratuites).
+    chaine : la chaîne à lancer : « services » ou « spots » (payantes ; la source des spots est gratuite), « osm »,
+    « finess » ou « carburants » (gratuites). La liste et les parties de chacune : GET /passages/chaines.
     ville_id : la ville de l'appli (cities.id). categories : celles à mettre à jour ; absentes, toutes celles de la chaîne.
     """
+    # L'exemple que montre /docs (« Try it out ») : un vrai lancement. Sans lui, /docs proposait
+    # "categories": ["string"], refusé parce qu'aucune catégorie ne s'appelle « string » (essai du 20 novembre 2026).
+    model_config = {"json_schema_extra": {"examples": [{"chaine": "osm", "ville_id": 7}]}}
+
     chaine: str
     ville_id: int
     categories: list[str] | None = None
