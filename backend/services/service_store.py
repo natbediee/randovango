@@ -28,6 +28,7 @@ from urllib.parse import urlparse
 from agents.find_service_links import AUTO_VERDICTS, SOCIAL_TYPES, TYPE_RANK, commune_of, domain
 from etl.load.load_poi import get_or_create_source, insert_histo_poi, insert_service_and_link
 from etl.load.load_poi_checks import save_signal
+from services import passage_store
 from services.pepite_service import is_generic, name_key
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
@@ -879,6 +880,9 @@ def save_commune(category, city: dict, answer: dict, version: int, model: str, t
                 if namesake:
                     flag_namesake(category, cursor, poi_id, row, position, namesake)
                     summary["meme_nom_dans_la_commune"] = summary.get("meme_nom_dans_la_commune", 0) + 1
+            # Le journal des passages (#276) : ce service a été ajouté, ou enrichi, par cette catégorie du passage.
+            passage_store.note_item(cursor, "service", poi_id, passage_store.CHANGED if poi else passage_store.ADDED,
+                                    category.key)
             _save_season(cursor, poi_id, row)
             save_sheet(category, cursor, poi_id, row, version, model)
             _save_proofs(cursor, poi_id, row["pages"])

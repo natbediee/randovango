@@ -47,6 +47,7 @@ from datetime import date
 
 from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, engine, make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet, mesure_passage, new_passage_id
+from services import passage_store
 from utils.db_utils import CITY_SPOTS_CLAUSE, MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
@@ -517,6 +518,8 @@ def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new
                 continue
 
             write_harmonization(cursor, spot["id"], payload)
+            # Le journal des passages (#276) : la description de ce spot vient de ce passage.
+            passage_store.note_item(cursor, "spot", spot["id"], passage_store.CHANGED, "harmonisation")
             connection.commit()
             summary["faits"] += 1
             logger.info(

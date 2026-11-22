@@ -128,3 +128,23 @@ def test_a_city_run_gives_its_summary_and_stops_on_the_budget(monkeypatch) -> No
     with pytest.raises(BudgetReached):
         read_openings.run(service=Service(), city_id=12, check_budget=check_budget)
     assert written == [1]
+
+
+def test_an_opening_read_is_noted_in_the_journal_of_its_passage(monkeypatch) -> None:
+    """Les dates d'ouverture lues pour un spot sont notées dans le journal du passage, partie « ouvertures »."""
+    from unittest.mock import MagicMock
+
+    class Service:
+        def complete_json(self, system, user, schema):
+            return {"statut": "periode", "debut": "11-06", "fin": "03-31"}
+
+    noted = []
+    monkeypatch.setattr(read_openings.MySQLUtils, "connect", lambda: MagicMock())
+    monkeypatch.setattr(read_openings.MySQLUtils, "disconnect", lambda connection: None)
+    monkeypatch.setattr(read_openings, "fetch_spots_to_read", lambda cursor, limit, spot_ids, city_id: [
+        {"id": 3894, "opening_period": "Overnight is forbidden between 01.04.- 05.11", "description": None}])
+    monkeypatch.setattr(read_openings, "write_opening", lambda cursor, spot_id, text, payload: None)
+    monkeypatch.setattr(read_openings.passage_store, "note_item",
+                        lambda cursor, kind, item_id, action, part: noted.append((kind, item_id, action, part)))
+    read_openings.run(service=Service(), city_id=50)
+    assert noted == [("spot", 3894, "modification", "ouvertures")]

@@ -359,3 +359,36 @@ def test_each_action_of_a_traveler_gets_its_own_passage_id():
     assert done.wait(5)
     assert all(passage_id and len(passage_id) == 32 for passage_id in seen)
     assert seen[0] != seen[1]
+
+
+def test_a_pepite_found_or_found_again_is_noted_in_the_journal():
+    """Une pépite trouvée est notée ajoutée, une pépite retrouvée est notée modifiée, sous la recherche qui l'a apportée."""
+    from unittest.mock import MagicMock
+
+    from agents.llm_service import mesure_passage
+
+    idea = {"nom": "Phare du Créac'h", "categorie": "site", "description": "…", "latitude": 48.46, "longitude": -5.13,
+            "creneau": "journee", "exterieur": 1, "permanent": 1, "note": 4}
+    cursor = MagicMock()
+    cursor.lastrowid = 41
+    with mesure_passage("p1"):
+        pepite_service.save_pepite(cursor, dict(idea), [], 9, "modele", part="lieux")
+        pepite_service.save_pepite(cursor, dict(idea), [{**idea, "id": 41, "position_source": None}], 9, "modele",
+                                   part="agenda")
+    noted = [call.args[1] for call in cursor.execute.call_args_list if "passage_items" in call.args[0]]
+    assert [row[:5] for row in noted] == [("p1", "pepite", 41, "ajout", "lieux"), ("p1", "pepite", 41, "modification", "agenda")]
+
+
+def test_a_position_found_by_the_agent_is_noted_in_the_journal(monkeypatch):
+    """La position d'une pépite retrouvée par l'agent est notée dans le journal du passage, partie « position »."""
+    from unittest.mock import MagicMock
+
+    from agents import locate_pepites
+    from agents.llm_service import mesure_passage
+
+    monkeypatch.setattr(locate_pepites, "locate_places", lambda places: {41: (48.46, -5.13, "https://exemple.fr")})
+    cursor = MagicMock()
+    with mesure_passage("p1"):
+        assert pepite_service.relocate(cursor, [{"id": 41}, {"id": 42}]) == 1
+    noted = [call.args[1] for call in cursor.execute.call_args_list if "passage_items" in call.args[0]]
+    assert [row[:5] for row in noted] == [("p1", "pepite", 41, "modification", "position")]

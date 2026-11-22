@@ -42,6 +42,7 @@ from pathlib import Path
 
 from agents.llm_config import make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet, mesure_passage, new_passage_id
+from services import passage_store
 from utils.db_utils import CITY_SPOTS_CLAUSE, MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, spot_name_label
 from utils.logger_util import LoggerUtil
@@ -437,6 +438,8 @@ def run(limit: int = None, spot_ids: list = None, only_new: bool = False, city_i
             write_verification(cursor, spot["id"], payload, service.model)
             if is_doubtful(payload):
                 mark_doubt(cursor, spot["id"])
+            # Le journal des passages (#276) : la vérification de ce spot vient de ce passage.
+            passage_store.note_item(cursor, "spot", spot["id"], passage_store.CHANGED, "verification")
             connection.commit()
             summary["faits"] += 1
             counts[payload["statut"]] += 1

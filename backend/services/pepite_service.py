@@ -66,6 +66,7 @@ import unicodedata
 from datetime import date, datetime, timedelta
 
 from agents.llm_service import mesure_objet, mesure_passage, new_passage_id
+from services import passage_store
 from services.map_service import fetch_hike_trace
 from utils.db_utils import MySQLUtils
 from utils.display_utils import (HIKE_START_H, pepite_news_text, pepite_section, pepite_day_texts, pepite_display, pepite_nothing_texts, pepite_reference_label, spot_name_label,
@@ -579,6 +580,8 @@ def relocate(cursor, places: list) -> int | None:
             cursor.execute("UPDATE pepites SET latitude = %s, longitude = %s, position_source = 'source',"
                            " position_url = %s, located_version = %s, located_at = NOW() WHERE id = %s",
                            (latitude, longitude, url, LOCATE_PROMPT_VERSION, place["id"]))
+            # Le journal des passages (#276) : la position de cette pépite vient de ce passage.
+            passage_store.note_item(cursor, "pepite", place["id"], passage_store.CHANGED, "position")
         else:
             cursor.execute("UPDATE pepites SET located_version = %s, located_at = NOW() WHERE id = %s",
                            (LOCATE_PROMPT_VERSION, place["id"]))
@@ -643,11 +646,12 @@ def same_place(idea: dict, existing: list) -> dict | None:
                 None)
 
 
-def save_pepite(cursor, idea: dict, existing: list, prompt_version: int, model: str) -> None:
+def save_pepite(cursor, idea: dict, existing: list, prompt_version: int, model: str, part: str = "lieux") -> None:
     """
     Enregistre une idée trouvée par l'agent. Si elle est déjà en base (same_place),
     on la met à jour : c'est ainsi qu'une idée ancienne est revérifiée (verified_at
     repart de maintenant).
+    `part` : la recherche qui l'a trouvée (« lieux » ou « agenda »), notée dans le journal des passages (#276).
     """
     same = same_place(idea, existing)
     if same and same.get("position_source") in PRECISE_POSITIONS and idea.get("position_source") not in PRECISE_POSITIONS:
@@ -673,6 +677,7 @@ def save_pepite(cursor, idea: dict, existing: list, prompt_version: int, model: 
                 sources = %s, prompt_version = %s, model = %s, verified_at = NOW()
             WHERE id = %s
         """, (*values, same["id"]))
+        passage_store.note_item(cursor, "pepite", same["id"], passage_store.CHANGED, part)
     else:
         cursor.execute("""
             INSERT INTO pepites (nom, categorie, description, commune, themes, lieu, adresse, latitude, longitude,
@@ -681,6 +686,7 @@ def save_pepite(cursor, idea: dict, existing: list, prompt_version: int, model: 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, NOW(), NOW())
         """, values)
+        passage_store.note_item(cursor, "pepite", cursor.lastrowid, passage_store.ADDED, part)
 
 
 # Heure indicative de chaque moment de la journée, pour ranger les pépites d'un jour.
@@ -787,7 +793,7 @@ def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None, rais
         return None
     for idea in ideas:
         locate(cursor, idea)
-        save_pepite(cursor, idea, in_zone, version, model)
+        save_pepite(cursor, idea, in_zone, version, model, part=mode)
     record_search(cursor, day, mode, len(ideas), version, trip_day_id)
     return len(ideas)
 

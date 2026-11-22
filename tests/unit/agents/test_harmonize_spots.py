@@ -294,3 +294,16 @@ def test_the_budget_stops_the_harmonization_before_the_next_spot(monkeypatch) ->
     with pytest.raises(BudgetReached):
         harmonize_spots.run_sample(service=FakeLLM(), only_new=True, city_id=12, check_budget=check_budget)
     assert written == [1]
+
+
+def test_a_spot_harmonized_under_a_passage_is_noted_in_its_journal(monkeypatch) -> None:
+    """Un spot harmonisé par la chaîne des spots est noté dans le journal du passage : sa description vient de lui."""
+    from agents.llm_service import mesure_passage
+
+    noted = []
+    _run_on(monkeypatch, [{**SPOT, "id": 3893, "reviews": []}])
+    monkeypatch.setattr(harmonize_spots.passage_store, "note_item",
+                        lambda cursor, kind, item_id, action, part: noted.append((kind, item_id, action, part)))
+    with mesure_passage("p1"):
+        harmonize_spots.run_sample(service=FakeLLM(), only_new=True, city_id=50)
+    assert noted == [("spot", 3893, "modification", "harmonisation")]
