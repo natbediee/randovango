@@ -45,15 +45,11 @@ def scraping_background(city):
     # est gardé en base avec sa raison, et la supervision le reprend. Non bloquant, comme les autres étapes.
     run_spot_chain(city)
 
-    # 4. Pépites de Vany : les lieux incontournables autour de la ville, cherchés une
-    # fois pour toutes par l'agent (quelques minutes). En dernier : la position des
-    # lieux trouvés est recalée sur les POI chargés plus haut, et les spots P4N,
-    # plus attendus, ne patientent pas derrière. Non bloquant, comme l'harmonisation.
-    try:
-        from services.pepite_service import search_city_places
-        search_city_places(city)
-    except Exception as pepites_error:
-        logger.warning(f"[ETL-SC] Pépites de Vany ignorées pour {city} : {pepites_error}")
+    # 4. Pépites de Vany : les lieux incontournables autour de la ville, cherchés une fois pour toutes par l'agent
+    # (quelques minutes). Après les spots : la position des lieux trouvés est recalée sur les POI chargés plus haut.
+    # Un passage de la chaîne « pepites » (issue #276), compté dans le budget des chaînes : son échec est gardé en base
+    # avec sa raison, et la supervision le reprend. Non bloquant, comme les autres étapes.
+    run_etl_passage("pepites", city)
 
     # 5. Les services cherchés par les agents (restaurants, commerces, supermarchés, laveries, issue #211). En tout
     # dernier : une grande ville est découpée en zones d'après ses spots, chargés plus haut. Le passage entre dans la

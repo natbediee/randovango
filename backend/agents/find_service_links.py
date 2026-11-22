@@ -36,7 +36,7 @@ import requests
 from pypdf import PdfReader
 
 from agents.llm_config import make_llm_service
-from agents.llm_service import LLMUnavailable
+from agents.llm_service import LLMUnavailable, mesure_passage, new_passage_id
 from agents.locate_pepites import is_search_page
 from agents.pepite_common import BROWSER_HEADERS, EXCLUDED_SITES_PROMPT, check_links, is_excluded_site
 from etl.load.load_poi_checks import save_check, save_signal
@@ -463,4 +463,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Un lancement en ligne de commande est un passage : tous ses appels d'agents portent le même identifiant dans
+    # llm_calls (issue #276), et on sait ce qu'il a coûté. Il n'a pas de ligne dans la table passages.
+    with mesure_passage(new_passage_id()):
+        main()

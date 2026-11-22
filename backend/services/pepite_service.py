@@ -65,7 +65,7 @@ import threading
 import unicodedata
 from datetime import date, datetime, timedelta
 
-from agents.llm_service import mesure_objet
+from agents.llm_service import mesure_objet, mesure_passage, new_passage_id
 from services.map_service import fetch_hike_trace
 from utils.db_utils import MySQLUtils
 from utils.display_utils import (HIKE_START_H, pepite_news_text, pepite_section, pepite_day_texts, pepite_display, pepite_nothing_texts, pepite_reference_label, spot_name_label,
@@ -759,12 +759,14 @@ def trail_tips_for_hikes(hike_ids: list) -> dict:
 # 5. CHERCHER (AGENT) ET PRÉPARER LES IDÉES D'UN JOUR
 # =============================================================================
 
-def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None) -> int | None:
+def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None, raise_errors: bool = False) -> int | None:
     """
     Lance une recherche de l'agent ("lieux" ou "agenda") pour la zone et enregistre
     ce qu'il trouve. Renvoie le nombre d'idées, ou None si l'agent n'a pas répondu
     (quota épuisé, délai dépassé...) : rien n'est alors enregistré, la recherche
     sera retentée à la prochaine occasion.
+    `raise_errors` (chaîne « pepites », issue #276) : l'erreur de l'agent remonte au lieu
+    d'être écrite dans le journal, pour que le passage la garde comme raison de son échec.
     """
     # Import ici et non en haut du fichier : les agents importent eux-mêmes ce module.
     from agents.discover_places import search_places
@@ -779,6 +781,8 @@ def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None) -> i
         search = search_places if mode == "lieux" else search_agenda
         ideas, model, version = search(day, known_names)
     except (LLMUnavailable, json.JSONDecodeError) as error:
+        if raise_errors:
+            raise
         logger.warning(f"[pépites] {mode} {day.get('spot_name') or day.get('city_name')} : recherche échouée : {error}")
         return None
     for idea in ideas:
@@ -853,6 +857,34 @@ def search_city_places(city_name: str) -> None:
             return
         _search_places(cursor, city)
         connection.commit()
+    finally:
+        cursor.close()
+        MySQLUtils.disconnect(connection)
+
+
+def search_city_for_chain(city_id: int) -> dict:
+    """
+    La partie « lieux » de la chaîne des pépites d'une ville (services/pepite_chain.py, issue #276) : les lieux
+    incontournables autour de la ville, cherchés par Vany puis placés, comme à l'ajout de la ville. Renvoie le bilan
+    {"pepites_trouvees": n}, ou {"pepites_trouvees": 0, "zones_deja_couvertes": 1} quand une recherche récente couvre
+    déjà sa zone : rien n'est alors recherché, et cela ne coûte rien.
+    L'erreur de Vany (quota, surcharge) remonte : le passage la garde comme raison de son échec.
+    """
+    connection = MySQLUtils.connect()
+    cursor = connection.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id, name, latitude, longitude FROM cities WHERE id = %s", (city_id,))
+        city = cursor.fetchone()
+        if _places_covered(cursor, city):
+            return {"pepites_trouvees": 0, "zones_deja_couvertes": 1}
+        zone = _city_context(cursor, city)
+        with mesure_objet("commune", city["id"]):
+            found = search_and_store(cursor, zone, "lieux", raise_errors=True)
+            # La position exacte des lieux que le code n'a pas su recaler ; un échec ici ne fait pas échouer la
+            # partie : relocate_missing reprendra ces lieux.
+            relocate_zone(cursor, zone)
+        connection.commit()
+        return {"pepites_trouvees": found}
     finally:
         cursor.close()
         MySQLUtils.disconnect(connection)
@@ -1094,7 +1126,12 @@ def _choice_lock(plan_id: int) -> threading.Lock:
 
 
 def _start_in_background(task, running: set, lock_of_plan, plan_id: int, day_number: int) -> None:
-    """Lance task(plan_id, day_number) en tâche de fond, sauf si elle tourne déjà."""
+    """
+    Lance task(plan_id, day_number) en tâche de fond, sauf si elle tourne déjà.
+    Chaque action d'un voyageur (ville choisie, spot choisi, complément du jour) reçoit son identifiant de passage :
+    tous ses appels à Vany le portent dans llm_calls, et on sait ce qu'a coûté la préparation d'un jour (issue #276).
+    Pas de ligne dans la table passages : ce ne sont pas des chaînes qu'on relance depuis la supervision.
+    """
     key = (plan_id, day_number)
     with _running_lock:
         if key in running:
@@ -1103,7 +1140,7 @@ def _start_in_background(task, running: set, lock_of_plan, plan_id: int, day_num
 
     def run():
         try:
-            with lock_of_plan(plan_id):
+            with lock_of_plan(plan_id), mesure_passage(new_passage_id()):
                 task(plan_id, day_number)
         except Exception as error:   # une tâche de fond ne doit jamais planter l'API
             logger.error(f"[pépites] plan {plan_id} jour {day_number} : {task.__name__} a échoué : {error}")

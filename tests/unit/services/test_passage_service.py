@@ -142,7 +142,7 @@ def test_a_launch_without_categories_takes_the_whole_chain(store, chain):
 
 
 @pytest.mark.parametrize("chain_key,city_id,parts,origin", [
-    ("pepites", 12, None, "supervision"),
+    ("chaine_future", 12, None, "supervision"),
     ("services", 99, None, "supervision"),
     ("services", 12, ["boulangeries"], "supervision"),
     ("services", 12, None, "nuit"),
@@ -870,3 +870,33 @@ def test_spots_missed_are_a_failure_resumed_without_the_finished_parts(store, sp
     resumed = passage_service.resume_passage(failed)
     passage_service.run_passage(resumed)
     assert [ran[0] for ran in spots["ran"]] == ["verification"]
+
+
+@pytest.mark.parametrize("summary,text", [
+    ({"verifies": 0}, "0 spot vérifié."),
+    ({"ouvertures_lues": 1}, "1 ouverture lue."),
+    ({"harmonises": 7}, "7 spots harmonisés."),
+])
+def test_zero_and_one_take_the_singular_in_a_summary(summary, text):
+    """Le bilan d'une partie écrit « 0 spot vérifié » et « 1 ouverture lue » au singulier, le pluriel à partir de 2 (Argol, 22 novembre 2026)."""
+    assert passage_service.summary_text(summary) == text
+
+
+def test_the_pepites_of_a_city_are_a_paid_chain_held_by_the_budget(store, monkeypatch):
+    """La chaîne des pépites d'une ville compte comme une chaîne : budget des chaînes atteint, son lancement est refusé (décision du 22 novembre 2026)."""
+    from contextlib import nullcontext
+    monkeypatch.setattr(passage_service.etl_chains, "city_lock", lambda key, city_id: nullcontext())
+    monkeypatch.setattr(passage_service.etl_chains, "city_lock_is_free", lambda key, city_id: True)
+    monkeypatch.setattr(passage_service.pepite_chain.pepite_service, "search_city_for_chain",
+                        lambda city_id: {"pepites_trouvees": 12})
+    store.budget_reason = "plafond du jour atteint : 10.40 € dépensés sur 10.00 €"
+    with pytest.raises(PassageConflict, match="Budget des agents atteint"):
+        passage_service.create_passage("pepites", 12)
+    store.budget_reason = None
+    passage_id = passage_service.create_passage("pepites", 12)
+    passage_service.run_passage(passage_id)
+    passage = passage_service.read_passage(passage_id)
+    assert passage["etat"] == "fini" and passage["payant"] is True
+    assert passage["categories"][0]["bilan_texte"] == "12 pépites trouvées."
+    assert passage_service.summary_text({"pepites_trouvees": 0, "zones_deja_couvertes": 1}) == (
+        "0 pépite trouvée ; 1 zone déjà couverte par une recherche récente.")
