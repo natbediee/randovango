@@ -54,7 +54,12 @@ def api(monkeypatch):
     monkeypatch.setattr(service, "resume_passage", resume_passage)
     monkeypatch.setattr(service, "run_passage", state.ran.append)
     monkeypatch.setattr(service, "read_passage", lambda passage_id: state_of(passage_id) if passage_id in state.known | {"reprise"} else None)
-    monkeypatch.setattr(service, "list_passages", lambda limit: {"en_cours": [], "en_file": [state_of("nouveau")], "derniers": [], "limite": limit})
+    def list_passages(limit, item_type=None, item_id=None):
+        if item_type == "restaurant":
+            raise ValueError("Objet incomplet ou inconnu : objet attendu parmi service, spot, pepite, avec objet_id")
+        return {"en_cours": [], "en_file": [state_of("nouveau")], "derniers": [], "limite": limit,
+                "objet": [item_type, item_id]}
+    monkeypatch.setattr(service, "list_passages", list_passages)
     app = FastAPI()
     app.include_router(supervision_passages.router, prefix="/api/supervision")
     app.dependency_overrides[require_admin] = lambda: {"username": "camille"}
@@ -214,3 +219,15 @@ def test_the_docs_show_a_real_launch_as_example():
     examples = PassageRequest.model_json_schema()["examples"]
     assert examples == [{"chaine": "osm", "ville_id": 7}]
     assert PassageRequest(**examples[0]).categories is None
+
+
+def test_the_list_is_filtered_on_an_information(api):
+    """?objet=spot&objet_id=3893 transmet l'objet au service : la liste garde sa forme, réduite aux passages qui l'ont apporté."""
+    response = api.client.get("/api/supervision/passages?objet=spot&objet_id=3893")
+    assert response.status_code == 200 and response.json()["objet"] == ["spot", 3893]
+
+
+def test_an_unknown_object_is_refused_with_its_reason(api):
+    """Un objet d'un type inconnu est refusé (422), avec les types attendus."""
+    response = api.client.get("/api/supervision/passages?objet=restaurant&objet_id=3")
+    assert response.status_code == 422 and "service, spot, pepite" in response.json()["detail"]

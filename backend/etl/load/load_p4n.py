@@ -3,6 +3,7 @@ import pandas as pd
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil, is_excluded_service
 from utils.db_utils import MySQLUtils
+from services import passage_store
 from utils.display_utils import EXCLUDED_SPOT_TYPES
 from utils.geo_utils import commune_of_town
 
@@ -127,6 +128,8 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
             )
             cursor.execute(insert_spot_sql, spot_values)
             spot_id = cursor.lastrowid
+            # Le journal des passages (#276) : ce spot a été ajouté par la lecture de la source (chaîne « spots »).
+            passage_store.note_item(cursor, "spot", spot_id, passage_store.ADDED, "source")
             logger.info(f"[load] : Spot inséré - Nom: {row['Nom_Place']}, p4n_id: {row['p4n_id']}, ville: {city}, spot_id: {spot_id}")
 
             # 2. Insert services et liaisons

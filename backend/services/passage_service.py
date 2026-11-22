@@ -584,8 +584,46 @@ def part_state(chain: Chain, part: dict, calls: list) -> dict:
             "debut": part["started_at"], "fin": part["finished_at"]}
 
 
-def read_passage(passage_id: str) -> dict | None:
-    """Tout ce que l'espace Agents de la supervision affiche d'un passage ; None s'il n'existe pas."""
+# --- Ce qu'un passage a trouvé (le journal passage_items, issue #276) ---
+
+def item_state(row: dict) -> dict:
+    """Une ligne du journal telle que l'écran la montre : l'objet, son nom, ajouté ou modifié, par quelle partie, quand."""
+    return {"objet": row["item_type"], "id": row["item_id"], "nom": row["item_name"], "action": row["action"],
+            "partie": row["part"], "le": row["written_at"]}
+
+
+def found_items(passage_id: str, details: bool, item: tuple | None = None) -> dict:
+    """
+    Les trouvailles d'un passage : leur nombre, et leur liste quand `details` est vrai (la liste d'un passage, ou celle
+    filtrée sur un objet). La liste des passages sans filtre ne les détaille pas (« trouvailles » vaut None) : un passage
+    d'une grande ville touche des centaines de spots, GET /passages/{passage_id} les donne.
+    `item` : (type, id) pour ne garder que ce que le passage a fait sur cet objet.
+    """
+    if not details:
+        return {"nombre_trouvailles": passage_store.count_items(passage_id), "trouvailles": None}
+    rows = passage_store.load_items(passage_id, *(item or ()))
+    return {"nombre_trouvailles": len(rows), "trouvailles": [item_state(row) for row in rows]}
+
+
+def untracked_passage(passage_id: str, item: tuple) -> dict:
+    """
+    Un passage du journal sans ligne dans passages : un lancement en ligne de commande, ou une action d'un voyageur.
+    Il a la même forme qu'un autre passage, les champs inconnus à None, avec ses appels et son coût lus dans llm_calls.
+    """
+    calls = passage_store.load_calls(passage_id)
+    return {"passage_id": passage_id, "chaine": None,
+            "libelle_chaine": "lancement hors supervision (ligne de commande ou action d'un voyageur)",
+            "ville": None, "origine": None, "etat": None, "payant": bool(calls),
+            "demande_le": None, "debut": None, "fin": None, "raison_echec": None, "raison_attente": None,
+            "reprise_de": None, "repris_par": None, **call_totals(calls), "categories": [],
+            **found_items(passage_id, True, item)}
+
+
+def read_passage(passage_id: str, details: bool = True, item: tuple | None = None) -> dict | None:
+    """
+    Tout ce que l'espace Agents de la supervision affiche d'un passage ; None s'il n'existe pas. `details` : la liste de
+    ses trouvailles (sinon leur nombre seul) ; `item` : (type, id) pour ne garder que ses trouvailles sur cet objet.
+    """
     passage = passage_store.load_passage(passage_id)
     if passage is None:
         return None
@@ -601,7 +639,8 @@ def read_passage(passage_id: str) -> dict | None:
             "raison_echec": passage["error"], "raison_attente": waiting_reason(passage),
             "reprise_de": passage["resumed_from"],
             "repris_par": passage_store.resumed_by(passage_id), **call_totals(calls),
-            "categories": [part_state(chain, part, calls) for part in parts]}
+            "categories": [part_state(chain, part, calls) for part in parts],
+            **found_items(passage_id, details, item)}
 
 
 def not_done(queued: list, waiting: list, failed: list) -> list:
@@ -615,13 +654,18 @@ def not_done(queued: list, waiting: list, failed: list) -> list:
     return rows
 
 
-def list_passages(limit: int = 20) -> dict:
+def list_passages(limit: int = 20, item_type: str | None = None, item_id: int | None = None) -> dict:
     """
     Le passage en cours, la file d'attente, les derniers passages finis ou en échec, et les villes non faites avec
     leur raison (villes_en_attente, #211).
+    Avec un objet (item_type et item_id) : la même forme, réduite aux passages qui ont ajouté ou modifié cet objet,
+    chacun avec ses trouvailles sur lui seul (passages_touching). Lève ValueError pour un objet incomplet ou inconnu.
     """
+    if item_type is not None or item_id is not None:
+        return passages_touching(item_type, item_id, limit)
+
     def read_all(ids: list) -> list:
-        return [passage for passage in map(read_passage, ids) if passage]
+        return [passage for passage in (read_passage(passage_id, details=False) for passage_id in ids) if passage]
 
     running = read_all(passage_store.passage_ids(RUNNING, limit))
     queued = read_all(passage_store.passage_ids(QUEUED, limit))
@@ -631,3 +675,22 @@ def list_passages(limit: int = 20) -> dict:
             "en_file": queued,
             "derniers": read_all(passage_store.recent_ids(limit)),
             "villes_en_attente": not_done(queued, waiting, failed)}
+
+
+def passages_touching(item_type: str | None, item_id: int | None, limit: int) -> dict:
+    """
+    Pour une information (un service, un spot, une pépite), les passages qui l'ont apportée, du plus récent au plus
+    ancien, rangés comme la liste des passages. Un passage sans ligne dans passages (ligne de commande, voyageur) va
+    dans « derniers ». Lève ValueError pour un objet incomplet ou d'un type inconnu.
+    """
+    if item_type not in passage_store.ITEM_TYPES or item_id is None:
+        raise ValueError(f"Objet incomplet ou inconnu : objet attendu parmi {', '.join(passage_store.ITEM_TYPES)}, "
+                         f"avec objet_id")
+    item = (item_type, item_id)
+    passages = [read_passage(passage_id, item=item) or untracked_passage(passage_id, item)
+                for passage_id in passage_store.passages_of_item(item_type, item_id)[:limit]]
+
+    def having(*states) -> list:
+        return [passage for passage in passages if passage["etat"] in states]
+    return {"en_cours": having(RUNNING), "en_file": having(QUEUED), "derniers": having(DONE, FAILED, None),
+            "villes_en_attente": not_done(having(QUEUED), having(WAITING), having(FAILED))}

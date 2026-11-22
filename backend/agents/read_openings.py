@@ -31,6 +31,7 @@ from datetime import date
 from agents.llm_config import make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet, mesure_passage, new_passage_id
 from services.supervision.spots_review import OPENING_OBJECT
+from services import passage_store
 from utils.db_utils import CITY_SPOTS_CLAUSE, MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
@@ -204,6 +205,8 @@ def run(limit: int = None, spot_ids: list = None, service=None, city_id: int = N
                 continue
             failures_in_a_row = 0
             write_opening(cursor, spot["id"], spot["opening_period"], payload)
+            # Le journal des passages (#276) : les dates d'ouverture de ce spot viennent de ce passage.
+            passage_store.note_item(cursor, "spot", spot["id"], passage_store.CHANGED, "ouvertures")
             connection.commit()
             summary["faits"] += 1
             logger.info(f"[ouvertures] #{spot['id']} {spot['opening_period']!r} -> {normalize(payload)}")

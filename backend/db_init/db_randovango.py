@@ -744,6 +744,28 @@ def init_database():
                 fetched_at DATETIME NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
+            # 25. passage_items : le journal de ce que les passages ont ajouté ou modifié (#276). Une ligne par écriture
+            # d'un agent ou d'une chaîne sur un service, un spot ou une pépite : on sait ainsi ce qu'un passage a trouvé,
+            # et, pour une information, le passage qui l'a apportée. Un même spot a plusieurs lignes : la source l'ajoute,
+            # l'harmonisation récrit sa description, la vérification le reprend plus tard.
+            # item_type : service, spot ou pepite ; item_id renvoie à poi, spots ou pepites selon le type (sans clé
+            # étrangère : un même champ pour trois tables). action : ajout ou modification. part : la partie du passage
+            # qui a écrit (restaurants, source, harmonisation, lieux, position...). passage_id : le même que
+            # llm_calls.passage_id, sans clé étrangère, comme lui : un lancement en ligne de commande ou une action d'un
+            # voyageur a un identifiant sans ligne dans passages.
+            """
+            CREATE TABLE IF NOT EXISTS passage_items (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                passage_id CHAR(32) NOT NULL,
+                item_type VARCHAR(20) NOT NULL,
+                item_id INT NOT NULL,
+                action VARCHAR(20) NOT NULL,
+                part VARCHAR(30),
+                written_at DATETIME NOT NULL,
+                INDEX idx_passage_items_passage (passage_id),
+                INDEX idx_passage_items_item (item_type, item_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
         ]
         ("- Création des tables :")
         user_cnx = MySQLUtils.connect()

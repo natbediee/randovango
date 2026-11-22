@@ -439,3 +439,12 @@ def test_a_shop_found_at_a_restaurant_gets_its_sheet_on_the_same_service(monkeyp
     assert created == [] and linked == [(30745, "bakery")] and summary["fiches"] == 1
     [params] = base.wrote("REPLACE INTO commerces")
     assert params[0] == 30745
+
+
+def test_a_service_saved_under_a_passage_is_noted_in_its_journal(monkeypatch):
+    """Le Galion créé par le passage des restaurants est noté dans le journal des passages, ajouté par la partie « restaurants »."""
+    from agents.llm_service import mesure_passage
+    with mesure_passage("p1"):
+        _, base, created, _ = _save(monkeypatch, RESTAURANTS, RESTAURANT)
+    assert created == ["Le Galion"]
+    assert base.wrote("INSERT INTO passage_items")[0][:5] == ("p1", "service", 99, "ajout", "restaurants")
