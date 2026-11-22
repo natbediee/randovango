@@ -203,3 +203,11 @@ def test_the_chains_say_which_are_free_and_which_are_paid(api):
     assert [part["cle"] for part in chains["services"]["categories"]] == [
         "restaurants", "commerces", "supermarches", "laveries"]
     assert chains["osm"]["libelle"] == "Lieux d'OpenStreetMap"
+
+
+def test_the_docs_show_a_real_launch_as_example():
+    """L'exemple de /docs pour lancer un passage est un vrai lancement, pas une catégorie « string » refusée."""
+    from api.models.supervision import PassageRequest
+    examples = PassageRequest.model_json_schema()["examples"]
+    assert examples == [{"chaine": "osm", "ville_id": 7}]
+    assert PassageRequest(**examples[0]).categories is None
