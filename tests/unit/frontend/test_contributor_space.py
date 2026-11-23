@@ -35,10 +35,11 @@ def test_preview_buttons_are_gone():
 
 
 def test_login_page_announces_future_benefits_as_coming_soon():
-    """La page de connexion annonce le suivi d'impact et Vany offert comme à venir, sans la citation inventée."""
+    """La page de connexion annonce le suivi d'impact et Vany offert sur une seule ligne « À venir », sans spots ni citation inventée."""
     page = render("/contributor/login")
-    assert "Bientôt : tu suivras ton impact" in page
-    assert "Bientôt : le chat 100% IA avec Vany" in page
+    assert "À venir : suivre ton impact, et Vany offert grâce à tes contributions." in page
+    assert "Bientôt :" not in page
+    assert "nuits passées sur tes spots" not in page
     assert "214 nuits" not in page
 
 
