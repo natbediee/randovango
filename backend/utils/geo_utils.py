@@ -1,4 +1,5 @@
 import re
+import time
 import unicodedata
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
@@ -189,18 +190,38 @@ def get_city_from_coordinates(latitude, longitude, language='fr', timeout=10, ma
 
 COMMUNE_URL = "https://geo.api.gouv.fr/communes"
 
+# LES ESSAIS (issue #318) : le 23 novembre 2026, 70 villes sont arrivées d'un coup, et geo.api.gouv.fr n'a pas répondu
+# à temps pour La Jonchère. Sans nouvel essai, la ville est restée sans commune. Trois essais, une pause qui s'allonge.
+GEO_API_ATTEMPTS = 3
+GEO_API_PAUSE_SECONDS = 2
+
+
+def get_geo_api(url, params, timeout):
+    """
+    Une demande à geo.api.gouv.fr, réessayée GEO_API_ATTEMPTS fois si l'API ne répond pas ou répond une erreur
+    (trop d'appels à la fois, serveur occupé). Renvoie la réponse lue (JSON), ou lève la dernière erreur.
+    """
+    for attempt in range(1, GEO_API_ATTEMPTS + 1):
+        try:
+            response = requests.get(url, params=params, timeout=timeout, headers={"User-Agent": "randovango"})
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            if attempt == GEO_API_ATTEMPTS:
+                raise
+            logger.warning(f"geo.api.gouv.fr, essai {attempt}/{GEO_API_ATTEMPTS} sans réponse : {e}")
+            time.sleep(GEO_API_PAUSE_SECONDS * attempt)
+
 
 def get_commune_from_coordinates(latitude, longitude, timeout=10):
     """
     La commune officielle qui contient ce point, d'après le découpage de l'État (geo.api.gouv.fr, gratuit) :
     (nom, code INSEE). Nominatim donne le lieu le plus proche, parfois un village : Trézien pour la pointe de
-    Corsen, qui est en Plouarzel. Renvoie (None, None) si l'API ne répond pas : on ne bloque jamais l'appelant.
+    Corsen, qui est en Plouarzel. Renvoie (None, None) si l'API ne répond pas, même après ses essais : on ne bloque
+    jamais l'appelant.
     """
     try:
-        response = requests.get(COMMUNE_URL, params={"lat": latitude, "lon": longitude, "fields": "nom,code"},
-                                timeout=timeout, headers={"User-Agent": "randovango"})
-        response.raise_for_status()
-        rows = response.json()
+        rows = get_geo_api(COMMUNE_URL, {"lat": latitude, "lon": longitude, "fields": "nom,code"}, timeout)
     except (requests.RequestException, ValueError) as e:
         logger.warning(f"geo.api.gouv.fr injoignable pour ({latitude}, {longitude}) : {e}")
         return None, None
@@ -214,13 +235,10 @@ def get_commune_details(insee: str, timeout=10) -> dict | None:
     """
     Ce qu'il faut pour créer la ligne d'une commune dans cities, d'après geo.api.gouv.fr : son nom officiel, la position
     de son centre, son département et sa région. Plouguerneau, que l'appli ne connaissait que par ses lieux-dits Lilia
-    et Tremenac'h (issue #184). Renvoie None si l'API ne répond pas.
+    et Tremenac'h (issue #184). Renvoie None si l'API ne répond pas, même après ses essais.
     """
     try:
-        response = requests.get(f"{COMMUNE_URL}/{insee}", params={"fields": "nom,code,centre,departement,region"},
-                                timeout=timeout, headers={"User-Agent": "randovango"})
-        response.raise_for_status()
-        row = response.json()
+        row = get_geo_api(f"{COMMUNE_URL}/{insee}", {"fields": "nom,code,centre,departement,region"}, timeout)
     except (requests.RequestException, ValueError) as e:
         logger.warning(f"geo.api.gouv.fr injoignable pour la commune {insee} : {e}")
         return None
