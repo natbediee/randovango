@@ -8,20 +8,20 @@
   <header class="stack-sm">
     <span class="eyebrow">Comment ça marche</span>
     <h1 class="hiw-title">Tu choisis la durée une fois,<br>puis tu composes chaque journée.</h1>
-    <p class="muted hiw-subtitle">Une journée de voyage, c'est une ville, une randonnée, un spot pour la nuit et les services autour. Tu répètes ça autant de jours que dure ton séjour. À la fin, tout part dans un carnet de voyage consultable hors connexion.</p>
+    <p class="muted hiw-subtitle">Chaque jour : une ville, une rando, un spot pour la nuit, les services et quelques pépites.<br>Autant de jours que dure ton séjour, puis ton carnet de voyage, même hors connexion.</p>
   </header>
 
   {# Le déroulé réel du planificateur : une durée choisie une fois, puis une boucle
-     de quatre étapes répétée à chaque journée, et le carnet à l'arrivée. #}
+     de cinq étapes répétée à chaque journée (celles du fil d'étapes, partials/stepper.html),
+     et le carnet à l'arrivée. #}
   <div class="card hiw-flow">
 
     <div class="hiw-step">
       <span class="hiw-step__num">1</span>
       <div class="hiw-step__body">
         <span class="hiw-step__title">Choisis la durée <span class="hiw-once">une seule fois</span></span>
-        <span class="hiw-step__desc muted">D'une escapade d'un jour à la semaine complète, à partir de la date de ton choix. C'est ce nombre de jours qui décide combien de journées tu vas composer.</span>
+        <span class="hiw-step__desc muted">D'un jour à une semaine : tu fixes le cap une fois, et on s'occupe du reste.</span>
       </div>
-      <span class="hiw-step__meta">~10 secondes</span>
     </div>
 
     <span class="hiw-link" aria-hidden="true"></span>
@@ -32,15 +32,19 @@
         <span class="hiw-step__num">2</span>
         <div class="hiw-step__body">
           <span class="hiw-step__title">Compose chaque jour <span class="hiw-badge">se répète pour chaque journée</span></span>
-          <span class="hiw-step__desc muted">Les quatre mêmes étapes, dans le même ordre, pour le jour 1, puis le jour 2, et ainsi de suite. Tu peux revenir en arrière à tout moment.</span>
+          <span class="hiw-step__desc muted">Cinq étapes, toujours dans le même ordre, jour après jour. Tu changes d'avis ? Reviens en arrière quand tu veux.</span>
         </div>
       </div>
 
+      {# Chaque carte dit aussi d'où vient la donnée, sans promettre plus que l'application (issue #302) :
+         spots de la source des spots, randos en GPX de sites de randonnée (l'envoi par un contributeur n'est pas encore annoncé),
+         services réunis et vérifiés, pépites trouvées sur le web. #}
       {% set day_steps = [
-        ('Ville', "Pars d'une ville", "Cherche-la ou pointe-la sur la carte - la météo des prochains jours s'affiche direct."),
-        ('Rando', 'Choisis ta randonnée', "Distance, dénivelé, difficulté : des randos décrites par des van-lifers qui les ont faites."),
-        ('Spot', 'Trouve ton spot pour la nuit', "Parkings, aires, coins nature : équipements, prix et accès van indiqués."),
-        ('Services', 'Ajoute les services utiles', "Eau, vidange, boulangerie, laverie - ce qu'il te faut autour de ton spot.")
+        ('Ville', "Pars d'une ville", "Pointe-la sur la carte : la météo des prochains jours s'affiche aussitôt."),
+        ('Rando', 'Choisis ta randonnée', "Des tracés de sites de randonnée, avec distance, dénivelé, difficulté, et les pépites de Vany sur le chemin."),
+        ('Spot', 'Trouve ton spot pour la nuit', "Le coin parfait pour la nuit, repéré par des van-lifers : aire, parking ou pleine nature, avec équipements, prix et accès van."),
+        ('Services', 'Ajoute les services utiles', "Eau, vidange, boulangerie, laverie… Tout ce qu'il faut à toi et à ton van, réuni autour de ton spot et toujours à jour."),
+        ('Pépites', 'Ajoute tes pépites', "Les bons plans dénichés sur la toile, ceux qu'on ne trouve pas dans les guides.")
       ] %}
       <div class="hiw-day-grid">
         {% for kicker, titre, desc in day_steps %}
@@ -64,7 +68,7 @@
       <span class="hiw-step__num"><i class="fas fa-book" aria-hidden="true"></i></span>
       <div class="hiw-step__body">
         <span class="hiw-step__title">Repars avec ton carnet de voyage <span class="hiw-once">à la fin</span></span>
-        <span class="hiw-step__desc muted">Toutes tes journées récapitulées en PDF : cartes, tracés, adresses et services, consultables hors connexion.</span>
+        <span class="hiw-step__desc muted">Tout ton voyage dans un carnet PDF : cartes, tracés et adresses, même sans réseau.</span>
       </div>
       <span class="tag tag--ok">Inclus</span>
     </div>
@@ -77,9 +81,10 @@
       <span class="eyebrow">Parcours classique</span>
       <h3 style="font-size:20px; font-weight:700; margin-top:8px;">Tu composes chaque jour, toi-même.</h3>
       <ul class="hiw-check">
-        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Les 4 étapes, autant de jours que tu veux</li>
+        {# Les limites de l'offre gratuite viennent de backend/api/trip_limits.py : 7 jours au plus, un voyage par jour. #}
+        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Les 5 étapes, 7 jours au plus en gratuit</li>
         <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Carnet de voyage inclus</li>
-        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Gratuit, sans compte</li>
+        <li><span class="hiw-check__mark hiw-check__mark--mint">✓</span> Gratuit, sans compte : un voyage par jour</li>
       </ul>
       <a href="{{ url_for('duration') }}" class="btn btn--primary btn--sm" style="margin-top:auto;">Planifier mon voyage</a>
     </div>
@@ -103,13 +108,15 @@
     </div>
   </div>
 
-  {# Réassurance contributeurs #}
+  {# Encart contributeur, annoncé « bientôt » : l'ajout d'un spot est masqué (issue #265) et l'envoi
+     d'une rando n'accepte pas encore tous les fichiers. Pas de bouton tant que le parcours n'est pas
+     prêt : on ne promet que ce qui viendra (issue #302). #}
   <div class="card hiw-reassurance">
     <div class="stack-sm" style="gap:4px;">
-      <h3 style="font-size:17px; font-weight:700;">Des spots vérifiés par de vrais van-lifers</h3>
-      <p class="muted" style="max-width:640px;">Chaque spot et chaque rando sont partagés par des contributeurs locaux, puis relus avant publication. Tu connais le coin ? Rejoins-les.</p>
+      <h3 style="font-size:17px; font-weight:700;">Ta rando préférée mérite d'être connue</h3>
+      <p class="muted" style="max-width:640px;">Bientôt, tu pourras partager tes randos et tes spots secrets avec tous les van-lifers. Et en tant que contributeur, Vany te sera offert dès son lancement.</p>
     </div>
-    <a href="{{ url_for('contributor_add_hike') }}" class="btn btn--outline btn--sm">Devenir contributeur</a>
+    <span class="tag tag--warn">Bientôt disponible</span>
   </div>
 
   {# FAQ #}
@@ -133,7 +140,7 @@
   {# CTA final #}
   <div class="stack-sm text-center" style="align-items:center; padding:10px 0;">
     <a href="{{ url_for('duration') }}" class="btn btn--primary">Planifier mon premier voyage →</a>
-    <span style="font-size:12.5px; color:var(--muted-3);">2 minutes, sans compte.</span>
+    <span style="font-size:12.5px; color:var(--muted-3);">Gratuit, sans compte.</span>
   </div>
 
 </div>

@@ -1833,7 +1833,8 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 /* Titre sur deux lignes (le <br> du template) : le retour est voulu, il oppose
    « une fois » et « chaque journée », les deux temps du planificateur. */
 .hiw-title { font-size: clamp(22px, 2.7vw, 32px); line-height: 1.2; letter-spacing: -0.6px; }
-.hiw-subtitle { font-size: clamp(13px, 1.24vw, 15px); max-width: 74ch; }
+/* Deux phrases courtes, une par ligne (séparées par un <br>) : la largeur laisse tenir chacune sur sa ligne. */
+.hiw-subtitle { font-size: clamp(13px, 1.24vw, 15px); max-width: 84ch; }
 @media (max-width: 760px) {
   .hiw-title { font-size: 24px; }
   .hiw-subtitle { font-size: 14px; }
@@ -1893,7 +1894,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
   border-radius: var(--r-card-sm);
   padding: 18px 20px;
 }
-.hiw-day-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.hiw-day-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
 .hiw-day {
   display: flex;
   flex-direction: column;
@@ -1952,7 +1953,7 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .hiw-faq { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 
 @media (max-width: 1000px) {
-  /* Les quatre étapes du jour passent en 2x2 avant de s'empiler. */
+  /* Les cinq étapes du jour passent sur deux colonnes avant de s'empiler. */
   .hiw-day-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
