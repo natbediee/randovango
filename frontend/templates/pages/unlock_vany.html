@@ -53,9 +53,10 @@
         <span class="field"><input type="text" class="mono" style="letter-spacing:2px; font-weight:600;" placeholder="VANY-XXXX-XXXX" disabled></span>
       </label>
       <button class="btn btn--outline btn--block" disabled>Codes bientôt disponibles</button>
+      {# « Rejoins-nous » menait à l'ajout d'une randonnée, qui renvoie à la connexion sans compte : une boucle.
+         Même phrase que sur la page de connexion contributeur (issue #301). #}
       <div class="login-footer" style="margin-top:auto;">
-        <span class="muted">Pas encore contributeur ?</span>
-        <a href="{{ url_for('contributor_add_hike') }}" class="login-link">Rejoins-nous →</a>
+        <span class="muted">Pas encore contributeur ? Nos premiers contributeurs rejoignent l'aventure sur invitation de l'équipe.</span>
       </div>
     </div>
   </div>
