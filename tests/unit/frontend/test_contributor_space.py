@@ -40,3 +40,25 @@ def test_login_page_announces_future_benefits_as_coming_soon():
     assert "Bientôt : tu suivras ton impact" in page
     assert "Bientôt : le chat 100% IA avec Vany" in page
     assert "214 nuits" not in page
+
+
+def test_login_page_explains_how_to_get_an_account():
+    """La connexion contributeur dit que les contributeurs entrent sur invitation de l'équipe, au lieu du lien qui y ramenait (issue #301)."""
+    page = render("/contributor/login")
+    assert "Nos premiers contributeurs rejoignent l'aventure sur invitation de l'équipe." in page
+    assert "Demande ton accès" not in page
+
+
+def test_unlock_page_no_longer_loops_to_the_login():
+    """La page d'accès à Vany donne la même réponse au lieu de « Rejoins-nous », qui ramenait à la connexion (issue #301)."""
+    page = render("/unlock-vany")
+    assert "Nos premiers contributeurs rejoignent l'aventure sur invitation de l'équipe." in page
+    assert "Rejoins-nous" not in page
+
+
+def test_login_page_answers_forgotten_password_without_dead_options():
+    """« Mot de passe oublié » donne une réponse, et la case « Se souvenir de moi », qui ne changeait rien, a disparu."""
+    page = render("/contributor/login")
+    assert "Demande-en un nouveau à l'équipe qui a créé ton compte." in page
+    assert "Mot de passe oublié ?</a>" not in page
+    assert "Se souvenir de moi" not in page

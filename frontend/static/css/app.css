@@ -1628,9 +1628,6 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 }
 .link-btn:hover { color: var(--teal); }
 .login-link { font-size: 13px; font-weight: 700; color: var(--teal); }
-.login-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.login-remember { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
-.login-remember input { accent-color: var(--teal); }
 .login-error {
   background: #FBEAE7; border: 1px solid #E9C4BD; color: #B4432E;
   border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600;

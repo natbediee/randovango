@@ -33,18 +33,19 @@
         </span>
       </label>
 
-      <div class="login-row">
-        <label class="login-remember"><input type="checkbox" id="rememberMe" checked> Se souvenir de moi</label>
-        <a href="#" class="login-link">Mot de passe oublié ?</a>
-      </div>
+      {# Pas de lien « Mot de passe oublié » : rien ne renvoie de mot de passe par e-mail. Les comptes sont créés
+         par l'équipe, c'est donc elle qui en donne un nouveau. La case « Se souvenir de moi » est retirée :
+         rien ne la lisait, la session durait pareil (issue #301). #}
+      <p class="muted" style="font-size:13px;">Mot de passe oublié ? Demande-en un nouveau à l'équipe qui a créé ton compte.</p>
 
       <div class="login-error" id="loginError" style="display:none;"></div>
 
       <button type="submit" class="btn btn--primary btn--block" id="loginSubmit">Se connecter</button>
 
+      {# Le lien « Demande ton accès » menait à l'ajout d'une randonnée, qui renvoie ici sans compte : une boucle.
+         La page dit plutôt comment on obtient un compte aujourd'hui (issue #301). #}
       <div class="login-footer">
-        <span class="muted">Pas encore contributeur ?</span>
-        <a href="{{ url_for('contributor_add_hike') }}" class="login-link">Demande ton accès →</a>
+        <span class="muted">Pas encore contributeur ? Nos premiers contributeurs rejoignent l'aventure sur invitation de l'équipe.</span>
       </div>
     </form>
 
