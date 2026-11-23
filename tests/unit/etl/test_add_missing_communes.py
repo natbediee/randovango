@@ -34,6 +34,7 @@ def test_geo_api_down_creates_no_commune(monkeypatch) -> None:
     """Sans réponse de geo.api.gouv.fr, aucune commune n'est créée à moitié."""
     def down(*args, **kwargs):
         raise geo_utils.requests.ConnectionError("injoignable")
+    monkeypatch.setattr(geo_utils, "GEO_API_PAUSE_SECONDS", 0)
     monkeypatch.setattr(geo_utils.requests, "get", down)
     assert geo_utils.get_commune_details("29195") is None
 

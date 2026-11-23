@@ -82,6 +82,7 @@ def test_a_point_outside_france_has_no_commune(monkeypatch) -> None:
 def test_geo_api_down_never_blocks_the_caller(monkeypatch) -> None:
     def down(*args, **kwargs):
         raise geo_utils.requests.ConnectionError("injoignable")
+    monkeypatch.setattr(geo_utils, "GEO_API_PAUSE_SECONDS", 0)
     monkeypatch.setattr(geo_utils.requests, "get", down)
     assert geo_utils.get_commune_from_coordinates(48.424, -4.76797) == (None, None)
 
@@ -89,3 +90,30 @@ def test_geo_api_down_never_blocks_the_caller(monkeypatch) -> None:
 def test_a_city_is_searched_as_its_commune_once_known() -> None:
     assert geo_utils.city_commune({"name": "Trézien", "commune": "Plouarzel"}) == "Plouarzel"
     assert geo_utils.city_commune({"name": "Trézien", "commune": None}) == "Trézien"
+
+
+def test_the_commune_is_asked_again_when_the_state_does_not_answer_at_once(monkeypatch) -> None:
+    """geo.api.gouv.fr muet une fois puis qui répond donne quand même la commune (La Jonchère, import du 23 novembre 2026)."""
+    answers = [geo_utils.requests.Timeout("pas de réponse en 10 s"), FakeCommunes([{"nom": "La Jonchère", "code": "85116"}])]
+
+    def answer_in_turn(*args, **kwargs):
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    monkeypatch.setattr(geo_utils, "GEO_API_PAUSE_SECONDS", 0)
+    monkeypatch.setattr(geo_utils.requests, "get", answer_in_turn)
+    assert geo_utils.get_commune_from_coordinates(46.4372, -1.37843) == ("La Jonchère", "85116")
+
+
+def test_the_state_is_asked_three_times_at_most(monkeypatch) -> None:
+    """Une API de l'État qui ne répond jamais est demandée trois fois, pas davantage, avant de laisser la commune inconnue."""
+    calls = []
+
+    def down(*args, **kwargs):
+        calls.append(1)
+        raise geo_utils.requests.ConnectionError("injoignable")
+    monkeypatch.setattr(geo_utils, "GEO_API_PAUSE_SECONDS", 0)
+    monkeypatch.setattr(geo_utils.requests, "get", down)
+    assert geo_utils.get_commune_from_coordinates(46.4372, -1.37843) == (None, None)
+    assert len(calls) == geo_utils.GEO_API_ATTEMPTS == 3

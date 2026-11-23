@@ -5,7 +5,7 @@ from utils.mongo_utils import MongoUtils
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
 from utils.db_utils import MySQLUtils
-from utils.geo_utils import get_admin_info_from_coordinates
+from utils.geo_utils import get_admin_info_from_coordinates, get_commune_details
 from etl.extract.gpx import remove_file
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -25,6 +25,20 @@ def find_city(cursor, city_name, insee):
                        " ORDER BY insee IS NULL, id LIMIT 1", (city_name, insee))
     row = cursor.fetchone()
     return row[0] if row else None
+
+
+def find_admin_info(insee, latitude, longitude) -> tuple:
+    """
+    (département, région, pays) de la ville d'une rando qui part de ce point.
+    D'abord geo.api.gouv.fr, par le code INSEE de la commune : gratuit, officiel, et il supporte un envoi de 70 villes
+    d'un coup. Avant l'issue #318, ils venaient de Nominatim, qui a refusé la plupart des appels de l'import du
+    23 novembre 2026 (« trop d'appels ») : 51 villes sont restées sans département, et l'agent des services cherchait
+    « Champagne, France ». Nominatim ne sert plus que sans code INSEE : un départ hors de France, ou l'État injoignable.
+    """
+    details = get_commune_details(insee) if insee else None
+    if details:
+        return details["department"], details["region"], "France"
+    return get_admin_info_from_coordinates(latitude, longitude)
 
 
 def load_gpx_data(data, gpx_path, verifie=0) -> str:
@@ -72,8 +86,7 @@ def _load_gpx_with_connection(mysql_conn, data, gpx_path, verifie) -> str:
             cursor.execute("UPDATE cities SET commune = %s, insee = %s WHERE id = %s AND insee IS NULL", (commune, insee, city_id))
             mysql_conn.commit()
     else:
-        # Récupérer infos admin
-        department, region, country = get_admin_info_from_coordinates(start_lat, start_lon)
+        department, region, country = find_admin_info(insee, start_lat, start_lon)
         cursor.execute(
             "INSERT INTO cities (name, latitude, longitude, department, region, country, commune, insee)"
             " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",

@@ -160,6 +160,12 @@ def test_the_message_holds_the_register_only_when_there_is_one():
     assert "CAFE KONK" in build_message(city, {"actifs": [{"nom": "CAFE KONK"}]})
 
 
+def test_the_message_names_the_department_of_the_commune():
+    """L'agent des services cherche « Champagne, Charente-Maritime », pas l'homonyme qu'il trouverait avec « France » (issue #318)."""
+    assert build_message({"name": "Champagne", "commune": "Champagne", "department": "Charente-Maritime"}, None) \
+        == "COMMUNE : Champagne, Charente-Maritime"
+
+
 def _row():
     return {"nom": "NOUS", "adresse": None, "lien": "https://annuaire.fr/nous", "preuve_url": "https://annuaire.fr/nous",
             "pages": [{"url": "https://annuaire.fr/nous", "type_page": "agregateur", "verdict": "agregateur"}]}
