@@ -473,6 +473,38 @@ def chain_lock_free(city_id):
     return nullcontext()
 
 
+def test_the_queue_takes_the_chains_of_a_city_in_the_order_of_the_new_city(store):
+    """Les chaînes d'une ville demandées dans le désordre passent dans l'ordre de l'ajout d'une ville : OSM, carburants, FINESS, spots, pépites, services."""
+    for chain_key in ("services", "pepites", "spots", "finess", "carburants", "osm"):
+        store.insert_passage(chain_key, chain_key, 12, "etl", ["partie"])
+    assert [passage["chain"] for passage in passage_queue.queue_in_order()] == list(passage_queue.CHAIN_ORDER)
+
+
+def test_the_osm_of_a_second_city_passes_before_the_services_of_the_first(store):
+    """Envoi de randos dans deux villes : OSM de la seconde passe avant les services de la première, qui durent des heures (constat du 23 novembre)."""
+    store.insert_passage("services-A", "services", 12, "etl", ["restaurants"])
+    store.insert_passage("osm-A", "osm", 12, "etl", ["osm"])
+    store.insert_passage("services-B", "services", 13, "etl", ["restaurants"])
+    store.insert_passage("osm-B", "osm", 13, "etl", ["osm"])
+    order = [passage["passage_id"] for passage in passage_queue.queue_in_order()]
+    assert order == ["osm-A", "osm-B", "services-A", "services-B"]
+
+
+def test_a_chain_unknown_to_the_queue_passes_last(store):
+    """Une chaîne que la file ne range pas (écrite par une autre version du code) passe après toutes les autres, sans la bloquer."""
+    store.insert_passage("inconnu", "chaine_future", 12, "etl", ["partie"])
+    store.insert_passage("services", "services", 12, "etl", ["restaurants"])
+    assert [passage["passage_id"] for passage in passage_queue.queue_in_order()] == ["services", "inconnu"]
+
+
+def test_a_new_city_osm_runs_before_an_older_services_passage(store, chain, free):
+    """La file fait partir OSM d'une ville nouvelle avant un passage des services demandé plus tôt."""
+    services = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    osm = passage_service.create_passage("osm", 12, origin="etl")
+    assert passage_queue.run_next() is True
+    assert store.passages[osm]["status"] == "fini" and store.passages[services]["status"] == "en_file"
+
+
 def test_a_passage_waiting_for_the_admin_is_not_taken_by_the_queue(store, chain):
     """Une ville en attente (mise à jour automatique coupée) n'est pas lancée par la file : elle attend l'admin."""
     passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
