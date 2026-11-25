@@ -59,6 +59,14 @@ class _Store:
         # Les passages sont gardés dans l'ordre où ils ont été demandés (un dictionnaire garde l'ordre d'écriture).
         return [key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED]
 
+    def failures_to_resume(self, chains, since):
+        # Comme la requête : les échecs de l'ETL sur ces chaînes, finis depuis `since`, que personne n'a repris.
+        return [{"passage_id": key, "chain": row["chain"], "city_id": row["city_id"],
+                 "resumed_from": row["resumed_from"], "finished_at": row["finished_at"]}
+                for key, row in self.passages.items()
+                if row["status"] == passage_store.FAILED and row["origin"] == "etl" and row["chain"] in chains
+                and row["finished_at"] and row["finished_at"] >= since and self.resumed_by(key) is None]
+
     def running_ids(self, chain):
         return [key for key, row in self.passages.items()
                 if row["status"] == passage_store.RUNNING and row["chain"] == chain]
@@ -101,6 +109,7 @@ def store(monkeypatch):
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
                  "passage_ids", "recent_ids", "resumed_by", "queued_ids", "running_ids", "open_parts", "finished_parts",
+                 "failures_to_resume",
                  "load_items", "count_items", "passages_of_item"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
@@ -1075,3 +1084,63 @@ def test_the_osm_of_two_new_cities_pass_one_after_the_other(store, city_chains, 
     assert store.passages[guidel]["status"] == "fini" and store.passages[second]["status"] == "en_file"
     assert passage_queue.run_next() is True
     assert free["asked"] == [("osm", "Guidel"), ("osm", "Morgat")]
+
+
+# --- La reprise seule des chaînes gratuites en échec (services/passage_queue.py, issue #316) ---
+
+NOW = datetime(2026, 11, 25, 12, 0)
+
+
+def _failed_osm(store, free, finished_at, resumed_from=None):
+    """Un OSM de l'ETL sur Guidel, en échec (OpenStreetMap muet), fini à `finished_at`."""
+    free["loaded"]["osm"] = None
+    passage_id = passage_service.create_passage("osm", 12, origin="etl", resumed_from=resumed_from)
+    passage_service.run_passage(passage_id)
+    store.passages[passage_id]["finished_at"] = finished_at
+    return passage_id
+
+
+def test_a_failed_osm_is_resumed_by_the_queue_after_fifteen_minutes(store, free):
+    """OSM en échec depuis 20 minutes : la file le reprend seule, par un passage « etl » qui le désigne, sans script (25 novembre 2026)."""
+    failed = _failed_osm(store, free, datetime(2026, 11, 25, 11, 40))
+    [resumed] = passage_queue.resume_failed_free_chains(NOW)
+    assert store.passages[resumed]["resumed_from"] == failed and store.passages[resumed]["origin"] == "etl"
+    assert store.passages[resumed]["status"] == "en_file"
+
+
+def test_a_failure_too_recent_waits_before_its_resume(store, free):
+    """OSM en échec depuis 5 minutes n'est pas encore repris : OpenStreetMap a le temps de se remettre."""
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 55))
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_after_two_resumes_the_failure_waits_for_the_admin(store, free):
+    """Un OSM qui échoue encore après deux reprises n'est plus repris seul : l'échec attend l'administratrice."""
+    first = _failed_osm(store, free, datetime(2026, 11, 25, 10, 0))
+    second = _failed_osm(store, free, datetime(2026, 11, 25, 10, 30), resumed_from=first)
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 0), resumed_from=second)
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failure_already_redone_by_hand_is_not_resumed(store, free):
+    """OSM en échec, mais déjà rechargé sur la ville par une relance à la main : la file ne le refait pas."""
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 0))
+    free["loaded"]["osm"] = 40
+    by_hand = passage_service.create_passage("osm", 12)
+    passage_service.run_passage(by_hand)
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failure_older_than_a_day_is_not_resumed(store, free):
+    """Un échec de la veille n'est pas repris seul : l'administratrice a peut-être déjà décidé de le laisser."""
+    _failed_osm(store, free, datetime(2026, 11, 24, 9, 0))
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failed_paid_chain_is_never_resumed_alone(store, chain):
+    """Un passage des services en échec n'est jamais repris par la file : une reprise coûte, c'est l'admin qui décide."""
+    chain["fail"]["restaurants"] = LLMTimeout("délai dépassé")
+    failed = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    passage_service.run_passage(failed)
+    store.passages[failed]["finished_at"] = datetime(2026, 11, 25, 10, 0)
+    assert passage_queue.resume_failed_free_chains(NOW) == []

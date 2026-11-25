@@ -14,6 +14,10 @@ prend donc les passages chaîne par chaîne, dans l'ordre de CHAIN_ORDER : tous 
 ainsi de suite ; dans une même chaîne, du plus ancien au plus récent. Pour chaque ville, l'ordre de l'ajout d'une ville
 est gardé : FINESS après OSM (les noms des pharmacies), les pépites après les spots, les services en dernier.
 
+LES CHAÎNES GRATUITES SE REPRENNENT SEULES (issue #316)
+Un OSM, des carburants ou un FINESS de l'ETL en échec est repris par la file un quart d'heure plus tard, deux fois au
+plus (resume_failed_free_chains). Une chaîne payante en échec, elle, attend toujours l'admin : une reprise coûte.
+
 COMMENT
 Un fil de fond, lancé au démarrage de l'API (start_worker), regarde la file toutes les minutes, et tout de suite quand
 l'ETL vient d'y mettre une ville (wake). À chaque tour, il fait partir le premier passage en file, si le verrou de
@@ -23,6 +27,7 @@ La file est la table passages elle-même : après un redémarrage du serveur, le
 fil repart d'eux. Pas besoin d'un outil de plus (Celery, Redis) pour un passage à la fois.
 """
 import threading
+from datetime import datetime, timedelta
 
 from services import passage_service, passage_store
 from utils.logger_util import LoggerUtil
@@ -33,6 +38,14 @@ CHECK_SECONDS = 60          # le temps entre deux regards sur la file, quand per
 
 # L'ordre dans lequel la file fait passer les chaînes : les gratuites et rapides d'abord, les services en dernier.
 CHAIN_ORDER = ("osm", "carburants", "finess", "spots", "pepites", "services")
+
+# La reprise seule des chaînes gratuites (issue #316). Un échec d'OSM, des carburants ou de FINESS vient presque
+# toujours d'une panne passagère (OpenStreetMap saturé, fichier de 52 Mo coupé en route) : la file le reprend elle-même,
+# comme le bouton de la supervision, au lieu d'un script lancé à la main (25 novembre 2026 : trois tours de reprise).
+AUTO_RESUMED_CHAINS = ("osm", "carburants", "finess")
+RESUME_AFTER_MINUTES = 15       # le temps laissé au serveur pour se remettre avant de reprendre
+MAX_AUTO_RESUMES = 2            # deux reprises au plus : trois essais en tout, puis l'échec attend l'admin
+AUTO_RESUME_HOURS = 24          # un échec plus ancien n'est pas repris seul : l'admin a peut-être déjà décidé
 
 _wake = threading.Event()   # posé par wake() : le fil regarde la file sans attendre la fin de la minute
 _worker = None              # le fil de fond, une fois lancé
@@ -80,15 +93,58 @@ def run_next() -> bool:
     return False
 
 
+def resumes_before(failure: dict) -> int:
+    """Combien de reprises ont déjà mené à cet échec : on remonte les resumed_from jusqu'au premier passage."""
+    count, previous = 0, failure["resumed_from"]
+    while previous:
+        count += 1
+        passage = passage_store.load_passage(previous)
+        previous = passage["resumed_from"] if passage else None
+    return count
+
+
+def can_resume_alone(failure: dict, now: datetime) -> bool:
+    """
+    Un échec que la file reprend seule : fini depuis au moins RESUME_AFTER_MINUTES, moins de MAX_AUTO_RESUMES reprises
+    derrière lui, et une chaîne pas déjà finie sur la ville par un autre passage (une relance à la main entre-temps).
+    """
+    if failure["finished_at"] > now - timedelta(minutes=RESUME_AFTER_MINUTES):
+        return False
+    if resumes_before(failure) >= MAX_AUTO_RESUMES:
+        return False
+    return not passage_store.finished_parts(failure["chain"], [failure["city_id"]])
+
+
+def resume_failed_free_chains(now: datetime | None = None) -> list:
+    """
+    Reprend les chaînes gratuites de l'ETL en échec qui peuvent l'être (can_resume_alone) : chaque reprise est un
+    nouveau passage en file, d'origine « etl », comme une relance depuis la supervision. Rend leurs identifiants.
+    """
+    now = now or datetime.now()
+    since = now - timedelta(hours=AUTO_RESUME_HOURS)
+    resumed = []
+    for failure in passage_store.failures_to_resume(AUTO_RESUMED_CHAINS, since):
+        if not can_resume_alone(failure, now):
+            continue
+        passage_id = passage_service.resume_passage(failure["passage_id"], origin="etl")
+        logger.info(f"[file] {failure['passage_id']} en échec repris seul par {passage_id}")
+        resumed.append(passage_id)
+    return resumed
+
+
 def work_forever() -> None:
     """
-    Le travail du fil de fond : vider la file, puis attendre une minute ou un réveil, et recommencer. Une erreur (base
-    injoignable un instant) est notée dans le journal et n'arrête pas le fil : il réessaie au tour suivant.
+    Le travail du fil de fond : reprendre les chaînes gratuites en échec qui peuvent l'être, faire partir un passage,
+    et recommencer tant que la file en a un prêt ; puis attendre une minute ou un réveil. Une erreur (base injoignable
+    un instant) est notée dans le journal et n'arrête pas le fil : il réessaie au tour suivant.
     """
     while True:
         try:
+            # Les reprises sont regardées avant chaque passage : pendant les heures d'un long envoi, un OSM en échec
+            # reprend sa place sans attendre que la file soit vide.
+            resume_failed_free_chains()
             while run_next():
-                pass
+                resume_failed_free_chains()
         except Exception:
             logger.exception("[file] erreur en regardant la file : nouvel essai au prochain tour")
         _wake.wait(CHECK_SECONDS)
