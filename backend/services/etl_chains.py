@@ -1,5 +1,6 @@
 """
-Les chaînes gratuites de l'ajout d'une ville : OSM, pharmacies FINESS, carburants (issue #276).
+Les chaînes gratuites de l'ajout d'une ville : OSM (suivi de Wikidata, issue #316), pharmacies FINESS, carburants
+(issue #276).
 
 Elles se lancent et se suivent comme la chaîne des services (services/passage_service.py) : un passage par ville, une
 trace en base, la raison d'un échec, la reprise depuis la supervision. Ce fichier donne, pour chacune, la fonction qui
@@ -19,6 +20,7 @@ from agents.find_services import PassageRunning
 from etl.etl_carburants import run_city_etl as run_fuel_etl
 from etl.etl_osm import run_osm_etl
 from etl.etl_pharmacies import run_new_city_etl as run_pharmacy_etl
+from etl.etl_wikidata import run_wikidata_etl
 from utils.db_utils import MySQLUtils
 
 
@@ -83,11 +85,20 @@ def city_lock_is_free(chain_key: str, city_id: int) -> bool:
 # La reprise et le budget ne servent pas : une chaîne gratuite se refait en entier, en quelques secondes.
 
 def run_osm(passage_id: str, key: str, city: dict, resume: bool, check_budget) -> dict:
-    """Les lieux d'OpenStreetMap autour de la ville (commerces, services, toilettes...) ; leur nombre en bilan."""
+    """
+    Les lieux d'OpenStreetMap autour de la ville (commerces, services, toilettes...), puis ceux de Wikidata (forts,
+    phares...) ; leur nombre en bilan. Wikidata passe ici depuis l'issue #316, juste après OSM comme avant : la règle
+    des doublons a besoin des deux. Son échec est seulement noté dans le journal : il ne fait pas échouer OSM, et le
+    bilan ne donne alors que les lieux d'OSM.
+    """
     count = run_osm_etl(city["name"])
     if count is None:
         raise StepFailed("OpenStreetMap n'a pas répondu (Overpass muet ou en erreur) : relancer plus tard")
-    return {"lieux": count}
+    summary = {"lieux": count}
+    wikidata_count = run_wikidata_etl(city["name"])
+    if wikidata_count is not None:
+        summary["lieux_wikidata"] = wikidata_count
+    return summary
 
 
 def run_finess(passage_id: str, key: str, city: dict, resume: bool, check_budget) -> dict:

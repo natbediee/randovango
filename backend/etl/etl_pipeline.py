@@ -1,9 +1,6 @@
 
 import threading
 from utils.db_utils import MySQLUtils
-from etl.extract.api_wikidata import extract_wikidata
-from etl.transform.transform_wikidata import transform_wikidata
-from etl.load.load_poi import load_wikidata_poi
 from utils.logger_util import LoggerUtil
 from etl.load.load_gpx import load_gpx_data
 from etl.extract.api_meteo import extract_weather_data
@@ -24,20 +21,7 @@ def scraping_background(city):
     for chain_key in FREE_CHAINS:
         run_free_chain(chain_key, city)
 
-    # 2. Extraction Wikidata (rapide - API)
-    try:
-        logger.info(f"[ETL-BG] Extraction Wikidata pour la ville : {city}")
-        wikidata_json = extract_wikidata(city)
-        logger.info("[ETL-BG] Transformation Wikidata...")
-        df_wiki = transform_wikidata(wikidata_json=wikidata_json, city_name=city)
-        logger.info("[ETL-BG] Chargement Wikidata...")
-        load_wikidata_poi(df_wiki=df_wiki, city_name=city)
-        logger.info(f"[ETL-BG] Wikidata chargé pour la ville : {city}")
-        # Un lieu de Wikidata est souvent déjà venu d'OSM (Fort Montbarey, Tour Vauban) : la règle des doublons repasse.
-        from services import poi_duplicates_service
-        poi_duplicates_service.after_load(city)
-    except Exception as e:
-        logger.error(f"[ETL-BG] Erreur Wikidata: {e}")
+    # 2. Wikidata passe désormais à la fin de la partie OSM (services/etl_chains.py, issue #316).
 
     # 3. La chaîne des spots (issue #276) : la source des spots relue autour de la ville (lent : un navigateur, environ
     # 4 minutes), puis les agents sur les spots de la ville encore à faire (harmonisation, ouvertures, vérification).

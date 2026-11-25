@@ -512,7 +512,9 @@ DISCARDED_WORDS = {"sans_page": "sans preuve", "liquidation": "société liquid�
 
 
 # Le bilan des autres chaînes que les services (etl_chains.py, spot_chain.py) : ce qu'elles ont fait, (singulier, pluriel).
-LOADED_WORDS = {"lieux": ("lieu chargé", "lieux chargés"), "pharmacies": ("pharmacie chargée", "pharmacies chargées"),
+LOADED_WORDS = {"lieux": ("lieu chargé", "lieux chargés"),
+                "lieux_wikidata": ("lieu de Wikidata chargé", "lieux de Wikidata chargés"),
+                "pharmacies": ("pharmacie chargée", "pharmacies chargées"),
                 # La chaîne des spots (services/spot_chain.py).
                 "spots_lus": ("spot lu", "spots lus"), "harmonises": ("spot harmonisé", "spots harmonisés"),
                 "ouvertures_lues": ("ouverture lue", "ouvertures lues"), "verifies": ("spot vérifié", "spots vérifiés"),
