@@ -1006,3 +1006,72 @@ def test_an_unknown_or_incomplete_object_is_refused(store, chain, item_type, ite
     """Un objet d'un type inconnu, ou sans son id, est refusé avec les types attendus."""
     with pytest.raises(ValueError, match="service, spot, pepite"):
         passage_service.list_passages(item_type=item_type, item_id=item_id)
+
+
+# --- Les chaînes de l'ajout d'une ville, demandées une seule fois (issue #316) ---
+
+@pytest.fixture
+def city_chains(store, free, monkeypatch):
+    """Les chaînes de l'ajout d'une ville, avec Guidel jamais lue par la source des spots, sauf si `read` est vrai."""
+    state = {"read": False}
+    monkeypatch.setattr(passage_service.spot_chain, "source_already_read", lambda city_id: state["read"])
+    return state
+
+
+def test_a_new_city_asks_a_free_chain_once_with_all_its_parts(store, city_chains):
+    """La première rando d'une ville nouvelle met OSM dans la file, d'origine « etl », avec toutes ses parties."""
+    passage_id = passage_service.request_city_chain("osm", "Guidel")
+    passage = store.passages[passage_id]
+    assert passage["chain"] == "osm" and passage["origin"] == "etl" and passage["status"] == "en_file"
+    assert [row["part"] for row in store.parts[passage_id]] == ["osm"]
+
+
+def test_five_hikes_in_the_same_new_city_ask_each_chain_only_once(store, city_chains):
+    """Cinq randos envoyées ensemble à la même ville ne demandent qu'un OSM et qu'un FINESS (Île-d'Yeu, 23 novembre 2026 : cinq OSM, trois FINESS)."""
+    for _ in range(5):
+        passage_service.request_city_chain("osm", "Guidel")
+        passage_service.request_city_chain("finess", "Guidel")
+    assert sorted(passage["chain"] for passage in store.passages.values()) == ["finess", "osm"]
+
+
+def test_a_chain_already_finished_on_the_city_is_not_asked_again(store, city_chains):
+    """Une rando arrivée après la fin d'OSM sur sa ville ne relance pas OSM : la ville est déjà faite."""
+    first = passage_service.request_city_chain("osm", "Guidel")
+    passage_service.run_passage(first)
+    assert store.passages[first]["status"] == "fini"
+    assert passage_service.request_city_chain("osm", "Guidel") is None
+
+
+def test_a_failure_waiting_for_its_resume_is_not_asked_again(store, city_chains, free):
+    """OSM en échec sur la ville, pas encore repris : une seconde rando n'en demande pas un autre, la reprise s'en charge."""
+    free["loaded"]["osm"] = None
+    failed = passage_service.request_city_chain("osm", "Guidel")
+    passage_service.run_passage(failed)
+    assert store.passages[failed]["status"] == "echec"
+    assert passage_service.request_city_chain("osm", "Guidel") is None
+
+
+def test_a_city_already_read_does_not_read_the_source_of_the_spots_again(store, city_chains):
+    """Une ville dont la source des spots a été lue avant les passages (histo_scrap) ne demande que les parties d'agents."""
+    city_chains["read"] = True
+    passage_id = passage_service.request_city_chain("spots", "Guidel")
+    assert [row["part"] for row in store.parts[passage_id]] == ["harmonisation", "ouvertures", "verification"]
+
+
+def test_a_city_unknown_to_cities_asks_nothing(store, city_chains):
+    """Une ville absente de la table cities ne met rien dans la file : l'avertissement est écrit dans le journal."""
+    assert passage_service.request_city_chain("osm", "Ville inconnue") is None
+    assert store.passages == {}
+
+
+def test_the_osm_of_two_new_cities_pass_one_after_the_other(store, city_chains, free, monkeypatch):
+    """Deux villes nouvelles : la file fait passer leurs OSM l'un après l'autre, jamais en même temps (62 OSM dans la même minute le 23 novembre 2026)."""
+    morgat = {"id": 13, "name": "Morgat", "commune": "Crozon", "insee": "29042"}
+    monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY, morgat])
+    guidel = passage_service.request_city_chain("osm", "Guidel")
+    second = passage_service.request_city_chain("osm", "Morgat")
+    store.passages[second]["city_name"] = "Morgat"
+    assert passage_queue.run_next() is True
+    assert store.passages[guidel]["status"] == "fini" and store.passages[second]["status"] == "en_file"
+    assert passage_queue.run_next() is True
+    assert free["asked"] == [("osm", "Guidel"), ("osm", "Morgat")]

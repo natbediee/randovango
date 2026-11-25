@@ -24,6 +24,7 @@ from etl.load.load_p4n import load_p4n_to_mysql
 from etl.transform.transform_p4n import transform_p4n
 from services import etl_chains
 from services.etl_chains import StepFailed
+from utils.db_utils import MySQLUtils
 
 LOCK_NAME = "randovango_passage_spots"
 BUSY = "Un passage de la chaîne des spots tourne déjà : attendre sa fin avant d'en lancer un autre."
@@ -50,6 +51,17 @@ def lock(city_id: int):
 def lock_is_free(city_id: int) -> bool:
     """Le verrou de la chaîne est-il libre ?"""
     return etl_chains.named_lock_is_free(LOCK_NAME)
+
+
+def source_already_read(city_id: int) -> bool:
+    """
+    La source des spots a-t-elle déjà été lue pour cette ville (une ligne dans histo_scrap) ? Une ville lue avant les
+    passages (#276) n'a aucune partie « source » finie dans la table passages : histo_scrap le sait quand même.
+    """
+    # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
+    with MySQLUtils.open_cursor() as (conn, cursor):
+        cursor.execute("SELECT COUNT(*) FROM histo_scrap WHERE city_id = %s", (city_id,))
+        return cursor.fetchone()[0] > 0
 
 
 def steps_of(part: str) -> dict:

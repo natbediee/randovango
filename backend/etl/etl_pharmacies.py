@@ -12,7 +12,7 @@ cachées qu'une fois ce passage fait sur elle. Avant, elles restent : une pharma
 la France : le fichier est national.
 
 DEUX DÉCLENCHEURS AUTOMATIQUES, COMME LES CARBURANTS (carte #241)
-    une ville ajoutée   : etl_pipeline.scraping_background lance run_new_city_etl après OSM ;
+    une ville ajoutée   : la chaîne « finess » lance run_new_city_etl, après OSM dans la file des passages ;
     chaque jour         : api/routers/step1.py lance refresh_pharmacies au début d'un voyage, si FINESS n'a pas encore
                           été relu aujourd'hui. Toutes les villes sont repassées : une pharmacie qui ouvre est ajoutée,
                           une pharmacie qui ferme est masquée, au plus tard un jour après (FINESS est refait chaque nuit).
@@ -92,8 +92,8 @@ def run_city_etl(city: str, pharmacies: list, dry_run: bool = False) -> int | No
 
 def run_new_city_etl(city: str) -> int | None:
     """
-    Les pharmacies d'une ville qui vient d'entrer dans l'application (carte #241), lancé par
-    etl_pipeline.scraping_background après OSM, sans geste de l'administratrice. FINESS est téléchargé pour elle seule :
+    Les pharmacies d'une ville qui vient d'entrer dans l'application (carte #241), lancé par la chaîne « finess »,
+    après OSM dans la file des passages, sans geste de l'administratrice. FINESS est téléchargé pour elle seule :
     une ville ajoutée est rare, et le fichier ne prend que quelques secondes. None si le fichier ou la ville manquent.
     """
     pharmacies = read_pharmacies()
