@@ -59,6 +59,14 @@ class _Store:
         # Les passages sont gardés dans l'ordre où ils ont été demandés (un dictionnaire garde l'ordre d'écriture).
         return [key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED]
 
+    def failures_to_resume(self, chains, since):
+        # Comme la requête : les échecs de l'ETL sur ces chaînes, finis depuis `since`, que personne n'a repris.
+        return [{"passage_id": key, "chain": row["chain"], "city_id": row["city_id"],
+                 "resumed_from": row["resumed_from"], "finished_at": row["finished_at"]}
+                for key, row in self.passages.items()
+                if row["status"] == passage_store.FAILED and row["origin"] == "etl" and row["chain"] in chains
+                and row["finished_at"] and row["finished_at"] >= since and self.resumed_by(key) is None]
+
     def running_ids(self, chain):
         return [key for key, row in self.passages.items()
                 if row["status"] == passage_store.RUNNING and row["chain"] == chain]
@@ -101,6 +109,7 @@ def store(monkeypatch):
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
                  "passage_ids", "recent_ids", "resumed_by", "queued_ids", "running_ids", "open_parts", "finished_parts",
+                 "failures_to_resume",
                  "load_items", "count_items", "passages_of_item"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
     monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
@@ -471,6 +480,38 @@ def chain_lock_free(city_id):
     """Un verrou toujours libre, pour une chaîne simulée."""
     from contextlib import nullcontext
     return nullcontext()
+
+
+def test_the_queue_takes_the_chains_of_a_city_in_the_order_of_the_new_city(store):
+    """Les chaînes d'une ville demandées dans le désordre passent dans l'ordre de l'ajout d'une ville : OSM, carburants, FINESS, spots, pépites, services."""
+    for chain_key in ("services", "pepites", "spots", "finess", "carburants", "osm"):
+        store.insert_passage(chain_key, chain_key, 12, "etl", ["partie"])
+    assert [passage["chain"] for passage in passage_queue.queue_in_order()] == list(passage_queue.CHAIN_ORDER)
+
+
+def test_the_osm_of_a_second_city_passes_before_the_services_of_the_first(store):
+    """Envoi de randos dans deux villes : OSM de la seconde passe avant les services de la première, qui durent des heures (constat du 23 novembre)."""
+    store.insert_passage("services-A", "services", 12, "etl", ["restaurants"])
+    store.insert_passage("osm-A", "osm", 12, "etl", ["osm"])
+    store.insert_passage("services-B", "services", 13, "etl", ["restaurants"])
+    store.insert_passage("osm-B", "osm", 13, "etl", ["osm"])
+    order = [passage["passage_id"] for passage in passage_queue.queue_in_order()]
+    assert order == ["osm-A", "osm-B", "services-A", "services-B"]
+
+
+def test_a_chain_unknown_to_the_queue_passes_last(store):
+    """Une chaîne que la file ne range pas (écrite par une autre version du code) passe après toutes les autres, sans la bloquer."""
+    store.insert_passage("inconnu", "chaine_future", 12, "etl", ["partie"])
+    store.insert_passage("services", "services", 12, "etl", ["restaurants"])
+    assert [passage["passage_id"] for passage in passage_queue.queue_in_order()] == ["services", "inconnu"]
+
+
+def test_a_new_city_osm_runs_before_an_older_services_passage(store, chain, free):
+    """La file fait partir OSM d'une ville nouvelle avant un passage des services demandé plus tôt."""
+    services = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    osm = passage_service.create_passage("osm", 12, origin="etl")
+    assert passage_queue.run_next() is True
+    assert store.passages[osm]["status"] == "fini" and store.passages[services]["status"] == "en_file"
 
 
 def test_a_passage_waiting_for_the_admin_is_not_taken_by_the_queue(store, chain):
@@ -974,3 +1015,132 @@ def test_an_unknown_or_incomplete_object_is_refused(store, chain, item_type, ite
     """Un objet d'un type inconnu, ou sans son id, est refusé avec les types attendus."""
     with pytest.raises(ValueError, match="service, spot, pepite"):
         passage_service.list_passages(item_type=item_type, item_id=item_id)
+
+
+# --- Les chaînes de l'ajout d'une ville, demandées une seule fois (issue #316) ---
+
+@pytest.fixture
+def city_chains(store, free, monkeypatch):
+    """Les chaînes de l'ajout d'une ville, avec Guidel jamais lue par la source des spots, sauf si `read` est vrai."""
+    state = {"read": False}
+    monkeypatch.setattr(passage_service.spot_chain, "source_already_read", lambda city_id: state["read"])
+    return state
+
+
+def test_a_new_city_asks_a_free_chain_once_with_all_its_parts(store, city_chains):
+    """La première rando d'une ville nouvelle met OSM dans la file, d'origine « etl », avec toutes ses parties."""
+    passage_id = passage_service.request_city_chain("osm", "Guidel")
+    passage = store.passages[passage_id]
+    assert passage["chain"] == "osm" and passage["origin"] == "etl" and passage["status"] == "en_file"
+    assert [row["part"] for row in store.parts[passage_id]] == ["osm"]
+
+
+def test_five_hikes_in_the_same_new_city_ask_each_chain_only_once(store, city_chains):
+    """Cinq randos envoyées ensemble à la même ville ne demandent qu'un OSM et qu'un FINESS (Île-d'Yeu, 23 novembre 2026 : cinq OSM, trois FINESS)."""
+    for _ in range(5):
+        passage_service.request_city_chain("osm", "Guidel")
+        passage_service.request_city_chain("finess", "Guidel")
+    assert sorted(passage["chain"] for passage in store.passages.values()) == ["finess", "osm"]
+
+
+def test_a_chain_already_finished_on_the_city_is_not_asked_again(store, city_chains):
+    """Une rando arrivée après la fin d'OSM sur sa ville ne relance pas OSM : la ville est déjà faite."""
+    first = passage_service.request_city_chain("osm", "Guidel")
+    passage_service.run_passage(first)
+    assert store.passages[first]["status"] == "fini"
+    assert passage_service.request_city_chain("osm", "Guidel") is None
+
+
+def test_a_failure_waiting_for_its_resume_is_not_asked_again(store, city_chains, free):
+    """OSM en échec sur la ville, pas encore repris : une seconde rando n'en demande pas un autre, la reprise s'en charge."""
+    free["loaded"]["osm"] = None
+    failed = passage_service.request_city_chain("osm", "Guidel")
+    passage_service.run_passage(failed)
+    assert store.passages[failed]["status"] == "echec"
+    assert passage_service.request_city_chain("osm", "Guidel") is None
+
+
+def test_a_city_already_read_does_not_read_the_source_of_the_spots_again(store, city_chains):
+    """Une ville dont la source des spots a été lue avant les passages (histo_scrap) ne demande que les parties d'agents."""
+    city_chains["read"] = True
+    passage_id = passage_service.request_city_chain("spots", "Guidel")
+    assert [row["part"] for row in store.parts[passage_id]] == ["harmonisation", "ouvertures", "verification"]
+
+
+def test_a_city_unknown_to_cities_asks_nothing(store, city_chains):
+    """Une ville absente de la table cities ne met rien dans la file : l'avertissement est écrit dans le journal."""
+    assert passage_service.request_city_chain("osm", "Ville inconnue") is None
+    assert store.passages == {}
+
+
+def test_the_osm_of_two_new_cities_pass_one_after_the_other(store, city_chains, free, monkeypatch):
+    """Deux villes nouvelles : la file fait passer leurs OSM l'un après l'autre, jamais en même temps (62 OSM dans la même minute le 23 novembre 2026)."""
+    morgat = {"id": 13, "name": "Morgat", "commune": "Crozon", "insee": "29042"}
+    monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY, morgat])
+    guidel = passage_service.request_city_chain("osm", "Guidel")
+    second = passage_service.request_city_chain("osm", "Morgat")
+    store.passages[second]["city_name"] = "Morgat"
+    assert passage_queue.run_next() is True
+    assert store.passages[guidel]["status"] == "fini" and store.passages[second]["status"] == "en_file"
+    assert passage_queue.run_next() is True
+    assert free["asked"] == [("osm", "Guidel"), ("osm", "Morgat")]
+
+
+# --- La reprise seule des chaînes gratuites en échec (services/passage_queue.py, issue #316) ---
+
+NOW = datetime(2026, 11, 25, 12, 0)
+
+
+def _failed_osm(store, free, finished_at, resumed_from=None):
+    """Un OSM de l'ETL sur Guidel, en échec (OpenStreetMap muet), fini à `finished_at`."""
+    free["loaded"]["osm"] = None
+    passage_id = passage_service.create_passage("osm", 12, origin="etl", resumed_from=resumed_from)
+    passage_service.run_passage(passage_id)
+    store.passages[passage_id]["finished_at"] = finished_at
+    return passage_id
+
+
+def test_a_failed_osm_is_resumed_by_the_queue_after_fifteen_minutes(store, free):
+    """OSM en échec depuis 20 minutes : la file le reprend seule, par un passage « etl » qui le désigne, sans script (25 novembre 2026)."""
+    failed = _failed_osm(store, free, datetime(2026, 11, 25, 11, 40))
+    [resumed] = passage_queue.resume_failed_free_chains(NOW)
+    assert store.passages[resumed]["resumed_from"] == failed and store.passages[resumed]["origin"] == "etl"
+    assert store.passages[resumed]["status"] == "en_file"
+
+
+def test_a_failure_too_recent_waits_before_its_resume(store, free):
+    """OSM en échec depuis 5 minutes n'est pas encore repris : OpenStreetMap a le temps de se remettre."""
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 55))
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_after_two_resumes_the_failure_waits_for_the_admin(store, free):
+    """Un OSM qui échoue encore après deux reprises n'est plus repris seul : l'échec attend l'administratrice."""
+    first = _failed_osm(store, free, datetime(2026, 11, 25, 10, 0))
+    second = _failed_osm(store, free, datetime(2026, 11, 25, 10, 30), resumed_from=first)
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 0), resumed_from=second)
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failure_already_redone_by_hand_is_not_resumed(store, free):
+    """OSM en échec, mais déjà rechargé sur la ville par une relance à la main : la file ne le refait pas."""
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 0))
+    free["loaded"]["osm"] = 40
+    by_hand = passage_service.create_passage("osm", 12)
+    passage_service.run_passage(by_hand)
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failure_older_than_a_day_is_not_resumed(store, free):
+    """Un échec de la veille n'est pas repris seul : l'administratrice a peut-être déjà décidé de le laisser."""
+    _failed_osm(store, free, datetime(2026, 11, 24, 9, 0))
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failed_paid_chain_is_never_resumed_alone(store, chain):
+    """Un passage des services en échec n'est jamais repris par la file : une reprise coûte, c'est l'admin qui décide."""
+    chain["fail"]["restaurants"] = LLMTimeout("délai dépassé")
+    failed = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    passage_service.run_passage(failed)
+    store.passages[failed]["finished_at"] = datetime(2026, 11, 25, 10, 0)
+    assert passage_queue.resume_failed_free_chains(NOW) == []

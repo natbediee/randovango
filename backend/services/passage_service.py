@@ -401,6 +401,39 @@ def request_etl_passage(city_name: str) -> str | None:
     return create_passage("services", city["id"], left, origin="etl", status=status)
 
 
+def parts_already_asked(chain_key: str, city_id: int) -> set:
+    """
+    Les parties d'une chaîne que l'ETL ne redemande pas sur cette ville : déjà finies, ou déjà demandées (en file, en
+    attente, en cours, ou en échec pas encore repris). La source des spots compte aussi comme faite quand histo_scrap
+    dit la ville déjà lue (une ville lue avant les passages).
+    """
+    already = passage_store.finished_parts(chain_key, [city_id]) | passage_store.open_parts(chain_key, [city_id])
+    if chain_key == "spots" and spot_chain.source_already_read(city_id):
+        already.add("source")
+    return already
+
+
+def request_city_chain(chain_key: str, city_name: str) -> str | None:
+    """
+    À l'arrivée d'une rando : met dans la file une chaîne de l'ajout d'une ville (OSM, carburants, FINESS, spots,
+    pépites) sur sa ville, et rend l'identifiant du passage ; None si la chaîne n'a plus rien à faire sur la ville.
+    Seules les parties jamais finies et pas déjà demandées sont demandées (issue #316) : cinq randos envoyées ensemble à
+    l'Île-d'Yeu avaient lancé cinq OSM et trois FINESS (23 novembre 2026). Une ville déjà faite n'est donc plus relancée
+    par une nouvelle rando ; l'admin peut toujours la relancer depuis la supervision.
+    Ces chaînes travaillent sur la ville elle-même, pas sur sa commune : l'OSM de Morgat est le sien.
+    """
+    city = next((row for row in service_store.load_cities() if row["name"] == city_name), None)
+    if city is None:
+        logger.warning(f"[passages] {city_name} : ville inconnue, chaîne {chain_key} non demandée")
+        return None
+    already = parts_already_asked(chain_key, city["id"])
+    left = [part for part in CHAINS[chain_key].parts if part not in already]
+    if not left:
+        logger.info(f"[passages] {city_name} : chaîne {chain_key} déjà faite ou déjà demandée, rien de plus")
+        return None
+    return create_passage(chain_key, city["id"], left, origin="etl")
+
+
 def launch_waiting(passage: dict) -> str:
     """
     Lance une ville que l'ETL a laissée en attente (mise à jour automatique coupée) : le passage est remis en file,
@@ -512,7 +545,9 @@ DISCARDED_WORDS = {"sans_page": "sans preuve", "liquidation": "société liquid�
 
 
 # Le bilan des autres chaînes que les services (etl_chains.py, spot_chain.py) : ce qu'elles ont fait, (singulier, pluriel).
-LOADED_WORDS = {"lieux": ("lieu chargé", "lieux chargés"), "pharmacies": ("pharmacie chargée", "pharmacies chargées"),
+LOADED_WORDS = {"lieux": ("lieu chargé", "lieux chargés"),
+                "lieux_wikidata": ("lieu de Wikidata chargé", "lieux de Wikidata chargés"),
+                "pharmacies": ("pharmacie chargée", "pharmacies chargées"),
                 # La chaîne des spots (services/spot_chain.py).
                 "spots_lus": ("spot lu", "spots lus"), "harmonises": ("spot harmonisé", "spots harmonisés"),
                 "ouvertures_lues": ("ouverture lue", "ouvertures lues"), "verifies": ("spot vérifié", "spots vérifiés"),

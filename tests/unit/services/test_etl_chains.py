@@ -22,6 +22,7 @@ GUIDEL = {"id": 12, "name": "Guidel"}
 def test_each_free_chain_loads_the_city_and_gives_its_count(monkeypatch, run_part, etl_name, summary):
     """OSM, FINESS et les carburants chargent la ville par son nom et rendent en bilan le nombre de lieux chargés."""
     asked = []
+    monkeypatch.setattr(etl_chains, "run_wikidata_etl", lambda name: None)      # Wikidata muet : bilan d'OSM seul
     monkeypatch.setattr(etl_chains, etl_name, lambda name: asked.append(name) or 42)
     assert run_part("p1", "x", GUIDEL, False, lambda: None) == summary
     assert asked == ["Guidel"]
@@ -37,6 +38,25 @@ def test_a_free_chain_that_loads_nothing_fails_with_a_readable_reason(monkeypatc
     monkeypatch.setattr(etl_chains, etl_name, lambda name: None)
     with pytest.raises(StepFailed, match=reason):
         run_part("p1", "x", GUIDEL, False, lambda: None)
+
+
+def test_osm_then_wikidata_load_the_city_and_both_counts_are_in_the_summary(monkeypatch):
+    """La partie OSM charge OSM puis Wikidata sur la ville, dans cet ordre, et son bilan donne les deux nombres de lieux."""
+    order = []
+    monkeypatch.setattr(etl_chains, "run_osm_etl", lambda name: order.append(("osm", name)) or 42)
+    monkeypatch.setattr(etl_chains, "run_wikidata_etl", lambda name: order.append(("wikidata", name)) or 5)
+    assert etl_chains.run_osm("p1", "osm", GUIDEL, False, lambda: None) == {"lieux": 42, "lieux_wikidata": 5}
+    assert order == [("osm", "Guidel"), ("wikidata", "Guidel")]
+
+
+def test_wikidata_is_not_asked_when_osm_fails(monkeypatch):
+    """OSM sans réponse : Wikidata n'est pas lu, la reprise du passage chargera les deux ensemble (la règle des doublons a besoin d'OSM)."""
+    asked = []
+    monkeypatch.setattr(etl_chains, "run_osm_etl", lambda name: None)
+    monkeypatch.setattr(etl_chains, "run_wikidata_etl", lambda name: asked.append(name) or 5)
+    with pytest.raises(StepFailed):
+        etl_chains.run_osm("p1", "osm", GUIDEL, False, lambda: None)
+    assert asked == []
 
 
 @pytest.fixture

@@ -97,6 +97,17 @@ def test_the_queue_is_read_from_the_oldest_passage(base):
     assert "ORDER BY requested_at, passage_id" in base.queries[0][0] and base.queries[0][1] == ("en_file",)
 
 
+def test_the_failures_to_resume_are_etl_failures_of_the_free_chains_not_yet_resumed(base):
+    """Les échecs à reprendre seuls sont ceux de l'ETL sur les chaînes données, finis depuis la date donnée, que personne n'a repris."""
+    from datetime import datetime
+    since = datetime(2026, 11, 24, 12, 0)
+    base.rows = [{"passage_id": "p1", "chain": "osm", "city_id": 12, "resumed_from": None, "finished_at": since}]
+    assert passage_store.failures_to_resume(("osm", "finess"), since)[0]["passage_id"] == "p1"
+    sql, values = base.queries[0]
+    assert "p.origin = 'etl'" in sql and "NOT EXISTS" in sql and "ORDER BY p.finished_at" in sql
+    assert values == ("echec", "osm", "finess", since)
+
+
 def test_an_item_is_noted_under_the_running_passage_without_committing(base):
     """Un spot harmonisé est noté sous le passage en cours, avec le curseur de l'écriture : la ligne entre avec elle."""
     from agents.llm_service import mesure_passage

@@ -117,6 +117,19 @@ def recent_ids(limit: int) -> list:
     return [row["passage_id"] for row in rows]
 
 
+def failures_to_resume(chains: tuple, since: datetime) -> list:
+    """
+    Les passages de l'ETL en échec sur ces chaînes, finis depuis `since`, que personne n'a encore repris : ceux que la
+    file peut reprendre seule (issue #316). Du plus ancien échec au plus récent, avec leur fin et le passage qu'ils
+    reprenaient eux-mêmes (resumed_from), pour compter les reprises déjà faites.
+    """
+    placeholders = ",".join(["%s"] * len(chains))
+    return _read(f"""SELECT p.passage_id, p.chain, p.city_id, p.resumed_from, p.finished_at FROM passages p
+                     WHERE p.status = %s AND p.origin = 'etl' AND p.chain IN ({placeholders}) AND p.finished_at >= %s
+                       AND NOT EXISTS (SELECT 1 FROM passages r WHERE r.resumed_from = p.passage_id)
+                     ORDER BY p.finished_at""", (FAILED, *chains, since))
+
+
 def resumed_by(passage_id: str) -> str | None:
     """Le passage qui reprend celui-ci (sa colonne resumed_from le désigne), ou None s'il n'a pas été repris."""
     rows = _read("SELECT passage_id FROM passages WHERE resumed_from = %s", (passage_id,))
