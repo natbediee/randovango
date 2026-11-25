@@ -90,6 +90,8 @@ def get_settings(_admin=Depends(require_admin)):
     qui reste le jour et le mois, et, si le budget est atteint, la raison (budget_atteint), sinon null.
     Les montants sont en euros TTC estimés ; la dépense est aussi donnée en dollars, la monnaie du fournisseur, avec le
     taux de la BCE utilisé (taux). Sans aucun taux connu, les montants en euros sont null et budget_atteint le dit.
+    budget_actif vaut false quand AGENT_BUDGET_ENABLED=0 coupe le budget (poste de développement) : les dépenses sont
+    toujours données, mais rien ne retient la file, et budget_atteint vaut null.
     """
     return budget_service.budget_state()
 

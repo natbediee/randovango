@@ -21,7 +21,14 @@ Un passage d'une chaîne d'agents ne part que si les deux conditions tiennent :
 Le passage en cours n'est jamais coupé : on peut dépasser d'un passage, soit une ville (2 à 4 €).
 Sans aucun taux connu (site de la BCE jamais lu), la dépense ne peut pas se compter en euros : les passages attendent.
 Vany elle-même n'est pas bloquée ici : sa réserve la protège des chaînes, son propre plafond viendra avec #198.
+
+LE BUDGET COUPÉ, SUR LE POSTE DE DÉVELOPPEMENT (issue #324)
+En local, les agents passent par l'abonnement : la dépense comptée n'est qu'un équivalent API, pas une facture.
+AGENT_BUDGET_ENABLED=0 dans le .env coupe alors le plafond du jour et l'enveloppe du mois : la file ne retient plus
+aucun passage à cause du budget. Les dépenses restent comptées et affichées, et budget_actif le dit à la supervision.
+Sans ce réglage, le budget est actif (préprod, prod), comme les plafonds de RATE_LIMIT_ENABLED.
 """
+import os
 from datetime import date, datetime, timedelta
 
 from services import agent_settings_store, exchange_rate_service
@@ -49,6 +56,15 @@ def amounts_in_euros(row: dict) -> dict:
             rate = exchange_rate_service.rate_for(row["changed_at"].date())
             amounts[f"{name}_eur"] = exchange_rate_service.usd_to_eur(float(row[f"{name}_usd"]), rate)
     return amounts
+
+
+def budget_enabled() -> bool:
+    """
+    Le budget retient-il les passages ? Oui par défaut (préprod, prod) ; AGENT_BUDGET_ENABLED=0 le coupe sur le poste
+    de développement. Relu à chaque décision, mais une valeur changée dans le .env n'arrive dans l'API qu'au
+    redémarrage de son conteneur : on la règle avant un gros envoi, pas pendant un passage.
+    """
+    return os.getenv("AGENT_BUDGET_ENABLED", "1") != "0"
 
 
 def load_settings() -> dict:
@@ -138,10 +154,13 @@ def budget_state(now: datetime | None = None) -> dict:
     TTC estimés et en dollars) et ce qui reste, le jour et le mois, le taux de la BCE utilisé pour aujourd'hui, et la
     raison du blocage si le budget est atteint (None sinon).
     Sans aucun taux connu, les montants en euros valent None et la raison du blocage le dit.
+    Budget coupé (AGENT_BUDGET_ENABLED=0) : budget_actif vaut False, les dépenses sont comptées comme d'habitude, et la
+    raison du blocage vaut toujours None, puisque rien ne retient la file.
     """
     now = now or datetime.now()
     settings = load_settings()
-    state = {"services_apres_etl": settings["services_after_etl"],
+    active = budget_enabled()
+    state = {"budget_actif": active, "services_apres_etl": settings["services_after_etl"],
              "enveloppe_du_mois_eur": settings["monthly_budget_eur"],
              "plafond_du_jour_eur": settings["daily_budget_eur"],
              "reserve_vany_eur": settings["vany_reserve_eur"],
@@ -157,7 +176,10 @@ def budget_state(now: datetime | None = None) -> dict:
         today, month = spent_since(day_start), spent_since(month_start)
         state["taux"] = exchange_rate_service.rate_label(exchange_rate_service.rate_for(now.date()))
     except RateUnavailable as error:
-        state["budget_atteint"] = f"taux du dollar inconnu ({error}) ; les passages attendent que le site de la BCE réponde"
+        state["budget_atteint"] = None
+        if active:
+            state["budget_atteint"] = (f"taux du dollar inconnu ({error}) ; "
+                                       f"les passages attendent que le site de la BCE réponde")
         return state
     # Dépensé et restant se calculent sur les montants arrondis au centime : sinon 10 − 2,725 donnerait « 2,73 dépensés »
     # et « 7,28 restants » (essai du 19 novembre 2026).
@@ -166,7 +188,7 @@ def budget_state(now: datetime | None = None) -> dict:
                   "depense_du_jour_usd": today["usd"], "depense_du_mois_usd": month["usd"],
                   "reste_du_jour_eur": round(max(0.0, settings["daily_budget_eur"] - today["eur"]), 2),
                   "reste_du_mois_eur": round(max(0.0, usable - month["eur"]), 2),
-                  "budget_atteint": block_reason(settings, today["eur"], month["eur"], now)})
+                  "budget_atteint": block_reason(settings, today["eur"], month["eur"], now) if active else None})
     return state
 
 
