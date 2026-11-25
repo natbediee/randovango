@@ -31,6 +31,10 @@ services:
       # Plafonds de débit coupés par défaut sur une branche, où l'on compose beaucoup de voyages pour tester.
       # Pour les essayer : RATE_LIMIT_ENABLED=1 devant la commande docker compose (voir .env.example).
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-0}
+      # Budget des agents coupé par défaut sur une branche : en local, les agents passent par l'abonnement, et le
+      # coût compté n'est qu'un équivalent API. Les dépenses restent affichées dans la supervision.
+      # Pour l'essayer : AGENT_BUDGET_ENABLED=1 devant la commande docker compose (voir .env.example).
+      AGENT_BUDGET_ENABLED: ${AGENT_BUDGET_ENABLED:-0}
     volumes:
       - ./backend:/usr/src/app
       # Un seul .env pour tout le projet : celui du dossier principal, rangé à côté (~/Dev/randovango).

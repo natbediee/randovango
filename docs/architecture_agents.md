@@ -116,5 +116,10 @@ flowchart TB
   chacun à son taux : le plafond ne bouge pas quand le dollar varie. Un passage payant ne part pas quand le budget
   est atteint (`services/budget_service.py`). Les montants sont aussi écrits en dollars dans `agent_settings`, pour le
   code qui lit encore les anciennes colonnes.
+- **Le budget coupé, sur le poste de développement.** Par l'abonnement, la dépense n'est qu'un équivalent :
+  `AGENT_BUDGET_ENABLED=0` coupe alors le plafond du jour et l'enveloppe du mois, et plus aucun passage n'attend à
+  cause du budget. Les dépenses restent comptées et affichées, et `budget_actif` vaut `false` dans
+  `GET /api/supervision/passages/reglage`. Sans ce réglage, le budget est actif (préprod, prod). Le réglage se lit
+  au démarrage du conteneur de l'API : on le change avant un gros envoi, pas pendant un passage.
 - **Sans aucun taux.** Si le site de la BCE n'a jamais pu être lu, la dépense ne peut pas se compter en euros : les
   passages payants attendent, un changement de montant est refusé (503), et les coûts gardent leurs seuls dollars.

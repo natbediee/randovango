@@ -44,6 +44,8 @@ def base(monkeypatch):
             raise RateUnavailable("aucun taux de la BCE connu")
         return rate(state["rates"].get(day, 1.20), day)
 
+    # Le .env du poste peut couper le budget (AGENT_BUDGET_ENABLED=0) : chaque test part du budget actif par défaut.
+    monkeypatch.delenv("AGENT_BUDGET_ENABLED", raising=False)
     store = budget_service.agent_settings_store
     monkeypatch.setattr(store, "load_latest", lambda: state["latest"])
     monkeypatch.setattr(store, "insert", insert)
@@ -166,3 +168,33 @@ def test_what_is_left_adds_up_with_what_is_spent(base):
     base["today"], base["month"] = 2.725, 40.0
     state = budget_service.budget_state(NOW)
     assert state["depense_du_jour_eur"] + state["reste_du_jour_eur"] == pytest.approx(10.0)
+
+
+def test_without_the_setting_the_budget_is_active(base):
+    """Sans AGENT_BUDGET_ENABLED, comme en préprod et en prod, le budget est actif et le plafond du jour retient la file."""
+    base["today"], base["month"] = 10.4, 40.0
+    state = budget_service.budget_state(NOW)
+    assert state["budget_actif"] is True and state["budget_atteint"] is not None
+
+
+def test_a_cut_budget_lets_passages_go_past_the_daily_cap_and_the_month_envelope(base, monkeypatch):
+    """Budget coupé sur le poste de développement : ni le plafond du jour ni l'enveloppe du mois ne retiennent un passage (file arrêtée le 24 novembre à 70,40 € sur 70 €)."""
+    monkeypatch.setenv("AGENT_BUDGET_ENABLED", "0")
+    base["today"], base["month"] = 80.0, 900.0
+    assert budget_service.budget_block() is None
+
+
+def test_a_cut_budget_still_counts_and_shows_the_spending(base, monkeypatch):
+    """Budget coupé : les dépenses du jour et du mois restent comptées et affichées, et budget_actif dit à la supervision qu'il est coupé."""
+    monkeypatch.setenv("AGENT_BUDGET_ENABLED", "0")
+    base["today"], base["month"] = 10.4, 40.0
+    state = budget_service.budget_state(NOW)
+    assert state["budget_actif"] is False and state["budget_atteint"] is None
+    assert (state["depense_du_jour_eur"], state["depense_du_mois_eur"]) == (10.4, 40.0)
+
+
+def test_a_cut_budget_does_not_wait_for_the_exchange_rate(base, monkeypatch):
+    """Budget coupé : même sans taux de la BCE connu, rien ne retient la file, puisque le budget ne compte plus."""
+    monkeypatch.setenv("AGENT_BUDGET_ENABLED", "0")
+    base["rates"] = None
+    assert budget_service.budget_block() is None
