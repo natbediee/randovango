@@ -121,13 +121,28 @@ else:
     logger.info("[INIT] ENV != dev : auto-init des bases désactivée.")
 
 
+def passage_queue_enabled() -> bool:
+    """
+    Dit si cette API doit faire tourner la file des passages. Non pendant les tests (ENV=test) : aucun thread ne doit y
+    lire la base. Non quand PASSAGE_QUEUE_ENABLED vaut « 0 » : c'est le cas d'un backend de branche
+    (docker-compose.branche.yml), qui partage la base commune et ne doit pas prendre les passages du backend principal
+    pour les faire tourner avec le code de sa branche. Le backend principal ne pose pas ce réglage : il garde sa file.
+    """
+    if os.getenv("ENV", "dev") == "test":
+        return False
+    return os.getenv("PASSAGE_QUEUE_ENABLED", "1") != "0"
+
+
 @app.on_event("startup")
 def start_passage_queue():
     """
-    Au démarrage du serveur, lance le fil de la file des passages (services/passage_queue.py, issue #211) : les villes
-    ajoutées par l'ETL y attendent leur tour, et celles restées en file avant un redémarrage repartent.
-    Pas pendant les tests (ENV=test) : aucun fil ne doit y lire la base.
+    Au démarrage du serveur, lance les threads de la file des passages (services/passage_queue.py) : les villes ajoutées
+    par l'ETL y attendent leur tour, et celles restées en file avant un redémarrage repartent. Sur une API qui ne fait
+    pas tourner la file (passage_queue_enabled), les villes ajoutées entrent quand même en file : c'est le backend
+    principal qui les fait partir.
     """
-    if os.getenv("ENV", "dev") != "test":
-        from services import passage_queue
-        passage_queue.start_worker()
+    if not passage_queue_enabled():
+        logger.info("[file] file des passages non lancée sur cette API (ENV=test ou PASSAGE_QUEUE_ENABLED=0)")
+        return
+    from services import passage_queue
+    passage_queue.start_worker()
