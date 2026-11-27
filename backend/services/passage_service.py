@@ -348,9 +348,10 @@ def run_passage(passage_id: str, parts: list | None = None) -> None:
     `parts` : les seules parties à faire maintenant (l'étape de la file, #332) ; s'il en reste d'autres après elles, le
     passage retourne en file, et l'étape suivante le prendra (les agents des spots après la source).
     Si le verrou est pris, le passage reste en file, sans échec : la file le relancera plus tard (#211).
-    Le travail et l'état final du passage s'écrivent sous le verrou (run_parts) : la file regarde chaque minute les
-    passages « en cours » sans verrou pour les dire coupés (#344), et un passage qui vient de finir ne doit jamais
-    être vu ainsi entre la fin de son verrou et l'écriture de son état.
+    Sous le verrou de sa chaîne, le passage tient aussi le verrou à son nom (passage_lock, #352) : c'est lui qui dit
+    qu'il tourne vraiment. Le travail et l'état final du passage s'écrivent sous ces verrous (run_parts) : la file
+    regarde chaque minute les passages « en cours » sans verrou pour les dire coupés (#344), et un passage qui vient
+    de finir ne doit jamais être vu ainsi entre la fin de son verrou et l'écriture de son état.
     """
     passage = passage_store.load_passage(passage_id)
     if passage["chain"] not in CHAINS:
@@ -362,7 +363,7 @@ def run_passage(passage_id: str, parts: list | None = None) -> None:
         return
     try:
         city = city_to_run(chain, passage)
-        with chain.lock(passage["city_id"], first[0]["part"]), mesure_passage(passage_id):
+        with chain.lock(passage["city_id"], first[0]["part"]), passage_lock(passage_id), mesure_passage(passage_id):
             # Relu sous le verrou : deux fils peuvent viser le même passage ; le second à prendre le verrou le trouve
             # déjà parti et ne le refait pas.
             if passage_store.load_passage(passage_id)["status"] != QUEUED:
@@ -588,27 +589,47 @@ def waiting_reason(passage: dict) -> str | None:
     return paid_wait() if part_is_paid(chain, to_do[0]) else None
 
 
-def running_part(parts: list) -> str | None:
-    """La partie en cours d'un passage, sinon sa prochaine à faire : c'est d'elle que dépend le verrou tenu."""
-    row = next((row for row in parts if row["status"] == RUNNING), None)
-    row = row or next((row for row in parts if row["status"] == TO_DO), None)
-    return row["part"] if row else None
+PASSAGE_LOCK = "randovango_passage_{}"     # le verrou d'un passage qui tourne, à son identifiant (#352)
 
 
-def is_cut(chain: Chain, passage: dict, parts: list) -> bool:
+def passage_lock(passage_id: str):
     """
-    Un passage coupé : « en cours » dans la base, alors que plus personne ne tient le verrou de sa partie (le serveur
-    a redémarré, ou le programme qui le faisait tourner a été arrêté). Un passage qui tourne vraiment tient toujours
-    son verrou, jusqu'à l'écriture de son état final (run_passage).
+    Le verrou à l'identifiant du passage : un bloc « with », qui lève PassageRunning s'il est déjà tenu. Le passage le
+    tient tant qu'il tourne (run_passage). Comme les autres verrous, il appartient à une connexion MySQL : il se libère
+    tout seul si le serveur s'arrête en route, ce qui laisse voir le passage coupé.
     """
-    return passage["status"] == RUNNING and chain.lock_is_free(passage["city_id"], running_part(parts))
+    return etl_chains.named_lock(PASSAGE_LOCK.format(passage_id), "Ce passage tourne déjà.")
+
+
+def interrupt_if_cut(passage: dict) -> bool:
+    """
+    Marque « interrompu » un passage coupé, et dit s'il l'était. Un passage coupé est « en cours » dans la base alors
+    que personne ne tient son verrou : le serveur a redémarré, ou le programme qui le faisait tourner a été arrêté.
+    On regarde le verrou du passage lui-même, pas celui de sa chaîne : les services, la source des spots et les
+    agents des spots ont un seul verrou pour toutes les villes, et tant que Die tenait celui des services, Ercé,
+    coupé par un redémarrage, paraissait tourner encore (27 novembre 2026, #352).
+    Pour regarder, on prend le verrou du passage sans attendre : s'il est tenu, le passage tourne vraiment, ici ou
+    dans un autre programme sur la même base, et on n'y touche pas. S'il est libre, on le garde pendant qu'on relit
+    l'état et qu'on écrit l'échec : le passage ne peut ni démarrer ni finir entre les deux.
+    """
+    if passage["status"] != RUNNING:
+        return False
+    try:
+        with passage_lock(passage["passage_id"]):
+            # Relu sous le verrou : le passage a pu finir juste avant qu'on le prenne.
+            if passage_store.load_passage(passage["passage_id"])["status"] != RUNNING:
+                return False
+            mark_interrupted(passage, passage_store.load_parts(passage["passage_id"]))
+            return True
+    except PassageRunning:
+        return False
 
 
 def mark_cut_passages() -> list:
     """
-    Marque « interrompu » les passages coupés (is_cut), et rend leurs identifiants. La file le fait elle-même, à
-    chaque tour du fil des reprises (#344) : avant, seul l'affichage de la supervision les voyait, et les OSM de
-    Val-de-Sos, Charpey, Buzan et Contrazy, restés « en cours » après l'arrêt des scripts de l'ancienne file,
+    Marque « interrompu » les passages coupés (interrupt_if_cut), et rend leurs identifiants. La file le fait
+    elle-même, à chaque tour du fil des reprises (#344) : avant, seul l'affichage de la supervision les voyait, et les
+    OSM de Val-de-Sos, Charpey, Buzan et Contrazy, restés « en cours » après l'arrêt des scripts de l'ancienne file,
     bloquaient les autres étapes de leur ville jusqu'à ce qu'on l'ouvre (27 novembre 2026).
     Une fois en échec, un passage coupé sur une partie gratuite est repris seul, comme tout échec gratuit.
     """
@@ -617,9 +638,7 @@ def mark_cut_passages() -> list:
         passage = passage_store.load_passage(passage_id)
         if passage is None or passage["chain"] not in CHAINS:
             continue        # une chaîne inconnue tourne peut-être sous une autre version du code : on n'y touche pas
-        parts = passage_store.load_parts(passage_id)
-        if is_cut(CHAINS[passage["chain"]], passage, parts):
-            mark_interrupted(passage, parts)
+        if interrupt_if_cut(passage):
             cut.append(passage_id)
     return cut
 
@@ -781,9 +800,9 @@ def read_passage(passage_id: str, details: bool = True, item: tuple | None = Non
     if passage is None:
         return None
     chain = chain_of(passage["chain"])
+    if passage["chain"] in CHAINS:      # une chaîne inconnue tourne peut-être sous une autre version du code
+        interrupt_if_cut(passage)
     parts = passage_store.load_parts(passage_id)
-    if is_cut(chain, passage, parts):
-        mark_interrupted(passage, parts)
     calls = passage_store.load_calls(passage_id)
     return {"passage_id": passage_id, "chaine": chain.key, "libelle_chaine": chain.label,
             "ville": {"id": passage["city_id"], "nom": passage["city_name"], "commune": passage["city_commune"]},
