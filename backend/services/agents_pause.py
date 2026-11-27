@@ -17,10 +17,16 @@ Ce fichier ne sait rien du modèle qui tourne derrière : changer de fournisseur
 
 La pause est gardée en mémoire, dans le programme qui fait tourner la file : après un redémarrage, le premier appel
 payant retrouve la limite, et la pause est notée de nouveau.
+
+L'heure de fin de la pause est une heure du serveur, en UTC comme la base, et se compare à datetime.now() : la pause
+s'arrête donc au bon moment, été comme hiver. Seule la phrase lue par l'administratrice la donne à l'heure de Paris
+(#299).
 """
 from datetime import datetime
 
-_until = None       # la fin de la pause en cours (heure locale du serveur), ou None
+from utils.paris_time import to_paris
+
+_until = None       # la fin de la pause en cours (heure du serveur, en UTC), ou None
 _reason = None      # la raison de la pause, en phrase lisible
 
 
@@ -32,13 +38,16 @@ def pause(until: datetime, reason: str) -> None:
 
 
 def paused_reason(now: datetime | None = None) -> str | None:
-    """Pourquoi les étapes payantes attendent, en phrase lisible ; None si la pause est finie, ou s'il n'y en a pas."""
+    """
+    Pourquoi les étapes payantes attendent, en phrase lisible, avec l'heure de reprise à l'heure de Paris ; None si la
+    pause est finie, ou s'il n'y en a pas.
+    """
     global _until, _reason
     now = now or datetime.now()
     if _until is None or now >= _until:
         _until, _reason = None, None
         return None
-    return f"{_reason} : la file reprend seule vers {_until:%H h %M}"
+    return f"{_reason} : la file reprend seule vers {to_paris(_until):%H h %M}"
 
 
 def clear() -> None:
