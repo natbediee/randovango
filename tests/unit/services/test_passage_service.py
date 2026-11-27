@@ -4,6 +4,7 @@ Les passages d'une chaîne d'agents lancés depuis la supervision (services/pass
 Aucune base ni aucun agent : la trace des passages est gardée dans un dictionnaire (_Store), et la chaîne des services
 est remplacée par une chaîne simulée, qui peut échouer sur la catégorie qu'on lui dit.
 """
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta
 
 import pytest
@@ -124,6 +125,18 @@ class _Store:
         return [key for key, row in self.passages.items() if row["status"] in ("fini", "echec")][:limit]
 
 
+@contextmanager
+def _held_lock(held: set, passage_id: str):
+    """Le verrou d'un passage, en mémoire : tenu pendant le bloc, refusé s'il est déjà tenu (comme GET_LOCK)."""
+    if passage_id in held:
+        raise PassageRunning("verrou du passage tenu")
+    held.add(passage_id)
+    try:
+        yield
+    finally:
+        held.discard(passage_id)
+
+
 @pytest.fixture
 def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
@@ -138,6 +151,9 @@ def store(monkeypatch):
     # Le budget des agents le permet, sauf si un test pose une raison de blocage dans fake.budget_reason.
     fake.budget_reason = None
     monkeypatch.setattr(passage_service.budget_service, "budget_block", lambda: fake.budget_reason)
+    # Le verrou de chaque passage (#352), en mémoire : fake.held garde les passages qui tournent, ici ou ailleurs.
+    fake.held = set()
+    monkeypatch.setattr(passage_service, "passage_lock", lambda passage_id: _held_lock(fake.held, passage_id))
     # Aucune pause des agents laissée par un test précédent : elle est gardée en mémoire, dans le module.
     agents_pause.clear()
     yield fake
@@ -409,7 +425,7 @@ def test_the_state_gives_the_step_and_cost_of_each_category_from_llm_calls(store
         {"agent": "find_laveries", "etape": "année 1", "status": "reussi", "cost_usd": 0.25, "called_at": CALLED_AT, "engine": "claude-code"},
         {"agent": "prove_laveries", "etape": "preuves, lot 2", "status": "delai", "cost_usd": 0.1, "called_at": CALLED_AT, "engine": "claude-code"},
     ]
-    chain["busy"] = True        # le passage tient le verrou : il tourne vraiment
+    store.held.add(passage_id)  # le passage tient son verrou : il tourne vraiment
     state = passage_service.read_passage(passage_id)
     assert state["ville"] == {"id": 12, "nom": "Guidel", "commune": "Guidel"} and state["origine"] == "supervision"
     assert (state["etat"], state["payant"], state["appels"], state["cout_usd"]) == ("en_cours", True, 3, 0.85)
@@ -428,7 +444,7 @@ def test_the_saving_step_is_shown_though_no_agent_announces_it(store, chain):
     store.set_passage_status(passage_id, "en_cours")
     store.set_part(passage_id, "restaurants", "en_cours", step="enregistrement")
     store.calls[passage_id] = [{"agent": "prove_restaurants", "etape": "preuves, lot 1", "status": "reussi", "cost_usd": 0.2, "called_at": CALLED_AT, "engine": "claude-code"}]
-    chain["busy"] = True
+    store.held.add(passage_id)  # le passage tient son verrou : il tourne vraiment
     part = passage_service.read_passage(passage_id)["categories"][0]
     assert (part["etape"], part["agent"]) == ("enregistrement", None)
 
@@ -938,7 +954,7 @@ def test_a_free_chain_is_refused_only_on_the_same_city(store, free):
 def test_a_running_free_chain_shows_the_loading_step(store, free):
     """Une partie d'OSM en cours montre l'étape « chargement » : elle n'a aucun agent dont lire l'étape."""
     passage_id = passage_service.create_passage("osm", 12)
-    store.set_passage_status(passage_id, "en_cours")
+    store.held.add(passage_id)  # le passage tient son verrou : il tourne vraiment
     store.set_part(passage_id, "osm", "en_cours")
     free["busy"].add(("osm", 12))       # le verrou est tenu : le passage tourne vraiment
     assert passage_service.read_passage(passage_id)["categories"][0]["etape"] == "chargement"
@@ -1408,11 +1424,58 @@ def test_a_cut_passage_is_marked_interrupted_without_the_supervision(store, free
 
 
 def test_a_passage_that_really_runs_is_left_alone(store, free):
-    """Un OSM « en cours » dont le verrou est tenu tourne vraiment : la file n'y touche pas."""
+    """Un OSM « en cours » dont le verrou est tenu, ici ou par un autre programme sur la même base, tourne vraiment : la file n'y touche pas."""
     running = _cut_osm(store)
-    free["busy"].add(("osm", 12))
+    store.held.add(running)
     assert passage_service.mark_cut_passages() == []
     assert store.passages[running]["status"] == "en_cours"
+
+
+def test_a_cut_service_is_seen_while_another_city_runs_its_services(store, chain):
+    """Services d'Ercé coupés par un redémarrage pendant que ceux de Die tournent : seul Ercé est marqué interrompu (27 novembre 2026, #352)."""
+    cut = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    running = passage_service.create_passage("services", 13, ["restaurants"], origin="etl")
+    for passage_id in (cut, running):
+        store.set_passage_status(passage_id, "en_cours")
+        store.set_part(passage_id, "restaurants", "en_cours")
+    chain["busy"] = True            # le verrou des services, le même pour toutes les villes, est tenu par Die
+    store.held.add(running)
+    assert passage_service.mark_cut_passages() == [cut]
+    assert store.passages[running]["status"] == "en_cours"
+
+
+def test_a_passage_holds_its_own_lock_while_it_runs(store, monkeypatch):
+    """Pendant qu'il tourne, un passage tient le verrou à son nom : la file ne peut pas le croire coupé."""
+    seen = {}
+
+    def run_part(passage_id, key, city, resume, check_budget):
+        seen["held"] = passage_id in store.held
+        seen["cut"] = passage_service.mark_cut_passages()
+        return {"lieux": 3}
+    monkeypatch.setitem(passage_service.CHAINS, "osm", passage_service.Chain(
+        key="osm", label="OSM", parts={"osm": "OSM"}, paid=False, lock=lambda city_id, part: nullcontext(),
+        lock_is_free=lambda city_id, part: True, run_part=run_part, steps_of=lambda part: {}, per_city=True))
+    passage_id = passage_service.create_passage("osm", 12, origin="etl")
+    passage_service.run_passage(passage_id)
+    assert seen == {"held": True, "cut": []} and store.passages[passage_id]["status"] == "fini"
+    assert passage_id not in store.held      # rendu à la fin
+
+
+def test_a_passage_that_finishes_while_it_is_looked_at_is_not_interrupted(store, free):
+    """Un passage fini juste avant qu'on prenne son verrou n'est pas marqué interrompu : son état est relu sous le verrou."""
+    passage_id = _cut_osm(store)
+    seen = dict(store.passages[passage_id])      # l'état lu avant de prendre le verrou : « en cours »
+    store.set_passage_status(passage_id, "fini")
+    assert passage_service.interrupt_if_cut(seen) is False
+    assert store.passages[passage_id]["status"] == "fini"
+
+
+def test_the_lock_of_a_passage_is_named_after_it(monkeypatch):
+    """Le verrou d'un passage porte son identifiant : deux passages de la même chaîne ont chacun le leur."""
+    names = []
+    monkeypatch.setattr(passage_service.etl_chains, "named_lock", lambda name, busy: names.append(name))
+    passage_service.passage_lock("abc123")
+    assert names == ["randovango_passage_abc123"]
 
 
 def test_a_cut_passage_of_an_unknown_chain_is_left_alone(store):

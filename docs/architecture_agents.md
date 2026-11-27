@@ -127,7 +127,10 @@ d'envoi, et n'attend jamais les étapes qui viennent après elle.
   cette partie a été refaite depuis. Un échec sur une partie payante attend toujours l'administratrice.
 - Un passage resté « en cours » alors que plus rien ne le fait tourner (serveur redémarré, programme arrêté) est
   marqué « interrompu » par la file elle-même, chaque minute : sur une partie gratuite, il est ensuite repris seul, et
-  les étapes de sa ville repartent.
+  les étapes de sa ville repartent. Un passage qui tourne tient un verrou MySQL à son identifiant
+  (`randovango_passage_<identifiant>`) : « en cours » sans ce verrou tenu, il est coupé. Le verrou de la chaîne ne
+  suffit pas à le dire, car les services, la source des spots et les agents des spots en ont un seul pour toutes les
+  villes : un passage coupé paraîtrait tourner tant qu'une autre ville tient ce verrou.
 - Seul le backend principal fait tourner la file. Un backend de branche (`docker-compose.branche.yml`) partage la
   base commune mais ne lance aucun thread (`PASSAGE_QUEUE_ENABLED=0`) : il ne prend pas les passages pour les faire avec
   le code de sa branche, et ne marque pas « interrompus » ceux que le principal fait tourner. Une ville ajoutée depuis
