@@ -98,11 +98,22 @@ def test_the_active_passages_are_read_for_one_chain_on_one_city(base):
     assert "status IN ('en_file', 'en_attente', 'en_cours')" in sql and values == ("carburants", 12)
 
 
-def test_the_queue_is_read_from_the_oldest_passage(base):
-    """La file se lit du plus ancien passage au plus récent : c'est l'ordre dans lequel ils partent."""
-    base.rows = [{"passage_id": "p1"}, {"passage_id": "p2"}]
-    assert passage_store.queued_ids() == ["p1", "p2"]
-    assert "ORDER BY requested_at, passage_id" in base.queries[0][0] and base.queries[0][1] == ("en_file",)
+def test_the_queue_is_read_from_the_oldest_passage_with_its_next_part(base):
+    """La file se lit du plus ancien passage au plus récent, chacun avec sa prochaine partie à faire : elle dit son étape (#332)."""
+    base.rows = [{"passage_id": "p1", "chain": "spots", "city_id": 12, "next_part": "harmonisation"}]
+    assert passage_store.queued_next_parts() == base.rows
+    sql, values = base.queries[0]
+    assert "ORDER BY p.requested_at, p.passage_id" in sql and "ORDER BY pp.position LIMIT 1" in sql
+    assert values == ("a_faire", "en_file")
+
+
+def test_a_pending_part_is_looked_for_in_the_other_open_passages_of_the_cities(base):
+    """L'étape d'avant attendue (l'OSM de la ville) se cherche dans les autres passages ouverts ou en échec non repris (#332)."""
+    base.rows = [{"1": 1}]
+    assert passage_store.pending_part("osm", "osm", [12, 13], "p9") is True
+    sql, values = base.queries[0]
+    assert "pp.status <> 'fini'" in sql and "p.passage_id <> %s" in sql and "r.resumed_from = p.passage_id" in sql
+    assert values == ("osm", "osm", 12, 13, "p9")
 
 
 def test_the_failures_to_resume_are_etl_failures_of_the_free_chains_not_yet_resumed(base):
