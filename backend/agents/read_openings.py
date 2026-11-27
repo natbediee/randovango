@@ -26,7 +26,6 @@ UTILISATION (dans le conteneur backend, depuis /usr/src/app)
 import argparse
 import json
 import re
-from datetime import date
 
 from agents.llm_config import make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet, mesure_passage, new_passage_id
@@ -35,6 +34,7 @@ from services import passage_store
 from utils.db_utils import CITY_SPOTS_CLAUSE, MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
+from utils.paris_time import paris_today
 
 logger = LoggerUtil.get_logger("etl_read_openings")
 
@@ -104,7 +104,7 @@ Le premier et le dernier jour où l'on peut dormir sur place, au format MM-JJ, s
 
 
 def build_user_message(opening_period: str, description: str | None = None) -> str:
-    return (f'DATE DU JOUR : {date.today():%d/%m/%Y}\nOUVERTURE : "{opening_period}"\n'
+    return (f'DATE DU JOUR : {paris_today():%d/%m/%Y}\nOUVERTURE : "{opening_period}"\n'
             f'DESCRIPTION : "{(description or "")[:MAX_DESCRIPTION_CHARS]}"')
 
 

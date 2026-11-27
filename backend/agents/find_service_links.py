@@ -29,7 +29,6 @@ import html
 import io
 import json
 import re
-from datetime import date
 from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
@@ -44,6 +43,7 @@ from services.llm_calls_service import run_cost_text
 from services.pepite_service import GENERIC_WORDS, name_key
 from utils.db_utils import MySQLUtils
 from utils.logger_util import LoggerUtil
+from utils.paris_time import paris_today
 
 logger = LoggerUtil.get_logger("agent_liens")
 
@@ -78,7 +78,7 @@ TYPE_RANK = {"site": 0, "office_tourisme": 1, "guide": 2, "facebook": 3, "instag
 
 SYSTEM_PROMPT = f"""Tu cherches le site officiel de commerces français (restaurants, cafés, boulangeries...)
 et s'ils existent encore, pour les voyageurs de Randovango, une application de voyage en van.
-Nous sommes le {date.today().isoformat()}.
+Nous sommes le {paris_today().isoformat()}.
 
 LIENS. Le but est la page tenue par le commerce lui-même. Pour chaque lieu :
 1. Cherche « nom + commune », puis « nom + commune + site officiel », puis le téléphone s'il est donné.

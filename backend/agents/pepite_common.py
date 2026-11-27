@@ -19,6 +19,7 @@ import requests
 from agents.llm_config import make_llm_service
 from services import pepite_service
 from utils.logger_util import LoggerUtil
+from utils.paris_time import paris_today
 
 logger = LoggerUtil.get_logger("agent_pepites")
 
@@ -131,7 +132,7 @@ def search_header(zone: dict) -> list:
     lat, lon = zone["points"][0]
     center = zone["spot_name"] if zone.get("has_spot") else f"centre de {zone.get('city_name') or 'la commune'}"
     return [
-        f"DATE DU JOUR : {date.today().strftime('%d/%m/%Y')}",
+        f"DATE DU JOUR : {paris_today().strftime('%d/%m/%Y')}",
         f"COMMUNE : {zone.get('city_name') or 'inconnue'}",
         f"CENTRE DE LA RECHERCHE : {center} ({lat}, {lon})",
     ]

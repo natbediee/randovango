@@ -10,6 +10,7 @@ from etl.transform.transform_p4n import transform_p4n
 from etl.load.load_poi import load_osm_poi, load_wikidata_poi
 from etl.load.load_p4n import load_p4n_to_mysql
 from etl.etl_meteo import run_meteo_etl
+from utils.paris_time import paris_today
 
 
 logger = LoggerUtil.get_logger("etl_rattrapage")
@@ -98,11 +99,11 @@ def rattrapage_meteo():
         cursor.execute("""
             SELECT c.id, c.name, c.latitude, c.longitude
             FROM cities c
-            LEFT JOIN weather w ON w.city_id = c.id AND w.date >= CURDATE()
+            LEFT JOIN weather w ON w.city_id = c.id AND w.date >= %s
             WHERE w.id IS NULL
             GROUP BY c.id, c.name, c.latitude, c.longitude
             ORDER BY c.name
-        """)
+        """, (paris_today(),))
         missing = cursor.fetchall()
 
     logger.info(f"[METEO] Villes restant à rattraper (prévisions absentes/périmées) : {len(missing)}")
