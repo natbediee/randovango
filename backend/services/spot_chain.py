@@ -18,8 +18,10 @@ UN SEUL PASSAGE À LA FOIS, TOUTES VILLES CONFONDUES
 Un spot entre deux villes voisines appartient aux deux (histo_scrap) : deux passages en même temps pourraient le payer
 deux fois. Et la source des spots ne se lit qu'avec un navigateur à la fois.
 """
+from contextlib import contextmanager
+
 from agents import harmonize_spots, read_openings, verify_spots
-from etl.extract.scraper_p4n import BrowserNotStarted, run_p4n_scraper
+from etl.extract.scraper_p4n import BrowserNotStarted, close_leftover_browsers, run_p4n_scraper
 from etl.load.load_p4n import load_p4n_to_mysql
 from etl.transform.transform_p4n import transform_p4n
 from services import etl_chains
@@ -43,9 +45,16 @@ class SpotsMissed(RuntimeError):
         self.missed, self.done, self.cause = missed, done, cause
 
 
+@contextmanager
 def lock(city_id: int):
-    """Le verrou de la chaîne, le même pour toutes les villes : un bloc « with »."""
-    return etl_chains.named_lock(LOCK_NAME, BUSY)
+    """
+    Le verrou de la chaîne, le même pour toutes les villes : un bloc « with ».
+    Une fois le verrou pris, aucun autre passage de spots ne tourne : un navigateur encore ouvert est le reste d'un
+    passage coupé net, il est fermé avant que celui-ci n'ouvre le sien (issue #333).
+    """
+    with etl_chains.named_lock(LOCK_NAME, BUSY):
+        close_leftover_browsers()
+        yield
 
 
 def lock_is_free(city_id: int) -> bool:

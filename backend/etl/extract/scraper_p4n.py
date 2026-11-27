@@ -1,5 +1,8 @@
-import time
+import glob
 import os
+import shutil
+import subprocess
+import time
 import pandas as pd
 from pathlib import Path
 from selenium import webdriver
@@ -37,6 +40,36 @@ ZOOM_LEVEL = 15 # Niveau de zoom par défaut pour un affichage local
 
 
 # --- Navigateur ---
+# Les programmes du navigateur dans le conteneur, et les profils qu'ils laissent dans /tmp. selenium_chrome_profile
+# est l'ancien profil fixe, abandonné (issue #333) : il est effacé lui aussi.
+BROWSER_PROGRAMS = ("chromium", "chromedriver")
+LEFTOVER_PROFILES = ("/tmp/org.chromium.Chromium.*", "/tmp/selenium_chrome_profile")
+
+
+def close_leftover_browsers() -> None:
+    """
+    Ferme les navigateurs restés ouverts dans le conteneur et efface leurs profils de /tmp.
+    Un passage coupé net (par exemple quand uvicorn --reload redémarre le backend après un fichier modifié) ne ferme
+    pas son Chrome : il garderait sa mémoire jusqu'au redémarrage du conteneur.
+
+    À n'appeler que quand aucun navigateur ne doit tourner : sous le verrou de la chaîne des spots
+    (services/spot_chain.py), seule à lancer un navigateur. Un script lancé à la main en même temps
+    (verify_spots.py, etl_rattrapage.py) perdrait le sien.
+    """
+    # Hors du conteneur (sur le Mac, par exemple), Chromium n'est pas là : on ne ferme surtout pas le Chrome
+    # de l'utilisatrice.
+    if not os.path.exists(CHROME_BINARY_PATH):
+        return
+    for program in BROWSER_PROGRAMS:
+        # -x : le nom exact du programme ; -KILL : un reste qui ne répond plus est fermé quand même.
+        # pkill rend 0 s'il a trouvé au moins un processus.
+        if subprocess.run(["pkill", "-KILL", "-x", program], capture_output=True).returncode == 0:
+            logger.warning(f"[Extract] : {program} resté ouvert par un passage précédent, fermé.")
+    for pattern in LEFTOVER_PROFILES:
+        for path in glob.glob(pattern):
+            shutil.rmtree(path, ignore_errors=True)
+
+
 class BrowserNotStarted(RuntimeError):
     """Le navigateur n'a pas pu démarrer : la source des spots n'a même pas été demandée."""
 

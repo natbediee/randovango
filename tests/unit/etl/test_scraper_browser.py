@@ -37,3 +37,37 @@ def test_the_scraper_passes_on_a_browser_that_does_not_start(monkeypatch):
     monkeypatch.setattr(scraper_p4n, "create_driver", refuse)
     with pytest.raises(BrowserNotStarted):
         scraper_p4n.run_p4n_scraper("Le Conquet")
+
+
+def fake_container(monkeypatch, tmp_path, running):
+    """Un conteneur de test : Chromium installé, `running` programmes encore ouverts, des profils dans un /tmp à part."""
+    profiles = [tmp_path / "org.chromium.Chromium.A74YZ7", tmp_path / "selenium_chrome_profile"]
+    for profile in profiles:
+        profile.mkdir()
+    killed = []
+
+    def pkill(command, capture_output):
+        killed.append(command[-1])
+        return type("Result", (), {"returncode": 0 if command[-1] in running else 1})()
+    monkeypatch.setattr(scraper_p4n.os.path, "exists", lambda path: True)
+    monkeypatch.setattr(scraper_p4n.subprocess, "run", pkill)
+    monkeypatch.setattr(scraper_p4n, "LEFTOVER_PROFILES",
+                        (str(tmp_path / "org.chromium.Chromium.*"), str(tmp_path / "selenium_chrome_profile")))
+    return killed, profiles
+
+
+def test_leftover_browsers_are_closed_and_their_profiles_erased(monkeypatch, tmp_path):
+    """Les Chrome laissés par un passage coupé net sont fermés, et leurs profils effacés de /tmp."""
+    killed, profiles = fake_container(monkeypatch, tmp_path, running={"chromium", "chromedriver"})
+    scraper_p4n.close_leftover_browsers()
+    assert killed == ["chromium", "chromedriver"]
+    assert not any(profile.exists() for profile in profiles)
+
+
+def test_outside_the_container_no_browser_is_closed(monkeypatch):
+    """Sans Chromium installé (sur le Mac par exemple), aucun navigateur n'est fermé : le Chrome de l'utilisatrice reste."""
+    killed = []
+    monkeypatch.setattr(scraper_p4n.os.path, "exists", lambda path: False)
+    monkeypatch.setattr(scraper_p4n.subprocess, "run", lambda command, capture_output: killed.append(command))
+    scraper_p4n.close_leftover_browsers()
+    assert killed == []
