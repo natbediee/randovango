@@ -4,7 +4,7 @@ Les passages d'une chaîne d'agents lancés depuis la supervision (services/pass
 Aucune base ni aucun agent : la trace des passages est gardée dans un dictionnaire (_Store), et la chaîne des services
 est remplacée par une chaîne simulée, qui peut échouer sur la catégorie qu'on lui dit.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -259,8 +259,12 @@ def test_a_passage_runs_every_category_under_its_own_identifier(store, chain):
 
 
 def quota() -> LLMLimitReached:
-    """La limite que lève le service d'accès au modèle quand le quota des agents est atteint, jusqu'à 13 h 42."""
-    return LLMLimitReached("session limit", datetime(2026, 11, 27, 13, 42), "quota des agents atteint")
+    """
+    La limite que lève le service d'accès au modèle quand le quota des agents est atteint, pour l'heure qui vient.
+    L'heure de retour part de maintenant : une heure fixe (13 h 42 le 27 novembre) faisait échouer ces tests une fois
+    l'heure passée.
+    """
+    return LLMLimitReached("session limit", datetime.now() + timedelta(hours=1), "quota des agents atteint")
 
 
 def test_a_quota_reached_puts_the_passage_back_in_the_queue_without_failure(store, chain):
