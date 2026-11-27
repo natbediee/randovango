@@ -27,7 +27,7 @@ CONQUET = {"name": "Le Conquet", "insee": "29040", "department": "Finistère", "
 def waiting_dir(tmp_path, monkeypatch):
     """Un dossier d'attente vide, à la place de /usr/src/data, et aucune rando encore en base."""
     monkeypatch.setattr(gpx, "GPX_DIR", tmp_path)
-    monkeypatch.setattr(etl_router, "GPX_DIR", tmp_path)
+    monkeypatch.setattr(etl_router, "UPLOAD_DIR", tmp_path / "envoi")
     monkeypatch.setattr(gpx, "gpx_already_in_mysql", lambda fname: False)
     return tmp_path
 
@@ -93,14 +93,12 @@ def test_a_gpx_with_a_track_is_ready_to_load(waiting_dir, commune_found) -> None
     assert path.exists()
 
 
-def test_an_uppercase_extension_is_read_too(waiting_dir, commune_found) -> None:
-    """Un « RANDO.GPX », que la route accepte, est lu lui aussi au lieu de rester oublié dans le dossier."""
+def test_an_uppercase_extension_is_read_too(waiting_dir) -> None:
+    """Un « RANDO.GPX », que la route accepte, est pris dans le dossier d'attente au lieu d'y rester oublié ; le sous-dossier du front n'en fait pas partie."""
     drop_sample(waiting_dir, "route_only.gpx", name="RANDO.GPX")
+    (waiting_dir / "envoi").mkdir()
 
-    results = gpx.extract_all_gpx_files()
-
-    assert [(r["filename"], r["reason"]) for r in results] == [("RANDO.GPX", gpx.ROUTE_ONLY)]
-    assert not (waiting_dir / "RANDO.GPX").exists()
+    assert gpx.waiting_files() == ["RANDO.GPX"]
 
 
 def test_a_trace_already_in_mongo_is_reported_as_already_loaded(waiting_dir, commune_found, monkeypatch) -> None:
@@ -127,20 +125,22 @@ def test_a_database_error_refuses_the_file_and_removes_it(waiting_dir, commune_f
 
 
 def test_only_loaded_hikes_complete_their_city(waiting_dir, commune_found, monkeypatch) -> None:
-    """Seule la rando chargée lance la météo et les services de sa ville ; la route refusée ne lance rien."""
+    """Dans le dossier d'attente, seule la rando chargée lance la météo et les chaînes de sa ville ; la route refusée ne lance rien et quitte le dossier."""
     monkeypatch.setattr(etl_pipeline, "load_gpx_data", lambda data, gpx_path, verifie: data["city_name"])
     completed = []
-    monkeypatch.setattr(etl_pipeline, "complete_cities", completed.extend)
+    monkeypatch.setattr(etl_pipeline, "load_weather", completed.append)
+    monkeypatch.setattr(etl_pipeline, "request_chains_of_cities", lambda cities: None)
     drop_sample(waiting_dir, "trace.gpx")
     drop_sample(waiting_dir, "route_only.gpx")
 
-    outcomes = sorted(etl_pipeline.main(user_role="admin"), key=lambda o: o["filename"])
+    outcomes = etl_pipeline.process_waiting_folder(user_role="admin")
 
     assert [(o["filename"], o["city"], o["reason"]) for o in outcomes] == [
         ("route_only.gpx", None, gpx.ROUTE_ONLY),
         ("trace.gpx", "Le Conquet", None),
     ]
     assert completed == ["Le Conquet"]
+    assert gpx.waiting_files() == ["trace.gpx"]   # le faux chargement ne retire pas le fichier ; le vrai le retire
 
 
 @pytest.fixture
@@ -149,7 +149,9 @@ def upload_client(waiting_dir, commune_found, monkeypatch):
     monkeypatch.setattr(etl_router, "get_roles_for_user", lambda user_id: ["user"])
     monkeypatch.setattr(etl_router, "insert_auth_log", lambda **kwargs: None)
     monkeypatch.setattr(etl_pipeline, "load_gpx_data", lambda data, gpx_path, verifie: data["city_name"])
-    monkeypatch.setattr(etl_pipeline, "complete_cities", lambda cities: None)
+    monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
+    monkeypatch.setattr(etl_pipeline, "start_chain_requests", lambda cities: None)
+    monkeypatch.setattr(etl_pipeline, "start_folder_worker", lambda role: None)
     app = FastAPI()
     app.include_router(etl_router.router, prefix="/api/etl")
     app.dependency_overrides[dependencies.get_current_user] = lambda: {"user_id": 7, "username": "contributrice"}
@@ -168,7 +170,7 @@ def test_the_upload_route_answers_a_refusal_with_its_reason(upload_client, waiti
 
     assert answer["success"] is False
     assert answer["message"] == f"Fichier route_only.gpx non chargé : {gpx.ROUTE_ONLY}."
-    assert list(waiting_dir.iterdir()) == []
+    assert list((waiting_dir / "envoi").iterdir()) == []
 
 
 def test_the_upload_route_answers_success_with_the_city(upload_client) -> None:
@@ -192,3 +194,16 @@ def test_a_refused_file_does_not_come_back_with_the_next_upload(upload_client) -
 def test_the_upload_route_does_not_hold_the_server() -> None:
     """La route d'envoi est une route « def » : FastAPI la fait tourner à part, et l'application répond pendant un envoi (5 minutes sans réponse le 25 novembre 2026)."""
     assert not inspect.iscoroutinefunction(etl_router.upload_gpx)
+
+
+def test_the_upload_answers_for_its_own_file_and_leaves_the_folder_to_the_background(upload_client, waiting_dir, monkeypatch) -> None:
+    """Le cas du 27 novembre 2026 : le fichier du front répond sans attendre les 265 fichiers d'un envoi en masse, laissés au fil de fond."""
+    started = []
+    monkeypatch.setattr(etl_pipeline, "start_folder_worker", started.append)
+    drop_sample(waiting_dir, "route_only.gpx", name="envoi-en-masse.gpx")
+
+    answer = send(upload_client, "trace.gpx")
+
+    assert (answer["success"], answer["city"]) == (True, "Le Conquet")
+    assert gpx.waiting_files() == ["envoi-en-masse.gpx"]
+    assert started == ["user"]

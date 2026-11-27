@@ -6,7 +6,6 @@ que la page d'ajout affiche à l'admin ou au contributeur, et il est retiré du 
 à chaque envoi suivant (issue #266).
 """
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import gpxpy
@@ -17,8 +16,11 @@ from utils.db_utils import gpx_already_in_mysql
 
 logger = LoggerUtil.get_logger("etl_gpx")
 
-# Le dossier d'attente : la route upload_gpx y écrit le fichier envoyé, le pipeline le vide.
+# Le dossier d'attente : on y dépose les fichiers d'un envoi en masse, que le pipeline vide un à un, en fond.
 GPX_DIR = Path("/usr/src/data")
+# Le fichier envoyé par la page d'ajout (route upload_gpx) attend à part, dans un sous-dossier (issue #328) : il est
+# traité tout de suite, avant ceux du dossier d'attente, et le fil qui vide le dossier ne le voit jamais.
+UPLOAD_DIR = GPX_DIR / "envoi"
 
 # Les motifs de refus, écrits pour la personne qui envoie le fichier (issue #266).
 ALREADY_LOADED = "cette rando est déjà en base (un fichier du même nom a déjà été chargé)"
@@ -27,11 +29,6 @@ ROUTE_ONLY = "il ne contient pas une trace complète"
 NO_TRACK = "le fichier ne contient aucune trace"
 START_NOT_FOUND = "le lieu de départ est introuvable : aucune commune trouvée au premier point de la trace"
 LOAD_FAILED = "une erreur est survenue pendant l'enregistrement en base"
-
-# Combien de fichiers sont lus en même temps (issue #328). Lire un fichier, c'est surtout attendre geo.api.gouv.fr, qui
-# dit dans quelle commune part la trace (≈ 0,2 s) : lus un par un, les 241 fichiers du 25 novembre 2026 avaient pris
-# 52 secondes. Six à la fois restent loin de la limite de l'API (50 appels par seconde).
-READ_WORKERS = 6
 
 
 def remove_file(gpx_path) -> None:
@@ -88,22 +85,11 @@ def read_gpx_file(gpx_path, fname) -> dict:
     return result
 
 
-def extract_all_gpx_files() -> list:
+def waiting_files() -> list:
     """
-    Lit tous les fichiers GPX du dossier d'attente et rend, pour chacun, le résultat de read_gpx_file, dans l'ordre
-    du dossier. Les fichiers sont lus READ_WORKERS à la fois : chacun attend sa commune sans retenir les autres.
-    L'extension est comparée en minuscules : la route accepte « RANDO.GPX », qui ne doit pas rester oublié ici.
+    Les noms des fichiers GPX du dossier d'attente, par ordre alphabétique. Le sous-dossier « envoi » n'en fait pas
+    partie. L'extension est comparée en minuscules : la route accepte « RANDO.GPX », qui ne doit pas rester oublié ici.
     """
-    gpx_files = [f for f in os.listdir(GPX_DIR) if f.lower().endswith('.gpx')]
-    if not gpx_files:
-        logger.error(f"[Extract] : Aucun fichier GPX trouvé dans {GPX_DIR}")
+    if not os.path.isdir(GPX_DIR):
         return []
-    # pool.map rend les résultats dans l'ordre des fichiers donnés, même si certains finissent avant d'autres.
-    with ThreadPoolExecutor(max_workers=READ_WORKERS) as pool:
-        return list(pool.map(read_waiting_file, gpx_files))
-
-
-def read_waiting_file(fname) -> dict:
-    """Lit un fichier du dossier d'attente, désigné par son seul nom (le travail d'un des lecteurs en parallèle)."""
-    logger.info(f"[Extract] : Début du pipeline. Fichier GPX détecté: {fname}")
-    return read_gpx_file(os.path.join(GPX_DIR, fname), fname)
+    return sorted(f for f in os.listdir(GPX_DIR) if f.lower().endswith('.gpx') and os.path.isfile(os.path.join(GPX_DIR, f)))

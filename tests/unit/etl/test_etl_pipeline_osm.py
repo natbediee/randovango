@@ -1,8 +1,8 @@
 """
-Compléter les villes d'un envoi (etl_pipeline.complete_cities, issues #316 et #328) : la météo tout de suite, une fois
-par ville, puis les chaînes de chaque ville demandées à la file des passages, par un seul fil qui ne retient pas la
-réponse ; une erreur sur une chaîne ou une ville n'arrête jamais les autres. Ni réseau ni base : les demandes de
-passage et la météo sont remplacés.
+Le fichier du front, puis le dossier d'attente (etl_pipeline, issues #316 et #328) : le fichier envoyé par la page
+d'ajout passe avant ceux d'un envoi en masse ; chaque ville reçoit sa météo, puis ses chaînes demandées à la file des
+passages, sans retenir la réponse ; une erreur sur une chaîne, une ville ou un fichier n'arrête jamais les autres.
+Ni réseau ni base : la lecture, le chargement, les demandes de passage et la météo sont remplacés.
 """
 import threading
 from unittest.mock import MagicMock
@@ -45,39 +45,99 @@ def test_an_error_on_one_chain_never_stops_the_others(asked, monkeypatch) -> Non
                for call in etl_pipeline.logger.warning.call_args_list)
 
 
+def loaded(fname, city) -> dict:
+    """Le résultat d'un fichier chargé sur cette ville, comme le rend process_file."""
+    return {"filename": fname, "city": city, "reason": None}
+
+
 def test_an_upload_answers_before_the_chains_are_asked(monkeypatch) -> None:
-    """Le cas du 25 novembre 2026 : l'envoi rend la main après la météo, sans attendre la demande des chaînes (≈ 1 s par ville), qui se fait à côté."""
-    may_ask = threading.Event()
-    asked = []
+    """Le fichier du front rend sa ville après la météo, sans attendre la demande des chaînes (≈ 1 s par ville le 25 novembre 2026), qui se fait à côté."""
+    may_ask, asked = threading.Event(), threading.Event()
 
     def slow_request(city):
         may_ask.wait(5)
-        asked.append(city)
+        asked.set()
+    monkeypatch.setattr(etl_pipeline, "process_file", lambda path, fname, verifie: loaded(fname, "Plougonvelin"))
     monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
+    monkeypatch.setattr(etl_pipeline, "start_folder_worker", lambda role: None)
     monkeypatch.setattr(etl_pipeline, "request_city_chains", slow_request)
 
-    worker = etl_pipeline.complete_cities(["Plougonvelin"])
+    outcome = etl_pipeline.process_upload("/usr/src/data/envoi/trace.gpx", user_role="admin")
 
-    assert asked == []
+    assert outcome["city"] == "Plougonvelin"
+    assert not asked.is_set()
     may_ask.set()
-    worker.join(5)
-    assert asked == ["Plougonvelin"]
+    assert asked.wait(5)
 
 
-def test_each_city_gets_its_weather_once_then_its_chains(monkeypatch) -> None:
-    """Trois randos sur deux villes : chaque ville reçoit sa météo une fois, puis ses chaînes une fois, Le Conquet avant Plouarzel comme à l'arrivée."""
+def test_the_front_file_passes_before_the_waiting_folder(monkeypatch) -> None:
+    """Pendant qu'un envoi en masse attend geo.api.gouv.fr pour un fichier du dossier, le fichier du front est chargé et répond sans l'attendre."""
+    folder_may_go = threading.Event()
+
+    def read_and_load(path, fname, verifie):
+        if fname.startswith("dossier"):
+            folder_may_go.wait(5)
+        return loaded(fname, "Le Conquet")
+    monkeypatch.setattr(etl_pipeline, "process_file", read_and_load)
+    monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
+    monkeypatch.setattr(etl_pipeline, "request_city_chains", lambda city: None)
+    monkeypatch.setattr(etl_pipeline.gpx, "waiting_files", lambda: ["dossier-1.gpx", "dossier-2.gpx"])
+    folder = threading.Thread(target=etl_pipeline.process_waiting_folder)
+    folder.start()
+
+    outcome = etl_pipeline.process_upload("/usr/src/data/envoi/front.gpx")
+
+    assert outcome == loaded("front.gpx", "Le Conquet")
+    assert folder.is_alive()
+    folder_may_go.set()
+    folder.join(5)
+
+
+def test_each_city_of_the_folder_gets_its_weather_once_then_its_chains(monkeypatch) -> None:
+    """Trois randos du dossier sur deux villes : chaque ville reçoit sa météo puis ses chaînes une seule fois, Le Conquet avant Plouarzel comme à l'arrivée."""
     weather, chains = [], []
+    results = {"a.gpx": loaded("a.gpx", "Le Conquet"),
+               "b.gpx": {"filename": "b.gpx", "city": None, "reason": "le fichier ne contient aucune trace"},
+               "c.gpx": loaded("c.gpx", "Plouarzel"), "d.gpx": loaded("d.gpx", "Le Conquet")}
+    monkeypatch.setattr(etl_pipeline.gpx, "waiting_files", lambda: sorted(results))
+    monkeypatch.setattr(etl_pipeline, "process_waiting_file", lambda fname, verifie: results[fname])
     monkeypatch.setattr(etl_pipeline, "load_weather", weather.append)
     monkeypatch.setattr(etl_pipeline, "request_city_chains", chains.append)
-    outcomes = [{"filename": "a.gpx", "city": "Le Conquet", "reason": None},
-                {"filename": "b.gpx", "city": None, "reason": "le fichier ne contient aucune trace"},
-                {"filename": "c.gpx", "city": "Plouarzel", "reason": None},
-                {"filename": "d.gpx", "city": "Le Conquet", "reason": None}]
 
-    etl_pipeline.complete_cities(etl_pipeline.loaded_cities(outcomes)).join(5)
+    outcomes = etl_pipeline.process_waiting_folder()
 
-    assert sorted(weather) == ["Le Conquet", "Plouarzel"]
-    assert chains == ["Le Conquet", "Plouarzel"]
+    assert [outcome["filename"] for outcome in outcomes] == ["a.gpx", "b.gpx", "c.gpx", "d.gpx"]
+    assert weather == chains == ["Le Conquet", "Plouarzel"]
+
+
+def test_a_file_that_stays_in_the_folder_is_tried_only_once(monkeypatch) -> None:
+    """Un fichier que le pipeline n'arrive pas à retirer du dossier n'est essayé qu'une fois : le fil de fond ne tourne pas sans fin."""
+    tried = []
+    monkeypatch.setattr(etl_pipeline.gpx, "waiting_files", lambda: ["coince.gpx"])
+    monkeypatch.setattr(etl_pipeline, "process_waiting_file",
+                        lambda fname, verifie: tried.append(fname) or {"filename": fname, "city": None, "reason": "erreur"})
+
+    etl_pipeline.process_waiting_folder()
+
+    assert tried == ["coince.gpx"]
+
+
+def test_an_unexpected_error_on_a_folder_file_becomes_a_refusal(monkeypatch) -> None:
+    """Une erreur inattendue sur un fichier du dossier (base injoignable à la lecture) devient un refus, et le fil passe au fichier suivant."""
+    def broken(path, fname, verifie):
+        raise ConnectionError("base injoignable")
+    monkeypatch.setattr(etl_pipeline, "process_file", broken)
+
+    assert etl_pipeline.process_waiting_file("trace.gpx", verifie=1)["reason"] == etl_pipeline.LOAD_FAILED
+
+
+def test_only_one_thread_empties_the_folder(monkeypatch) -> None:
+    """Pendant qu'un fil vide le dossier d'attente, un second envoi n'en lance pas un autre : le même fichier n'est jamais lu deux fois."""
+    monkeypatch.setattr(etl_pipeline.gpx, "waiting_files", lambda: ["trace.gpx"])
+    monkeypatch.setattr(etl_pipeline, "process_waiting_file", lambda fname, verifie: pytest.fail("fichier lu deux fois"))
+
+    with etl_pipeline._folder_lock:
+        assert etl_pipeline.process_waiting_folder() == []
 
 
 def test_an_error_on_one_city_never_stops_the_next_ones(monkeypatch) -> None:
