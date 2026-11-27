@@ -23,9 +23,10 @@ attendent ; les fils gratuits continuent. Une partie coupée en route par une li
 en file (services/agents_pause.py) : à l'heure de retour donnée par le fournisseur, son fil la reprend, sans repayer ce
 qui est fait.
 
-LES CHAÎNES GRATUITES SE REPRENNENT SEULES (issue #316)
-Un OSM, des carburants ou un FINESS de l'ETL en échec est repris par la file un quart d'heure plus tard, deux fois au
-plus (resume_failed_free_chains), par un fil à part. Une chaîne payante en échec, elle, attend toujours l'admin.
+LES PARTIES GRATUITES SE REPRENNENT SEULES (issues #316 et #344)
+Un OSM, des carburants, un FINESS ou une source des spots de l'ETL en échec est repris par la file un quart d'heure
+plus tard, deux fois au plus (resume_failed_free_chains), par un fil à part. Un échec sur une partie payante (les
+agents des spots, les pépites, les services), lui, attend toujours l'admin : une reprise coûte.
 
 COMMENT
 Les fils sont lancés au démarrage de l'API (start_worker). Chacun regarde sa file toutes les minutes, et tout de suite
@@ -48,7 +49,10 @@ CHECK_SECONDS = 60          # le temps entre deux regards sur une file, quand pe
 # La reprise seule des chaînes gratuites (issue #316). Un échec d'OSM, des carburants ou de FINESS vient presque
 # toujours d'une panne passagère (OpenStreetMap saturé, fichier de 52 Mo coupé en route) : la file le reprend elle-même,
 # comme le bouton de la supervision, au lieu d'un script lancé à la main (25 novembre 2026 : trois tours de reprise).
-AUTO_RESUMED_CHAINS = ("osm", "carburants", "finess")
+# Les spots aussi, depuis l'issue #344, mais seulement quand c'est leur source, gratuite, qui a échoué : le 27 novembre
+# 2026, 53 lectures de la source ont échoué en une minute (deux programmes se disputaient Chrome), et il aurait fallu
+# 53 clics sur « Reprendre ». Un échec sur une partie payante (harmonisation, ouvertures, vérification) attend l'admin.
+AUTO_RESUMED_CHAINS = ("osm", "carburants", "finess", "spots")
 RESUME_AFTER_MINUTES = 15       # le temps laissé au serveur pour se remettre avant de reprendre
 MAX_AUTO_RESUMES = 2            # deux reprises au plus : trois essais en tout, puis l'échec attend l'admin
 AUTO_RESUME_HOURS = 24          # un échec plus ancien n'est pas repris seul : l'admin a peut-être déjà décidé
@@ -138,11 +142,21 @@ def resumes_before(failure: dict) -> int:
     return count
 
 
+def failed_part(failure: dict) -> str | None:
+    """La partie sur laquelle le passage a échoué ; None si l'échec est venu avant la première partie."""
+    row = next((row for row in passage_store.load_parts(failure["passage_id"])
+                if row["status"] == passage_store.FAILED), None)
+    return row["part"] if row else None
+
+
 def can_resume_alone(failure: dict, now: datetime) -> bool:
     """
     Un échec que la file reprend seule : fini depuis au moins RESUME_AFTER_MINUTES, moins de MAX_AUTO_RESUMES reprises
-    derrière lui, une chaîne pas déjà en file ou en cours sur la ville, et pas déjà finie par un autre passage (une
-    relance à la main entre-temps).
+    derrière lui, échoué sur une partie gratuite, une chaîne pas déjà en file ou en cours sur la ville, et une partie
+    pas déjà finie par un autre passage (une relance à la main entre-temps, ou la source des spots relue depuis).
+    La partie gratuite (issue #344) : OSM, carburants et FINESS n'ont que des parties gratuites ; les spots seulement
+    leur source. Une reprise ne coûte donc rien de plus que ce que l'ETL avait demandé : la source relue, les agents
+    des spots partiront ensuite comme ils l'auraient fait sans l'échec.
     Le cas de la file ou du cours (issue #329) : à Larrau, deux carburants en échec, doublons d'avant #316, avaient été
     repris tous les deux, ce qui mettait deux carburants en file pour la même ville (25 novembre 2026). Le premier
     repris est en file quand vient le second : celui-ci n'est pas repris.
@@ -151,9 +165,15 @@ def can_resume_alone(failure: dict, now: datetime) -> bool:
         return False
     if resumes_before(failure) >= MAX_AUTO_RESUMES:
         return False
+    chain = passage_service.CHAINS[failure["chain"]]
+    # Un échec venu avant la première partie (ville introuvable un instant) : repris seulement pour une chaîne gratuite.
+    part = failed_part(failure)
+    if passage_service.part_is_paid(chain, part) if part else chain.paid:
+        return False
     if passage_store.active_ids(failure["chain"], failure["city_id"]):
         return False
-    return not passage_store.finished_parts(failure["chain"], [failure["city_id"]])
+    finished = passage_store.finished_parts(failure["chain"], [failure["city_id"]])
+    return part not in finished if part else not finished
 
 
 def resume_failed_free_chains(now: datetime | None = None) -> list:
@@ -175,11 +195,15 @@ def resume_failed_free_chains(now: datetime | None = None) -> list:
 
 def work_on_resumes() -> None:
     """
-    Le travail du fil des reprises : reprendre les chaînes gratuites en échec qui peuvent l'être, réveiller les étapes
-    s'il en a repris, puis attendre une minute. Un seul fil le fait : deux fils pourraient reprendre le même échec.
+    Le travail du fil des reprises : marquer « interrompu » les passages coupés (#344), reprendre les parties
+    gratuites en échec qui peuvent l'être, réveiller les étapes s'il en a repris, puis attendre une minute. Un seul fil
+    le fait : deux fils pourraient reprendre le même échec.
     """
     while True:
         try:
+            cut = passage_service.mark_cut_passages()
+            if cut:
+                logger.info(f"[file] {len(cut)} passage(s) coupé(s) marqué(s) interrompu(s) : {', '.join(cut)}")
             if resume_failed_free_chains():
                 wake()
         except Exception:
