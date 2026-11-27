@@ -5,6 +5,7 @@ aux spots de la ville encore à faire. Ni base, ni navigateur, ni agent : chaque
 import pandas as pd
 import pytest
 
+from etl.extract.scraper_p4n import BrowserNotStarted
 from services import spot_chain
 from services.etl_chains import StepFailed
 from services.spot_chain import SpotsMissed
@@ -27,6 +28,16 @@ def test_an_unreadable_source_fails_with_its_reason(monkeypatch):
     monkeypatch.setattr(spot_chain, "run_p4n_scraper", lambda name, is_headless, save_csv: None)
     with pytest.raises(StepFailed, match="source des spots illisible"):
         spot_chain.run_source("p1", "source", GUIDEL, False, lambda: None)
+
+
+def test_a_browser_that_does_not_start_fails_with_its_own_reason(monkeypatch):
+    """Un navigateur qui ne démarre pas se dit comme tel, et non « ville sans position ou page qui ne répond pas » (26 novembre 2026)."""
+    def refuse(name, is_headless, save_csv):
+        raise BrowserNotStarted("le navigateur ne démarre pas (Chrome failed to start)")
+    monkeypatch.setattr(spot_chain, "run_p4n_scraper", refuse)
+    with pytest.raises(StepFailed, match="le navigateur ne démarre pas") as failure:
+        spot_chain.run_source("p1", "source", GUIDEL, False, lambda: None)
+    assert "ville sans position" not in str(failure.value)
 
 
 def test_a_source_without_new_spots_finishes_with_zero_spots_read(monkeypatch):

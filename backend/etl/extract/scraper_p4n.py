@@ -7,7 +7,12 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    StaleElementReferenceException,
+    TimeoutException,
+    WebDriverException,
+)
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
 
@@ -32,19 +37,35 @@ ZOOM_LEVEL = 15 # Niveau de zoom par défaut pour un affichage local
 
 
 # --- Navigateur ---
+class BrowserNotStarted(RuntimeError):
+    """Le navigateur n'a pas pu démarrer : la source des spots n'a même pas été demandée."""
+
+
 def create_driver(is_headless: bool = True):
-    """Crée le navigateur Chromium piloté par Selenium (installé dans le conteneur)."""
+    """
+    Crée le navigateur Chromium piloté par Selenium (installé dans le conteneur).
+    Lève BrowserNotStarted si Chromium ne démarre pas, pour que l'échec soit dit comme tel.
+    """
     options = webdriver.ChromeOptions()
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--user-data-dir=/tmp/selenium_chrome_profile')
+    # Pas de --user-data-dir : chromedriver donne à chaque navigateur un profil neuf dans /tmp, effacé à sa fermeture.
+    # Un profil fixe se partageait entre tous les navigateurs : le 26 novembre 2026, un passage coupé net a laissé
+    # son Chrome ouvert sur ce profil, chaque Chrome suivant l'a trouvé pris et s'est fermé aussitôt
+    # (197 passages en échec en 35 minutes).
     options.binary_location = CHROME_BINARY_PATH
     if is_headless:
         options.add_argument('--headless')
         logger.info("[Extract] : Mode Headless activé (Sans interface graphique).")
     else:
         logger.info("[Extract] : Mode Visuel activé (Avec interface graphique, pour débogage).")
-    return webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=options)
+    try:
+        return webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=options)
+    except WebDriverException as error:
+        # Le message de chromedriver seul, sans la pile ni le lien de documentation qu'il ajoute après « ; ».
+        reason = (error.msg or type(error).__name__).split(";")[0]
+        logger.critical(f"[Extract] : le navigateur ne démarre pas : {reason}")
+        raise BrowserNotStarted(f"le navigateur ne démarre pas ({reason})") from error
 
 
 def dismiss_cookies(driver, wait) -> None:
@@ -195,6 +216,8 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
     """
     Obtient les coordonnées de la ville, construit l'URL de recherche p4n,
     scrappe les résultats et sauvegarde en CSV en option.
+    Renvoie None si la ville n'a pas de position ou si la page n'a pas pu être lue ;
+    lève BrowserNotStarted si le navigateur ne démarre pas (un autre échec, à dire autrement).
     """
     latitude, longitude = get_city_center(city_name)
 
@@ -286,6 +309,9 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
             logger.warning("[Extract] : Aucune donnée valide à traiter.")
             return None
 
+    except BrowserNotStarted:
+        # Pas avalé par le « except Exception » plus bas : l'appelant doit savoir que c'est le navigateur.
+        raise
     except TimeoutException:
         logger.error("[Extract] : ÉCHEC : Timeout. La liste des résultats n'a pas chargé à temps.")
         return None
