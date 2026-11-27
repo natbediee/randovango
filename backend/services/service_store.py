@@ -35,6 +35,7 @@ from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.geo_utils import (address_with_commune, city_commune, geocode_address_ban, geocode_locality_ban,
                              geocode_sure_address_ban, geocode_way_ban, get_bounding_box, haversine_distance_km)
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
+from utils.paris_time import paris_today
 
 MAX_KM = 15                 # au-delà, l'adresse géocodée n'est pas celle de la commune cherchée
 SAME_PLACE_KM = 0.05        # même nom, sans numéro de rue : à moins de 50 m, c'est le même lieu
@@ -207,7 +208,7 @@ def page_accepted(page: dict, today: date = None, commune: str = "") -> bool:
     if page["type_page"] != "presse":
         return True
     published = page_date(page.get("date_page"))
-    today = today or date.today()
+    today = today or paris_today()
     return bool(published) and (today.year - published.year) * 12 + today.month - published.month <= MAX_ARTICLE_MONTHS
 
 

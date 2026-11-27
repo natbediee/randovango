@@ -5,15 +5,18 @@ Aucune base ni réseau : le réglage en vigueur, les dépenses de llm_calls et l
 valeurs posées par chaque test. Le taux par défaut, 1,20 $ pour un euro, compense exactement la TVA de 20 % : un dollar
 dépensé fait alors un euro TTC, et les montants se lisent sans calcul.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
 from services import budget_service
 from services.exchange_rate_service import RateUnavailable
+from utils.paris_time import to_paris
 
-NOW = datetime(2026, 11, 19, 15, 30)
+NOW = datetime(2026, 11, 19, 15, 30)    # une heure de la base, en UTC : 16 h 30 à Paris
 TODAY, FIRST_OF_MONTH = date(2026, 11, 19), date(2026, 11, 1)
+# Minuit à Paris le 19 et le 1er novembre, en heure UTC de la base (Paris est à UTC+1 en novembre).
+DAY_START, MONTH_START = datetime(2026, 11, 18, 23, 0), datetime(2026, 10, 31, 23, 0)
 
 
 def rate(usd_per_eur, day=TODAY):
@@ -30,8 +33,9 @@ def base(monkeypatch):
     state = {"latest": None, "inserted": [], "today": 0.0, "month": 0.0, "rates": {}}
 
     def spent_by_day(start):
-        # Le début du jour (le 19) ou le début du mois (le 1er) : chaque test compte à la date NOW.
-        if start.day != 1:
+        # Le début du jour ou le début du mois (minuit le 1er à Paris, soit 23 h UTC la veille) : chaque test compte
+        # à la date NOW.
+        if to_paris(start).day != 1:
             return {TODAY: state["today"]}
         return {FIRST_OF_MONTH: state["month"] - state["today"], TODAY: state["today"]}
 
@@ -154,7 +158,47 @@ def test_without_any_known_rate_nothing_is_written(base):
 
 def test_the_next_month_of_december_is_january():
     """L'enveloppe de décembre repart le 1er janvier de l'année suivante."""
-    assert budget_service.next_month(datetime(2026, 12, 31)) == datetime(2027, 1, 1)
+    assert budget_service.next_month(date(2026, 12, 31)) == date(2027, 1, 1)
+
+
+# --- Le jour et le mois de Paris (issue #299) ---
+
+def test_in_winter_the_day_and_the_month_start_at_midnight_in_paris():
+    """En novembre, le plafond du jour repart à minuit à Paris (23 h UTC la veille), et l'enveloppe le 1er à minuit à Paris."""
+    assert budget_service.period_starts(NOW) == (DAY_START, MONTH_START)
+
+
+def test_in_summer_the_day_and_the_month_start_at_midnight_in_paris():
+    """En juillet, à l'heure d'été, minuit à Paris tombe à 22 h UTC la veille : le jour et le mois repartent une heure plus tôt en UTC."""
+    starts = budget_service.period_starts(datetime(2026, 7, 15, 10, 0))
+    assert starts == (datetime(2026, 7, 14, 22, 0), datetime(2026, 6, 30, 22, 0))
+
+
+def test_at_half_past_midnight_in_paris_the_new_day_is_already_counted():
+    """À 0 h 30 à Paris le 20 novembre (23 h 30 UTC le 19), la dépense de la veille ne compte plus dans le plafond du jour."""
+    day_start, _ = budget_service.period_starts(datetime(2026, 11, 19, 23, 30))
+    assert day_start == datetime(2026, 11, 19, 23, 0)
+
+
+def test_on_the_first_of_the_month_in_paris_the_envelope_restarts_before_midnight_utc():
+    """À 0 h 30 à Paris le 1er décembre (23 h 30 UTC le 30 novembre), l'enveloppe de décembre est déjà neuve."""
+    day_start, month_start = budget_service.period_starts(datetime(2026, 11, 30, 23, 30))
+    assert day_start == month_start == datetime(2026, 11, 30, 23, 0)
+
+
+def test_a_full_envelope_names_the_next_first_of_the_month_in_paris():
+    """L'enveloppe atteinte le 1er décembre à 0 h 30 à Paris (le 30 novembre en UTC) reprend le 1er janvier, pas le 1er décembre."""
+    settings = {"monthly_budget_eur": 100.0, "vany_reserve_eur": 25.0, "daily_budget_eur": 10.0}
+    reason = budget_service.block_reason(settings, 0.0, 80.0, datetime(2026, 11, 30, 23, 30))
+    assert "reprennent le 01/01/2027" in reason
+
+
+def test_the_time_of_a_change_of_setting_is_shown_in_paris(base):
+    """Un réglage changé à 10 h 49 en base, le 20 novembre, s'affiche à 11 h 49, l'heure de Paris (cas vu pendant #211)."""
+    base["latest"] = {**budget_service.DEFAULTS, "changed_at": datetime(2026, 11, 20, 10, 49), "changed_by": "admin",
+                      "reason": None}
+    shown = budget_service.budget_state(NOW)["modifie_le"]
+    assert (shown.day, shown.hour, shown.minute) == (20, 11, 49) and shown.utcoffset() == timedelta(hours=1)
 
 
 def test_the_reason_of_a_change_is_kept_with_it(base):

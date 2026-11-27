@@ -15,6 +15,7 @@ from services.supervision import spots_review as supervision
 from services.supervision.services_edit import address_town, in_city
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import city_commune, communes_only, get_bounding_box
+from utils.paris_time import paris_date_text, paris_today
 
 ZONE_KM = 5          # le rayon par défaut de l'étape 3 (step3.py)
 PAGE_SIZE = 50
@@ -107,7 +108,7 @@ def _recent(cursor) -> list:
     return [{"id": row["id"], "ouverture": row["objet_type"] == supervision.OPENING_OBJECT,
              "nom": supervision._name(spots.get(row["objet_id"])),
              "action": DECISION_LABELS.get(row["decision"], row["decision"]), "note": row["note"] or "",
-             "par": row["decided_by"], "le": row["decided_at"].strftime("%d/%m/%Y")} for row in rows]
+             "par": row["decided_by"], "le": paris_date_text(row["decided_at"])} for row in rows]
 
 
 def search(city_id: int | None = None, name: str | None = None, on_date: date | None = None) -> dict:
@@ -131,7 +132,7 @@ def search(city_id: int | None = None, name: str | None = None, on_date: date | 
             rows = _search_rows(cursor, city, name, all_cities)
             ids = [row["id"] for row in rows]
             states = supervision._spot_states(cursor)
-            texts = supervision.reworked_a_savoir(cursor, ids, on_date or date.today())
+            texts = supervision.reworked_a_savoir(cursor, ids, on_date or paris_today())
             openings = _opening_ids(cursor, ids)
             cards = [spot_card(row, *states.get(row["id"], (None, None)), texts.get(row["id"], []), openings.get(row["id"]))
                      for row in rows]

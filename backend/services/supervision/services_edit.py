@@ -16,7 +16,6 @@ pas un nom ou un lien corrigé ici (service_store._decided_by_human).
 """
 import json
 import re
-from datetime import date
 
 from services import service_store
 from services.supervision import services_review as review
@@ -25,9 +24,11 @@ from services.commerce_selection_service import SHOP_CATEGORY_LABELS
 from services.restaurant_selection_service import CONFIRMED_SEASON, PROBABLE_SEASON, TABLE_CATEGORY_LABELS, season_label
 from services.station_selection_service import STATION_VIEW_SQL, station_view
 from utils.db_utils import MySQLUtils
+from utils.paris_time import paris_date_text
 from utils.display_utils import PENDING_DOUBT_SQL, shown_verified
 from utils.geo_utils import (address_town, city_commune, communes_only, get_bounding_box, haversine_distance_km,
                              town_choices, town_key)
+from utils.paris_time import paris_today
 
 EDIT_FILE = "modifier"
 ZONE_KM = 5          # le rayon par défaut de l'étape 4 (step4.py)
@@ -180,7 +181,7 @@ def _recent(cursor) -> list:
     """, (review.POI, EDIT_FILE, RECENT_DECISIONS))
     return [{"id": row["id"], "nom": row["name"], "action": review.ACTION_LABELS.get(row["decision"], row["decision"]),
              "champs": ", ".join(FIELD_NAMES.get(field, field) for field in review.signal_detail(row).get("champs", [])),
-             "note": row["note"] or "", "par": row["decided_by"], "le": row["decided_at"].strftime("%d/%m/%Y")}
+             "note": row["note"] or "", "par": row["decided_by"], "le": paris_date_text(row["decided_at"])}
             for row in cursor.fetchall()]
 
 
@@ -517,7 +518,7 @@ def _station_views(cursor, poi_ids: list) -> dict:
         return {}
     marks = ",".join(["%s"] * len(poi_ids))
     cursor.execute(f"{STATION_VIEW_SQL} WHERE sc.poi_id IN ({marks})", tuple(poi_ids))
-    today = date.today()
+    today = paris_today()
     return {row["poi_id"]: station_view(row, today) for row in cursor.fetchall()}
 
 

@@ -25,6 +25,11 @@ Un passage en échec garde ce qui est fini. resume_passage en crée un nouveau, 
 finies ; une grande ville cherchée par zones reprend en plus les zones finies de son fichier (service_chain).
 Le passage en échec reste tel quel, trace fidèle de ce qui s'est passé : la reprise le désigne (resumed_from), et lui
 connaît sa reprise (repris_par). Un passage ne se reprend qu'une fois : si la reprise échoue, c'est elle qu'on reprend.
+
+LES HEURES, À L'HEURE DE PARIS (#299)
+Les heures des passages sont gardées en UTC dans la base ; read_passage et le message d'un passage qui tourne déjà les
+rendent à l'heure de Paris, avec leur fuseau (utils/paris_time.py). Le code qui décide (la file, les reprises) compare
+toujours les heures de la base entre elles, en UTC.
 """
 import re
 from dataclasses import dataclass
@@ -40,6 +45,7 @@ from services.etl_chains import StepFailed
 from services.spot_chain import SpotsMissed
 from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO, WAITING
 from utils.geo_utils import city_commune
+from utils.paris_time import to_paris
 from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("passages")
@@ -235,7 +241,7 @@ def check_not_open(chain: Chain, city_id: int) -> None:
         return
     if passage["status"] == RUNNING:
         raise PassageConflict(f"Un passage « {chain.label} » tourne déjà sur {passage['city_name']}, depuis le "
-                              f"{passage['started_at']:%d/%m/%Y à %H h %M} : attendre sa fin avant d'en lancer un autre.")
+                              f"{to_paris(passage['started_at']):%d/%m/%Y à %H h %M} : attendre sa fin avant d'en lancer un autre.")
     raise PassageConflict(f"Un passage « {chain.label} » est déjà demandé sur {passage['city_name']} "
                           f"({passage['passage_id']}, {passage['status']}) : il partira à son tour.")
 
@@ -728,7 +734,7 @@ def part_state(chain: Chain, part: dict, calls: list) -> dict:
             "etape": step, "detail_etape": detail, "agent": last["agent"] if last and step != SAVING else None,
             **call_totals(mine), "bilan": part["summary"], "bilan_texte": summary_text(part["summary"]),
             "raison_echec": part["error"],
-            "debut": part["started_at"], "fin": part["finished_at"]}
+            "debut": to_paris(part["started_at"]), "fin": to_paris(part["finished_at"])}
 
 
 # --- Ce qu'un passage a trouvé (le journal passage_items, issue #276) ---
@@ -736,7 +742,7 @@ def part_state(chain: Chain, part: dict, calls: list) -> dict:
 def item_state(row: dict) -> dict:
     """Une ligne du journal telle que l'écran la montre : l'objet, son nom, ajouté ou modifié, par quelle partie, quand."""
     return {"objet": row["item_type"], "id": row["item_id"], "nom": row["item_name"], "action": row["action"],
-            "partie": row["part"], "le": row["written_at"]}
+            "partie": row["part"], "le": to_paris(row["written_at"])}
 
 
 def found_items(passage_id: str, details: bool, item: tuple | None = None) -> dict:
@@ -782,7 +788,8 @@ def read_passage(passage_id: str, details: bool = True, item: tuple | None = Non
     return {"passage_id": passage_id, "chaine": chain.key, "libelle_chaine": chain.label,
             "ville": {"id": passage["city_id"], "nom": passage["city_name"], "commune": passage["city_commune"]},
             "origine": passage["origin"], "etat": passage["status"], "payant": chain.paid,
-            "demande_le": passage["requested_at"], "debut": passage["started_at"], "fin": passage["finished_at"],
+            "demande_le": to_paris(passage["requested_at"]), "debut": to_paris(passage["started_at"]),
+            "fin": to_paris(passage["finished_at"]),
             "raison_echec": passage["error"], "raison_attente": waiting_reason(passage),
             "reprise_de": passage["resumed_from"],
             "repris_par": passage_store.resumed_by(passage_id), **call_totals(calls),

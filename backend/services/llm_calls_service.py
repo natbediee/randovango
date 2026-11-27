@@ -16,11 +16,12 @@ Un appel est rattaché à une commune de trois façons, selon son objet :
     - spot    : la commune du spot dans histo_scrap (la plus petite s'il y en a plusieurs) ;
     - plan    : la commune de départ du voyage, trip_plans.city_id.
 """
-from datetime import date
+from datetime import datetime, time
 
 from services import exchange_rate_service
 from services.exchange_rate_service import RateUnavailable
 from utils.db_utils import MySQLUtils
+from utils.paris_time import paris_today
 
 # Ce que vaut le coût d'un appel, selon son moteur (llm_calls.engine) : l'API facture vraiment ce prix ; le programme
 # `claude` passe par l'abonnement, et son coût n'est que ce qu'aurait coûté l'appel par l'API.
@@ -42,11 +43,11 @@ QUERIES = {
         GROUP BY l.agent
         ORDER BY cout_usd DESC
     """,
+    # Par heure UTC : cost_report range ensuite chaque heure dans son jour de Paris (paris_days, #299).
     "jour": f"""
-        SELECT DATE(l.called_at) AS jour, {TOTALS}
+        SELECT DATE(l.called_at) AS jour_utc, HOUR(l.called_at) AS heure_utc, {TOTALS}
         FROM llm_calls l
-        GROUP BY DATE(l.called_at)
-        ORDER BY jour DESC
+        GROUP BY DATE(l.called_at), HOUR(l.called_at)
     """,
     "voyage": f"""
         SELECT l.objet_id AS plan_id, {TOTALS}
@@ -102,12 +103,32 @@ def passage_calls(cursor, passage_id: str) -> list:
     return _dicts(cursor)
 
 
+def paris_days(hours: list) -> list:
+    """
+    Le bilan « jour » à partir du bilan heure UTC par heure UTC : chaque heure va dans son jour de Paris, ses totaux
+    s'additionnent, et les jours vont du plus récent au plus ancien. Paris est toujours à un nombre entier d'heures de
+    l'UTC : une heure UTC tombe entière dans un seul jour de Paris.
+    """
+    days = {}
+    for row in hours:
+        day = paris_today(datetime.combine(row["jour_utc"], time(row["heure_utc"])))
+        totals = days.setdefault(day, {"jour": day})
+        for name, value in row.items():
+            if name not in ("jour_utc", "heure_utc"):
+                totals[name] = totals.get(name, 0) + (value or 0)
+    return [days[day] for day in sorted(days, reverse=True)]
+
+
 def cost_report(cursor, by: str) -> list:
-    """[{groupe..., appels, echecs, cout_usd, ...}] ; `by` vaut agent, jour, voyage, commune ou passage."""
+    """
+    [{groupe..., appels, echecs, cout_usd, ...}] ; `by` vaut agent, jour, voyage, commune ou passage. Le jour est
+    celui de Paris (#299).
+    """
     if by not in QUERIES:
         raise ValueError(f"Bilan inconnu : {by} (attendu : {', '.join(QUERIES)})")
     cursor.execute(QUERIES[by])
-    return _dicts(cursor)
+    rows = _dicts(cursor)
+    return paris_days(rows) if by == "jour" else rows
 
 
 def load_cost_report(by: str) -> list:
@@ -144,7 +165,7 @@ def calls_cost(calls: list) -> dict:
     """
     usd_by_day = {}
     for call in calls:
-        day = call["called_at"].date()
+        day = paris_today(call["called_at"])     # le jour de Paris de l'appel, pour son taux (#299)
         usd_by_day[day] = usd_by_day.get(day, 0.0) + float(call["cost_usd"] or 0)
     cost = {"cout_usd": round(sum(usd_by_day.values()), 4), "cout_eur": None, "taux": None,
             "nature_du_cout": cost_nature({call["engine"] for call in calls})}
@@ -171,7 +192,7 @@ def run_cost_text(run: dict) -> str:
     usd = run.get("cost_usd") or 0
     seconds = (run.get("duration_ms") or 0) / 1000
     try:
-        rate = exchange_rate_service.rate_for(date.today())
+        rate = exchange_rate_service.rate_for(paris_today())
     except RateUnavailable:
         return f"{seconds:.0f} s, {usd:.2f} $ ({nature} ; euros inconnus, aucun taux de la BCE)"
     eur = exchange_rate_service.usd_to_eur(usd, rate)

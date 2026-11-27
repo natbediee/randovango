@@ -47,6 +47,7 @@ from utils.db_utils import CITY_SPOTS_CLAUSE, MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, spot_name_label
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
+from utils.paris_time import paris_today
 
 logger = LoggerUtil.get_logger("etl_verify_spots")
 
@@ -208,7 +209,7 @@ def build_user_message(spot: dict) -> str:
     to_check = description.split("À savoir :", 1)[1].strip() if "À savoir :" in description else description
     read_on = spot.get("details_scraped_at")
     lines = [
-        f"DATE DU JOUR : {date.today().strftime('%d/%m/%Y')}",
+        f"DATE DU JOUR : {paris_today().strftime('%d/%m/%Y')}",
         f"IDENTIFIANT DU SPOT : {spot['id']}",
         f"LIEU : {spot['name_label']}",
         f"COMMUNE : {spot.get('city_label') or 'inconnue'} ({spot.get('postal_code') or 'code postal inconnu'})",
@@ -327,7 +328,7 @@ def read_recent_reviews(driver, wait, spot: dict, first_page: bool = False) -> N
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "h1.place-header-name")))
         if first_page:
             dismiss_cookies(driver, wait)   # le bandeau n'apparaît qu'à la première page
-        spot["recent_reviews"] = recent_reviews(extract_reviews(driver), date.today()) or spot["recent_reviews"]
+        spot["recent_reviews"] = recent_reviews(extract_reviews(driver), paris_today()) or spot["recent_reviews"]
     except WebDriverException as error:
         logger.warning(f"[verify] #{spot['id']} fiche non relue, commentaires en base : {error}")
 

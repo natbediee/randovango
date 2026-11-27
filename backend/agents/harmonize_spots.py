@@ -43,7 +43,6 @@ UTILISATION (dans le conteneur backend, depuis /usr/src/app)
 """
 import argparse
 import json
-from datetime import date
 
 from agents.llm_config import ENGINE_API, ENGINE_CLAUDE_CODE, engine, make_llm_service
 from agents.llm_service import LLMUnavailable, mesure_objet, mesure_passage, new_passage_id
@@ -53,6 +52,7 @@ from utils.display_utils import HIDDEN_SPOT_TYPES
 from utils.logger_util import LoggerUtil
 from utils.review_utils import PROMPT_SELECTION, select_reviews
 from utils.service_utils import SERVICE_CATEGORY_MAP, ServiceUtil
+from utils.paris_time import paris_today
 
 logger = LoggerUtil.get_logger("etl_harmonize_spots")
 
@@ -290,7 +290,7 @@ def build_user_message(spot: dict) -> str:
     tirer des informations qui ne sont écrites nulle part.
     """
     lines = [
-        f"DATE DU JOUR : {date.today():%d/%m/%Y}",
+        f"DATE DU JOUR : {paris_today():%d/%m/%Y}",
         f'DESCRIPTION : "{(spot.get("description") or "").strip()}"',
         f'OUVERTURE : "{spot.get("opening_period") or "non renseignée"}"',
         "COMMENTAIRES :",

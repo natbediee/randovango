@@ -34,6 +34,7 @@ from etl.transform.transform_pharmacies import closures, is_open, pharmacy_row, 
 from utils.db_utils import get_all_city_ids
 from utils.geo_utils import address_town, get_city_center, spelling_key
 from utils.logger_util import LoggerUtil
+from utils.paris_time import paris_today
 
 logger = LoggerUtil.get_logger("etl_pharmacies")
 
@@ -81,7 +82,7 @@ def city_rows(city: str, pharmacies: list, today: date) -> list | None:
 
 def run_city_etl(city: str, pharmacies: list, dry_run: bool = False) -> int | None:
     """Renvoie le nombre de pharmacies chargées (ou qui le seraient), None en cas d'échec."""
-    rows = city_rows(city, pharmacies, date.today())
+    rows = city_rows(city, pharmacies, paris_today())
     if rows is None:
         return None
     if dry_run:
@@ -134,7 +135,7 @@ def refresh_pharmacies() -> int | None:
 def hide_closed_pharmacies(pharmacies: list, dry_run: bool = False) -> int:
     """Les pharmacies déjà en base qui ne sont plus ouvertes dans FINESS : masquées (ou seulement listées en essai)."""
     known = known_pharmacies()
-    closed = closures(known, pharmacies, date.today())
+    closed = closures(known, pharmacies, paris_today())
     if dry_run:
         for finess, closed_on in closed.items():
             print(f"  serait masquée : pharmacie {finess}, fermée le {closed_on or '? (sortie du fichier)'}")

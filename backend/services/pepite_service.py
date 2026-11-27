@@ -74,6 +74,7 @@ from utils.display_utils import (HIKE_START_H, pepite_news_text, pepite_section,
 from utils.geo_utils import geocode_address_ban, get_bounding_box, haversine_distance_km
 from utils.logger_util import LoggerUtil
 from utils.meteo_utils import meteo_code_to_picto, sunset_time
+from utils.paris_time import paris_today
 
 logger = LoggerUtil.get_logger("pepite_service")
 
@@ -187,7 +188,7 @@ def load_day_context(cursor, plan_id: int, day_number: int) -> dict | None:
     # "weather_picto" reste None et les idées en extérieur seront à revérifier.
     # Le détail ("weather") sert au choix de Vany (choose_pepites).
     day["weather_picto"] = day["weather"] = None
-    if 0 <= (day["day_date"] - date.today()).days <= FORECAST_DAYS:
+    if 0 <= (day["day_date"] - paris_today()).days <= FORECAST_DAYS:
         cursor.execute(
             "SELECT weather_code, temp_min_c, temp_max_c, precipitation_mm, wind_max_kmh FROM weather"
             " WHERE city_id = %s AND date = %s ORDER BY id DESC LIMIT 1",
@@ -442,7 +443,7 @@ def record_search(cursor, day: dict, mode: str, found: int, prompt_version: int,
     `trip_day_id` n'est donné que pour une recherche complémentaire.
     """
     lat, lon = day["points"][0]
-    first, last = (day["day_date"], day["trip_end"]) if mode == "agenda" else (date.today(), date.today())
+    first, last = (day["day_date"], day["trip_end"]) if mode == "agenda" else (paris_today(), paris_today())
     cursor.execute(
         "INSERT INTO pepite_recherches (latitude, longitude, jour, jour_fin, searched_at, nb_trouvees, type,"
         " prompt_version, trip_day_id) VALUES (%s, %s, %s, %s, NOW(), %s, %s, %s, %s)",
