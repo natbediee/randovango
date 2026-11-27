@@ -269,6 +269,13 @@ Depuis le dossier du worktree :
 BRANCHE=carburants PORT=8001 docker compose -f docker-compose.branche.yml up -d
 ```
 L'API de la branche est alors sur http://localhost:8001/docs ; celle du projet principal reste sur le port 8000.
+
+Le backend de branche ne fait pas tourner la file des passages : la base est commune, et il prendrait sinon les
+passages du backend principal pour les faire avec le code de la branche. Une ville ajoutée depuis la branche entre en
+file et part depuis le backend principal. Pour essayer la file de la branche, le demander au lancement :
+```bash
+PASSAGE_QUEUE_ENABLED=1 BRANCHE=carburants PORT=8001 docker compose -f docker-compose.branche.yml up -d
+```
 Les tables nouvelles de la branche se créent quand on le décide :
 ```bash
 docker exec fastapi_backend_carburants python db_init/db_randovango.py
