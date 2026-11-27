@@ -18,6 +18,9 @@ qui les lisent encore. Une ligne d'avant les euros n'a que des dollars : on la c
 Un passage d'une chaîne d'agents ne part que si les deux conditions tiennent :
     - ce qui est dépensé depuis le 1er du mois reste sous l'enveloppe, moins la part de Vany ;
     - ce qui est dépensé depuis minuit reste sous le plafond du jour.
+Le jour et le mois sont ceux de Paris (#299) : le plafond du jour repart à minuit à Paris, l'enveloppe le 1er du mois
+à minuit à Paris, été comme hiver. Les heures de llm_calls sont en UTC (utils/paris_time.py) : on compare donc à
+l'heure UTC de ce minuit-là.
 Le passage en cours n'est jamais coupé : on peut dépasser d'un passage, soit une ville (2 à 4 €).
 Sans aucun taux connu (site de la BCE jamais lu), la dépense ne peut pas se compter en euros : les passages attendent.
 Vany elle-même n'est pas bloquée ici : sa réserve la protège des chaînes, son propre plafond viendra avec #198.
@@ -33,6 +36,7 @@ from datetime import date, datetime, timedelta
 
 from services import agent_settings_store, exchange_rate_service
 from services.exchange_rate_service import RateUnavailable
+from utils import paris_time
 
 # Les montants réglables, sans leur monnaie : chacun a une colonne _eur et une colonne _usd dans agent_settings.
 AMOUNTS = ("monthly_budget", "daily_budget", "vany_reserve")
@@ -110,13 +114,16 @@ def save_settings(changes: dict, changed_by: str, reason: str | None = None) -> 
 
 
 def period_starts(now: datetime) -> tuple:
-    """Minuit aujourd'hui, et le 1er du mois à minuit : le début du jour et du mois qu'on compte."""
-    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return day, day.replace(day=1)
+    """
+    Le début du jour et du mois qu'on compte : minuit à Paris aujourd'hui, et le 1er du mois à minuit à Paris, en heure
+    UTC de la base. `now` est une heure de la base (UTC, sans fuseau).
+    """
+    today = paris_time.paris_today(now)
+    return paris_time.paris_midnight(today), paris_time.paris_midnight(today.replace(day=1))
 
 
-def next_month(day: datetime) -> datetime:
-    """Le 1er du mois suivant : le jour où l'enveloppe du mois repart."""
+def next_month(day: date) -> date:
+    """Le 1er du mois suivant : le jour où l'enveloppe du mois repart. `day` est un jour de Paris."""
     return (day.replace(day=28) + timedelta(days=4)).replace(day=1)
 
 
@@ -134,11 +141,11 @@ def block_reason(settings: dict, spent_today: float, spent_month: float, now: da
     """
     Pourquoi un passage ne peut pas partir maintenant, en phrase lisible ; None si le budget le permet.
     Les montants sont en euros. L'enveloppe du mois est regardée d'abord : si elle est atteinte, attendre demain ne
-    suffit pas.
+    suffit pas. `now` est une heure de la base (UTC, sans fuseau) : le jour de reprise dit est celui de Paris.
     """
     usable = settings["monthly_budget_eur"] - settings["vany_reserve_eur"]
     if spent_month >= usable:
-        back = next_month(now)
+        back = next_month(paris_time.paris_today(now))
         return (f"enveloppe du mois atteinte : {spent_month:.2f} € dépensés, {usable:.2f} € permis aux agents "
                 f"({settings['vany_reserve_eur']:.2f} € gardés pour Vany) ; les passages reprennent le "
                 f"{back:%d/%m/%Y}, ou plus tôt si l'enveloppe est relevée")
@@ -156,6 +163,8 @@ def budget_state(now: datetime | None = None) -> dict:
     Sans aucun taux connu, les montants en euros valent None et la raison du blocage le dit.
     Budget coupé (AGENT_BUDGET_ENABLED=0) : budget_actif vaut False, les dépenses sont comptées comme d'habitude, et la
     raison du blocage vaut toujours None, puisque rien ne retient la file.
+    `now` est une heure de la base (UTC, sans fuseau) ; l'heure du changement de réglage (modifie_le) est rendue à
+    l'heure de Paris.
     """
     now = now or datetime.now()
     settings = load_settings()
@@ -167,14 +176,14 @@ def budget_state(now: datetime | None = None) -> dict:
              "depense_du_jour_eur": None, "depense_du_mois_eur": None,
              "depense_du_jour_usd": None, "depense_du_mois_usd": None,
              "reste_du_jour_eur": None, "reste_du_mois_eur": None, "taux": None,
-             "modifie_le": settings["changed_at"], "modifie_par": settings["changed_by"],
+             "modifie_le": paris_time.to_paris(settings["changed_at"]), "modifie_par": settings["changed_by"],
              "raison_du_changement": settings["reason"]}
     try:
         if settings["daily_budget_eur"] is None:
             raise RateUnavailable("le réglage en dollars ne peut pas être converti")
         day_start, month_start = period_starts(now)
         today, month = spent_since(day_start), spent_since(month_start)
-        state["taux"] = exchange_rate_service.rate_label(exchange_rate_service.rate_for(now.date()))
+        state["taux"] = exchange_rate_service.rate_label(exchange_rate_service.rate_for(paris_time.paris_today(now)))
     except RateUnavailable as error:
         state["budget_atteint"] = None
         if active:
