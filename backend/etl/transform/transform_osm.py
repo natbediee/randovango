@@ -28,6 +28,9 @@ NAMED_BY_OPERATOR = ('laundry',)
 # Mesure du 13 novembre 2026 sur Brest, Plougonvelin et Le Conquet : 21 toilettes sur 221 réservées aux clients
 # (camping municipal, médiathèque, restaurant), montrées « Toilettes publiques » à l'étape 4 (issue #193).
 PUBLIC_FACILITY_TYPES = ('toilets', 'shower')
+# Les stations-service d'OSM ne sont pas des services : l'étape 4 ne montre que celles de l'État, qui prennent nom et
+# marque d'OSM. Elles sont rangées à part, dans osm_fuel_stations (transform_carburants.osm_fuel_stations).
+FUEL_TYPE = 'fuel'
 
 # Le lien d'un lieu, du plus utile au moins utile. Beaucoup de contributeurs n'écrivent
 # que contact:website, ou seulement la page Facebook : 159 restaurants sur 1 775 sans lien
@@ -205,7 +208,7 @@ def transform_osm(osm_json : dict,city : str) -> pd.DataFrame:
     Transforme les données OSM JSON extraites en un DataFrame de POI normalisés pour insertion en base.
     Seuls les POI avec nom, type et coordonnées valides sont conservés.
     Les POI de type 'information' ne sont gardés que si leur nom est 'Office du tourisme'.
-    Les commerces (shop) sont inclus.
+    Les commerces (shop) sont inclus. Les stations-service ne le sont pas : elles vont dans osm_fuel_stations.
     """
     pois = []
     if not osm_json or 'elements' not in osm_json:
@@ -246,6 +249,8 @@ def transform_osm(osm_json : dict,city : str) -> pd.DataFrame:
             if name and operator and poi_type in NAMED_BY_OPERATOR:
                 name = f"{name} {operator}"
 
+        if poi_type == FUEL_TYPE:
+            continue
         if name and poi_type and lat is not None and lon is not None:
             # Filtrage spécial pour 'information'
             if poi_type == 'information' and name != 'Office du tourisme':

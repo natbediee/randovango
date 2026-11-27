@@ -120,6 +120,7 @@ def keep_near(stations: list, latitude: float, longitude: float, distance_km: fl
 
 
 def osm_station(element: dict) -> dict:
+    """Une station-service d'OSM telle que l'étape des carburants la lit : nom, marque, identifiant de l'État, position."""
     tags = element.get("tags", {})
     return {
         "osm_element": f"{element['type']}/{element['id']}",
@@ -130,6 +131,15 @@ def osm_station(element: dict) -> dict:
         "ref": tags.get("ref:FR:prix-carburants"),
         "postcode": tags.get("addr:postcode"),
     }
+
+
+def osm_fuel_stations(osm_json: dict | None) -> list:
+    """
+    Les stations-service de la réponse d'Overpass de l'étape OSM (étiquette amenity=fuel), au format de osm_station.
+    L'étape OSM les range dans osm_fuel_stations, et l'étape des carburants les y relit.
+    """
+    elements = (osm_json or {}).get("elements", [])
+    return [osm_station(element) for element in elements if element.get("tags", {}).get("amenity") == "fuel"]
 
 
 def _distance_m(station: dict, osm: dict) -> float:

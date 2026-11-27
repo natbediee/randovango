@@ -1,10 +1,12 @@
 """
 Les stations-service et leurs prix, depuis prix-carburants.gouv.fr : extraction, transformation, chargement.
-Gratuit : aucun agent, aucune recherche web. Un fichier d'environ 1 Mo pour toute la France, puis Overpass par ville.
+Gratuit : aucun agent, aucune recherche web, aucun appel à Overpass. Un fichier d'environ 1 Mo pour toute la France,
+et les stations OSM que l'étape OSM a rangées pour la ville (table osm_fuel_stations) : Overpass n'est interrogé
+qu'une fois par ville, par l'étape OSM. Celle-ci doit donc être passée avant.
 
 Deux façons de passer :
     par ville  : les stations à moins de DISTANCE_KM du centre, reliées aux stations OSM pour avoir leur marque ;
-    prix       : les prix des stations déjà en base, sans Overpass. Le lien avec OSM déjà fait est gardé.
+    prix       : les prix des stations déjà en base. Le lien avec OSM déjà fait est gardé.
 
 UTILISATION (depuis backend/) :
     python -m etl.etl_carburants --ville Plougonvelin --essai      # n'écrit rien : affiche ce qui serait chargé
@@ -15,10 +17,12 @@ UTILISATION (depuis backend/) :
 import argparse
 from datetime import datetime
 
-from etl.extract.api_carburants import download_state_file, extract_osm_fuel
-from etl.load.load_carburants import known_stations, load_missing_signals, load_stations, mark_prices_read
+from etl.extract.api_carburants import download_state_file
+from etl.extract.api_osm import FUEL_DISTANCE_KM
+from etl.load.load_carburants import (known_stations, load_missing_signals, load_stations, mark_prices_read,
+                                      osm_fuel_stations_of)
 from etl.transform.transform_carburants import (file_signals, keep_near, last_news, link_signals, link_to_osm,
-                                                osm_station, parse_state_file, station_rows)
+                                                parse_state_file, station_rows)
 from services import poi_triage_service
 from utils.db_utils import get_all_city_ids
 from utils.geo_utils import get_city_center, haversine_distance_km
@@ -26,7 +30,7 @@ from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("etl_carburants")
 
-DISTANCE_KM = 5     # le carré de l'ETL OSM (api_osm.extract_osm) et de l'étape 4 (step4_services.js)
+DISTANCE_KM = FUEL_DISTANCE_KM     # le carré où l'étape OSM cherche les stations, celui de l'étape 4 (step4_services.js)
 
 
 def _read_state_file() -> list | None:
@@ -35,17 +39,17 @@ def _read_state_file() -> list | None:
 
 
 def city_rows(city: str, stations: list) -> tuple | None:
-    """(lignes à charger, stations OSM seules) pour une ville. None si la ville ou Overpass manquent."""
+    """(lignes à charger, stations OSM seules) pour une ville. None si la ville manque ou si l'étape OSM n'y est pas passée."""
     latitude, longitude = get_city_center(city)
     if latitude is None:
         logger.error(f"[ETL] : {city} absente de la table cities")
         return None
     nearby = keep_near(stations, latitude, longitude, DISTANCE_KM)
-    elements = extract_osm_fuel(latitude, longitude, DISTANCE_KM, city)
-    if elements is None:
-        logger.error(f"[ETL] : Overpass muet pour {city} : stations non chargées, à repasser")
+    # Sans les stations OSM, chaque station de l'État serait chargée sous « Station-service », sans marque : on attend.
+    osm_stations = osm_fuel_stations_of(city)
+    if osm_stations is None:
+        logger.error(f"[ETL] : l'étape OSM n'est pas encore passée pour {city} : stations non chargées, à repasser")
         return None
-    osm_stations = [osm_station(e) for e in elements]
     read_at = datetime.now().replace(microsecond=0)
     rows, linked = [], set()
     for station in nearby:

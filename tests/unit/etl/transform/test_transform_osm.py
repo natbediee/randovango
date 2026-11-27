@@ -42,6 +42,16 @@ def test_transform_osm_filters_and_keeps_expected_pois() -> None:
     assert set(df["type"]) == {"museum", "information", "beach"}
 
 
+def test_fuel_stations_are_not_loaded_as_services() -> None:
+    """Une station-service d'OSM n'est plus un service : elle part dans osm_fuel_stations, pas dans les lieux chargés."""
+    osm_json = {"elements": [
+        {"type": "node", "id": 582223754, "lat": 48.3423, "lon": -4.72315,
+         "tags": {"amenity": "fuel", "name": "Intermarché", "ref:FR:prix-carburants": "29217001"}},
+        {"type": "node", "id": 1, "lat": 48.39, "lon": -4.49, "tags": {"name": "Musee", "tourism": "museum"}},
+    ]}
+    assert list(transform_osm(osm_json, city="Plougonvelin")["name"]) == ["Musee"]
+
+
 def test_transform_osm_invalid_payload_returns_empty_dataframe() -> None:
     df = transform_osm({}, city="Brest")
 
