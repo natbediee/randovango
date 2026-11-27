@@ -128,6 +128,10 @@ d'envoi, et n'attend jamais les étapes qui viennent après elle.
 - Un passage resté « en cours » alors que plus rien ne le fait tourner (serveur redémarré, programme arrêté) est
   marqué « interrompu » par la file elle-même, chaque minute : sur une partie gratuite, il est ensuite repris seul, et
   les étapes de sa ville repartent.
+- Seul le backend principal fait tourner la file. Un backend de branche (`docker-compose.branche.yml`) partage la
+  base commune mais ne lance aucun thread (`PASSAGE_QUEUE_ENABLED=0`) : il ne prend pas les passages pour les faire avec
+  le code de sa branche, et ne marque pas « interrompus » ceux que le principal fait tourner. Une ville ajoutée depuis
+  une branche entre en file et part depuis le backend principal.
 
 ## Le coût en euros et le budget
 

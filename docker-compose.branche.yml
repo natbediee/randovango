@@ -35,6 +35,11 @@ services:
       # coût compté n'est qu'un équivalent API. Les dépenses restent affichées dans la supervision.
       # Pour l'essayer : AGENT_BUDGET_ENABLED=1 devant la commande docker compose (voir .env.example).
       AGENT_BUDGET_ENABLED: ${AGENT_BUDGET_ENABLED:-0}
+      # File des passages coupée par défaut sur une branche : la base est commune, et un backend de branche qui la
+      # ferait tourner prendrait les passages du backend principal pour les faire avec le code de sa branche. Les
+      # villes ajoutées ici entrent en file et partent depuis le backend principal. Pour essayer la file de la
+      # branche : PASSAGE_QUEUE_ENABLED=1 devant la commande docker compose (voir .env.example).
+      PASSAGE_QUEUE_ENABLED: ${PASSAGE_QUEUE_ENABLED:-0}
     volumes:
       - ./backend:/usr/src/app
       # Un seul .env pour tout le projet : celui du dossier principal, rangé à côté (~/Dev/randovango).
