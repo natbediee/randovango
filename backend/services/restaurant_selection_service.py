@@ -15,6 +15,7 @@ import json
 import re
 from datetime import date
 from urllib.parse import quote_plus
+from utils.paris_time import paris_today
 
 # Une liste fixe : le genre, écrit librement, classait Ar Dagenta en bistrot puis en pizzeria.
 # La même grille dans toute la France (8 novembre 2026) : l'ancienne était bretonne (crêperie), et « traditionnel » mêlait
@@ -39,7 +40,7 @@ def is_new(since: date | None, today: date | None = None) -> bool:
     """Le lieu est-il au registre depuis moins de NEW_MONTHS mois ?"""
     if not since:
         return False
-    today = today or date.today()
+    today = today or paris_today()
     return (today.year - since.year) * 12 + today.month - since.month < NEW_MONTHS
 
 

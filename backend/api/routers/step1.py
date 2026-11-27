@@ -20,6 +20,7 @@ from typing import List
 from datetime import datetime, timedelta, date
 import time
 import threading
+from utils.paris_time import paris_today
 
 router = APIRouter()
 logger = LoggerUtil.get_logger("router")
@@ -277,7 +278,7 @@ async def get_ville_list(
     # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
     with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
         # Vérification si les données météo J+6 existent (7 jours de prévisions : J+0 à J+6)
-        date_j6 = datetime.now().date() + timedelta(days=6)
+        date_j6 = paris_today() + timedelta(days=6)
         cursor.execute("SELECT COUNT(*) as count FROM weather WHERE date >= %s", (date_j6,))
         result = cursor.fetchone()
         meteo_j7_exists = result['count'] > 0
@@ -313,8 +314,8 @@ async def get_ville_list(
         if city_ids:
             placeholders = ",".join(["%s"] * len(city_ids))
             cursor.execute(
-                f"SELECT * FROM weather WHERE city_id IN ({placeholders}) AND DATE >= CURDATE() ORDER BY city_id, date ASC",
-                tuple(city_ids)
+                f"SELECT * FROM weather WHERE city_id IN ({placeholders}) AND DATE >= %s ORDER BY city_id, date ASC",
+                (*city_ids, paris_today())
             )
             for m in cursor.fetchall():
                 meteo_by_city[m["city_id"]].append({
@@ -367,7 +368,7 @@ def create_plan(
             if cursor.fetchone() is None:
                 raise HTTPException(status_code=400, detail=f"Ville introuvable (id={city_id}). Choisis une ville dans la liste.")
             try:
-                plan_id = insert_plan_with_days(cursor, start_date or date.today(), duration_days, city_id,
+                plan_id = insert_plan_with_days(cursor, start_date or paris_today(), duration_days, city_id,
                                                 user_token_to_insert, user_id_to_insert)
                 cnx.commit()
             except Exception:
@@ -440,7 +441,7 @@ async def refresh_city_meteo(city_id: int):
             etl_result = run_meteo_etl(city_name, result['latitude'], result['longitude'])
 
             # Récupérer les prévisions météo fraîchement créées
-            cursor.execute("SELECT * FROM weather WHERE city_id = %s AND DATE >= CURDATE() ORDER BY date ASC", (city_id,))
+            cursor.execute("SELECT * FROM weather WHERE city_id = %s AND DATE >= %s ORDER BY date ASC", (city_id, paris_today()))
             meteo_data = cursor.fetchall()
 
         forecasts = []

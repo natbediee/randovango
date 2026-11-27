@@ -12,6 +12,7 @@ from utils.display_utils import SPOT_ON_HIKE_KM, enrich_spot
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import distance_to_trace_km
+from utils.paris_time import paris_today
 
 router = APIRouter()
 logger = LoggerUtil.get_logger(__name__)
@@ -51,7 +52,7 @@ def _night_date(cursor, plan_id, day_number) -> date:
         plan = cursor.fetchone()
         if plan and plan["start_date"]:
             return plan["start_date"] + timedelta(days=day_number - 1)
-    return date.today()
+    return paris_today()
 
 
 def _hike_trace(cursor, hike_id) -> list:
@@ -80,7 +81,7 @@ def _spots_around_city(connection, cursor, city_id, distance_km, get_bounding_bo
         _, _, north, east = get_bounding_box(max(p[0] for p in trace), max(p[1] for p in trace), SPOT_ON_HIKE_KM)
         min_lat, min_lon, max_lat, max_lon = min(min_lat, south), min(min_lon, west), max(max_lat, north), max(max_lon, east)
 
-    spots = proposable_spots(connection, cursor, (min_lat, min_lon, max_lat, max_lon), night or date.today())
+    spots = proposable_spots(connection, cursor, (min_lat, min_lon, max_lat, max_lon), night or paris_today())
     if trace:
         for spot in spots:
             spot["hike_distance_km"] = distance_to_trace_km(spot["latitude"], spot["longitude"], trace)
@@ -109,7 +110,7 @@ def _spots_around_city(connection, cursor, city_id, distance_km, get_bounding_bo
                 services_map[spot_id] = []
             services_map[spot_id].append(service)
 
-    a_savoir = reworked_a_savoir(cursor, spot_ids, night or date.today())
+    a_savoir = reworked_a_savoir(cursor, spot_ids, night or paris_today())
 
     # Construire la réponse, avec les champs prêts à afficher (catégorie prix,
     # badge, icônes des services...) calculés en Python par enrich_spot.

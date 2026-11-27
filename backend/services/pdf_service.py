@@ -23,6 +23,7 @@ from services.map_service import (
     fetch_hike_waypoints,
     legend_entries,
 )
+from utils.paris_time import paris_today
 
 # --- Palette (design tokens du handoff) ------------------------------------
 CREAM = "#F9F8F1"
@@ -795,7 +796,7 @@ def _cover_section(plan, days, totals) -> str:
     return f"""
     <div class="cover-head">
         {_lockup_html()}
-        <span class="cover-head__date">Établi le {_long_date(date.today(), weekday=False)}</span>
+        <span class="cover-head__date">Établi le {_long_date(paris_today(), weekday=False)}</span>
     </div>
     <div class="rule"></div>
     <div class="hero">

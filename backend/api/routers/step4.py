@@ -25,6 +25,7 @@ from utils import display_utils
 from utils.display_utils import PENDING_DOUBT_SQL, enrich_poi, poi_subtitle
 from utils.geo_utils import city_commune
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
+from utils.paris_time import paris_today
 
 router = APIRouter()
 
@@ -104,7 +105,7 @@ def station_fields(poi: dict) -> dict:
     l'étiquette Autoroute (réseau autoroutier, carte #180) et une fermeture temporaire. Les prix sont ceux d'aujourd'hui, pas du jour du voyage : l'ancienneté se compte donc
     depuis aujourd'hui.
     """
-    today = date.today()
+    today = paris_today()
     badges = price_badges(poi.get("station_prix"), today)
     return {"prix": badges, "prix_resume": prices_summary(badges, poi.get("station_lu_le")),
             "automate_24_24": poi.get("station_automate") == 1, "autoroute": is_motorway(poi.get("station_route")),
@@ -382,7 +383,7 @@ def get_poi(
     names = Counter(" ".join((poi["name"] or "").lower().split()) for poi in {poi["id"]: poi for poi in poi_list}.values())
 
     # Appelée directement (tests), la valeur par défaut est l'objet Query de FastAPI, pas None.
-    day = day_date if isinstance(day_date, date) else date.today()
+    day = day_date if isinstance(day_date, date) else paris_today()
     for poi in poi_list:
         # Un lieu sans position ne peut être ni mesuré ni placé sur la carte : un lieu « position introuvable »
         # validé dans /supervision en est un (Biscuiterie de la Pointe Saint-Mathieu, 7 novembre 2026).
