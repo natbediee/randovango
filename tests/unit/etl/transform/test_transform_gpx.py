@@ -1,3 +1,7 @@
+import unicodedata
+
+import pytest
+
 from etl.transform import transform_gpx
 
 
@@ -24,7 +28,63 @@ GPX_SAMPLE = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 
 
 def test_normalize_name_replaces_tokens() -> None:
+    """Le numéro d'ordre devant le nom est retiré et l'apostrophe de « d_armor » remise."""
     assert transform_gpx.normalize_name("01-rando_test_d_armor") == "rando test d'armor"
+
+
+@pytest.mark.parametrize("file_name, expected", [
+    ("FFRandonnée-L_Île-d_Yeu___Kreuzland", "L'Île-d'Yeu : Kreuzland"),
+    ("FFRandonnée-Dolus-d_Oléron___dunes_et_marais", "Dolus-d'Oléron : dunes et marais"),
+    ("FFRandonnée-Pont-l_Abbé-d_Arnoult___au_bord_de_l_Arnoult", "Pont-l'Abbé-d'Arnoult : au bord de l'Arnoult"),
+    ("FFRandonnée-Les_Sables-d_Olonne___Les_Bourbes", "Les Sables-d'Olonne : Les Bourbes"),
+    ("FFRandonnée-Fouras___station_balnéaire,_presqu_île_ostréicole",
+     "Fouras : station balnéaire, presqu'île ostréicole"),
+    ("FFRandonnée-L_Épina", "L'Épina"),
+])
+def test_a_file_name_reads_with_its_apostrophes_and_separator(file_name, expected) -> None:
+    """Le nom d'une rando tiré de son fichier retrouve ses apostrophes et son « : » (randos 349, 314, 351, 373, 315, 300 de l'import du 23 novembre)."""
+    assert transform_gpx.normalize_name(file_name) == expected
+
+
+def test_a_name_with_a_space_before_the_title_keeps_one_separator() -> None:
+    """« L_Île-d_Yeu___ Kreuzland », avec un espace après les trois « _ », se lit aussi « L'Île-d'Yeu : Kreuzland »."""
+    assert transform_gpx.normalize_name("L_Île-d_Yeu___ Kreuzland") == "L'Île-d'Yeu : Kreuzland"
+
+
+def test_a_decomposed_accent_from_a_mac_file_name_is_recognized() -> None:
+    """Un nom de fichier venu d'un Mac écrit « é » en deux caractères : le préfixe est quand même retiré, l'apostrophe remise."""
+    decomposed = unicodedata.normalize("NFD", "FFRandonnée-L_Épina")
+
+    assert transform_gpx.normalize_name(decomposed) == "L'Épina"
+
+
+def test_a_name_with_a_hyphen_stays_whole() -> None:
+    """Un nom de trace sans préfixe de source garde ce qui précède son premier tiret : « Saint-Pol… » ne devient pas « Pol… »."""
+    assert transform_gpx.normalize_name("Saint-Pol-de-Léon par la côte") == "Saint-Pol-de-Léon par la côte"
+
+
+def test_the_breton_ch_gets_its_apostrophe() -> None:
+    """Le « c'h » breton retrouve son apostrophe : « Circuit_de_Roc_h_ar_Bic » se lit « Circuit de Roc'h ar Bic » (rando 22)."""
+    assert transform_gpx.normalize_name("FFRandonnée-Circuit_de_Roc_h_ar_Bic") == "Circuit de Roc'h ar Bic"
+
+
+def test_an_elision_before_a_consonant_keeps_its_apostrophe() -> None:
+    """Un nom de lieu savoyard élide devant une consonne : « Praz_d_zeures » se lit « Praz d'zeures » (rando 605)."""
+    file_name = "FFRandonnée-Refuge_de_Praz_d_zeures_en_2_jours_-_Itinéraire_pédestre"
+
+    assert transform_gpx.normalize_name(file_name) == "Refuge de Praz d'zeures en 2 jours - Itinéraire pédestre"
+
+
+def test_a_letter_inside_a_word_is_not_taken_for_an_elided_word() -> None:
+    """Seul un petit mot isolé prend une apostrophe : « Rand_Abers » reste « Rand Abers » (rando 18)."""
+    assert transform_gpx.normalize_name("FFRandonnée-Rand_Abers") == "Rand Abers"
+
+
+def test_a_name_already_written_with_apostrophes_is_unchanged() -> None:
+    """Un nom de trace déjà bien écrit, apostrophes comprises, ressort tel quel (« Refuge de Praz d'zeures »)."""
+    name = "Refuge de Praz d'zeures en 2 jours - Itinéraire pédestre"
+
+    assert transform_gpx.normalize_name(name) == name
 
 
 def test_transform_gpx_returns_none_when_city_not_found(monkeypatch) -> None:
