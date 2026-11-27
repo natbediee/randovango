@@ -342,19 +342,18 @@ def run_passage(passage_id: str, parts: list | None = None) -> None:
     `parts` : les seules parties à faire maintenant (l'étape de la file, #332) ; s'il en reste d'autres après elles, le
     passage retourne en file, et l'étape suivante le prendra (les agents des spots après la source).
     Si le verrou est pris, le passage reste en file, sans échec : la file le relancera plus tard (#211).
-    Si le budget est atteint, ou si le fournisseur des agents refuse pour un temps, le passage s'arrête avant la partie ou la zone suivante
-    et retourne en file : ce qui est fini reste enregistré, et la file le reprend là où il en était (#332).
+    Le travail et l'état final du passage s'écrivent sous le verrou (run_parts) : la file regarde chaque minute les
+    passages « en cours » sans verrou pour les dire coupés (#344), et un passage qui vient de finir ne doit jamais
+    être vu ainsi entre la fin de son verrou et l'écriture de son état.
     """
     passage = passage_store.load_passage(passage_id)
     if passage["chain"] not in CHAINS:
         logger.warning(f"[passages] {passage_id} laissé tel quel : {UNKNOWN_CHAIN}")
         return
     chain = CHAINS[passage["chain"]]
-    resume = passage["resumed_from"] is not None
     first = parts_to_run(passage_id, parts)
     if not first:
         return
-    part = None
     try:
         city = city_to_run(chain, passage)
         with chain.lock(passage["city_id"], first[0]["part"]), mesure_passage(passage_id):
@@ -363,24 +362,41 @@ def run_passage(passage_id: str, parts: list | None = None) -> None:
             if passage_store.load_passage(passage_id)["status"] != QUEUED:
                 return
             passage_store.set_passage_status(passage_id, RUNNING)
-            for row in parts_to_run(passage_id, parts):
-                part = row["part"]
-                stop_if_over_budget(chain, part)
-                passage_store.set_part(passage_id, part, RUNNING)
-                # Une partie arrêtée par le budget ou le quota reprend son fichier : rien de fait n'est repayé.
-                summary = chain.run_part(passage_id, part, city, resume or row["step"] == PAUSED,
-                                         lambda: stop_if_over_budget(chain, part))
-                passage_store.set_part(passage_id, part, DONE, summary=summary)
-            part = None
+            run_parts(passage_id, chain, city, passage["resumed_from"] is not None, parts)
+    except PassageRunning:
+        # Le verrou était pris avant que le passage commence : il garde sa place dans la file.
+        logger.info(f"[passages] {passage_id} attend : un autre passage tient le verrou")
+    except Exception as error:
+        # Une erreur avant la première partie (ville introuvable, base injoignable au moment du verrou).
+        reason = failure_reason(error)
+        logger.exception(f"[passages] {passage_id} en échec (avant la première catégorie) : {reason}")
+        passage_store.set_passage_status(passage_id, FAILED, reason)
+
+
+def run_parts(passage_id: str, chain: Chain, city: dict, resume: bool, parts: list | None) -> None:
+    """
+    Les parties à faire du passage, l'une après l'autre, puis son état final : fini, en file pour l'étape suivante,
+    en file pour attendre (budget, limite du fournisseur des agents), ou en échec. Appelé sous le verrou de la chaîne.
+    Si le budget est atteint, ou si le fournisseur des agents refuse pour un temps, le passage s'arrête avant la partie
+    ou la zone suivante et retourne en file : ce qui est fini reste enregistré, et la file le reprend là où il en
+    était (#332).
+    """
+    part = None
+    try:
+        for row in parts_to_run(passage_id, parts):
+            part = row["part"]
+            stop_if_over_budget(chain, part)
+            passage_store.set_part(passage_id, part, RUNNING)
+            # Une partie arrêtée par le budget ou le quota reprend son fichier : rien de fait n'est repayé.
+            summary = chain.run_part(passage_id, part, city, resume or row["step"] == PAUSED,
+                                     lambda: stop_if_over_budget(chain, part))
+            passage_store.set_part(passage_id, part, DONE, summary=summary)
         if parts_to_run(passage_id, None):
             passage_store.set_passage_status(passage_id, QUEUED)
             logger.info(f"[passages] {passage_id} : étape finie, le passage attend l'étape suivante")
         else:
             passage_store.set_passage_status(passage_id, DONE)
             logger.info(f"[passages] {passage_id} fini")
-    except PassageRunning:
-        # Le verrou était pris avant que le passage commence : il garde sa place dans la file.
-        logger.info(f"[passages] {passage_id} attend : un autre passage tient le verrou")
     except BudgetReached as reason:
         # Pas un échec : le passage retourne en file, et la partie arrêtée garde l'étape « budget » pour la reprise.
         logger.info(f"[passages] {passage_id} arrêté avant {part} : {reason}")
@@ -533,6 +549,7 @@ def list_chains() -> list:
 
 
 AUTO_OFF = "mise à jour automatique coupée : à lancer depuis la supervision"
+CUT_LIMIT = 200     # les passages « en cours » regardés à chaque tour : bien plus que les huit fils de la file
 
 
 def paid_wait() -> str | None:
@@ -572,10 +589,40 @@ def running_part(parts: list) -> str | None:
     return row["part"] if row else None
 
 
+def is_cut(chain: Chain, passage: dict, parts: list) -> bool:
+    """
+    Un passage coupé : « en cours » dans la base, alors que plus personne ne tient le verrou de sa partie (le serveur
+    a redémarré, ou le programme qui le faisait tourner a été arrêté). Un passage qui tourne vraiment tient toujours
+    son verrou, jusqu'à l'écriture de son état final (run_passage).
+    """
+    return passage["status"] == RUNNING and chain.lock_is_free(passage["city_id"], running_part(parts))
+
+
+def mark_cut_passages() -> list:
+    """
+    Marque « interrompu » les passages coupés (is_cut), et rend leurs identifiants. La file le fait elle-même, à
+    chaque tour du fil des reprises (#344) : avant, seul l'affichage de la supervision les voyait, et les OSM de
+    Val-de-Sos, Charpey, Buzan et Contrazy, restés « en cours » après l'arrêt des scripts de l'ancienne file,
+    bloquaient les autres étapes de leur ville jusqu'à ce qu'on l'ouvre (27 novembre 2026).
+    Une fois en échec, un passage coupé sur une partie gratuite est repris seul, comme tout échec gratuit.
+    """
+    cut = []
+    for passage_id in passage_store.passage_ids(RUNNING, CUT_LIMIT):
+        passage = passage_store.load_passage(passage_id)
+        if passage is None or passage["chain"] not in CHAINS:
+            continue        # une chaîne inconnue tourne peut-être sous une autre version du code : on n'y touche pas
+        parts = passage_store.load_parts(passage_id)
+        if is_cut(CHAINS[passage["chain"]], passage, parts):
+            mark_interrupted(passage, parts)
+            cut.append(passage_id)
+    return cut
+
+
 def mark_interrupted(passage: dict, parts: list) -> None:
     """
     Un passage « en cours » dont plus personne ne tient le verrou a été coupé : le serveur a redémarré pendant qu'il
-    tournait. On l'écrit en échec, une fois pour toutes, pour qu'il puisse être repris.
+    tournait, ou le programme qui le faisait tourner a été arrêté. On l'écrit en échec, une fois pour toutes, pour
+    qu'il puisse être repris.
     """
     reason = "passage interrompu (le serveur a redémarré pendant qu'il tournait) : à reprendre"
     for part in parts:
@@ -729,7 +776,7 @@ def read_passage(passage_id: str, details: bool = True, item: tuple | None = Non
         return None
     chain = chain_of(passage["chain"])
     parts = passage_store.load_parts(passage_id)
-    if passage["status"] == RUNNING and chain.lock_is_free(passage["city_id"], running_part(parts)):
+    if is_cut(chain, passage, parts):
         mark_interrupted(passage, parts)
     calls = passage_store.load_calls(passage_id)
     return {"passage_id": passage_id, "chaine": chain.key, "libelle_chaine": chain.label,

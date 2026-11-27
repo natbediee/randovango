@@ -1365,3 +1365,80 @@ def test_a_failed_source_is_resumed_twice_at_most(store, spots):
     third = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 0))
     store.passages[second]["resumed_from"], store.passages[third]["resumed_from"] = first, second
     assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+# --- Un passage coupé, vu par la file elle-même (services/passage_service.py, issue #344) ---
+
+def _cut_osm(store, city_id=12):
+    """Un OSM de l'ETL resté « en cours » alors que plus rien ne le fait tourner (son verrou est libre)."""
+    passage_id = passage_service.create_passage("osm", city_id, origin="etl")
+    store.set_passage_status(passage_id, "en_cours")
+    store.set_part(passage_id, "osm", "en_cours")
+    return passage_id
+
+
+def test_a_cut_passage_is_marked_interrupted_without_the_supervision(store, free):
+    """Un OSM resté « en cours » sans verrou est marqué interrompu par la file, sans ouvrir la supervision (Val-de-Sos, 27 novembre 2026)."""
+    cut = _cut_osm(store)
+    assert passage_service.mark_cut_passages() == [cut]
+    assert store.passages[cut]["status"] == "echec" and store.parts[cut][0]["status"] == "echec"
+    assert store.passages[cut]["error"].startswith("passage interrompu")
+
+
+def test_a_passage_that_really_runs_is_left_alone(store, free):
+    """Un OSM « en cours » dont le verrou est tenu tourne vraiment : la file n'y touche pas."""
+    running = _cut_osm(store)
+    free["busy"].add(("osm", 12))
+    assert passage_service.mark_cut_passages() == []
+    assert store.passages[running]["status"] == "en_cours"
+
+
+def test_a_cut_passage_of_an_unknown_chain_is_left_alone(store):
+    """Un passage « en cours » d'une chaîne inconnue tourne peut-être sous une autre version du code : la file n'y touche pas."""
+    store.insert_passage("inconnu", "chaine_future", 12, "etl", ["partie"])
+    store.set_passage_status("inconnu", "en_cours")
+    assert passage_service.mark_cut_passages() == [] and store.passages["inconnu"]["status"] == "en_cours"
+
+
+def test_after_a_cut_osm_is_resumed_the_steps_of_its_city_go_again(store, chain, free):
+    """OSM coupé : marqué interrompu, repris seul un quart d'heure plus tard, puis les services de sa ville partent (#344)."""
+    cut = _cut_osm(store)
+    services = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    assert passage_queue.next_for(step("services")) is None        # la ville attend son OSM
+    passage_service.mark_cut_passages()
+    store.passages[cut]["finished_at"] = datetime(2026, 11, 25, 11, 40)
+    [resumed] = passage_queue.resume_failed_free_chains(NOW)
+    assert passage_queue.run_step_once(step("osm")) is True and store.passages[resumed]["status"] == "fini"
+    assert passage_queue.next_for(step("services")) == services
+
+
+def test_the_final_state_is_written_under_the_lock(store, monkeypatch):
+    """L'état final d'un passage s'écrit avant que son verrou soit rendu : la file ne peut pas le croire coupé entre les deux."""
+    from contextlib import contextmanager
+    seen = {}
+
+    @contextmanager
+    def lock(city_id, part):
+        yield
+        seen["status_at_release"] = store.passages[passage_id]["status"]
+
+    monkeypatch.setitem(passage_service.CHAINS, "osm", passage_service.Chain(
+        key="osm", label="OSM", parts={"osm": "OSM"}, paid=False, lock=lock, lock_is_free=lambda city_id, part: True,
+        run_part=lambda *args: {"lieux": 3}, steps_of=lambda part: {}, per_city=True))
+    passage_id = passage_service.create_passage("osm", 12, origin="etl")
+    passage_service.run_passage(passage_id)
+    assert seen["status_at_release"] == "fini"
+
+
+def test_the_resumes_worker_marks_the_cut_passages_first(store, monkeypatch):
+    """À chaque tour, le fil des reprises marque d'abord les passages coupés, puis reprend les échecs gratuits."""
+    turns = []
+    monkeypatch.setattr(passage_service, "mark_cut_passages", lambda: turns.append("coupés") or [])
+    monkeypatch.setattr(passage_queue, "resume_failed_free_chains", lambda: turns.append("reprises") or [])
+
+    def stop_after_one_turn(seconds):
+        raise SystemExit         # arrête la boucle sans fin du fil, pour le test
+    monkeypatch.setattr(passage_queue._wakes[passage_queue.RESUMES], "wait", stop_after_one_turn)
+    with pytest.raises(SystemExit):
+        passage_queue.work_on_resumes()
+    assert turns == ["coupés", "reprises"]

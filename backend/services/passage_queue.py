@@ -195,11 +195,15 @@ def resume_failed_free_chains(now: datetime | None = None) -> list:
 
 def work_on_resumes() -> None:
     """
-    Le travail du fil des reprises : reprendre les chaînes gratuites en échec qui peuvent l'être, réveiller les étapes
-    s'il en a repris, puis attendre une minute. Un seul fil le fait : deux fils pourraient reprendre le même échec.
+    Le travail du fil des reprises : marquer « interrompu » les passages coupés (#344), reprendre les parties
+    gratuites en échec qui peuvent l'être, réveiller les étapes s'il en a repris, puis attendre une minute. Un seul fil
+    le fait : deux fils pourraient reprendre le même échec.
     """
     while True:
         try:
+            cut = passage_service.mark_cut_passages()
+            if cut:
+                logger.info(f"[file] {len(cut)} passage(s) coupé(s) marqué(s) interrompu(s) : {', '.join(cut)}")
             if resume_failed_free_chains():
                 wake()
         except Exception:
