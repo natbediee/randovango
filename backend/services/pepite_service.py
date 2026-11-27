@@ -570,6 +570,8 @@ def relocate(cursor, places: list) -> int | None:
     from agents.llm_service import LLMUnavailable
     from agents.locate_pepites import LOCATE_PROMPT_VERSION, locate_places
     try:
+        # L'agent consulte des pages web pour tout le lot : la transaction se termine avant (issue #296).
+        MySQLUtils.end_transaction(cursor)
         found = locate_places(places)
     except (LLMUnavailable, json.JSONDecodeError) as error:
         logger.warning(f"[pépites] positions : recalage échoué : {error}")
@@ -785,6 +787,8 @@ def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None, rais
     known_names = [c["nom"] for c in in_zone if is_fresh(c, datetime.now())]
     try:
         search = search_places if mode == "lieux" else search_agenda
+        # La recherche dure plusieurs minutes : la transaction de nos lectures se termine avant (issue #296).
+        MySQLUtils.end_transaction(cursor)
         ideas, model, version = search(day, known_names)
     except (LLMUnavailable, json.JSONDecodeError) as error:
         if raise_errors:
@@ -988,6 +992,8 @@ def _top_up(cursor, day: dict, proposed: set, section: str) -> int:
         return slots
 
     already = [c["nom"] for c in links if c["id"] in proposed]
+    # Vany prend jusqu'à une minute pour choisir : la transaction se termine avant (issue #296).
+    MySQLUtils.end_transaction(cursor)
     choice = choose_pepites(day, pool, slots, already, program)
     if choice is None:
         choice = {"ids": [i["id"] for i in pool[:slots]], "why": {}, "moment": {}, "favorite": None}
