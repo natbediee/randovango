@@ -392,3 +392,88 @@ def test_a_position_found_by_the_agent_is_noted_in_the_journal(monkeypatch):
         assert pepite_service.relocate(cursor, [{"id": 41}, {"id": 42}]) == 1
     noted = [call.args[1] for call in cursor.execute.call_args_list if "passage_items" in call.args[0]]
     assert [row[:5] for row in noted] == [("p1", "pepite", 41, "modification", "position")]
+
+
+# =============================================================================
+# La transaction se termine avant chaque appel de Vany (issue #296)
+# =============================================================================
+
+class RecordingCursor:
+    """Curseur qui note les requêtes reçues, pour savoir si la transaction était terminée au moment de l'appel."""
+    def __init__(self):
+        self.queries = []
+        self.lastrowid = 1
+
+    def execute(self, query, params=None):
+        self.queries.append(query)
+
+    def fetchall(self):
+        return []
+
+    def fetchone(self):
+        return None
+
+
+def last_query_is_commit(cursor: RecordingCursor) -> bool:
+    """La dernière requête envoyée avant l'appel de l'agent termine-t-elle la transaction ?"""
+    return bool(cursor.queries) and cursor.queries[-1] == "COMMIT"
+
+
+def test_the_transaction_ends_before_a_zone_search(monkeypatch) -> None:
+    """Une recherche de Vany (agenda ou lieux) commence transaction terminée : un ajout de colonne n'attend pas ses minutes de recherche (20 novembre 2026, trip_plans)."""
+    from agents import find_pepites
+
+    cursor = RecordingCursor()
+    seen = []
+
+    def search_agenda(day, known_names):
+        seen.append(last_query_is_commit(cursor))
+        return [], "modele", 1
+
+    monkeypatch.setattr(find_pepites, "search_agenda", search_agenda)
+    monkeypatch.setattr(pepite_service, "find_candidates", lambda cursor, day: cursor.execute("SELECT pepites") or [])
+    monkeypatch.setattr(pepite_service, "record_search", lambda *args: None)
+
+    assert pepite_service.search_and_store(cursor, dict(DAY), "agenda") == 0
+    assert seen == [True]
+
+
+def test_the_transaction_ends_before_vany_chooses(monkeypatch) -> None:
+    """Le choix des pépites du jour par Vany commence transaction terminée, après la lecture des idées possibles."""
+    from agents import choose_pepites
+
+    cursor = RecordingCursor()
+    seen = []
+
+    def choose(day, pool, slots, already, program):
+        seen.append(last_query_is_commit(cursor))
+        return None   # Vany ne répond pas : le code prend les plus proches
+
+    monkeypatch.setattr(choose_pepites, "choose_pepites", choose)
+    monkeypatch.setattr(pepite_service, "day_links", lambda cursor, trip_day_id: cursor.execute("SELECT liens") or [])
+    monkeypatch.setattr(pepite_service, "ids_used_elsewhere", lambda cursor, day: set())
+    monkeypatch.setattr(pepite_service, "program_elsewhere", lambda cursor, day: [])
+    monkeypatch.setattr(pepite_service, "find_candidates", lambda cursor, day: [idea()])
+    monkeypatch.setattr(pepite_service, "evaluate", lambda candidate, day: candidate | {"closeness": 1})
+    monkeypatch.setattr(pepite_service, "pepite_section", lambda candidate: "saison")
+
+    pepite_service._top_up(cursor, dict(DAY, trip_day_id=7), set(), "saison")
+    assert seen == [True]
+    assert "INSERT INTO trip_day_pepites" in cursor.queries[-1]   # la proposition est bien écrite après l'appel
+
+
+def test_the_transaction_ends_before_positions_are_looked_up(monkeypatch) -> None:
+    """La recherche des positions par l'agent (pages web, tout un lot) commence transaction terminée."""
+    from agents import locate_pepites
+
+    cursor = RecordingCursor()
+    cursor.execute("SELECT lieux à recaler")
+    seen = []
+
+    def locate_places(places):
+        seen.append(last_query_is_commit(cursor))
+        return {}
+
+    monkeypatch.setattr(locate_pepites, "locate_places", locate_places)
+    assert pepite_service.relocate(cursor, [{"id": 41}]) == 0
+    assert seen == [True]
