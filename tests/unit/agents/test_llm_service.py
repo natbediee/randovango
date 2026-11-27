@@ -1,9 +1,10 @@
 import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 
-from agents.llm_service import LLMService, LLMUnavailable
+from agents.llm_service import LLMLimitReached, LLMService, LLMUnavailable
 
 
 def response(text=None, stop_reason="end_turn"):
@@ -131,3 +132,84 @@ def test_a_long_question_goes_through_standard_input(monkeypatch) -> None:
     assert llm_service.ClaudeCodeLLMService("modele-test").complete_json("sys", question, SCHEMA) == {"ok": True}
     assert calls["input"] == question
     assert all(len(part) < 128_000 for part in calls["command"])
+
+
+# --- Les limites du fournisseur, traduites en LLMLimitReached (issue #332) ---
+
+# Le 27 novembre 2026 à 6 h 11, heure de Paris (UTC+1) : le quota des agents coupé ce matin-là.
+MORNING = datetime(2026, 11, 27, 6, 11, tzinfo=timezone(timedelta(hours=1)))
+
+
+def local(moment: datetime) -> datetime:
+    """Une heure avec fuseau, ramenée à l'heure locale du serveur sans fuseau, comme la rend llm_service."""
+    return moment.astimezone().replace(tzinfo=None)
+
+
+def test_the_reset_hour_in_utc_is_read_in_local_time() -> None:
+    """« resets 1:40pm (UTC) », lu à 6 h 11 à Paris : les agents reviennent à 13 h 40 UTC le même jour."""
+    from agents import llm_service
+    reset = llm_service.reset_time("You've hit your session limit · resets 1:40pm (UTC)", MORNING)
+    assert reset == local(datetime(2026, 11, 27, 13, 40, tzinfo=timezone.utc))
+
+
+def test_a_reset_hour_already_past_is_tomorrow() -> None:
+    """« resets 2am (Europe/Paris) », lu à 6 h 11 : l'heure est passée, c'est celle du lendemain."""
+    from agents import llm_service
+    reset = llm_service.reset_time("usage limit reached · resets 2am (Europe/Paris)", MORNING)
+    assert reset == local(datetime(2026, 11, 28, 1, 0, tzinfo=timezone.utc))
+
+
+def test_the_quota_becomes_a_limit_until_its_reset_hour() -> None:
+    """Le quota de l'abonnement devient une limite neutre : jusqu'à l'heure dite, deux minutes de plus, sans nommer le fournisseur."""
+    from agents import llm_service
+    limit = llm_service.limit_reached("You've hit your session limit · resets 1:40pm (UTC)", MORNING)
+    assert limit.until == local(datetime(2026, 11, 27, 13, 42, tzinfo=timezone.utc))
+    assert limit.reason == "quota des agents atteint" and isinstance(limit, LLMUnavailable)
+
+
+def test_a_quota_without_a_readable_hour_waits_half_an_hour() -> None:
+    """Un quota sans heure lisible fait réessayer une demi-heure plus tard."""
+    from agents import llm_service
+    now = datetime(2026, 11, 27, 6, 11)
+    assert llm_service.limit_reached("You've hit your usage limit", now).until == now + timedelta(minutes=30)
+
+
+def test_too_many_calls_waits_five_minutes() -> None:
+    """Trop d'appels à la minute (erreur 429) : une limite de cinq minutes."""
+    from agents import llm_service
+    now = datetime(2026, 11, 27, 6, 11)
+    limit = llm_service.limit_reached("Error code: 429 - rate_limit_error", now)
+    assert limit.until == now + timedelta(minutes=5) and limit.reason == "trop d'appels aux agents en même temps"
+
+
+@pytest.mark.parametrize("message", ["Error code: 400 - Your credit balance is too low", "division by zero"])
+def test_an_empty_credit_or_a_real_failure_is_not_a_limit(message) -> None:
+    """Le crédit de l'API épuisé ne revient pas seul, une vraie panne non plus : ce ne sont pas des limites passagères."""
+    from agents import llm_service
+    assert llm_service.limit_reached(message, datetime(2026, 11, 27, 6, 11)) is None
+
+
+def test_the_subscription_quota_raises_a_limit(monkeypatch) -> None:
+    """Le programme claude répond « session limit » : l'appel lève LLMLimitReached, que la file sait attendre (27 novembre 2026)."""
+    from agents import llm_service
+
+    def fake_run(command, **kwargs):
+        result = {"type": "result", "is_error": True, "result": "You've hit your session limit · resets 1:40pm (UTC)"}
+        return SimpleNamespace(stdout=json.dumps(result), stderr="", returncode=1)
+
+    monkeypatch.setattr(llm_service.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(llm_service.ServiceUtil, "load_env", staticmethod(lambda: None))
+    monkeypatch.setattr(llm_service.subprocess, "run", fake_run)
+    with pytest.raises(LLMLimitReached):
+        llm_service.ClaudeCodeLLMService("modele-test").complete_json("sys", "question", SCHEMA)
+
+
+def test_too_many_api_calls_raise_a_limit() -> None:
+    """L'API répond 429 : l'appel lève LLMLimitReached au lieu de l'erreur brute du module anthropic."""
+    class Busy:
+        def create(self, **kwargs):
+            raise RuntimeError("Error code: 429 - {'type': 'rate_limit_error'}")
+    service = LLMService("modele-test", api_key="test")
+    service.client = SimpleNamespace(messages=Busy())
+    with pytest.raises(LLMLimitReached):
+        service.complete_json("sys", "user", SCHEMA)

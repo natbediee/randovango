@@ -24,13 +24,15 @@ et l'étape quand la chaîne des services les a annoncés avec mesure_passage et
 import contextvars
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agents.llm_prices import api_cost_usd
 from utils.logger_util import LoggerUtil
@@ -65,6 +67,74 @@ class LLMRefused(LLMUnavailable):
 
 class LLMTruncated(LLMUnavailable):
     """La réponse a été coupée avant la fin (MAX_TOKENS atteint)."""
+
+
+class LLMLimitReached(LLMUnavailable):
+    """
+    Le fournisseur des agents refuse pour un temps : quota de l'abonnement atteint, ou trop d'appels à la fois.
+    `until` dit à partir de quand réessayer, `reason` le dit en phrase lisible, sans nommer le fournisseur : le reste
+    de l'application (la file des passages) attend sans savoir quel modèle tourne derrière (issue #332).
+    Elle hérite de LLMUnavailable : un agent qui passe un spot raté continue comme avant.
+    """
+    def __init__(self, message: str, until: datetime, reason: str):
+        super().__init__(message)
+        self.until, self.reason = until, reason
+
+
+# --- Les limites du fournisseur (issue #332) -------------------------------------
+# Seul ce fichier connaît les messages de Claude : il les traduit en LLMLimitReached, avec l'heure de retour.
+# Le quota de l'abonnement : « You've hit your session limit · resets 1:40pm (UTC) » (journal des agents,
+# 9 octobre 2026). Trop d'appels, ou API surchargée : erreurs 429 et 529, revenues en quelques minutes.
+SUBSCRIPTION_QUOTA = re.compile(r"hit your .*limit|usage limit", re.IGNORECASE)
+API_BUSY = re.compile(r"rate.?limit|overloaded|Error code: (429|529)", re.IGNORECASE)
+RESET_TIME = re.compile(r"resets (\d{1,2})(?::(\d{2}))?\s*(am|pm)(?: \(([^)]+)\))?", re.IGNORECASE)
+QUOTA_WAIT = timedelta(minutes=30)      # un quota sans heure de retour lisible : on réessaie dans une demi-heure
+BUSY_WAIT = timedelta(minutes=5)        # trop d'appels : revient en quelques minutes
+RESET_MARGIN = timedelta(minutes=2)     # un peu après l'heure dite, pour ne pas buter sur une horloge en avance
+QUOTA_REASON = "quota des agents atteint"
+BUSY_REASON = "trop d'appels aux agents en même temps"
+
+
+def reset_time(message: str, now: datetime) -> datetime | None:
+    """
+    L'heure de retour lue dans le message du fournisseur, en heure locale du serveur (sans fuseau) ; None si elle n'y
+    est pas. `now` porte son fuseau. L'heure est donnée sans date : déjà passée aujourd'hui, c'est celle de demain.
+    """
+    found = RESET_TIME.search(message)
+    if not found:
+        return None
+    hour, minute, half, zone = int(found.group(1)) % 12, int(found.group(2) or 0), found.group(3).lower(), found.group(4)
+    if half == "pm":
+        hour += 12
+    try:
+        tz = ZoneInfo(zone) if zone else None
+    except (ZoneInfoNotFoundError, ValueError):
+        tz = None
+    # On calcule dans le fuseau donné par le message, puis on revient à l'heure locale du serveur, sans fuseau.
+    here = now.astimezone(tz) if tz else now
+    reset = here.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if reset <= here:
+        reset += timedelta(days=1)
+    return reset.astimezone().replace(tzinfo=None)
+
+
+def limit_reached(message: str, now: datetime | None = None) -> LLMLimitReached | None:
+    """
+    L'erreur LLMLimitReached à lever si ce message du fournisseur dit une limite passagère ; None sinon (une vraie
+    panne, ou le crédit de l'API épuisé, qui ne revient pas seul et reste une erreur ordinaire).
+    """
+    now = now or datetime.now()
+    if SUBSCRIPTION_QUOTA.search(message):
+        reset = reset_time(message, now.astimezone())
+        return LLMLimitReached(message, reset + RESET_MARGIN if reset else now + QUOTA_WAIT, QUOTA_REASON)
+    if API_BUSY.search(message):
+        return LLMLimitReached(message, now + BUSY_WAIT, BUSY_REASON)
+    return None
+
+
+def unavailable(message: str) -> LLMUnavailable:
+    """L'erreur à lever pour ce message : une limite passagère (LLMLimitReached) ou une erreur ordinaire."""
+    return limit_reached(message) or LLMUnavailable(message)
 
 
 # --- Mesure de chaque appel ----------------------------------------------------
@@ -323,6 +393,10 @@ class LLMService:
             return self._read_json(response)
         except Exception as raised:
             error = raised
+            # Trop d'appels (429) ou API surchargée (529) : une limite passagère, que la file sait attendre.
+            limit = limit_reached(str(raised)) if not isinstance(raised, LLMUnavailable) else None
+            if limit:
+                raise limit from raised
             raise
         finally:
             # finally : exécuté que l'appel réussisse ou lève une erreur.
@@ -519,7 +593,7 @@ class ClaudeCodeLLMService:
                 answer = event
         if answer is None:
             message = (process.stderr or process.stdout).strip()[:300]
-            raise LLMUnavailable(f"claude -p a échoué (code {process.returncode}) : {message}")
+            raise unavailable(f"claude -p a échoué (code {process.returncode}) : {message}")
 
         # 6. Garder quelques mesures de l'appel, avant de juger la réponse : un appel
         #    raté a aussi consommé. "total_cost_usd" est le prix qu'aurait coûté l'appel
@@ -534,5 +608,5 @@ class ClaudeCodeLLMService:
         }
 
         if answer.get("is_error") or answer.get("structured_output") is None:
-            raise LLMUnavailable(f"claude -p : réponse inutilisable ({str(answer.get('result'))[:300]})")
+            raise unavailable(f"claude -p : réponse inutilisable ({str(answer.get('result'))[:300]})")
         return answer["structured_output"]
