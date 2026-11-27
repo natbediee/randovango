@@ -3,7 +3,7 @@ import json
 import time
 
 from utils.logger_util import LoggerUtil
-from utils.geo_utils import get_city_center
+from utils.geo_utils import get_bounding_box, get_city_center
 
 OVERPASS_HEADERS = {
     "User-Agent": "RandoVanGo-ETL/1.0 (https://github.com/natbediee/randovango)"
@@ -17,6 +17,10 @@ OVERPASS_PAUSE_SECONDS = 5
 OVERPASS_BUSY_STATUS = {429, 500, 502, 503, 504}
 OVERPASS_BACKOFF_SECONDS = (30, 60, 120)  # attentes entre deux essais de tous les serveurs
 OVERPASS_MAX_RETRY_AFTER_SECONDS = 300
+# Les stations-service sont demandées dans le carré de l'étape des carburants (etl_carburants.keep_near), plus large en
+# longitude que celui des autres lieux : 5 km de chaque côté, soit environ 0,068 degré en Bretagne au lieu de 0,05.
+# Sans ce carré, une station de l'État au bord perdrait le nom et la marque que lui donne OSM.
+FUEL_DISTANCE_KM = 5
 
 
 logger = LoggerUtil.get_logger("etl_osm")
@@ -54,6 +58,9 @@ def extract_osm(city: str) -> dict:
     }
 
     logger.info(f"[Extract] : Bounding box : {bbox} (rayon ~5-6 km)")
+    # Le carré des stations-service : elles ne sont plus demandées qu'ici, l'étape des carburants les relit en base
+    # (osm_fuel_stations) au lieu d'interroger Overpass une seconde fois pour la même ville.
+    fuel_south, fuel_west, fuel_north, fuel_east = get_bounding_box(latitude, longitude, FUEL_DISTANCE_KM)
 
     # 3. Requête Overpass QL utilisant la bounding box
     # Récupère un large éventail de POI, le filtrage se fera en transformation.
@@ -79,7 +86,7 @@ def extract_osm(city: str) -> dict:
                     nwr["shop"="supermarket"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["shop"="convenience"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["shop"="bakery"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
-                    nwr["amenity"="fuel"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
+                    nwr["amenity"="fuel"]({fuel_south},{fuel_west},{fuel_north},{fuel_east});
                     nwr["amenity"="shower"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["amenity"="sanitary_dump_station"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});
                     nwr["shop"="laundry"]({bbox['south']},{bbox['west']},{bbox['north']},{bbox['east']});

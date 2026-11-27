@@ -10,6 +10,10 @@ redevenu « Station-service » au rafraîchissement suivant des prix.
 
 Les prix d'une station sont remplacés en bloc : la table garde exactement ce que dit le dernier fichier.
 
+Les stations-service d'OSM d'une ville ne sont pas des services : l'étape OSM les range dans osm_fuel_stations
+(save_osm_fuel_stations), et l'étape des carburants les y relit (osm_fuel_stations_of) pour donner nom et marque aux
+stations de l'État. Overpass n'est ainsi interrogé qu'une fois par ville, par l'étape OSM.
+
 Les signaux d'une station douteuse (transform_carburants) vont dans poi_signals, sous deux sources : SIGNALS_FROM_OSM
 pour le passage par ville, SIGNALS_FROM_STATE pour le rafraîchissement des prix. Chaque passage remplace les siens :
 un signal qui n'a plus lieu d'être est effacé s'il est encore à relire, jamais s'il a été relu. Une station retirée ou
@@ -20,6 +24,7 @@ import json
 from etl.load.load_poi import get_or_create_source, insert_histo_poi, insert_service_and_link
 from etl.load.load_poi_checks import save_signal
 from utils.db_utils import MySQLUtils
+from utils.service_utils import ServiceUtil
 from utils.geo_utils import address_with_commune
 from utils.logger_util import LoggerUtil
 
@@ -211,3 +216,50 @@ def known_stations() -> dict:
             """)
         rows = {row["pdv_id"]: row for row in cursor.fetchall()}
     return rows
+
+
+OSM_STATION_COLUMNS = ("osm_element", "name", "brand", "state_ref", "postcode", "latitude", "longitude")
+
+
+def save_osm_fuel_stations(city_name: str, stations: list, read_at) -> None:
+    """
+    Range les stations-service d'OSM d'une ville (au format de transform_carburants.osm_station) et note la date du
+    passage dans cities.osm_stations_read_at. Les lignes d'avant de la ville sont remplacées : une station retirée
+    d'OSM disparaît. Une ville absente de la table cities n'a rien à ranger.
+    """
+    # buffered : get_city_id ne lit que la première ligne, la requête suivante doit pouvoir partir.
+    with MySQLUtils.open_cursor(buffered=True) as (cnx, cursor):
+        city_id = ServiceUtil.get_city_id(cursor, city_name)
+        if city_id is None:
+            logger.warning(f"[Load] : {city_name} absente de la table cities : stations OSM non rangées")
+            return
+        cursor.execute("DELETE FROM osm_fuel_stations WHERE city_id = %s", (city_id,))
+        for station in stations:
+            # « ref » dans osm_station : l'étiquette ref:FR:prix-carburants, rangée sous state_ref.
+            values = (station["osm_element"], station["name"], station["brand"], station["ref"], station["postcode"],
+                      station["latitude"], station["longitude"])
+            cursor.execute(
+                f"INSERT INTO osm_fuel_stations (city_id, {', '.join(OSM_STATION_COLUMNS)}, read_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (city_id, *values, read_at))
+        cursor.execute("UPDATE cities SET osm_stations_read_at = %s WHERE id = %s", (read_at, city_id))
+        cnx.commit()
+    logger.info(f"[Load] : {len(stations)} stations-service OSM rangées pour {city_name}")
+
+
+def osm_fuel_stations_of(city_name: str) -> list | None:
+    """
+    Les stations-service d'OSM rangées pour une ville par l'étape OSM, au format de transform_carburants.osm_station.
+    None si l'étape OSM n'y est pas encore passée : une liste vide veut dire qu'OSM n'y connaît aucune station.
+    """
+    # buffered : fetchone ne lit que la première ville de ce nom, la requête suivante doit pouvoir partir.
+    with MySQLUtils.open_cursor(dictionary=True, buffered=True) as (cnx, cursor):
+        cursor.execute("SELECT id, osm_stations_read_at FROM cities WHERE name = %s", (city_name,))
+        city = cursor.fetchone()
+        if city is None or city["osm_stations_read_at"] is None:
+            return None
+        cursor.execute(f"SELECT {', '.join(OSM_STATION_COLUMNS)} FROM osm_fuel_stations WHERE city_id = %s "
+                       "ORDER BY osm_element", (city["id"],))
+        rows = cursor.fetchall()
+    return [{"osm_element": row["osm_element"], "name": row["name"], "brand": row["brand"], "ref": row["state_ref"],
+             "postcode": row["postcode"], "latitude": row["latitude"], "longitude": row["longitude"]} for row in rows]
