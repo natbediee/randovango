@@ -16,6 +16,7 @@ def steps(monkeypatch):
     monkeypatch.setattr(etl_osm, "extract_osm", fake.extract)
     monkeypatch.setattr(etl_osm, "transform_osm", fake.transform)
     monkeypatch.setattr(etl_osm, "load_osm_poi", fake.load)
+    monkeypatch.setattr(etl_osm, "save_osm_fuel_stations", fake.save_stations)
     monkeypatch.setattr(poi_duplicates_service, "after_load", fake.duplicates)
     return fake
 
@@ -27,12 +28,23 @@ def test_success_returns_the_number_of_places(steps) -> None:
     steps.duplicates.assert_called_once_with("Dinard")
 
 
+def test_the_fuel_stations_of_the_same_answer_are_stored_for_the_fuel_step(steps) -> None:
+    """Les stations-service de la réponse d'Overpass sont rangées pour la ville : l'étape des carburants n'y revient pas."""
+    steps.extract.return_value = {"elements": [
+        {"type": "node", "id": 9, "lat": 48.6, "lon": -2.0, "tags": {"amenity": "fuel", "brand": "Total"}}]}
+    etl_osm.run_osm_etl("Dinard")
+    city, stations, _ = steps.save_stations.call_args.args
+    assert city == "Dinard"
+    assert [(station["osm_element"], station["brand"]) for station in stations] == [("node/9", "Total")]
+
+
 def test_failure_returns_none_and_nothing_is_loaded(steps) -> None:
     """OSM muet pour Dinard : l'étape rend None (la chaîne « osm » en fait un échec gardé en base), rien n'est chargé."""
     steps.extract.return_value = None
     assert etl_osm.run_osm_etl("Dinard") is None
     steps.transform.assert_not_called()
     steps.load.assert_not_called()
+    steps.save_stations.assert_not_called()
 
 
 def test_a_loading_error_goes_up_to_the_chain(steps) -> None:

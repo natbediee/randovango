@@ -113,5 +113,7 @@ def run_fuel(passage_id: str, key: str, city: dict, resume: bool, check_budget) 
     """Les stations-service et leurs prix (fichier de l'État, noms d'OSM) ; leur nombre en bilan."""
     count = run_fuel_etl(city["name"])
     if count is None:
-        raise StepFailed("fichier des prix des carburants ou OpenStreetMap muet, ou ville sans position : relancer plus tard")
+        # Les noms et marques viennent des stations OSM rangées par la chaîne « osm » : sans elle, rien n'est chargé.
+        raise StepFailed("fichier des prix des carburants illisible, étape OSM pas encore passée pour la ville, "
+                         "ou ville sans position : relancer plus tard")
     return {"stations": count}

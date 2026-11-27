@@ -17,12 +17,14 @@ sans l'afficher.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import subprocess
 import sys
 import tarfile
 import tempfile
 import time
+import zlib
 from pathlib import Path
 
 import backup
@@ -52,15 +54,38 @@ def extract_archive(archive_path: Path, target: Path) -> None:
         archive.extractall(target)
 
 
+def is_readable_archive(archive_path: Path) -> bool:
+    """Vrai si le fichier est une archive .tar.gz entière et intacte, lue d'un bout à l'autre."""
+    # Le .gz se termine par une somme de contrôle de tout son contenu : le lire en entier la
+    # vérifie. Des octets pris au hasard ne passent pas cette vérification.
+    try:
+        with gzip.open(archive_path, "rb") as stream:
+            while stream.read(1024 * 1024):
+                pass
+        with tarfile.open(archive_path, "r:gz") as archive:
+            archive.getnames()
+    except (OSError, EOFError, zlib.error, tarfile.TarError):
+        # OSError couvre « not a gzip file » (gzip.BadGzipFile) ; EOFError, un .gz coupé.
+        return False
+    return True
+
+
 def open_archive(encrypted: Path, target: Path, password: str) -> None:
     """Déchiffre l'archive puis l'ouvre dans target ; l'archive déchiffrée n'est pas gardée."""
+    stop_message = "Déchiffrement impossible : mot de passe faux ou archive abîmée."
     target.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="randovango-restauration-") as temporary:
         clear = Path(temporary) / "archive.tar.gz"
         try:
             backup.decrypt_file(encrypted, clear, password)
         except subprocess.CalledProcessError:
-            sys.exit("Déchiffrement impossible : mot de passe faux ou archive abîmée.")
+            sys.exit(stop_message)
+        # Piège : openssl (AES-256-CBC) ne vérifie que le remplissage de fin. Avec un mauvais
+        # mot de passe, ce remplissage tombe parfois juste par hasard (15 fois sur 1 500 essais
+        # le 20 novembre 2026) : openssl rend alors des octets sans sens, sans erreur. On vérifie
+        # donc l'archive déchiffrée en entier avant d'en poser le moindre fichier.
+        if not is_readable_archive(clear):
+            sys.exit(stop_message)
         extract_archive(clear, target)
 
 
