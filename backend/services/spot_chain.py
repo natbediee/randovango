@@ -59,9 +59,9 @@ def lock_name(part: str) -> str:
 def lock(city_id: int, part: str):
     """
     Le verrou de la partie que le passage va faire, le même pour toutes les villes : un bloc « with ».
-    Une fois le verrou de la source pris, aucune autre lecture de la source ne tourne : un navigateur encore ouvert est
-    le reste d'un passage coupé net, il est fermé avant que celui-ci n'ouvre le sien (issue #333). Les agents
-    n'ouvrent aucun navigateur : sous leur verrou, on ne ferme rien.
+    Une fois le verrou de la source pris, aucune autre lecture de la source ne tourne : les navigateurs orphelins,
+    restes d'un passage coupé net, sont fermés avant que celle-ci n'ouvre le sien (issue #333). La vérification des
+    spots a son propre navigateur, vivant : il n'est pas touché (issue #350). Sous le verrou des agents, on ne ferme rien.
     """
     with etl_chains.named_lock(lock_name(part), BUSY):
         if part in FREE_PARTS:

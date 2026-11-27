@@ -39,35 +39,69 @@ def test_the_scraper_passes_on_a_browser_that_does_not_start(monkeypatch):
         scraper_p4n.run_p4n_scraper("Le Conquet")
 
 
-def fake_container(monkeypatch, tmp_path, running):
-    """Un conteneur de test : Chromium installé, `running` programmes encore ouverts, des profils dans un /tmp à part."""
-    profiles = [tmp_path / "org.chromium.Chromium.A74YZ7", tmp_path / "selenium_chrome_profile"]
-    for profile in profiles:
-        profile.mkdir()
-    killed = []
+# Les processus d'un conteneur, comme les donne ps : un passage coupé net (son Python mort, son chromedriver et son
+# Chrome rattachés au n° 1) et une vérification des spots vivante (Python n° 50, son chromedriver, son Chrome et une
+# page de ce Chrome). Le cas des villes 607 et 608, le 27 novembre 2026.
+PS_LINES = """
+    1     0 docker-init     /sbin/docker-init -- uvicorn main:app
+   50     1 python3.12      python3.12 -m agents.verify_spots
+  101     1 chromedriver    /usr/bin/chromedriver --port=111
+  102   101 chromium        /usr/lib/chromium/chromium --user-data-dir=/tmp/org.chromium.Chromium.MORT
+  103   102 chromium        /usr/lib/chromium/chromium --type=renderer
+  201    50 chromedriver    /usr/bin/chromedriver --port=222
+  202   201 chromium        /usr/lib/chromium/chromium --user-data-dir=/tmp/org.chromium.Chromium.VIVANT
+  203   202 chromium        /usr/lib/chromium/chromium --type=renderer
+"""
 
-    def pkill(command, capture_output):
-        killed.append(command[-1])
-        return type("Result", (), {"returncode": 0 if command[-1] in running else 1})()
+
+def fake_container(monkeypatch, tmp_path):
+    """Un conteneur de test : Chromium installé, les processus de PS_LINES, et leurs profils dans un /tmp à part."""
+    dead, alive = tmp_path / "org.chromium.Chromium.MORT", tmp_path / "org.chromium.Chromium.VIVANT"
+    old = tmp_path / "selenium_chrome_profile"
+    for profile in (dead, alive, old):
+        profile.mkdir()
+    lines = PS_LINES.replace("/tmp/", f"{tmp_path}/")
+    killed = []
     monkeypatch.setattr(scraper_p4n.os.path, "exists", lambda path: True)
-    monkeypatch.setattr(scraper_p4n.subprocess, "run", pkill)
+    monkeypatch.setattr(scraper_p4n.subprocess, "run",
+                        lambda command, capture_output, text: type("Result", (), {"stdout": lines})())
+    monkeypatch.setattr(scraper_p4n.os, "kill", lambda pid, sig: killed.append(pid))
     monkeypatch.setattr(scraper_p4n, "LEFTOVER_PROFILES",
-                        (str(tmp_path / "org.chromium.Chromium.*"), str(tmp_path / "selenium_chrome_profile")))
-    return killed, profiles
+                        (str(tmp_path / "org.chromium.Chromium.*"), str(old)))
+    return killed, dead, alive, old
 
 
 def test_leftover_browsers_are_closed_and_their_profiles_erased(monkeypatch, tmp_path):
-    """Les Chrome laissés par un passage coupé net sont fermés, et leurs profils effacés de /tmp."""
-    killed, profiles = fake_container(monkeypatch, tmp_path, running={"chromium", "chromedriver"})
+    """Le chromedriver et le Chrome d'un passage coupé net sont fermés, avec leurs pages, et leur profil est effacé de /tmp."""
+    killed, dead, alive, old = fake_container(monkeypatch, tmp_path)
     scraper_p4n.close_leftover_browsers()
-    assert killed == ["chromium", "chromedriver"]
-    assert not any(profile.exists() for profile in profiles)
+    assert sorted(killed) == [101, 102, 103]
+    assert not dead.exists() and not old.exists()
+
+
+def test_a_running_verification_keeps_its_browser(monkeypatch, tmp_path):
+    """Une vérification des spots en cours garde son Chrome et son profil quand une lecture de la source démarre (villes 607 et 608, #350)."""
+    killed, dead, alive, old = fake_container(monkeypatch, tmp_path)
+    scraper_p4n.close_leftover_browsers()
+    assert not {50, 201, 202, 203} & set(killed)
+    assert alive.exists()
+
+
+def test_only_browsers_attached_to_the_first_process_are_orphans():
+    """Un orphelin est un navigateur rattaché au processus n° 1, avec ce qu'il a lancé ; le Python lui-même n'en est pas un."""
+    processes = [{"pid": 1, "ppid": 0, "name": "docker-init", "args": ""},
+                 {"pid": 50, "ppid": 1, "name": "python3.12", "args": ""},
+                 {"pid": 101, "ppid": 1, "name": "chromedriver", "args": ""},
+                 {"pid": 102, "ppid": 101, "name": "chromium", "args": ""},
+                 {"pid": 201, "ppid": 50, "name": "chromedriver", "args": ""}]
+    assert scraper_p4n.orphan_browsers(processes) == {101, 102}
 
 
 def test_outside_the_container_no_browser_is_closed(monkeypatch):
     """Sans Chromium installé (sur le Mac par exemple), aucun navigateur n'est fermé : le Chrome de l'utilisatrice reste."""
     killed = []
     monkeypatch.setattr(scraper_p4n.os.path, "exists", lambda path: False)
-    monkeypatch.setattr(scraper_p4n.subprocess, "run", lambda command, capture_output: killed.append(command))
+    monkeypatch.setattr(scraper_p4n.subprocess, "run", lambda *args, **kwargs: killed.append(args))
+    monkeypatch.setattr(scraper_p4n.os, "kill", lambda pid, sig: killed.append(pid))
     scraper_p4n.close_leftover_browsers()
     assert killed == []

@@ -1,10 +1,9 @@
-from utils.db_utils import MySQLUtils
-from utils.mongo_utils import MongoUtils
 from fastapi import APIRouter, UploadFile, File, Depends
 from api.dependencies import get_current_user, require_admin
 from api.models.etl import GPXUploadResponse, GPXDeleteResponse
 from etl.etl_pipeline import process_upload
 from etl.extract.gpx import UPLOAD_DIR
+from etl.load.load_gpx import delete_hike_with_trace
 from services.authentification import get_roles_for_user, insert_auth_log
 
 router = APIRouter()
@@ -101,19 +100,8 @@ async def delete_gpx(
     if ext not in ALLOWED_EXT:
         return GPXDeleteResponse(success=False, message=f"Extension non autorisée: {ext}")
 
-    # Suppression dans MySQL
-    # « with » : la connexion se ferme à la sortie du bloc, même si la suppression échoue (issue #206).
-    with MySQLUtils.open_cursor() as (cnx, cursor):
-        cursor.execute("DELETE FROM hikes WHERE filename = %s", (filename,))
-        mysql_deleted = cursor.rowcount
-        cnx.commit()
-
-    # Suppression dans MongoDB
-    MongoUtils.connect()
-    collection = MongoUtils.get_collection("gpx_traces")
-    result = collection.delete_many({"filename": filename})
-    mongo_deleted = result.deleted_count
-    MongoUtils.disconnect()
+    # La rando et son tracé, retirés ensemble ou pas du tout (issue #285).
+    mysql_deleted, mongo_deleted = delete_hike_with_trace(filename)
 
     # Audit log - succès
     insert_auth_log(
