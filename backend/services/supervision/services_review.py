@@ -47,6 +47,7 @@ from services.restaurant_selection_service import TABLE_CATEGORY_LABELS
 from utils.service_utils import POI_FRONTEND_CATEGORY_MAP
 from utils.db_utils import MySQLUtils
 from utils.geo_utils import address_town, communes_only, town_choices, town_key
+from utils.paris_time import paris_date_text
 
 POI = "poi"
 PAGE_SIZE = 50
@@ -536,7 +537,7 @@ def get_reviews(tab: str = "liens", service: str | None = None, city: str | None
             WHERE d.objet_type = %s AND d.annulee_at IS NULL ORDER BY d.id DESC LIMIT %s
         """, (POI, RECENT_DECISIONS))
         recent = [{"id": row["id"], "nom": row["name"], "action": ACTION_LABELS.get(row["decision"], row["decision"]),
-                   "note": row["note"] or "", "par": row["decided_by"], "le": row["decided_at"].strftime("%d/%m/%Y")}
+                   "note": row["note"] or "", "par": row["decided_by"], "le": paris_date_text(row["decided_at"])}
                   for row in cursor.fetchall()]
         audit = _audit_sample(cursor, tab, service, city)
         # L'identifiant de la ville choisie, pour le lien « voir Modifier » quand elle n'a plus rien à relire : elle

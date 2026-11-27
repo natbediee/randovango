@@ -10,12 +10,12 @@ annoncer ce que ces pages ne montreraient pas. Un lieu présent dans deux files 
 une fois dans chacune, comme le filtre « Problème » de la page Services, dont « Tous » fait la somme.
 """
 from collections import Counter
-from datetime import date
 
 from services.supervision import rating, services_edit, services_review, spots_edit, spots_review
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, spot_category
 from utils.geo_utils import address_town, communes_only, town_choices, town_key
+from utils.paris_time import paris_today
 
 # Les files des services (services_review.TAB_SIGNALS), avec le libellé et l'ordre du filtre
 # « Problème » de la page Services (TABS dans supervision_services.js).
@@ -310,7 +310,7 @@ def get_summary(city_id: int | None = None, town: str | None = None) -> dict:
         # Le service n'est cherché que pour un lieu (poi) : un numéro de spot n'est pas un numéro de lieu.
         cursor.execute(RATED_DECISIONS, (services_review.POI, spots_review.SPOT, services_review.POI))
         ratings = count_ratings(cursor.fetchall())
-        hidden_ids = spots_review.hidden_spot_ids(connection, cursor, date.today())
+        hidden_ids = spots_review.hidden_spot_ids(connection, cursor, paris_today())
         place = city_inventory(cursor, city, town, cities, hidden_ids)
         cursor.close()
         cities_offered, towns = choices

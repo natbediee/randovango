@@ -4,9 +4,9 @@ L'heure de Paris tirée des heures de la base, gardées en UTC (utils/paris_time
 Les jours choisis encadrent les deux changements d'heure de 2026 : le dimanche 29 mars (UTC+1 devient UTC+2) et le
 dimanche 25 octobre (UTC+2 redevient UTC+1).
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
-from utils.paris_time import paris_midnight, paris_today, to_paris
+from utils.paris_time import PARIS, paris_date_text, paris_midnight, paris_today, to_paris
 
 
 def test_a_winter_hour_is_one_hour_later_in_paris() -> None:
@@ -53,3 +53,19 @@ def test_midnight_follows_the_change_of_time_in_october() -> None:
     """Le 25 octobre 2026 commence à 22 h UTC la veille (été) ; le 26, à 23 h UTC la veille (hiver)."""
     assert paris_midnight(date(2026, 10, 25)) == datetime(2026, 10, 24, 22, 0)
     assert paris_midnight(date(2026, 10, 26)) == datetime(2026, 10, 25, 23, 0)
+
+
+def test_a_decision_taken_just_after_midnight_in_paris_carries_that_day() -> None:
+    """Une décision prise à 0 h 30 à Paris le 28 novembre (23 h 30 UTC le 27) s'affiche « 28/11/2026 » dans la supervision."""
+    assert paris_date_text(datetime(2026, 11, 27, 23, 30)) == "28/11/2026"
+    assert paris_date_text(datetime(2026, 11, 27, 22, 30)) == "27/11/2026"
+
+
+def test_a_summer_decision_changes_day_at_22_h_utc() -> None:
+    """En juillet, une décision notée 22 h 15 UTC le 14 a été prise le 15 à 0 h 15 à Paris."""
+    assert paris_date_text(datetime(2026, 7, 14, 22, 15)) == "15/07/2026"
+
+
+def test_without_an_hour_the_paris_day_is_today_in_paris() -> None:
+    """Sans heure donnée, le jour de Paris est celui de maintenant, à Paris : il remplace date.today(), qui suit l'UTC du conteneur."""
+    assert paris_today() == datetime.now(timezone.utc).astimezone(PARIS).date()

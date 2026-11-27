@@ -30,9 +30,18 @@ def to_paris(moment: datetime | None) -> datetime | None:
     return moment.replace(tzinfo=BASE_ZONE).astimezone(PARIS)
 
 
-def paris_today(now: datetime) -> date:
-    """Le jour qu'il est à Paris à cette heure de la base : le 28 dès minuit à Paris, même s'il est 23 h en UTC."""
-    return to_paris(now).date()
+def paris_today(now: datetime | None = None) -> date:
+    """
+    Le jour qu'il est à Paris à cette heure de la base (maintenant, sans `now`) : le 28 dès minuit à Paris, même s'il
+    est 23 h le 27 en UTC. À utiliser à la place de date.today(), qui donne le jour UTC du conteneur.
+    """
+    # Sans `now`, l'heure UTC lue directement : le résultat est le même sur un poste réglé sur Paris.
+    return to_paris(now or datetime.now(BASE_ZONE).replace(tzinfo=None)).date()
+
+
+def paris_date_text(moment: datetime) -> str:
+    """La date à Paris d'une heure de la base, en « JJ/MM/AAAA » : une décision prise à 0 h 30 à Paris porte ce jour-là."""
+    return f"{to_paris(moment):%d/%m/%Y}"
 
 
 def paris_midnight(day: date) -> datetime:

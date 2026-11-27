@@ -29,6 +29,7 @@ from services.supervision.decisions import record_decision
 from utils.db_utils import MySQLUtils
 from utils.display_utils import HIDDEN_SPOT_TYPES, a_savoir_on, spot_category, spot_name_label
 from utils.geo_utils import address_town, communes_only, town_key
+from utils.paris_time import paris_date_text
 
 DECISIONS = ("retirer", "garder")
 SPOT = "spot"
@@ -297,7 +298,7 @@ def get_reviews(city_id: int | None = None, town: str | None = None, category: s
                             "note": d["note"] or "", "par": d["decided_by"],
                             "a_savoir": (d["a_savoir_corrige"] if d["a_savoir_corrige"] is not None
                                          else _a_savoir_text(d["a_savoir_agent"])),
-                            "le": d["decided_at"].strftime("%d/%m/%Y")} for d in recent]}
+                            "le": paris_date_text(d["decided_at"])} for d in recent]}
     finally:
         MySQLUtils.disconnect(connection)
 
@@ -333,7 +334,7 @@ def _opening_decisions(cursor) -> list:
             "texte_change": row["opening_period"] != detail["texte"],
             "note": row["note"] or "",
             "par": row["decided_by"],
-            "le": row["decided_at"].strftime("%d/%m/%Y"),
+            "le": paris_date_text(row["decided_at"]),
         })
     return openings
 
