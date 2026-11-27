@@ -7,7 +7,21 @@ La météo se charge tout de suite. Le reste (OSM et Wikidata, carburants, FINES
 ces chaînes dans un fil de fond à elle : 98 randos envoyées ensemble le 23 novembre 2026 avaient lancé 62 OSM dans la
 même minute (OpenStreetMap a refusé l'application), cinq OSM pour l'Île-d'Yeu, et ≈ 70 recherches de pépites en
 parallèle, parties avant que le budget du jour ait pu les arrêter.
+
+UN ENVOI EN MASSE RÉPOND VITE (issue #328)
+Le 25 novembre 2026, un envoi de 240 randos a tenu la requête 5 minutes, et l'API ne répondait plus à personne :
+lecture des fichiers 52 s, chargement 35 s, météo 44 s, et surtout la demande des chaînes, 180 s (≈ 1 s par ville,
+dont 0,8 s pour les services, qui relisent les fichiers des passages). Désormais :
+- les fichiers se lisent six à la fois (extract/gpx.py), et la commune de départ arrive avec son département et sa
+  région, en une seule demande à l'État : une ville nouvelle ne lui en fait plus une seconde ;
+- la météo attend Open-Meteo six villes à la fois (HTTP_WORKERS) ;
+- la météo est demandée une fois par ville, et non plus une fois par rando ;
+- la demande des chaînes à la file part dans un fil à elle, après la réponse : la requête ne l'attend plus. Ce fil ne
+  fait que remplir la file ; c'est toujours la file qui fait partir les passages, un à la fois.
 """
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 from utils.logger_util import LoggerUtil
 from etl.load.load_gpx import load_gpx_data
 from etl.extract.api_meteo import extract_weather_data
@@ -21,6 +35,14 @@ logger = LoggerUtil.get_logger("etl_pipeline")
 # passage_queue.py) : FINESS après OSM (une pharmacie au nom de société, « SELARL… », prend le nom de la pharmacie OSM
 # voisine), les pépites après les spots (leur position est recalée sur les lieux chargés), les services en dernier.
 CITY_CHAINS = ("osm", "carburants", "finess", "spots", "pepites")
+
+# Combien de villes attendent leur météo (Open-Meteo) en même temps pendant un envoi.
+HTTP_WORKERS = 6
+
+# Un seul fil de demande des chaînes travaille à la fois, même si deux envois se suivent de près. La règle « une chaîne
+# déjà demandée n'est pas redemandée » lit la table passages : deux fils qui liraient en même temps la même ville
+# pourraient tous deux la croire pas encore demandée, et la demander deux fois.
+_requests_lock = threading.Lock()
 
 
 def request_city_chains(city):
@@ -90,9 +112,8 @@ def load_one_gpx(gpx_file, verifie) -> dict:
     return outcome
 
 
-def complete_city(city):
-    """Pour la ville d'une rando qui vient d'entrer : la météo tout de suite, puis le reste demandé à la file."""
-    # 1. Extraction et chargement météo pour la ville (rapide)
+def load_weather(city) -> None:
+    """Charge les prévisions météo d'une ville. Non bloquant : une erreur est notée, l'envoi continue."""
     try:
         logger.info(f"[ETL] Extraction météo pour la ville: {city}")
         weather_data = extract_weather_data(city)
@@ -102,27 +123,72 @@ def complete_city(city):
         else:
             logger.warning(f"[ETL] Aucune donnée météo à charger pour la ville: {city}")
     except Exception as e:
-        logger.error(f"[ETL] Erreur lors de l'extraction/chargement météo: {e}")
+        logger.error(f"[ETL] Erreur lors de l'extraction/chargement météo pour {city} : {e}")
 
-    # 2. Les chaînes de la ville, demandées à la file des passages (issue #316) : plus de fil de fond par rando.
-    request_city_chains(city)
+
+def request_chains_of_cities(cities) -> None:
+    """
+    Le travail du fil de demande : met en file les chaînes de chaque ville, l'une après l'autre (request_city_chains),
+    sous le verrou qui empêche deux envois de demander en même temps. Une erreur sur une ville n'arrête pas les autres.
+    """
+    with _requests_lock:
+        for city in cities:
+            try:
+                request_city_chains(city)
+            except Exception as request_error:
+                logger.warning(f"[ETL] Chaînes non demandées pour {city} : {request_error}")
+        logger.info(f"[ETL] Chaînes demandées à la file pour {len(cities)} ville(s)")
+
+
+def start_chain_requests(cities) -> threading.Thread:
+    """
+    Lance le fil qui demande les chaînes des villes à la file, et rend tout de suite, sans attendre sa fin : la réponse
+    de l'envoi n'attend plus les ≈ 1 s par ville de la demande. Le fil s'arrête avec l'API (« daemon ») ; s'il est
+    coupé en route, les villes pas encore demandées se relancent depuis la supervision.
+    """
+    worker = threading.Thread(target=request_chains_of_cities, args=(list(cities),),
+                              name="demande-des-chaines", daemon=True)
+    worker.start()
+    return worker
+
+
+def complete_cities(cities) -> threading.Thread:
+    """
+    Pour les villes des randos qui viennent d'entrer : la météo tout de suite, six villes à la fois, puis le reste
+    demandé à la file par un fil à part, que la fonction rend sans l'attendre. Chaque ville n'y est qu'une fois, même
+    quand plusieurs randos y partent.
+    """
+    with ThreadPoolExecutor(max_workers=HTTP_WORKERS) as pool:
+        # list(...) attend que toutes les météos soient faites ; une erreur y est déjà notée par load_weather.
+        list(pool.map(load_weather, cities))
+    return start_chain_requests(cities)
+
+
+def loaded_cities(outcomes) -> list:
+    """Les villes des randos chargées, chacune une seule fois, dans l'ordre d'arrivée des randos."""
+    # dict.fromkeys retire les doublons en gardant l'ordre : la première rando d'une ville la place dans la liste.
+    return list(dict.fromkeys(outcome["city"] for outcome in outcomes if not outcome["reason"]))
 
 
 def main(user_role="user") -> list:
     """
     Traite les fichiers GPX du dossier d'attente et rend, pour chacun, {"filename", "city", "reason"} :
     la ville de la rando chargée, ou le motif du refus. La route upload_gpx y retrouve le fichier envoyé.
+    Seuls la lecture, le chargement et la météo sont attendus ; les chaînes des villes sont demandées après (#328).
     """
     verifie = 1 if user_role == "admin" else 0
+    gpx_files = extract_all_gpx_files()
     outcomes = []
-    for gpx_file in extract_all_gpx_files():
+    # Le chargement reste un fichier après l'autre : deux randos d'une même ville nouvelle, chargées en même temps,
+    # pourraient chacune ne pas trouver la ville et la créer deux fois.
+    for gpx_file in gpx_files:
         outcome = load_one_gpx(gpx_file, verifie)
         if outcome["reason"]:
             logger.info(f"[ETL] Fichier {outcome['filename']} non chargé : {outcome['reason']}")
         else:
             logger.info(f"[ETL] Ville extraite du GPX: {outcome['city']}")
-            complete_city(outcome["city"])
         outcomes.append(outcome)
+    complete_cities(loaded_cities(outcomes))
 
     logger.info(f"[ETL] Pipeline principal terminé : {outcomes}")
     return outcomes

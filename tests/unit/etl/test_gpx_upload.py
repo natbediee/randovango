@@ -5,6 +5,7 @@ déjà en base reçoit un refus avec son motif, et ne reste pas dans le dossier 
 Les petits GPX d'essai sont dans gpx_samples/ ; chaque test les copie dans un dossier temporaire qui joue le dossier
 d'attente. Ni base ni réseau : la recherche de la commune et l'enregistrement en base sont remplacés.
 """
+import inspect
 import shutil
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from etl.extract import gpx
 from etl.transform import transform_gpx
 
 SAMPLES = Path(__file__).parent / "gpx_samples"
+CONQUET = {"name": "Le Conquet", "insee": "29040", "department": "Finistère", "region": "Bretagne"}
 
 
 @pytest.fixture
@@ -33,7 +35,7 @@ def waiting_dir(tmp_path, monkeypatch):
 @pytest.fixture
 def commune_found(monkeypatch):
     """Le départ de la trace est au Conquet, que l'État reconnaît comme commune."""
-    monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda lat, lon: ("Le Conquet", "29040"))
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda lat, lon: CONQUET)
     monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Le Conquet")
 
 
@@ -61,7 +63,7 @@ def test_a_gpx_without_track_is_refused_and_removed(waiting_dir, commune_found, 
 
 def test_a_gpx_without_commune_at_start_is_refused_and_removed(waiting_dir, monkeypatch) -> None:
     """Une trace dont le départ n'est dans aucune commune connue est refusée : lieu de départ introuvable."""
-    monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda lat, lon: (None, None))
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda lat, lon: None)
     monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: None)
     path = drop_sample(waiting_dir, "trace.gpx")
 
@@ -128,7 +130,7 @@ def test_only_loaded_hikes_complete_their_city(waiting_dir, commune_found, monke
     """Seule la rando chargée lance la météo et les services de sa ville ; la route refusée ne lance rien."""
     monkeypatch.setattr(etl_pipeline, "load_gpx_data", lambda data, gpx_path, verifie: data["city_name"])
     completed = []
-    monkeypatch.setattr(etl_pipeline, "complete_city", completed.append)
+    monkeypatch.setattr(etl_pipeline, "complete_cities", completed.extend)
     drop_sample(waiting_dir, "trace.gpx")
     drop_sample(waiting_dir, "route_only.gpx")
 
@@ -147,7 +149,7 @@ def upload_client(waiting_dir, commune_found, monkeypatch):
     monkeypatch.setattr(etl_router, "get_roles_for_user", lambda user_id: ["user"])
     monkeypatch.setattr(etl_router, "insert_auth_log", lambda **kwargs: None)
     monkeypatch.setattr(etl_pipeline, "load_gpx_data", lambda data, gpx_path, verifie: data["city_name"])
-    monkeypatch.setattr(etl_pipeline, "complete_city", lambda city: None)
+    monkeypatch.setattr(etl_pipeline, "complete_cities", lambda cities: None)
     app = FastAPI()
     app.include_router(etl_router.router, prefix="/api/etl")
     app.dependency_overrides[dependencies.get_current_user] = lambda: {"user_id": 7, "username": "contributrice"}
@@ -185,3 +187,8 @@ def test_a_refused_file_does_not_come_back_with_the_next_upload(upload_client) -
 
     assert answer["success"] is True
     assert answer["message"] == "Nouveau tracé sur Le Conquet (fichier trace.gpx)."
+
+
+def test_the_upload_route_does_not_hold_the_server() -> None:
+    """La route d'envoi est une route « def » : FastAPI la fait tourner à part, et l'application répond pendant un envoi (5 minutes sans réponse le 25 novembre 2026)."""
+    assert not inspect.iscoroutinefunction(etl_router.upload_gpx)

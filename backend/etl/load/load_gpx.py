@@ -27,15 +27,18 @@ def find_city(cursor, city_name, insee):
     return row[0] if row else None
 
 
-def find_admin_info(insee, latitude, longitude) -> tuple:
+def find_admin_info(insee, latitude, longitude, details=None) -> tuple:
     """
     (département, région, pays) de la ville d'une rando qui part de ce point.
     D'abord geo.api.gouv.fr, par le code INSEE de la commune : gratuit, officiel, et il supporte un envoi de 70 villes
     d'un coup. Avant l'issue #318, ils venaient de Nominatim, qui a refusé la plupart des appels de l'import du
     23 novembre 2026 (« trop d'appels ») : 51 villes sont restées sans département, et l'agent des services cherchait
     « Champagne, France ». Nominatim ne sert plus que sans code INSEE : un départ hors de France, ou l'État injoignable.
+    `details` : la commune telle que l'État l'a donnée à la lecture du GPX (transform_gpx, issue #328), avec son
+    département et sa région ; sans eux, la commune est redemandée ici.
     """
-    details = get_commune_details(insee) if insee else None
+    if not (details and details.get("department")) and insee:
+        details = get_commune_details(insee)
     if details:
         return details["department"], details["region"], "France"
     return get_admin_info_from_coordinates(latitude, longitude)
@@ -86,7 +89,7 @@ def _load_gpx_with_connection(mysql_conn, data, gpx_path, verifie) -> str:
             cursor.execute("UPDATE cities SET commune = %s, insee = %s WHERE id = %s AND insee IS NULL", (commune, insee, city_id))
             mysql_conn.commit()
     else:
-        department, region, country = find_admin_info(insee, start_lat, start_lon)
+        department, region, country = find_admin_info(insee, start_lat, start_lon, data.get('commune_details'))
         cursor.execute(
             "INSERT INTO cities (name, latitude, longitude, department, region, country, commune, insee)"
             " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",

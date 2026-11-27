@@ -13,13 +13,17 @@ ALLOWED_EXT = {"gpx"}
 
 
 @router.post("/upload_gpx", summary="Upload a GPX file and launch the ETL pipeline (Admin and Contributor only)", response_model=GPXUploadResponse)
-async def upload_gpx(
+def upload_gpx(
     file: UploadFile = File(..., description="Fichier GPX"),
     user=Depends(get_current_user)
 ):
     """
     Reçoit le GPX d'une rando depuis la page d'ajout, le charge en base et dit ce qui s'est vraiment passé :
     la ville du tracé chargé, ou le motif du refus (issue #266).
+    Une route « def », et non « async def » (issue #328) : le pipeline attend la base et des API sans rendre la main.
+    Dans une route « async def », il bloquait tout le serveur : le 25 novembre 2026, pendant les 5 minutes d'un envoi
+    de 240 randos, ni l'application ni la supervision ne répondaient. Une route « def », FastAPI la fait tourner à
+    part (dans un fil de son groupe de fils) : les autres requêtes continuent d'être servies pendant l'envoi.
     """
     # Récupérer le rôle de l'utilisateur
     user_id = user["user_id"]
@@ -33,7 +37,8 @@ async def upload_gpx(
     GPX_DIR.mkdir(parents=True, exist_ok=True)
     dest_path = GPX_DIR / file.filename
     with open(dest_path, "wb") as f:
-        f.write(await file.read())
+        # file.file : le fichier reçu, lu directement, puisqu'une route « def » ne peut pas attendre file.read().
+        f.write(file.file.read())
     # Lancer le pipeline ETL (traitement synchrone), puis retrouver le résultat du fichier envoyé.
     try:
         outcome = find_outcome(run_etl_pipeline(user_role=user_role), file.filename)

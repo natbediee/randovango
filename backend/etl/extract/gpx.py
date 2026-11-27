@@ -6,6 +6,7 @@ que la page d'ajout affiche à l'admin ou au contributeur, et il est retiré du 
 à chaque envoi suivant (issue #266).
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import gpxpy
@@ -26,6 +27,11 @@ ROUTE_ONLY = "il ne contient pas une trace complète"
 NO_TRACK = "le fichier ne contient aucune trace"
 START_NOT_FOUND = "le lieu de départ est introuvable : aucune commune trouvée au premier point de la trace"
 LOAD_FAILED = "une erreur est survenue pendant l'enregistrement en base"
+
+# Combien de fichiers sont lus en même temps (issue #328). Lire un fichier, c'est surtout attendre geo.api.gouv.fr, qui
+# dit dans quelle commune part la trace (≈ 0,2 s) : lus un par un, les 241 fichiers du 25 novembre 2026 avaient pris
+# 52 secondes. Six à la fois restent loin de la limite de l'API (50 appels par seconde).
+READ_WORKERS = 6
 
 
 def remove_file(gpx_path) -> None:
@@ -84,15 +90,20 @@ def read_gpx_file(gpx_path, fname) -> dict:
 
 def extract_all_gpx_files() -> list:
     """
-    Lit tous les fichiers GPX du dossier d'attente et rend, pour chacun, le résultat de read_gpx_file.
+    Lit tous les fichiers GPX du dossier d'attente et rend, pour chacun, le résultat de read_gpx_file, dans l'ordre
+    du dossier. Les fichiers sont lus READ_WORKERS à la fois : chacun attend sa commune sans retenir les autres.
     L'extension est comparée en minuscules : la route accepte « RANDO.GPX », qui ne doit pas rester oublié ici.
     """
     gpx_files = [f for f in os.listdir(GPX_DIR) if f.lower().endswith('.gpx')]
     if not gpx_files:
         logger.error(f"[Extract] : Aucun fichier GPX trouvé dans {GPX_DIR}")
         return []
-    results = []
-    for fname in gpx_files:
-        logger.info(f"[Extract] : Début du pipeline. Fichier GPX détecté: {fname}")
-        results.append(read_gpx_file(os.path.join(GPX_DIR, fname), fname))
-    return results
+    # pool.map rend les résultats dans l'ordre des fichiers donnés, même si certains finissent avant d'autres.
+    with ThreadPoolExecutor(max_workers=READ_WORKERS) as pool:
+        return list(pool.map(read_waiting_file, gpx_files))
+
+
+def read_waiting_file(fname) -> dict:
+    """Lit un fichier du dossier d'attente, désigné par son seul nom (le travail d'un des lecteurs en parallèle)."""
+    logger.info(f"[Extract] : Début du pipeline. Fichier GPX détecté: {fname}")
+    return read_gpx_file(os.path.join(GPX_DIR, fname), fname)

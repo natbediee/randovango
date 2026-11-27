@@ -74,6 +74,15 @@ def test_the_commune_of_a_point_comes_with_its_insee_code(monkeypatch) -> None:
     assert geo_utils.get_commune_from_coordinates(48.424, -4.76797) == ("Plouarzel", "29177")
 
 
+def test_the_commune_of_a_point_comes_with_its_department_and_region(monkeypatch) -> None:
+    """La commune du départ d'une rando arrive avec son département et sa région, en une seule demande à l'État."""
+    row = {"nom": "Plouarzel", "code": "29177", "departement": {"code": "29", "nom": "Finistère"},
+           "region": {"code": "53", "nom": "Bretagne"}}
+    monkeypatch.setattr(geo_utils.requests, "get", lambda *a, **k: FakeCommunes([row]))
+    assert geo_utils.get_commune_at(48.424, -4.76797) == {"name": "Plouarzel", "insee": "29177",
+                                                          "department": "Finistère", "region": "Bretagne"}
+
+
 def test_a_point_outside_france_has_no_commune(monkeypatch) -> None:
     monkeypatch.setattr(geo_utils.requests, "get", lambda *a, **k: FakeCommunes([]))
     assert geo_utils.get_commune_from_coordinates(50.0, -10.0) == (None, None)
