@@ -20,6 +20,7 @@ import requests
 
 from services import exchange_rate_store
 from utils.logger_util import LoggerUtil
+from utils.paris_time import paris_today
 
 logger = LoggerUtil.get_logger("exchange_rates")
 
@@ -57,7 +58,7 @@ def refresh_rates(today: date | None = None) -> None:
     Une BCE injoignable n'arrête rien : on le note dans le journal, et le dernier taux connu continue de servir.
     """
     global _failed_on
-    today = today or date.today()
+    today = today or paris_today()
     last_fetch = exchange_rate_store.last_fetch()
     if (last_fetch is not None and last_fetch.date() >= today) or _failed_on == today:
         return

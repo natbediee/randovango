@@ -106,7 +106,7 @@ def save_settings(changes: dict, changed_by: str, reason: str | None = None) -> 
     current = load_settings()
     settings = {key: changes.get(key, current[key]) for key in DEFAULTS}
     check_amounts(settings)
-    rate = exchange_rate_service.rate_for(date.today())
+    rate = exchange_rate_service.rate_for(paris_time.paris_today())
     for name in AMOUNTS:
         settings[f"{name}_usd"] = exchange_rate_service.eur_to_usd(settings[f"{name}_eur"], rate)
     agent_settings_store.insert(settings, changed_by, reason)
