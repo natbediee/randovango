@@ -122,8 +122,12 @@ d'envoi, et n'attend jamais les étapes qui viennent après elle.
   seule cette ville attend.
 - Quand le quota ou le budget des agents est atteint, seules les étapes payantes attendent ; les étapes
   gratuites continuent. Au retour, elles repartent de la ville la plus ancienne.
-- Une chaîne gratuite en échec est reprise seule un quart d'heure plus tard, deux fois au plus, sauf si la même chaîne
-  est déjà en file ou en cours sur la ville. Une chaîne payante en échec attend toujours l'administratrice.
+- Une partie gratuite en échec (OSM, carburants, FINESS, ou la lecture de la source des spots) est reprise seule un
+  quart d'heure plus tard, deux fois au plus, sauf si la même chaîne est déjà en file ou en cours sur la ville, ou si
+  cette partie a été refaite depuis. Un échec sur une partie payante attend toujours l'administratrice.
+- Un passage resté « en cours » alors que plus rien ne le fait tourner (serveur redémarré, programme arrêté) est
+  marqué « interrompu » par la file elle-même, chaque minute : sur une partie gratuite, il est ensuite repris seul, et
+  les étapes de sa ville repartent.
 
 ## Le coût en euros et le budget
 
