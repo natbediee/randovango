@@ -2,8 +2,8 @@
 from datetime import datetime
 
 from etl.transform.transform_carburants import (DEFAULT_NAME, file_signals, keep_near, last_news, link_signals,
-                                                link_to_osm, osm_station, parse_state_file, station_rows,
-                                                usable_address)
+                                                link_to_osm, osm_fuel_stations, osm_station, parse_state_file,
+                                                station_rows, usable_address)
 
 XML = """<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
 <pdv_liste>
@@ -172,3 +172,15 @@ def test_two_silent_stations_side_by_side_are_not_twins():
 def test_a_station_missing_from_the_state_file_is_doubtful():
     """Le fichier de l'État n'a aucune fermeture : une station en base qui n'y est plus a peut-être fermé."""
     assert file_signals([], [{"pdv_id": "29000099"}], NOW)["29000099"][0][0] == "station_absente"
+
+
+def test_only_the_fuel_stations_of_the_osm_answer_are_kept():
+    """Dans la réponse d'Overpass de l'étape OSM, seules les stations-service sont gardées, avec l'identifiant de l'État."""
+    answer = {"elements": [
+        {"type": "node", "id": 582223754, "lat": 48.3423, "lon": -4.72315,
+         "tags": {"amenity": "fuel", "name": "Intermarché", "brand": "Intermarché", "ref:FR:prix-carburants": "29217001"}},
+        {"type": "node", "id": 1, "lat": 48.34, "lon": -4.72, "tags": {"amenity": "pharmacy", "name": "Pharmacie"}},
+    ]}
+    [station] = osm_fuel_stations(answer)
+    assert (station["osm_element"], station["brand"], station["ref"]) == ("node/582223754", "Intermarché", "29217001")
+    assert osm_fuel_stations(None) == []
