@@ -4,7 +4,7 @@ Les passages d'une chaîne d'agents lancés depuis la supervision (services/pass
 Aucune base ni aucun agent : la trace des passages est gardée dans un dictionnaire (_Store), et la chaîne des services
 est remplacée par une chaîne simulée, qui peut échouer sur la catégorie qu'on lui dit.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -259,8 +259,12 @@ def test_a_passage_runs_every_category_under_its_own_identifier(store, chain):
 
 
 def quota() -> LLMLimitReached:
-    """La limite que lève le service d'accès au modèle quand le quota des agents est atteint, jusqu'à 13 h 42."""
-    return LLMLimitReached("session limit", datetime(2026, 11, 27, 13, 42), "quota des agents atteint")
+    """
+    La limite que lève le service d'accès au modèle quand le quota des agents est atteint, pour l'heure qui vient.
+    L'heure de retour part de maintenant : une heure fixe (13 h 42 le 27 novembre) faisait échouer ces tests une fois
+    l'heure passée.
+    """
+    return LLMLimitReached("session limit", datetime.now() + timedelta(hours=1), "quota des agents atteint")
 
 
 def test_a_quota_reached_puts_the_passage_back_in_the_queue_without_failure(store, chain):
@@ -1309,3 +1313,132 @@ def test_a_failed_paid_chain_is_never_resumed_alone(store, chain):
     passage_service.run_passage(failed)
     store.passages[failed]["finished_at"] = datetime(2026, 11, 25, 10, 0)
     assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+# --- La reprise seule d'une source des spots en échec (services/passage_queue.py, issue #344) ---
+
+def _failed_spots(store, spots, part, finished_at):
+    """Un passage des spots de l'ETL sur Guidel, en échec sur cette partie, fini à `finished_at`."""
+    from services.etl_chains import StepFailed
+    spots["fail"][part] = StepFailed("source des spots illisible") if part == "source" else LLMTimeout("trop long")
+    passage_id = passage_service.create_passage("spots", 12, origin="etl")
+    passage_service.run_passage(passage_id)
+    del spots["fail"][part]
+    store.passages[passage_id]["finished_at"] = finished_at
+    return passage_id
+
+
+def test_a_failed_source_of_the_spots_is_resumed_by_the_queue(store, spots):
+    """Une source des spots en échec depuis 20 minutes est reprise seule, sans clic (53 sources en échec le 27 novembre 2026)."""
+    failed = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 40))
+    [resumed] = passage_queue.resume_failed_free_chains(NOW)
+    assert store.passages[resumed]["resumed_from"] == failed and store.passages[resumed]["origin"] == "etl"
+    assert [row["part"] for row in store.parts[resumed]] == ["source", "harmonisation", "ouvertures", "verification"]
+
+
+@pytest.mark.parametrize("part", ["harmonisation", "ouvertures", "verification"])
+def test_spots_failed_on_a_paid_part_wait_for_the_admin(store, spots, part):
+    """Des spots en échec sur une partie payante ne sont jamais repris seuls : une reprise coûte, l'administratrice décide."""
+    _failed_spots(store, spots, part, datetime(2026, 11, 25, 11, 40))
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failed_source_is_not_resumed_while_the_spots_of_the_city_are_queued(store, spots):
+    """Une source en échec n'est pas reprise quand les spots de la ville sont déjà en file : ils la liront."""
+    _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 40))
+    passage_service.create_passage("spots", 12, origin="etl")
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failed_source_is_not_resumed_once_the_source_was_read_since(store, spots):
+    """Une source en échec n'est pas reprise quand la source de la ville a été lue depuis, par une relance à la main."""
+    _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 40))
+    by_hand = passage_service.create_passage("spots", 12, ["source"])
+    passage_service.run_passage(by_hand)
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failed_source_is_resumed_twice_at_most(store, spots):
+    """Une source qui échoue encore après deux reprises n'est plus reprise seule, comme les chaînes gratuites."""
+    first = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 10, 0))
+    second = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 10, 30))
+    third = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 0))
+    store.passages[second]["resumed_from"], store.passages[third]["resumed_from"] = first, second
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+# --- Un passage coupé, vu par la file elle-même (services/passage_service.py, issue #344) ---
+
+def _cut_osm(store, city_id=12):
+    """Un OSM de l'ETL resté « en cours » alors que plus rien ne le fait tourner (son verrou est libre)."""
+    passage_id = passage_service.create_passage("osm", city_id, origin="etl")
+    store.set_passage_status(passage_id, "en_cours")
+    store.set_part(passage_id, "osm", "en_cours")
+    return passage_id
+
+
+def test_a_cut_passage_is_marked_interrupted_without_the_supervision(store, free):
+    """Un OSM resté « en cours » sans verrou est marqué interrompu par la file, sans ouvrir la supervision (Val-de-Sos, 27 novembre 2026)."""
+    cut = _cut_osm(store)
+    assert passage_service.mark_cut_passages() == [cut]
+    assert store.passages[cut]["status"] == "echec" and store.parts[cut][0]["status"] == "echec"
+    assert store.passages[cut]["error"].startswith("passage interrompu")
+
+
+def test_a_passage_that_really_runs_is_left_alone(store, free):
+    """Un OSM « en cours » dont le verrou est tenu tourne vraiment : la file n'y touche pas."""
+    running = _cut_osm(store)
+    free["busy"].add(("osm", 12))
+    assert passage_service.mark_cut_passages() == []
+    assert store.passages[running]["status"] == "en_cours"
+
+
+def test_a_cut_passage_of_an_unknown_chain_is_left_alone(store):
+    """Un passage « en cours » d'une chaîne inconnue tourne peut-être sous une autre version du code : la file n'y touche pas."""
+    store.insert_passage("inconnu", "chaine_future", 12, "etl", ["partie"])
+    store.set_passage_status("inconnu", "en_cours")
+    assert passage_service.mark_cut_passages() == [] and store.passages["inconnu"]["status"] == "en_cours"
+
+
+def test_after_a_cut_osm_is_resumed_the_steps_of_its_city_go_again(store, chain, free):
+    """OSM coupé : marqué interrompu, repris seul un quart d'heure plus tard, puis les services de sa ville partent (#344)."""
+    cut = _cut_osm(store)
+    services = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    assert passage_queue.next_for(step("services")) is None        # la ville attend son OSM
+    passage_service.mark_cut_passages()
+    store.passages[cut]["finished_at"] = datetime(2026, 11, 25, 11, 40)
+    [resumed] = passage_queue.resume_failed_free_chains(NOW)
+    assert passage_queue.run_step_once(step("osm")) is True and store.passages[resumed]["status"] == "fini"
+    assert passage_queue.next_for(step("services")) == services
+
+
+def test_the_final_state_is_written_under_the_lock(store, monkeypatch):
+    """L'état final d'un passage s'écrit avant que son verrou soit rendu : la file ne peut pas le croire coupé entre les deux."""
+    from contextlib import contextmanager
+    seen = {}
+
+    @contextmanager
+    def lock(city_id, part):
+        yield
+        seen["status_at_release"] = store.passages[passage_id]["status"]
+
+    monkeypatch.setitem(passage_service.CHAINS, "osm", passage_service.Chain(
+        key="osm", label="OSM", parts={"osm": "OSM"}, paid=False, lock=lock, lock_is_free=lambda city_id, part: True,
+        run_part=lambda *args: {"lieux": 3}, steps_of=lambda part: {}, per_city=True))
+    passage_id = passage_service.create_passage("osm", 12, origin="etl")
+    passage_service.run_passage(passage_id)
+    assert seen["status_at_release"] == "fini"
+
+
+def test_the_resumes_worker_marks_the_cut_passages_first(store, monkeypatch):
+    """À chaque tour, le fil des reprises marque d'abord les passages coupés, puis reprend les échecs gratuits."""
+    turns = []
+    monkeypatch.setattr(passage_service, "mark_cut_passages", lambda: turns.append("coupés") or [])
+    monkeypatch.setattr(passage_queue, "resume_failed_free_chains", lambda: turns.append("reprises") or [])
+
+    def stop_after_one_turn(seconds):
+        raise SystemExit         # arrête la boucle sans fin du fil, pour le test
+    monkeypatch.setattr(passage_queue._wakes[passage_queue.RESUMES], "wait", stop_after_one_turn)
+    with pytest.raises(SystemExit):
+        passage_queue.work_on_resumes()
+    assert turns == ["coupés", "reprises"]

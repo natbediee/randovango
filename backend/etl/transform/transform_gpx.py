@@ -1,6 +1,7 @@
 import math
 import os
 import re
+import unicodedata
 import gpxpy
 from utils.geo_utils import get_city_from_coordinates, get_commune_at
 
@@ -17,25 +18,54 @@ def extract_waypoints(gpx):
 		{'name': wpt.name, 'lat': wpt.latitude, 'lon': wpt.longitude, 'ele': wpt.elevation, 'desc': wpt.description}
 		for wpt in gpx.waypoints
 	]
-def normalize_name(raw_name):
-    # Prendre la partie après le premier tiret
-    if '-' in raw_name:
-        name = raw_name.split('-', 1)[1]
-    else:
-        name = raw_name
+# Nettoyage du nom d'une rando (issue #319).
+# Une rando sans nom de trace prend le nom de son fichier, où le site de la fédération a remplacé chaque apostrophe
+# et chaque espace par « _ », et le séparateur « : » par « ___ » :
+# « FFRandonnée-L_Île-d_Yeu___Kreuzland.gpx » doit se lire « L'Île-d'Yeu : Kreuzland ».
 
-    # Remplacer les cas particuliers d'apostrophe
-    name = re.sub(r'_d_', " d'", name)
-    name = re.sub(r'_l_', " l'", name)
-    name = re.sub(r'_qu_', " qu'", name)
-    name = re.sub(r'_s_', " s'", name)
-    name = re.sub(r'_t_', " t'", name)
-    name = re.sub(r'_n_', " n'", name)
-    # Remplacer les autres _ par des espaces
-    name = name.replace('_', ' ')
-    # Supprimer les espaces en double
-    name = re.sub(r' +', ' ', name)
-    return name
+# Les préfixes ajoutés devant le nom par une source : celui de la fédération, ou un numéro d'ordre (« 01- »).
+# Seuls ceux-là sont retirés : un nom qui commence par « Saint-Pol » garde son tiret.
+SOURCE_PREFIX = re.compile(r'^(FFRandonnée|\d+)-')
+
+# Le séparateur entre le lieu et le titre : trois « _ », parfois entourés d'espaces.
+SEPARATOR = re.compile(r'\s*___\s*')
+
+# Une apostrophe effacée : un petit mot élidé (l, d, qu, presqu…) collé par « _ » au mot suivant (« d_Yeu »,
+# « l_Abbé », « presqu_île »). Le petit mot doit être isolé : il commence le nom ou suit un séparateur (espace, « _ »,
+# tiret, comme dans « Dolus-d_Oléron »), sinon « Rand_Abers » deviendrait « Ran'd Abers ».
+# Le mot suivant n'a pas à commencer par une voyelle : les noms de lieux savoyards élident devant une consonne
+# (« Praz_d_zeures » se lit « Praz d'zeures », rando 605). Il doit commencer par une lettre, pas par un chiffre.
+ELIDED_WORD = re.compile(
+	r"(?<![^\s_\-])(l|d|j|m|n|s|t|c|qu|jusqu|lorsqu|puisqu|quoiqu|presqu)_(?=[^\W\d_])",
+	re.IGNORECASE,
+)
+
+# Le « c'h » breton : « Roc_h_ar_Bic », « Créac_h_Gwen », « C_hléguer » s'écrivent avec une apostrophe.
+BRETON_CH = re.compile(r'(c)_(h)', re.IGNORECASE)
+
+
+def remove_source_prefix(name):
+	"""Retire le préfixe d'une source connue (« FFRandonnée- », « 01- ») ; tout autre tiret fait partie du nom."""
+	return SOURCE_PREFIX.sub('', name, count=1)
+
+
+def restore_apostrophes(name):
+	"""Remet les apostrophes que le nom de fichier a remplacées par « _ » (« L_Île-d_Yeu » → « L'Île-d'Yeu »)."""
+	name = ELIDED_WORD.sub(r"\1'", name)
+	return BRETON_CH.sub(r"\1'\2", name)
+
+
+def normalize_name(raw_name):
+	"""Rend lisible le nom d'une rando tiré d'un nom de trace ou de fichier : préfixe, séparateur, apostrophes, espaces."""
+	# Sur Mac, un nom de fichier peut écrire « é » en deux caractères (e + accent) : on le ramène à un seul,
+	# sinon le préfixe « FFRandonnée- » et les voyelles accentuées ne seraient pas reconnus.
+	name = unicodedata.normalize('NFC', raw_name)
+	name = remove_source_prefix(name)
+	name = SEPARATOR.sub(' : ', name)
+	name = restore_apostrophes(name)
+	# Les « _ » restants étaient des espaces ; on supprime ensuite les espaces en double.
+	name = name.replace('_', ' ')
+	return re.sub(r' +', ' ', name).strip()
 
 def transform_gpx(gpx_content, fname) -> dict:
 	"""

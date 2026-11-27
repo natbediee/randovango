@@ -1,6 +1,7 @@
 import glob
 import os
 import shutil
+import signal
 import subprocess
 import time
 import pandas as pd
@@ -43,31 +44,77 @@ ZOOM_LEVEL = 15 # Niveau de zoom par défaut pour un affichage local
 # Les programmes du navigateur dans le conteneur, et les profils qu'ils laissent dans /tmp. selenium_chrome_profile
 # est l'ancien profil fixe, abandonné (issue #333) : il est effacé lui aussi.
 BROWSER_PROGRAMS = ("chromium", "chromedriver")
+ORPHAN_PARENT = 1   # le processus n° 1 du conteneur (docker-init) recueille les processus dont le parent est mort
 LEFTOVER_PROFILES = ("/tmp/org.chromium.Chromium.*", "/tmp/selenium_chrome_profile")
+
+
+def list_processes() -> list:
+    """
+    Les processus du conteneur, chacun en dictionnaire : son numéro (pid), celui de son parent (ppid), le nom de son
+    programme et sa ligne de commande complète (où se lit le profil d'un Chromium, --user-data-dir=…).
+    """
+    output = subprocess.run(["ps", "-eo", "pid=,ppid=,comm=,args="], capture_output=True, text=True).stdout
+    processes = []
+    for line in output.splitlines():
+        fields = line.split(None, 3)
+        if len(fields) >= 3:
+            processes.append({"pid": int(fields[0]), "ppid": int(fields[1]), "name": fields[2],
+                              "args": fields[3] if len(fields) == 4 else ""})
+    return processes
+
+
+def orphan_browsers(processes: list) -> set:
+    """
+    Les numéros des processus de navigateur orphelins : ceux dont le passage a été tué, et tout ce qu'ils ont lancé.
+    Un Chrome vivant a pour parent le Python qui le pilote (ou le chromedriver de celui-ci). Quand ce Python est tué
+    net, son chromedriver et son Chrome sont rattachés au processus n° 1 du conteneur : c'est à cela qu'on les
+    reconnaît (issue #350). Ainsi, une lecture de la source qui démarre ne ferme plus le navigateur d'une
+    vérification des spots en cours sur une autre ville (villes 607 et 608, 27 novembre 2026).
+    """
+    orphans = {process["pid"] for process in processes
+               if process["name"] in BROWSER_PROGRAMS and process["ppid"] == ORPHAN_PARENT}
+    # Les enfants d'un orphelin (les processus que Chrome lance pour ses pages) partent avec lui. On reparcourt la
+    # liste tant qu'on en trouve de nouveaux : un petit-enfant n'est vu qu'une fois son parent ajouté.
+    found = True
+    while found:
+        children = {process["pid"] for process in processes if process["ppid"] in orphans} - orphans
+        orphans |= children
+        found = bool(children)
+    return orphans
+
+
+def profiles_in_use(processes: list) -> str:
+    """Les lignes de commande des processus restés ouverts, mises bout à bout : le profil d'un Chrome vivant y figure."""
+    return " ".join(process["args"] for process in processes)
 
 
 def close_leftover_browsers() -> None:
     """
-    Ferme les navigateurs restés ouverts dans le conteneur et efface leurs profils de /tmp.
+    Ferme les navigateurs orphelins du conteneur (orphan_browsers) et efface de /tmp les profils que plus aucun
+    navigateur n'utilise.
     Un passage coupé net (par exemple quand uvicorn --reload redémarre le backend après un fichier modifié) ne ferme
     pas son Chrome : il garderait sa mémoire jusqu'au redémarrage du conteneur.
-
-    À n'appeler que quand aucun navigateur ne doit tourner : sous le verrou de la chaîne des spots
-    (services/spot_chain.py), seule à lancer un navigateur. Un script lancé à la main en même temps
-    (verify_spots.py, etl_rattrapage.py) perdrait le sien.
+    Un navigateur vivant, lui, n'est jamais fermé : depuis la file par étapes, la lecture de la source tourne en même
+    temps que la vérification des spots, qui a son propre Chrome. Son profil n'est pas effacé non plus.
     """
     # Hors du conteneur (sur le Mac, par exemple), Chromium n'est pas là : on ne ferme surtout pas le Chrome
     # de l'utilisatrice.
     if not os.path.exists(CHROME_BINARY_PATH):
         return
-    for program in BROWSER_PROGRAMS:
-        # -x : le nom exact du programme ; -KILL : un reste qui ne répond plus est fermé quand même.
-        # pkill rend 0 s'il a trouvé au moins un processus.
-        if subprocess.run(["pkill", "-KILL", "-x", program], capture_output=True).returncode == 0:
-            logger.warning(f"[Extract] : {program} resté ouvert par un passage précédent, fermé.")
+    processes = list_processes()
+    orphans = orphan_browsers(processes)
+    for pid in orphans:
+        try:
+            os.kill(pid, signal.SIGKILL)       # un reste qui ne répond plus est fermé quand même
+        except ProcessLookupError:
+            pass                               # déjà fermé, avec son parent
+    if orphans:
+        logger.warning(f"[Extract] : {len(orphans)} processus de navigateur laissés par un passage coupé, fermés.")
+    in_use = profiles_in_use([process for process in processes if process["pid"] not in orphans])
     for pattern in LEFTOVER_PROFILES:
         for path in glob.glob(pattern):
-            shutil.rmtree(path, ignore_errors=True)
+            if path not in in_use:
+                shutil.rmtree(path, ignore_errors=True)
 
 
 class BrowserNotStarted(RuntimeError):
