@@ -90,6 +90,14 @@ def test_the_running_passages_are_read_for_one_chain_only(base):
     assert "chain = %s" in sql and values == ("en_cours", "services")
 
 
+def test_the_active_passages_are_read_for_one_chain_on_one_city(base):
+    """Les passages qui referont déjà la chaîne sur la ville : en file, en attente ou en cours, pas les échecs (#329)."""
+    base.rows = [{"passage_id": "p1"}]
+    assert passage_store.active_ids("carburants", 12) == ["p1"]
+    sql, values = base.queries[0]
+    assert "status IN ('en_file', 'en_attente', 'en_cours')" in sql and values == ("carburants", 12)
+
+
 def test_the_queue_is_read_from_the_oldest_passage(base):
     """La file se lit du plus ancien passage au plus récent : c'est l'ordre dans lequel ils partent."""
     base.rows = [{"passage_id": "p1"}, {"passage_id": "p2"}]

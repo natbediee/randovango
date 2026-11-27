@@ -67,6 +67,11 @@ class _Store:
                 if row["status"] == passage_store.FAILED and row["origin"] == "etl" and row["chain"] in chains
                 and row["finished_at"] and row["finished_at"] >= since and self.resumed_by(key) is None]
 
+    def active_ids(self, chain, city_id):
+        # Comme la requête : les passages de la chaîne sur la ville, en file, en attente ou en cours.
+        return [key for key, row in self.passages.items() if row["chain"] == chain and row["city_id"] == city_id
+                and row["status"] in ("en_file", "en_attente", "en_cours")]
+
     def running_ids(self, chain):
         return [key for key, row in self.passages.items()
                 if row["status"] == passage_store.RUNNING and row["chain"] == chain]
@@ -108,7 +113,7 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by", "queued_ids", "running_ids", "open_parts", "finished_parts",
+                 "passage_ids", "recent_ids", "resumed_by", "queued_ids", "running_ids", "active_ids", "open_parts", "finished_parts",
                  "failures_to_resume",
                  "load_items", "count_items", "passages_of_item"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
@@ -1128,6 +1133,20 @@ def test_a_failure_already_redone_by_hand_is_not_resumed(store, free):
     free["loaded"]["osm"] = 40
     by_hand = passage_service.create_passage("osm", 12)
     passage_service.run_passage(by_hand)
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_two_failures_on_the_same_city_are_resumed_once(store, free):
+    """Deux OSM en échec sur la même ville (doublons d'avant #316, Larrau) : un seul est repris, pas deux en file (#329)."""
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 0))
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 5))
+    assert len(passage_queue.resume_failed_free_chains(NOW)) == 1
+
+
+def test_a_failure_is_not_resumed_while_the_chain_is_queued_on_the_city(store, free):
+    """OSM en échec alors qu'un autre OSM de la ville est déjà en file : la file ne le reprend pas (#329)."""
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 0))
+    passage_service.create_passage("osm", 12, origin="etl")
     assert passage_queue.resume_failed_free_chains(NOW) == []
 
 

@@ -106,11 +106,17 @@ def resumes_before(failure: dict) -> int:
 def can_resume_alone(failure: dict, now: datetime) -> bool:
     """
     Un échec que la file reprend seule : fini depuis au moins RESUME_AFTER_MINUTES, moins de MAX_AUTO_RESUMES reprises
-    derrière lui, et une chaîne pas déjà finie sur la ville par un autre passage (une relance à la main entre-temps).
+    derrière lui, une chaîne pas déjà en file ou en cours sur la ville, et pas déjà finie par un autre passage (une
+    relance à la main entre-temps).
+    Le cas de la file ou du cours (issue #329) : à Larrau, deux carburants en échec, doublons d'avant #316, avaient été
+    repris tous les deux, ce qui mettait deux carburants en file pour la même ville (25 novembre 2026). Le premier
+    repris est en file quand vient le second : celui-ci n'est pas repris.
     """
     if failure["finished_at"] > now - timedelta(minutes=RESUME_AFTER_MINUTES):
         return False
     if resumes_before(failure) >= MAX_AUTO_RESUMES:
+        return False
+    if passage_store.active_ids(failure["chain"], failure["city_id"]):
         return False
     return not passage_store.finished_parts(failure["chain"], [failure["city_id"]])
 

@@ -142,6 +142,17 @@ def queued_ids() -> list:
     return [row["passage_id"] for row in rows]
 
 
+def active_ids(chain: str, city_id: int) -> list:
+    """
+    Les passages de cette chaîne sur cette ville qui sont en file, en attente ou en cours : la file ne reprend pas
+    seule un échec quand l'un d'eux refera déjà la chaîne (issue #329).
+    """
+    rows = _read("""SELECT passage_id FROM passages
+                    WHERE chain = %s AND city_id = %s AND status IN ('en_file', 'en_attente', 'en_cours')""",
+                 (chain, city_id))
+    return [row["passage_id"] for row in rows]
+
+
 def running_ids(chain: str) -> list:
     """Les passages en cours d'une chaîne, du plus récent au plus ancien."""
     rows = _read("SELECT passage_id FROM passages WHERE status = %s AND chain = %s ORDER BY requested_at DESC",
