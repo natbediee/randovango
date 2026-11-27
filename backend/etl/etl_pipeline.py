@@ -3,7 +3,7 @@ L'ETL d'une rando envoyée : lire le fichier GPX, charger la rando, puis complé
 
 COMPLÉTER LA VILLE, PAR LA FILE DES PASSAGES (issue #316)
 La météo se charge tout de suite. Le reste (OSM et Wikidata, carburants, FINESS, spots, pépites, services) est demandé
-à la file des passages (services/passage_queue.py), qui fait partir un passage à la fois. Avant, chaque rando lançait
+à la file des passages (services/passage_queue.py), où chaque étape fait partir une ville à la fois. Avant, chaque rando lançait
 ces chaînes dans un fil de fond à elle : 98 randos envoyées ensemble le 23 novembre 2026 avaient lancé 62 OSM dans la
 même minute (OpenStreetMap a refusé l'application), cinq OSM pour l'Île-d'Yeu, et ≈ 70 recherches de pépites en
 parallèle, parties avant que le budget du jour ait pu les arrêter.
@@ -17,7 +17,7 @@ prenne du temps n'est pas grave, mais une demande du front doit toujours passer 
 - les fichiers du dossier d'attente passent ensuite, un à un, dans un fil de fond (process_waiting_folder). Le front
   ne les attend jamais : entre deux fichiers du dossier, son fichier passe ;
 - la demande des chaînes d'une ville à la file se fait à côté, sans retenir la réponse (≈ 1 s par ville le 25 novembre).
-  Ces fils ne font que remplir la file ; c'est toujours la file qui fait partir les passages, un à la fois.
+  Ces fils ne font que remplir la file ; c'est toujours la file qui fait partir les passages, étape par étape.
 """
 import os
 import threading
@@ -32,9 +32,10 @@ from etl.extract.gpx import read_gpx_file, remove_file, ALREADY_LOADED, LOAD_FAI
 
 logger = LoggerUtil.get_logger("etl_pipeline")
 
-# Les chaînes de l'ajout d'une ville, hors services. La file les fait passer dans son propre ordre (CHAIN_ORDER de
-# passage_queue.py) : FINESS après OSM (une pharmacie au nom de société, « SELARL… », prend le nom de la pharmacie OSM
-# voisine), les pépites après les spots (leur position est recalée sur les lieux chargés), les services en dernier.
+# Les chaînes de l'ajout d'une ville, hors services. Chaque étape de la file a sa propre file (passage_steps.py) et
+# attend, pour cette ville seule, ce dont elle dépend : FINESS après OSM (une pharmacie au nom de société, « SELARL… »,
+# prend le nom de la pharmacie OSM voisine), les pépites et les services après OSM (leurs lieux servent d'indices et de
+# recalage), les agents des spots après la lecture de leur source.
 CITY_CHAINS = ("osm", "carburants", "finess", "spots", "pepites")
 
 # Un seul chargement en base à la fois, entre le fichier du front et ceux du dossier : deux randos d'une même ville
@@ -53,8 +54,8 @@ _requests_lock = threading.Lock()
 
 def request_city_chains(city):
     """
-    Met dans la file des passages les chaînes de la ville qui restent à faire, puis la réveille : elle les fera partir
-    une à une. L'ETL n'attend pas leur fin. Une chaîne déjà faite ou déjà demandée n'est pas redemandée.
+    Met dans la file des passages les chaînes de la ville qui restent à faire, puis la réveille : chaque étape les
+    fera partir à son tour. L'ETL n'attend pas leur fin. Une chaîne déjà faite ou déjà demandée n'est pas redemandée.
     """
     for chain_key in CITY_CHAINS:
         request_chain(chain_key, city)

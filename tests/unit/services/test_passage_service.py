@@ -9,11 +9,12 @@ from datetime import datetime
 import pytest
 
 from agents.find_services import PassageRunning
-from agents.llm_service import LLMTimeout, LLMUnavailable, passage_courant
-from services import passage_queue, passage_service, passage_store
+from agents.llm_service import LLMLimitReached, LLMTimeout, LLMUnavailable, passage_courant
+from services import agents_pause, passage_queue, passage_service, passage_steps, passage_store
 from services.passage_service import PassageConflict
 
 CITY = {"id": 12, "name": "Guidel", "commune": "Guidel", "insee": "56078"}
+OTHER = {"id": 13, "name": "Plouarzel", "commune": "Plouarzel", "insee": "29177"}    # une seconde ville, une autre commune
 CALLED_AT = datetime(2026, 11, 19, 10, 10)  # le jour des appels de llm_calls, pour convertir leur coût en euros
 
 
@@ -55,9 +56,23 @@ class _Store:
     def resumed_by(self, passage_id):
         return next((key for key, row in self.passages.items() if row["resumed_from"] == passage_id), None)
 
-    def queued_ids(self):
+    def queued_next_parts(self):
         # Les passages sont gardés dans l'ordre où ils ont été demandés (un dictionnaire garde l'ordre d'écriture).
-        return [key for key, row in self.passages.items() if row["status"] == passage_store.QUEUED]
+        return [{"passage_id": key, "chain": row["chain"], "city_id": row["city_id"],
+                 "next_part": next((part["part"] for part in self.parts[key] if part["status"] == passage_store.TO_DO),
+                                   None)}
+                for key, row in self.passages.items() if row["status"] == passage_store.QUEUED]
+
+    def pending_part(self, chain, part, city_ids, other_than):
+        # Comme la requête : la partie pas finie dans un autre passage ouvert, ou en échec pas encore repris.
+        def still_open(key, passage):
+            return (passage["status"] in ("en_file", "en_attente", "en_cours")
+                    or (passage["status"] == "echec" and self.resumed_by(key) is None))
+        return any(row["part"] == part and row["status"] != "fini"
+                   for key, passage in self.passages.items()
+                   if passage["chain"] == chain and passage["city_id"] in city_ids and key != other_than
+                   and still_open(key, passage)
+                   for row in self.parts[key])
 
     def failures_to_resume(self, chains, since):
         # Comme la requête : les échecs de l'ETL sur ces chaînes, finis depuis `since`, que personne n'a repris.
@@ -66,6 +81,11 @@ class _Store:
                 for key, row in self.passages.items()
                 if row["status"] == passage_store.FAILED and row["origin"] == "etl" and row["chain"] in chains
                 and row["finished_at"] and row["finished_at"] >= since and self.resumed_by(key) is None]
+
+    def active_ids(self, chain, city_id):
+        # Comme la requête : les passages de la chaîne sur la ville, en file, en attente ou en cours.
+        return [key for key, row in self.passages.items() if row["chain"] == chain and row["city_id"] == city_id
+                and row["status"] in ("en_file", "en_attente", "en_cours")]
 
     def running_ids(self, chain):
         return [key for key, row in self.passages.items()
@@ -108,16 +128,24 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by", "queued_ids", "running_ids", "open_parts", "finished_parts",
+                 "passage_ids", "recent_ids", "resumed_by", "queued_next_parts", "pending_part", "running_ids", "active_ids", "open_parts", "finished_parts",
                  "failures_to_resume",
                  "load_items", "count_items", "passages_of_item"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
-    monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY])
+    monkeypatch.setattr(passage_service.service_store, "load_cities", lambda: [CITY, OTHER])
     monkeypatch.setattr(passage_service.service_store, "load_city", lambda name: CITY)
     # Le budget des agents le permet, sauf si un test pose une raison de blocage dans fake.budget_reason.
     fake.budget_reason = None
     monkeypatch.setattr(passage_service.budget_service, "budget_block", lambda: fake.budget_reason)
-    return fake
+    # Aucune pause des agents laissée par un test précédent : elle est gardée en mémoire, dans le module.
+    agents_pause.clear()
+    yield fake
+    agents_pause.clear()
+
+
+def run_next() -> bool:
+    """Fait partir un passage prêt, en essayant les étapes de la file l'une après l'autre ; False si aucune n'en a."""
+    return any(passage_queue.run_step_once(step) for step in passage_steps.STEPS)
 
 
 @pytest.fixture
@@ -136,14 +164,14 @@ def chain(monkeypatch):
             raise state["fail"][key]
         return {"fiches": 3}
 
-    def lock(city_id):
+    def lock(city_id, part):
         if state["busy"]:
             raise PassageRunning("verrou tenu")
         from contextlib import nullcontext
         return nullcontext()
 
     fake = passage_service.Chain(key="services", label="Recherche des services", parts=passage_service.SERVICE_LABELS,
-                                 paid=True, lock=lock, lock_is_free=lambda city_id: not state["busy"], run_part=run_part,
+                                 paid=True, lock=lock, lock_is_free=lambda city_id, part: not state["busy"], run_part=run_part,
                                  steps_of=passage_service.service_steps)
     monkeypatch.setitem(passage_service.CHAINS, "services", fake)
     return state
@@ -195,20 +223,28 @@ def test_a_launch_is_refused_when_the_budget_is_reached(store, chain):
     assert store.passages == {}
 
 
-def test_a_lock_held_from_the_command_line_is_named_too(store, chain):
-    """Un verrou tenu sans trace vient d'un lancement dans le conteneur : le message le dit."""
+def test_a_launch_while_the_chain_runs_on_another_city_enters_the_queue(store, chain):
+    """Les services tournent sur une autre ville : le lancement n'est plus refusé, le passage entre dans la file (#332)."""
+    store.insert_passage("ailleurs", "services", 99, "etl", ["restaurants"])
+    store.set_passage_status("ailleurs", "en_cours")
     chain["busy"] = True
-    with pytest.raises(PassageConflict, match="lancé en ligne de commande"):
+    passage_id = passage_service.create_passage("services", 12)
+    assert store.passages[passage_id]["status"] == "en_file"
+
+
+def test_a_launch_while_the_chain_is_queued_on_the_city_names_it(store, chain):
+    """La même chaîne déjà en file sur la ville : le lancement est refusé, le message nomme le passage qui partira."""
+    queued = passage_service.create_passage("services", 12, origin="etl")
+    with pytest.raises(PassageConflict, match=f"déjà demandé sur Guidel .{queued}, en_file"):
         passage_service.create_passage("services", 12)
 
 
 def test_a_launch_refused_does_not_name_a_passage_of_another_chain(store, chain):
-    """Le refus nomme le passage de la même chaîne : un passage d'une autre chaîne en cours n'est pas pris pour lui."""
+    """Un passage d'une autre chaîne en cours sur la ville ne retient pas le lancement des services."""
     store.insert_passage("autre", "carburants", 12, "etl", ["carburants"])
     store.set_passage_status("autre", "en_cours")
-    chain["busy"] = True
-    with pytest.raises(PassageConflict, match="lancé en ligne de commande"):
-        passage_service.create_passage("services", 12)
+    passage_id = passage_service.create_passage("services", 12)
+    assert store.passages[passage_id]["status"] == "en_file"
 
 
 # --- Faire tourner ---
@@ -222,15 +258,43 @@ def test_a_passage_runs_every_category_under_its_own_identifier(store, chain):
     assert [(row["status"], row["summary"]) for row in store.parts[passage_id]] == [("fini", {"fiches": 3})] * 2
 
 
-def test_a_quota_reached_keeps_the_finished_categories_and_stops(store, chain):
-    """Quota de Claude atteint pendant les commerces : les restaurants restent finis, la suite reste à faire, la raison est lisible."""
-    chain["fail"]["commerces"] = LLMUnavailable("claude -p : réponse inutilisable (You've hit your session limit · resets 1:40pm (UTC))")
+def quota() -> LLMLimitReached:
+    """La limite que lève le service d'accès au modèle quand le quota des agents est atteint, jusqu'à 13 h 42."""
+    return LLMLimitReached("session limit", datetime(2026, 11, 27, 13, 42), "quota des agents atteint")
+
+
+def test_a_quota_reached_puts_the_passage_back_in_the_queue_without_failure(store, chain):
+    """Quota des agents atteint pendant les commerces : pas d'échec, les restaurants restent finis, le passage attend en file (27 novembre 2026, villes 507 à 538)."""
+    chain["fail"]["commerces"] = quota()
     passage_id = passage_service.create_passage("services", 12, ["restaurants", "commerces", "laveries"])
     passage_service.run_passage(passage_id)
-    assert [row["status"] for row in store.parts[passage_id]] == ["fini", "echec", "a_faire"]
-    reason = store.passages[passage_id]["error"]
-    assert reason.startswith("quota de l'abonnement Claude atteint (il revient à 1:40pm (UTC) : reprendre après cette heure)")
-    assert store.parts[passage_id][1]["error"] == reason
+    assert store.passages[passage_id]["status"] == "en_file" and store.passages[passage_id]["error"] is None
+    assert [(row["status"], row["step"]) for row in store.parts[passage_id]] == [
+        ("fini", None), ("a_faire", "budget"), ("a_faire", None)]
+    assert passage_queue.why_waiting(passage_id).startswith("quota des agents atteint : la file reprend seule vers")
+
+
+def test_after_the_quota_the_passage_resumes_alone_without_paying_again(store, chain):
+    """L'heure de retour des agents passée, l'étape des services reprend seule les commerces sur leur fichier, sans refaire les restaurants."""
+    chain["fail"]["commerces"] = quota()
+    passage_id = passage_service.create_passage("services", 12, ["restaurants", "commerces"])
+    passage_service.run_passage(passage_id)
+    assert run_next() is False                  # la pause des agents retient l'étape payante
+    agents_pause.clear()                        # l'heure de retour est passée
+    del chain["fail"]["commerces"]
+    assert run_next() is True
+    assert [ran[0] for ran in chain["ran"]] == ["restaurants", "commerces", "commerces"]
+    assert chain["ran"][-1] == ("commerces", True, passage_id)
+    assert store.passages[passage_id]["status"] == "fini"
+
+
+def test_an_empty_api_credit_stays_a_failure(store, chain):
+    """Le crédit de l'API épuisé ne revient pas seul : la partie passe en échec, avec la raison, pour l'administratrice."""
+    chain["fail"]["restaurants"] = LLMUnavailable("Error code: 400 - Your credit balance is too low")
+    passage_id = passage_service.create_passage("services", 12, ["restaurants"])
+    passage_service.run_passage(passage_id)
+    assert store.passages[passage_id]["status"] == "echec"
+    assert store.passages[passage_id]["error"].startswith("crédit de l'API Anthropic épuisé")
 
 
 def test_a_passage_that_finds_the_lock_taken_keeps_its_place_in_the_queue(store, chain):
@@ -292,6 +356,26 @@ def test_a_failed_passage_is_resumed_only_once_and_knows_its_resumption(store, c
     passage_service.run_passage(resumed)
     again = passage_service.resume_passage(resumed)
     assert store.passages[again]["resumed_from"] == resumed
+
+
+def test_a_resume_is_accepted_while_the_same_step_runs_on_another_city(store, chain):
+    """Reprendre les services de Guidel pendant qu'ils tournent sur une autre ville : accepté, la reprise entre dans la file (Bedous et Rocquefort, #332)."""
+    chain["fail"]["laveries"] = LLMTimeout("trop long")
+    failed = passage_service.create_passage("services", 12, ["laveries"], origin="etl")
+    passage_service.run_passage(failed)
+    store.insert_passage("ailleurs", "services", 13, "etl", ["restaurants"])
+    store.set_passage_status("ailleurs", "en_cours")
+    chain["busy"] = True
+    resumed = passage_service.resume_passage(failed)
+    assert store.passages[resumed]["status"] == "en_file" and store.passages[resumed]["resumed_from"] == failed
+    assert passage_queue.why_waiting(resumed) == "attend la fin du passage en cours"
+
+
+def test_a_waiting_city_is_launched_while_the_same_step_runs_on_another_city(store, chain):
+    """Lancer une ville en attente pendant que la même étape tourne ailleurs : elle retourne en file, sans refus (#332)."""
+    waiting = passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
+    chain["busy"] = True
+    assert passage_service.resume_passage(waiting) == waiting and store.passages[waiting]["status"] == "en_file"
 
 
 def test_only_a_failed_passage_can_be_resumed(store, chain):
@@ -429,18 +513,18 @@ def test_the_state_of_a_category_carries_its_summary_sentence(store, chain):
     assert finished["bilan_texte"] == "3 services enregistrés." and waiting["bilan_texte"] is None
 
 
-# --- La file (services/passage_queue.py, issue #211) ---
+# --- La file (services/passage_queue.py, issues #211 et #332) ---
 
 def test_two_cities_added_one_after_the_other_pass_in_order(store, chain):
     """Deux villes ajoutées coup sur coup par l'ETL passent l'une après l'autre, dans l'ordre d'arrivée : la seconde n'est pas perdue."""
     first = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
     second = passage_service.create_passage("services", 12, ["laveries"], origin="etl")
-    assert passage_queue.run_next() is True
+    assert run_next() is True
     assert store.passages[first]["status"] == "fini" and store.passages[second]["status"] == "en_file"
-    assert passage_queue.run_next() is True
+    assert run_next() is True
     assert store.passages[second]["status"] == "fini"
     assert [ran[0] for ran in chain["ran"]] == ["restaurants", "laveries"]
-    assert passage_queue.run_next() is False
+    assert run_next() is False
 
 
 def test_the_queue_waits_while_a_passage_runs(store, chain):
@@ -448,93 +532,128 @@ def test_the_queue_waits_while_a_passage_runs(store, chain):
     queued = passage_service.create_passage("services", 12, origin="etl")
     chain["busy"] = True
     assert passage_queue.why_waiting(queued) == "attend la fin du passage en cours"
-    assert passage_queue.run_next() is False and chain["ran"] == []
+    assert run_next() is False and chain["ran"] == []
 
 
 def test_the_queue_waits_for_the_budget_then_goes_by_itself(store, chain):
     """Budget atteint : la ville reste en file avec la raison ; dès que le budget le permet, elle part seule."""
     queued = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
     store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
-    assert passage_queue.run_next() is False
+    assert run_next() is False
     assert passage_queue.why_waiting(queued).startswith("plafond du jour atteint")
     store.budget_reason = None          # le lendemain, ou le plafond relevé par l'admin
-    assert passage_queue.run_next() is True and store.passages[queued]["status"] == "fini"
+    assert run_next() is True and store.passages[queued]["status"] == "fini"
 
 
-def test_a_free_passage_does_not_wait_behind_a_passage_held_by_the_budget(store, chain, monkeypatch):
-    """Un passage gratuit en file part même si un passage des services, plus ancien, attend le budget du lendemain."""
-    ran = []
-    free = passage_service.Chain(key="gratuite", label="Chaîne gratuite", parts={"lieux": "Lieux"}, paid=False,
-                                 lock=chain_lock_free, lock_is_free=lambda city_id: True,
-                                 run_part=lambda *args: ran.append(args[1]) or {"lieux": 4}, steps_of=lambda key: {})
-    monkeypatch.setitem(passage_service.CHAINS, "gratuite", free)
+def test_a_free_step_does_not_wait_behind_a_paid_step_held_by_the_budget(store, chain, free):
+    """OSM d'une ville part même si les services, demandés plus tôt, attendent le budget du lendemain."""
     held = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
-    behind = passage_service.create_passage("gratuite", 12, origin="etl")
+    osm = passage_service.create_passage("osm", 13, origin="etl")
     store.budget_reason = "plafond du jour atteint : 10.40 $ dépensés sur 10.00 $"
-    assert passage_queue.run_next() is True
-    assert ran == ["lieux"] and store.passages[behind]["status"] == "fini"
+    assert run_next() is True
+    assert store.passages[osm]["status"] == "fini"
     assert store.passages[held]["status"] == "en_file" and chain["ran"] == []
 
 
-def chain_lock_free(city_id):
+def chain_lock_free(city_id, part):
     """Un verrou toujours libre, pour une chaîne simulée."""
     from contextlib import nullcontext
     return nullcontext()
 
 
-def test_the_queue_takes_the_chains_of_a_city_in_the_order_of_the_new_city(store):
-    """Les chaînes d'une ville demandées dans le désordre passent dans l'ordre de l'ajout d'une ville : OSM, carburants, FINESS, spots, pépites, services."""
-    for chain_key in ("services", "pepites", "spots", "finess", "carburants", "osm"):
-        store.insert_passage(chain_key, chain_key, 12, "etl", ["partie"])
-    assert [passage["chain"] for passage in passage_queue.queue_in_order()] == list(passage_queue.CHAIN_ORDER)
+def step(key):
+    """L'étape de la file de cette clé (services/passage_steps.py)."""
+    return passage_steps.STEPS_BY_KEY[key]
 
 
-def test_the_osm_of_a_second_city_passes_before_the_services_of_the_first(store):
-    """Envoi de randos dans deux villes : OSM de la seconde passe avant les services de la première, qui durent des heures (constat du 23 novembre)."""
-    store.insert_passage("services-A", "services", 12, "etl", ["restaurants"])
-    store.insert_passage("osm-A", "osm", 12, "etl", ["osm"])
-    store.insert_passage("services-B", "services", 13, "etl", ["restaurants"])
-    store.insert_passage("osm-B", "osm", 13, "etl", ["osm"])
-    order = [passage["passage_id"] for passage in passage_queue.queue_in_order()]
-    assert order == ["osm-A", "osm-B", "services-A", "services-B"]
+@pytest.mark.parametrize("chain_key,part,step_key", [
+    ("osm", "osm", "osm"), ("carburants", "carburants", "carburants"), ("finess", "finess", "finess"),
+    ("pepites", "lieux", "pepites"), ("services", "laveries", "services"),
+    ("spots", "source", "source"), ("spots", "harmonisation", "agents_spots"), ("spots", "verification", "agents_spots"),
+])
+def test_each_part_belongs_to_the_file_of_its_step(chain_key, part, step_key):
+    """Chaque partie va dans la file de son étape : la source des spots et ses agents sont deux étapes (#332)."""
+    assert passage_steps.step_for(chain_key, part) is step(step_key)
 
 
-def test_a_chain_unknown_to_the_queue_passes_last(store):
-    """Une chaîne que la file ne range pas (écrite par une autre version du code) passe après toutes les autres, sans la bloquer."""
-    store.insert_passage("inconnu", "chaine_future", 12, "etl", ["partie"])
-    store.insert_passage("services", "services", 12, "etl", ["restaurants"])
-    assert [passage["passage_id"] for passage in passage_queue.queue_in_order()] == ["services", "inconnu"]
-
-
-def test_a_new_city_osm_runs_before_an_older_services_passage(store, chain, free):
-    """La file fait partir OSM d'une ville nouvelle avant un passage des services demandé plus tôt."""
+def test_the_services_of_a_city_wait_for_its_osm_not_for_the_osm_of_the_others(store, chain, free):
+    """Les services de la ville 12 attendent son OSM, puis partent alors que l'OSM de la ville 13 est encore en file (#332)."""
     services = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
-    osm = passage_service.create_passage("osm", 12, origin="etl")
-    assert passage_queue.run_next() is True
-    assert store.passages[osm]["status"] == "fini" and store.passages[services]["status"] == "en_file"
+    osm_12 = passage_service.create_passage("osm", 12, origin="etl")
+    passage_service.create_passage("osm", 13, origin="etl")
+    assert passage_queue.next_for(step("services")) is None
+    assert passage_queue.why_waiting(services) == "attend OSM et Wikidata de la ville"
+    assert passage_queue.run_step_once(step("osm")) is True and store.passages[osm_12]["status"] == "fini"
+    assert passage_queue.next_for(step("services")) == services
+
+
+def test_the_osm_step_chains_the_cities_while_the_services_of_the_first_wait(store, chain, free):
+    """OSM enchaîne les villes, une à la fois, sans attendre les services de la première : ils sont dans une autre file (#332)."""
+    passage_service.create_passage("osm", 12, origin="etl")
+    passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    passage_service.create_passage("osm", 13, origin="etl")
+    store.budget_reason = "plafond du jour atteint"
+    assert passage_queue.run_step_once(step("osm")) is True
+    assert passage_queue.run_step_once(step("osm")) is True
+    assert free["asked"] == [("osm", "Guidel"), ("osm", "Guidel")] and chain["ran"] == []
+
+
+def test_a_city_with_a_failed_osm_only_holds_its_own_services(store, chain, free):
+    """OSM de la ville 12 en échec : ses services attendent, ceux de la ville 13, dont l'OSM est fini, partent (#332)."""
+    free["loaded"]["osm"] = None
+    failed = passage_service.create_passage("osm", 12, origin="etl")
+    passage_service.run_passage(failed)
+    held = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    free["loaded"]["osm"] = 40
+    passage_service.run_passage(passage_service.create_passage("osm", 13, origin="etl"))
+    other = passage_service.create_passage("services", 13, ["restaurants"], origin="etl")
+    assert passage_queue.next_for(step("services")) == other
+    assert passage_queue.why_waiting(held) == "attend OSM et Wikidata de la ville"
+
+
+def test_a_city_without_any_osm_asked_is_ready_for_its_services(store, chain):
+    """Une ville ajoutée avant les passages n'a aucun OSM demandé : ses services ne l'attendent pas, rien ne viendrait."""
+    services = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    assert passage_queue.next_for(step("services")) == services
+
+
+def test_a_chain_unknown_to_the_queue_is_never_taken(store, chain):
+    """Une chaîne qu'aucune étape ne connaît (écrite par une autre version du code) n'est prise par aucune file, sans les bloquer."""
+    store.insert_passage("inconnu", "chaine_future", 12, "etl", ["partie"])
+    services = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    assert run_next() is True and store.passages[services]["status"] == "fini"
+    assert store.passages["inconnu"]["status"] == "en_file"
 
 
 def test_a_passage_waiting_for_the_admin_is_not_taken_by_the_queue(store, chain):
     """Une ville en attente (mise à jour automatique coupée) n'est pas lancée par la file : elle attend l'admin."""
     passage_service.create_passage("services", 12, origin="etl", status=passage_store.WAITING)
-    assert passage_queue.run_next() is False and chain["ran"] == []
+    assert run_next() is False and chain["ran"] == []
 
 
 def test_an_error_while_reading_the_queue_does_not_stop_the_worker(store, chain, monkeypatch):
-    """Une base injoignable un instant est notée dans le journal ; le fil de la file attend le tour suivant au lieu de s'arrêter."""
+    """Une base injoignable un instant est notée dans le journal ; le fil d'une étape attend le tour suivant au lieu de s'arrêter."""
     turns = []
 
-    def broken():
-        turns.append(1)
+    def broken(step):
+        turns.append(step.key)
         raise ConnectionError("base injoignable")
 
     def stop_after_one_turn(seconds):
         raise SystemExit         # arrête la boucle sans fin du fil, pour le test
-    monkeypatch.setattr(passage_queue, "run_next", broken)
-    monkeypatch.setattr(passage_queue._wake, "wait", stop_after_one_turn)
+    monkeypatch.setattr(passage_queue, "run_step_once", broken)
+    monkeypatch.setattr(passage_queue._wakes["osm"], "wait", stop_after_one_turn)
     with pytest.raises(SystemExit):
-        passage_queue.work_forever()
-    assert turns == [1]
+        passage_queue.work_on_step(step("osm"))
+    assert turns == ["osm"]
+
+
+def test_a_finished_city_wakes_the_other_steps(store, chain, free, monkeypatch):
+    """OSM d'une ville fini : les autres étapes sont réveillées tout de suite, sans attendre leur minute (#332)."""
+    woken = []
+    monkeypatch.setattr(passage_queue, "wake", lambda: woken.append(True))
+    passage_service.create_passage("osm", 12, origin="etl")
+    assert passage_queue.run_step_once(step("osm")) is True and woken == [True]
 
 
 # --- La demande de l'ETL d'une nouvelle ville (issue #211) ---
@@ -636,7 +755,7 @@ def test_with_the_automatic_update_off_the_city_waits_for_the_admin(store, etl):
     etl["auto"] = False
     passage_id = passage_service.request_etl_passage("Guidel")
     assert store.passages[passage_id]["status"] == "en_attente"
-    assert passage_queue.run_next() is False
+    assert run_next() is False
 
 
 def test_the_etl_wakes_the_queue_after_its_request(monkeypatch):
@@ -686,9 +805,9 @@ def test_the_cities_not_done_are_listed_with_their_reason(store, chain):
     waiting = passage_service.create_passage("services", 12, ["commerces"], origin="etl", status=passage_store.WAITING)
     store.budget_reason = None
     chain["fail"]["laveries"] = LLMTimeout("trop long")
-    failed = passage_service.create_passage("services", 12, ["laveries"])
+    failed = passage_service.create_passage("services", 12, ["laveries"], origin="etl")
     passage_service.run_passage(failed)
-    resumed_failure = passage_service.create_passage("services", 12, ["supermarches"])
+    resumed_failure = passage_service.create_passage("services", 12, ["supermarches"], origin="etl")
     chain["fail"]["supermarches"] = LLMTimeout("trop long")
     passage_service.run_passage(resumed_failure)
     store.insert_passage("reprise", "services", 12, "supervision", ["supermarches"], resumed_from=resumed_failure)
@@ -723,7 +842,7 @@ def test_a_big_city_stopped_between_two_zones_resumes_its_file_when_the_budget_r
     passage_service.run_passage(passage_id)
     assert store.passages[passage_id]["status"] == "en_file" and store.passages[passage_id]["error"] is None
     chain["zone_budget"] = set()
-    assert passage_queue.run_next() is True
+    assert run_next() is True
     assert store.passages[passage_id]["status"] == "fini"
     assert [(key, resume) for key, resume, _ in chain["ran"]] == [("restaurants", False), ("restaurants", True)]
 
@@ -808,7 +927,7 @@ def test_a_free_chain_is_refused_only_on_the_same_city(store, free):
     free["busy"].add(("osm", 12))
     with pytest.raises(PassageConflict, match="« Lieux d'OpenStreetMap » tourne déjà sur Guidel"):
         passage_service.create_passage("osm", 12)
-    passage_service.check_free(passage_service.CHAINS["osm"], 13)       # Morgat : rien ne la retient
+    assert passage_service.create_passage("osm", 13)        # Plouarzel : rien ne la retient
 
 
 def test_a_running_free_chain_shows_the_loading_step(store, free):
@@ -844,7 +963,7 @@ def test_a_queued_passage_of_an_unknown_chain_is_never_run_here(store, chain):
     _unknown_passage(store, "en_file")
     known = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
     assert passage_queue.why_waiting("inconnu") == passage_service.UNKNOWN_CHAIN
-    assert passage_queue.run_next() is True
+    assert run_next() is True
     assert store.passages[known]["status"] == "fini" and store.passages["inconnu"]["status"] == "en_file"
     passage_service.run_passage("inconnu")
     assert store.passages["inconnu"]["status"] == "en_file"
@@ -877,7 +996,7 @@ def spots(monkeypatch):
     monkeypatch.setattr(passage_service.spot_chain, "run_part", run_part)
     monkeypatch.setitem(passage_service.CHAINS, "spots", passage_service.Chain(
         key="spots", label="Chaîne des spots", parts=passage_service.spot_chain.PARTS, paid=True,
-        lock=lambda city_id: nullcontext(), lock_is_free=lambda city_id: True, run_part=run_part,
+        lock=lambda city_id, part: nullcontext(), lock_is_free=lambda city_id, part: True, run_part=run_part,
         steps_of=passage_service.spot_chain.steps_of, free_parts=passage_service.spot_chain.FREE_PARTS))
     return state
 
@@ -913,18 +1032,50 @@ def test_a_launch_of_agent_parts_is_refused_when_the_budget_is_reached(store, sp
 def test_spots_missed_are_a_failure_resumed_without_the_finished_parts(store, spots):
     """Deux spots ratés à la vérification : la partie échoue avec la raison traduite, et la reprise ne refait qu'elle."""
     from services.spot_chain import SpotsMissed
-    quota = RuntimeError("You've hit your session limit · resets 1:40pm (UTC)")
-    spots["fail"]["verification"] = SpotsMissed(2, 5, quota)
+    spots["fail"]["verification"] = SpotsMissed(2, 5, LLMTimeout("claude -p n'a pas répondu"))
     failed = passage_service.create_passage("spots", 12)
     passage_service.run_passage(failed)
     passage = passage_service.read_passage(failed)
     assert passage["etat"] == "echec"
-    assert passage["raison_echec"].startswith("2 spots ratés sur 7 (quota de l'abonnement Claude atteint")
+    assert passage["raison_echec"].startswith("2 spots ratés sur 7 (délai dépassé")
     del spots["fail"]["verification"]
     spots["ran"].clear()
     resumed = passage_service.resume_passage(failed)
     passage_service.run_passage(resumed)
     assert [ran[0] for ran in spots["ran"]] == ["verification"]
+
+
+def test_spots_missed_by_the_claude_quota_wait_in_the_queue(store, spots):
+    """Des spots ratés parce que le quota des agents est atteint : la vérification attend son retour en file, sans échec (#332)."""
+    from services.spot_chain import SpotsMissed
+    spots["fail"]["verification"] = SpotsMissed(2, 5, quota())
+    passage_id = passage_service.create_passage("spots", 12)
+    passage_service.run_passage(passage_id)
+    assert store.passages[passage_id]["status"] == "en_file"
+    assert store.parts[passage_id][3]["status"] == "a_faire" and store.parts[passage_id][3]["step"] == "budget"
+
+
+def test_the_source_step_reads_only_the_source_then_the_agents_step_takes_the_city(store, spots):
+    """L'étape de la source lit la source seule et remet le passage en file ; l'étape des agents des spots le prend ensuite (#332)."""
+    passage_id = passage_service.create_passage("spots", 12, origin="etl")
+    assert passage_queue.next_for(step("agents_spots")) is None
+    assert passage_queue.run_step_once(step("source")) is True
+    assert [ran[0] for ran in spots["ran"]] == ["source"] and store.passages[passage_id]["status"] == "en_file"
+    assert passage_queue.run_step_once(step("agents_spots")) is True
+    assert [ran[0] for ran in spots["ran"]] == ["source", "harmonisation", "ouvertures", "verification"]
+    assert store.passages[passage_id]["status"] == "fini"
+
+
+def test_the_source_chains_the_cities_while_the_agents_wait_for_the_budget(store, spots):
+    """Budget atteint : la source des spots enchaîne les villes, leurs agents attendent sans échec (#317 : spots lus le jour de l'ajout)."""
+    store.budget_reason = "plafond du jour atteint"
+    first = passage_service.create_passage("spots", 12, origin="etl")
+    second = passage_service.create_passage("spots", 13, origin="etl")
+    assert passage_queue.run_step_once(step("source")) is True
+    assert passage_queue.run_step_once(step("source")) is True
+    assert passage_queue.run_step_once(step("agents_spots")) is False
+    assert [ran[0] for ran in spots["ran"]] == ["source", "source"]
+    assert store.passages[first]["status"] == store.passages[second]["status"] == "en_file"
 
 
 @pytest.mark.parametrize("summary,text", [
@@ -1080,9 +1231,9 @@ def test_the_osm_of_two_new_cities_pass_one_after_the_other(store, city_chains, 
     guidel = passage_service.request_city_chain("osm", "Guidel")
     second = passage_service.request_city_chain("osm", "Morgat")
     store.passages[second]["city_name"] = "Morgat"
-    assert passage_queue.run_next() is True
+    assert run_next() is True
     assert store.passages[guidel]["status"] == "fini" and store.passages[second]["status"] == "en_file"
-    assert passage_queue.run_next() is True
+    assert run_next() is True
     assert free["asked"] == [("osm", "Guidel"), ("osm", "Morgat")]
 
 
@@ -1128,6 +1279,20 @@ def test_a_failure_already_redone_by_hand_is_not_resumed(store, free):
     free["loaded"]["osm"] = 40
     by_hand = passage_service.create_passage("osm", 12)
     passage_service.run_passage(by_hand)
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_two_failures_on_the_same_city_are_resumed_once(store, free):
+    """Deux OSM en échec sur la même ville (doublons d'avant #316, Larrau) : un seul est repris, pas deux en file (#329)."""
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 0))
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 5))
+    assert len(passage_queue.resume_failed_free_chains(NOW)) == 1
+
+
+def test_a_failure_is_not_resumed_while_the_chain_is_queued_on_the_city(store, free):
+    """OSM en échec alors qu'un autre OSM de la ville est déjà en file : la file ne le reprend pas (#329)."""
+    _failed_osm(store, free, datetime(2026, 11, 25, 11, 0))
+    passage_service.create_passage("osm", 12, origin="etl")
     assert passage_queue.resume_failed_free_chains(NOW) == []
 
 

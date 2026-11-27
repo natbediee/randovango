@@ -136,10 +136,27 @@ def resumed_by(passage_id: str) -> str | None:
     return rows[0]["passage_id"] if rows else None
 
 
-def queued_ids() -> list:
-    """Les passages en file, du plus ancien au plus récent : c'est l'ordre dans lequel ils partent."""
-    rows = _read("SELECT passage_id FROM passages WHERE status = %s ORDER BY requested_at, passage_id", (QUEUED,))
+def active_ids(chain: str, city_id: int) -> list:
+    """
+    Les passages de cette chaîne sur cette ville qui sont en file, en attente ou en cours : la file ne reprend pas
+    seule un échec quand l'un d'eux refera déjà la chaîne (issue #329).
+    """
+    rows = _read("""SELECT passage_id FROM passages
+                    WHERE chain = %s AND city_id = %s AND status IN ('en_file', 'en_attente', 'en_cours')""",
+                 (chain, city_id))
     return [row["passage_id"] for row in rows]
+
+
+def queued_next_parts() -> list:
+    """
+    Les passages en file, du plus ancien au plus récent, chacun avec sa prochaine partie à faire (next_part) : c'est
+    elle qui dit quelle étape de la file doit le prendre (services/passage_steps.py, issue #332). Une seule requête
+    pour toute la file : chaque étape la relit à chaque tour.
+    """
+    return _read("""SELECT p.passage_id, p.chain, p.city_id,
+                           (SELECT pp.part FROM passage_parts pp WHERE pp.passage_id = p.passage_id AND pp.status = %s
+                            ORDER BY pp.position LIMIT 1) AS next_part
+                    FROM passages p WHERE p.status = %s ORDER BY p.requested_at, p.passage_id""", (TO_DO, QUEUED))
 
 
 def running_ids(chain: str) -> list:
@@ -181,6 +198,23 @@ def open_parts(chain: str, city_ids: list) -> set:
                                 (SELECT 1 FROM passages r WHERE r.resumed_from = p.passage_id)))""",
                  (chain, *city_ids))
     return {row["part"] for row in rows}
+
+
+def pending_part(chain: str, part: str, city_ids: list, other_than: str) -> bool:
+    """
+    Cette partie est-elle demandée pour ces villes sans être finie, dans un autre passage que `other_than` : en file,
+    en attente, en cours, ou en échec pas encore repris ? Une étape de la file attend alors, pour ces villes seules,
+    que cette partie soit faite (services/passage_steps.py, issue #332).
+    """
+    placeholders = ",".join(["%s"] * len(city_ids))
+    rows = _read(f"""SELECT 1 FROM passages p JOIN passage_parts pp ON pp.passage_id = p.passage_id
+                     WHERE p.chain = %s AND pp.part = %s AND p.city_id IN ({placeholders}) AND p.passage_id <> %s
+                       AND pp.status <> 'fini'
+                       AND (p.status IN ('en_file', 'en_attente', 'en_cours')
+                            OR (p.status = 'echec' AND NOT EXISTS
+                                (SELECT 1 FROM passages r WHERE r.resumed_from = p.passage_id)))
+                     LIMIT 1""", (chain, part, *city_ids, other_than))
+    return bool(rows)
 
 
 # --- Le journal de ce que les passages ont ajouté ou modifié (table passage_items, issue #276) ---

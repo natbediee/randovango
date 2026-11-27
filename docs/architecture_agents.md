@@ -21,7 +21,8 @@ flowchart TB
 
     subgraph SVC["services/passage_service.py"]
         CREATE["create_passage<br/>écrit la demande : en file"]
-        RUN["run_passage, en tâche de fond<br/>verrou : un seul passage à la fois"]
+        QUEUE["passage_queue : une file par étape<br/>une ville à la fois, dans l'ordre d'envoi"]
+        RUN["run_passage<br/>les parties de l'étape, sous son verrou"]
         READ["read_passage<br/>assemble ce que l'écran affiche"]
     end
 
@@ -57,8 +58,9 @@ flowchart TB
     POST --> CREATE
     RESUME --> CREATE
     CREATE --> PASS
-    POST --> RUN
-    RESUME --> RUN
+    POST -- "réveille" --> QUEUE
+    RESUME -- "réveille" --> QUEUE
+    QUEUE --> RUN
     RUN --> CHAIN
     RUN -- "état de chaque catégorie" --> PASS
     S1 -.-> LLM
@@ -79,23 +81,49 @@ flowchart TB
 
 - **Lancer.** `POST /api/supervision/passages` reçoit la chaîne, la ville et les catégories
   (`{"chaine": "services", "ville_id": 12, "categories": ["restaurants"]}`). La demande est écrite dans `passages`, puis
-  le passage tourne en tâche de fond : la route répond tout de suite, une grande ville pouvant prendre des heures.
+  elle entre dans la file de son étape et part à son tour : la route répond tout de suite, une grande ville pouvant
+  prendre des heures.
   C'est toujours une vraie mise à jour : l'essai et le rejeu restent des outils de la ligne de commande
   (`python -m agents.find_services --essai`, `--rejouer`).
-- **Un seul passage à la fois.** Deux passages en même temps créeraient le même service deux fois. Un verrou tenu par
-  MySQL l'empêche, pour l'API comme pour la ligne de commande ; un second lancement est refusé (409) avec un message
-  qui nomme le passage en cours.
+- **Un seul passage à la fois par étape.** Deux passages des services en même temps créeraient le même service deux
+  fois. Un verrou tenu par MySQL l'empêche, pour l'API comme pour la ligne de commande. Un second lancement de la même
+  chaîne sur la même ville est refusé (409) avec un message qui nomme le passage déjà demandé ; sur une autre ville, il
+  attend son tour dans la file.
 - **Suivre.** L'état vient de deux tables : `passages` et `passage_parts` disent ce qui a été demandé et où en est
   chaque catégorie ; `llm_calls` donne le coût et l'étape de chaque appel d'agent, sous le même identifiant de passage.
-- **Échouer et reprendre.** Si Claude ne répond plus (quota atteint, délai dépassé), la catégorie en cours passe en
+- **Attendre le fournisseur.** Si le quota des agents est atteint, ou s'ils reçoivent trop d'appels à la fois, la
+  catégorie en cours n'échoue pas. Le service d'accès au modèle (`agents/llm_service.py`), seul à connaître le
+  fournisseur, en fait une limite neutre avec son heure de retour ; le passage retourne en file, et les étapes payantes
+  attendent cette heure (`services/agents_pause.py`). Elles repartent seules, sans repayer ce qui est fait.
+- **Échouer et reprendre.** Une autre erreur (délai dépassé, crédit de l'API épuisé) fait passer la catégorie en
   échec avec une raison lisible, et le passage s'arrête. Les catégories finies restent enregistrées. La reprise
   (`POST /api/supervision/passages/ID/reprise`) ne refait que les catégories non finies ; une grande ville reprend en
-  plus ses zones finies depuis son fichier JSON.
-- **Une chaîne en paramètre.** Seule la chaîne des services est branchée (`CHAINS` dans `passage_service.py`) ;
-  les autres chaînes (OSM, pépites, carburants) s'y ajouteront sans nouvelle route. Le lancement à la fin
-  de l'ETL d'une nouvelle ville appellera les mêmes fonctions, avec l'origine `etl` et la file d'attente.
+  plus ses zones finies depuis son fichier JSON. Elle est acceptée même quand la même étape tourne sur une autre ville.
+- **Une chaîne en paramètre.** Les chaînes (`CHAINS` dans `passage_service.py`) se lancent toutes par les mêmes
+  routes : services, spots, pépites, et les chaînes gratuites de l'ajout d'une ville (OSM, carburants, FINESS).
 - **Les mesures.** `llm_calls` garde chaque appel, réussi ou non : son coût en dollars, sa durée, ses tokens,
   ses recherches web, son passage et son étape. C'est la source du suivi des coûts dans la supervision.
+
+## La file des passages
+
+Une ville ajoutée par l'envoi d'une rando demande ses chaînes à la file (`services/passage_queue.py`). Chaque étape
+(`services/passage_steps.py`) a sa propre file et son propre fil de fond : elle prend une ville à la fois, dans l'ordre
+d'envoi, et n'attend jamais les étapes qui viennent après elle.
+
+| Étape | Elle attend, pour la ville | Payante |
+|---|---|---|
+| OSM et Wikidata (seul appel à Overpass) | rien | non |
+| Lecture de la source des spots (un navigateur à la fois) | rien | non |
+| Carburants, pharmacies FINESS | OSM et Wikidata | non |
+| Pépites de la ville, services | OSM et Wikidata | oui |
+| Agents des spots : harmonisation, puis ouvertures, puis vérification | la lecture de la source | oui |
+
+- Une ville pas prête pour une étape (son OSM pas fini, ou en échec) est sautée : l'étape prend la suivante, et
+  seule cette ville attend.
+- Quand le quota ou le budget des agents est atteint, seules les étapes payantes attendent ; les étapes
+  gratuites continuent. Au retour, elles repartent de la ville la plus ancienne.
+- Une chaîne gratuite en échec est reprise seule un quart d'heure plus tard, deux fois au plus, sauf si la même chaîne
+  est déjà en file ou en cours sur la ville. Une chaîne payante en échec attend toujours l'administratrice.
 
 ## Le coût en euros et le budget
 
