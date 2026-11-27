@@ -1,6 +1,11 @@
 from etl.transform import transform_gpx
 
 
+def commune(name, insee) -> dict:
+    """La commune que geo.api.gouv.fr donnerait au départ de la trace, avec son département et sa région."""
+    return {"name": name, "insee": insee, "department": "Finistère", "region": "Bretagne"}
+
+
 GPX_SAMPLE = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <gpx version=\"1.1\" creator=\"pytest\" xmlns=\"http://www.topografix.com/GPX/1/1\">
   <metadata>
@@ -24,7 +29,7 @@ def test_normalize_name_replaces_tokens() -> None:
 
 def test_transform_gpx_returns_none_when_city_not_found(monkeypatch) -> None:
     monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: None)
-    monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda *args, **kwargs: (None, None))
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: None)
 
     result = transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")
 
@@ -33,7 +38,7 @@ def test_transform_gpx_returns_none_when_city_not_found(monkeypatch) -> None:
 
 def test_transform_gpx_returns_expected_payload(monkeypatch) -> None:
     monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Brest")
-    monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda *args, **kwargs: ("Brest", "29019"))
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: commune("Brest", "29019"))
 
     result = transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")
 
@@ -49,7 +54,7 @@ def test_transform_gpx_returns_expected_payload(monkeypatch) -> None:
 def test_a_gpx_leaving_from_a_locality_is_named_after_its_commune(monkeypatch) -> None:
     """Un GPX qui part de la pointe de Corsen, que Nominatim range à Trézien, est rattaché à sa commune, Plouarzel."""
     monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Trézien")
-    monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda *args, **kwargs: ("Plouarzel", "29177"))
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: commune("Plouarzel", "29177"))
 
     result = transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")
 
@@ -59,13 +64,21 @@ def test_a_gpx_leaving_from_a_locality_is_named_after_its_commune(monkeypatch) -
 def test_nominatim_names_the_city_only_when_the_state_does_not_answer(monkeypatch) -> None:
     """Sans réponse de geo.api.gouv.fr, le GPX garde le lieu donné par Nominatim plutôt que d'être perdu."""
     monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Trézien")
-    monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda *args, **kwargs: (None, None))
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: None)
 
     assert transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")["city_name"] == "Trézien"
 
 
 def test_without_nominatim_the_city_is_named_after_its_commune(monkeypatch) -> None:
     monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: None)
-    monkeypatch.setattr(transform_gpx, "get_commune_from_coordinates", lambda *args, **kwargs: ("Plouarzel", "29177"))
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: commune("Plouarzel", "29177"))
 
     assert transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")["city_name"] == "Plouarzel"
+
+
+def test_the_department_comes_with_the_commune_of_the_start(monkeypatch) -> None:
+    """La commune du départ arrive avec son département et sa région : une ville nouvelle d'un envoi ne redemande pas l'État au chargement."""
+    monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: None)
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: commune("Plouarzel", "29177"))
+
+    assert transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")["commune_details"]["department"] == "Finistère"

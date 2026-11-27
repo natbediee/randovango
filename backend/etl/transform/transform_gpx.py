@@ -2,7 +2,7 @@ import math
 import os
 import re
 import gpxpy
-from utils.geo_utils import get_city_from_coordinates, get_commune_from_coordinates
+from utils.geo_utils import get_city_from_coordinates, get_commune_at
 
 def extract_points(gpx):
 	"""Extrait la liste des points (lat, lon, ele) de toutes les traces du GPX."""
@@ -64,9 +64,13 @@ def transform_gpx(gpx_content, fname) -> dict:
 	# Nominatim donne le lieu le plus proche, parfois un lieu-dit (Trézien pour la pointe de Corsen, en Plouarzel) :
 	# depuis l'issue #184, « Où pars-tu » ne propose plus que des communes, et un GPX parti d'un lieu-dit est rattaché à
 	# la ville de sa commune. Nominatim ne sert plus que si l'État ne répond pas.
-	city_name = commune = insee = None
+	# La réponse de l'État donne aussi le département et la région (commune_details) : le chargement les écrit dans la
+	# ville si elle est nouvelle, sans redemander l'État (issue #328).
+	city_name = commune = insee = commune_details = None
 	if start_lat and start_lon:
-		commune, insee = get_commune_from_coordinates(start_lat, start_lon)
+		commune_details = get_commune_at(start_lat, start_lon)
+		if commune_details:
+			commune, insee = commune_details["name"], commune_details["insee"]
 		city_name = commune or get_city_from_coordinates(start_lat, start_lon, language='fr')
 	# Si la ville n'est pas trouvée, on arrête la transformation (aucun chargement)
 	if not city_name:
@@ -144,5 +148,6 @@ def transform_gpx(gpx_content, fname) -> dict:
 		'description': description,
 		'city_name': city_name,
 		'commune': commune,
-		'insee': insee
+		'insee': insee,
+		'commune_details': commune_details
 	}
