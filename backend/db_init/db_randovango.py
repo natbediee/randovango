@@ -136,6 +136,9 @@ def init_database():
             # 1. table cities
             # name est le lieu que connaît le voyageur (Trézien, Portsall) ; commune et insee, la commune officielle
             # qui le contient (Plouarzel, 29177), d'après geo.api.gouv.fr. Vides si l'API n'a pas répondu.
+            # osm_stations_read_at : le dernier passage de l'étape OSM qui a rangé les stations-service de la ville dans
+            # osm_fuel_stations. Vide tant qu'elle n'est pas passée : l'étape des carburants attend alors, car une ville
+            # sans aucune station OSM (rien dans la table) n'est pas une ville où OSM n'est pas encore passé.
             """
             CREATE TABLE IF NOT EXISTS cities (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -146,7 +149,8 @@ def init_database():
                 region VARCHAR(255),
                 country VARCHAR(255),
                 commune VARCHAR(255),
-                insee CHAR(5)
+                insee CHAR(5),
+                osm_stations_read_at DATETIME
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 2. table sources
@@ -446,6 +450,28 @@ def init_database():
                 rupture_fin DATETIME,
                 PRIMARY KEY (poi_id, carburant),
                 FOREIGN KEY (poi_id) REFERENCES stations_carburant(poi_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """,
+            # 9 octies. les stations-service d'OSM d'une ville, telles qu'OSM les décrit, rangées par l'étape OSM
+            # (etl/etl_osm.py). L'étape des carburants les relit pour donner nom et marque aux stations de l'État, sans
+            # interroger Overpass une seconde fois. Ce ne sont pas des services : une station OSM seule n'est jamais
+            # montrée (le Total de Portsall). Une ligne par station et par ville : deux villes voisines peuvent voir la
+            # même station dans leur carré. Les lignes d'une ville sont remplacées à chaque passage de l'étape OSM.
+            # osm_element : « node/582223754 » ; state_ref : l'étiquette ref:FR:prix-carburants, l'identifiant de
+            # l'État (pdv_id de stations_carburant), quand OSM la porte.
+            """
+            CREATE TABLE IF NOT EXISTS osm_fuel_stations (
+                city_id INT NOT NULL,
+                osm_element VARCHAR(30) NOT NULL,
+                name VARCHAR(255),
+                brand VARCHAR(100),
+                state_ref VARCHAR(10),
+                postcode VARCHAR(10),
+                latitude DOUBLE,
+                longitude DOUBLE,
+                read_at DATETIME NOT NULL,
+                PRIMARY KEY (city_id, osm_element),
+                FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """,
             # 10.table poi_service (association POI <-> services)

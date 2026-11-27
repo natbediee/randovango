@@ -1,5 +1,8 @@
-import time
+import glob
 import os
+import shutil
+import subprocess
+import time
 import pandas as pd
 from pathlib import Path
 from selenium import webdriver
@@ -7,7 +10,12 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    StaleElementReferenceException,
+    TimeoutException,
+    WebDriverException,
+)
 from utils.logger_util import LoggerUtil
 from utils.service_utils import ServiceUtil
 
@@ -32,19 +40,65 @@ ZOOM_LEVEL = 15 # Niveau de zoom par défaut pour un affichage local
 
 
 # --- Navigateur ---
+# Les programmes du navigateur dans le conteneur, et les profils qu'ils laissent dans /tmp. selenium_chrome_profile
+# est l'ancien profil fixe, abandonné (issue #333) : il est effacé lui aussi.
+BROWSER_PROGRAMS = ("chromium", "chromedriver")
+LEFTOVER_PROFILES = ("/tmp/org.chromium.Chromium.*", "/tmp/selenium_chrome_profile")
+
+
+def close_leftover_browsers() -> None:
+    """
+    Ferme les navigateurs restés ouverts dans le conteneur et efface leurs profils de /tmp.
+    Un passage coupé net (par exemple quand uvicorn --reload redémarre le backend après un fichier modifié) ne ferme
+    pas son Chrome : il garderait sa mémoire jusqu'au redémarrage du conteneur.
+
+    À n'appeler que quand aucun navigateur ne doit tourner : sous le verrou de la chaîne des spots
+    (services/spot_chain.py), seule à lancer un navigateur. Un script lancé à la main en même temps
+    (verify_spots.py, etl_rattrapage.py) perdrait le sien.
+    """
+    # Hors du conteneur (sur le Mac, par exemple), Chromium n'est pas là : on ne ferme surtout pas le Chrome
+    # de l'utilisatrice.
+    if not os.path.exists(CHROME_BINARY_PATH):
+        return
+    for program in BROWSER_PROGRAMS:
+        # -x : le nom exact du programme ; -KILL : un reste qui ne répond plus est fermé quand même.
+        # pkill rend 0 s'il a trouvé au moins un processus.
+        if subprocess.run(["pkill", "-KILL", "-x", program], capture_output=True).returncode == 0:
+            logger.warning(f"[Extract] : {program} resté ouvert par un passage précédent, fermé.")
+    for pattern in LEFTOVER_PROFILES:
+        for path in glob.glob(pattern):
+            shutil.rmtree(path, ignore_errors=True)
+
+
+class BrowserNotStarted(RuntimeError):
+    """Le navigateur n'a pas pu démarrer : la source des spots n'a même pas été demandée."""
+
+
 def create_driver(is_headless: bool = True):
-    """Crée le navigateur Chromium piloté par Selenium (installé dans le conteneur)."""
+    """
+    Crée le navigateur Chromium piloté par Selenium (installé dans le conteneur).
+    Lève BrowserNotStarted si Chromium ne démarre pas, pour que l'échec soit dit comme tel.
+    """
     options = webdriver.ChromeOptions()
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--user-data-dir=/tmp/selenium_chrome_profile')
+    # Pas de --user-data-dir : chromedriver donne à chaque navigateur un profil neuf dans /tmp, effacé à sa fermeture.
+    # Un profil fixe se partageait entre tous les navigateurs : le 26 novembre 2026, un passage coupé net a laissé
+    # son Chrome ouvert sur ce profil, chaque Chrome suivant l'a trouvé pris et s'est fermé aussitôt
+    # (197 passages en échec en 35 minutes).
     options.binary_location = CHROME_BINARY_PATH
     if is_headless:
         options.add_argument('--headless')
         logger.info("[Extract] : Mode Headless activé (Sans interface graphique).")
     else:
         logger.info("[Extract] : Mode Visuel activé (Avec interface graphique, pour débogage).")
-    return webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=options)
+    try:
+        return webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=options)
+    except WebDriverException as error:
+        # Le message de chromedriver seul, sans la pile ni le lien de documentation qu'il ajoute après « ; ».
+        reason = (error.msg or type(error).__name__).split(";")[0]
+        logger.critical(f"[Extract] : le navigateur ne démarre pas : {reason}")
+        raise BrowserNotStarted(f"le navigateur ne démarre pas ({reason})") from error
 
 
 def dismiss_cookies(driver, wait) -> None:
@@ -195,6 +249,8 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
     """
     Obtient les coordonnées de la ville, construit l'URL de recherche p4n,
     scrappe les résultats et sauvegarde en CSV en option.
+    Renvoie None si la ville n'a pas de position ou si la page n'a pas pu être lue ;
+    lève BrowserNotStarted si le navigateur ne démarre pas (un autre échec, à dire autrement).
     """
     latitude, longitude = get_city_center(city_name)
 
@@ -286,6 +342,9 @@ def run_p4n_scraper(city_name : str, is_headless=True, save_csv=False) -> pd.Dat
             logger.warning("[Extract] : Aucune donnée valide à traiter.")
             return None
 
+    except BrowserNotStarted:
+        # Pas avalé par le « except Exception » plus bas : l'appelant doit savoir que c'est le navigateur.
+        raise
     except TimeoutException:
         logger.error("[Extract] : ÉCHEC : Timeout. La liste des résultats n'a pas chargé à temps.")
         return None

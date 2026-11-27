@@ -37,6 +37,23 @@ class MySQLUtils:
         if conn:
             conn.close()
 
+    # POURQUOI CETTE FONCTION (issue #296)
+    # Avec mysql.connector, une connexion n'est pas en « autocommit » : la première requête, même un simple SELECT,
+    # ouvre une transaction qui dure jusqu'au prochain commit (ou rollback). Tant qu'elle dure, MySQL protège chaque
+    # table lue contre tout changement de structure (le « verrou de métadonnées »). Le 20 novembre 2026, une
+    # recherche de Vany avait lu le voyage puis attendu l'agent plusieurs minutes : l'ajout d'une colonne à
+    # trip_plans a attendu (« Waiting for table metadata lock »), et toutes les lectures des voyages ont fait la
+    # queue derrière lui pendant deux minutes.
+    # D'où la règle : avant un appel long (un agent, une page web), on termine la transaction.
+    @staticmethod
+    def end_transaction(cursor) -> None:
+        """
+        Termine la transaction en cours sur la connexion de ce curseur, avant un appel long.
+        COMMIT et non ROLLBACK : ce que le code a déjà écrit est gardé, exactement comme au commit qui viendrait
+        après l'appel. On passe par le curseur, que reçoivent toutes les fonctions, plutôt que par la connexion.
+        """
+        cursor.execute("COMMIT")
+
     # POURQUOI CETTE FONCTION (issue #206)
     # Une connexion ouverte puis oubliée reste prise sur le serveur MySQL. Une fuite de ce genre a déjà bloqué
     # l'étape 3 (erreur 500, table verrouillée) : une erreur survenait avant le disconnect, qui n'était jamais appelé.

@@ -10,6 +10,7 @@ import pytest
 import requests
 
 from etl.extract import api_osm
+from utils.geo_utils import get_bounding_box
 
 MORBIHAN = (47.5868, -3.00045)
 ANSWER = {"elements": [{"id": 1}]}
@@ -150,3 +151,13 @@ def test_public_equipments_are_still_asked(overpass) -> None:
     for tag in ('"amenity"="toilets"', '"amenity"="shower"', '"amenity"="drinking_water"',
                 '"amenity"="sanitary_dump_station"'):
         assert tag in query
+
+
+def test_fuel_stations_are_asked_in_the_square_of_the_fuel_step(overpass) -> None:
+    """Les stations-service sont demandées dans le carré de 5 km des carburants, plus large en longitude que les autres lieux."""
+    overpass.script = [_response(200, ANSWER)]
+
+    api_osm.extract_osm("Plougonvelin")
+
+    south, west, north, east = get_bounding_box(*MORBIHAN, api_osm.FUEL_DISTANCE_KM)
+    assert f'nwr["amenity"="fuel"]({south},{west},{north},{east});' in overpass.calls[0][1]

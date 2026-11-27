@@ -213,22 +213,39 @@ def get_geo_api(url, params, timeout):
             time.sleep(GEO_API_PAUSE_SECONDS * attempt)
 
 
-def get_commune_from_coordinates(latitude, longitude, timeout=10):
+def get_commune_at(latitude, longitude, timeout=10) -> dict | None:
     """
-    La commune officielle qui contient ce point, d'après le découpage de l'État (geo.api.gouv.fr, gratuit) :
-    (nom, code INSEE). Nominatim donne le lieu le plus proche, parfois un village : Trézien pour la pointe de
-    Corsen, qui est en Plouarzel. Renvoie (None, None) si l'API ne répond pas, même après ses essais : on ne bloque
-    jamais l'appelant.
+    La commune officielle qui contient ce point, d'après le découpage de l'État (geo.api.gouv.fr, gratuit), avec ce
+    qu'il faut pour créer sa ville : {"name", "insee", "department", "region"}. None si le point n'est dans aucune
+    commune française, ou si l'API ne répond pas, même après ses essais : on ne bloque jamais l'appelant.
+    Le département et la région viennent dans la même réponse (issue #328) : une ville nouvelle d'un envoi n'a plus
+    besoin d'une seconde demande à l'État, et un envoi de 240 randos fait 240 demandes au lieu de 400.
     """
+    params = {"lat": latitude, "lon": longitude, "fields": "nom,code,departement,region"}
     try:
-        rows = get_geo_api(COMMUNE_URL, {"lat": latitude, "lon": longitude, "fields": "nom,code"}, timeout)
+        rows = get_geo_api(COMMUNE_URL, params, timeout)
     except (requests.RequestException, ValueError) as e:
         logger.warning(f"geo.api.gouv.fr injoignable pour ({latitude}, {longitude}) : {e}")
-        return None, None
+        return None
     if not rows:
         logger.warning(f"Aucune commune française pour ({latitude}, {longitude})")
+        return None
+    row = rows[0]
+    # Une commune d'outre-mer ou une réponse partielle peut venir sans département ni région : on garde la commune.
+    return {"name": row["nom"], "insee": row["code"],
+            "department": (row.get("departement") or {}).get("nom"), "region": (row.get("region") or {}).get("nom")}
+
+
+def get_commune_from_coordinates(latitude, longitude, timeout=10):
+    """
+    La commune officielle qui contient ce point (get_commune_at), en (nom, code INSEE). Nominatim donne le lieu le plus
+    proche, parfois un village : Trézien pour la pointe de Corsen, qui est en Plouarzel. (None, None) si l'API ne
+    répond pas ou si le point n'est dans aucune commune.
+    """
+    commune = get_commune_at(latitude, longitude, timeout)
+    if commune is None:
         return None, None
-    return rows[0]["nom"], rows[0]["code"]
+    return commune["name"], commune["insee"]
 
 
 def get_commune_details(insee: str, timeout=10) -> dict | None:

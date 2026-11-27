@@ -3,11 +3,12 @@ Les cas importants de la règle des carburants, sur une ville entière (etl_carb
 la station de l'État est prouvée, la station seulement dans OSM est masquée, un prix absent reste vide,
 chaque carburant a sa ligne.
 """
+from datetime import datetime
 from unittest.mock import MagicMock
 
 from etl import etl_carburants
 from etl.load import load_carburants
-from etl.transform.transform_carburants import parse_state_file
+from etl.transform.transform_carburants import osm_station, parse_state_file
 
 # Une station de l'État à Plouarzel, qui vend trois carburants, dont un sans prix (rupture définitive).
 XML = """<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
@@ -29,13 +30,19 @@ TOTAL_PORTSALL = {"type": "way", "id": 7, "center": {"lat": 48.4300, "lon": -4.7
                   "tags": {"amenity": "fuel", "name": "Total", "brand": "TotalEnergies"}}
 
 
+def _stored_by_the_osm_step(elements):
+    """Les stations OSM telles que l'étape OSM les range en base (osm_fuel_stations), ou None si elle n'est pas passée."""
+    return None if elements is None else [osm_station(element) for element in elements]
+
+
 def _city_rows(monkeypatch, elements):
     monkeypatch.setattr(etl_carburants, "get_city_center", lambda city: (48.4300, -4.7200))
-    monkeypatch.setattr(etl_carburants, "extract_osm_fuel", lambda *args: elements)
+    monkeypatch.setattr(etl_carburants, "osm_fuel_stations_of", lambda city: _stored_by_the_osm_step(elements))
     return etl_carburants.city_rows("Plouarzel", parse_state_file(XML))
 
 
 def test_a_state_station_is_loaded_with_its_osm_name(monkeypatch):
+    """La Station U de Plouarzel prend son nom dans les stations OSM rangées par l'étape OSM, reliée par l'identifiant."""
     rows, osm_only = _city_rows(monkeypatch, [STATION_U])
     assert len(rows) == 1
     assert rows[0]["poi"]["name"] == "Station U"
@@ -57,11 +64,13 @@ def test_a_state_station_without_osm_is_still_loaded(monkeypatch):
     assert (rows[0]["station"]["lien_osm"], rows[0]["station"]["marque"]) == ("aucun", None)
 
 
-def test_nothing_is_loaded_when_overpass_does_not_answer(monkeypatch):
+def test_nothing_is_loaded_before_the_osm_step(monkeypatch):
+    """L'étape OSM pas encore passée sur la ville : rien n'est chargé, plutôt que des stations sans nom ni marque."""
     assert _city_rows(monkeypatch, None) is None
 
 
 def test_each_fuel_has_its_line_and_a_missing_price_stays_empty(monkeypatch):
+    """Chaque carburant de la station a sa ligne ; le GPLc en rupture définitive n'a pas de prix."""
     rows, _ = _city_rows(monkeypatch, [STATION_U])
     prices = {price["carburant"]: price for price in rows[0]["prix"]}
     assert sorted(prices) == ["E10", "GPLc", "Gazole"]
@@ -71,6 +80,7 @@ def test_each_fuel_has_its_line_and_a_missing_price_stays_empty(monkeypatch):
 
 
 def test_prices_are_replaced_as_a_block_with_null_for_a_missing_price(monkeypatch):
+    """Les prix d'une station sont effacés puis réécrits en bloc, un prix absent étant écrit vide."""
     rows, _ = _city_rows(monkeypatch, [STATION_U])
     cursor = MagicMock()
     load_carburants._replace_prices(cursor, 12, rows[0]["prix"])
@@ -212,7 +222,7 @@ def test_a_city_pass_signals_a_doubtful_link_and_hides_it(monkeypatch):
     xml = XML.replace(b'id="29810002"', b'id="29290003"')
     far = {**STATION_U, "lat": 48.4420, "tags": {**STATION_U["tags"], "ref:FR:prix-carburants": "29290003"}}
     monkeypatch.setattr(etl_carburants, "get_city_center", lambda city: (48.4300, -4.7200))
-    monkeypatch.setattr(etl_carburants, "extract_osm_fuel", lambda *args: [far])
+    monkeypatch.setattr(etl_carburants, "osm_fuel_stations_of", lambda city: _stored_by_the_osm_step([far]))
     loads, sorted_out = [], []
     monkeypatch.setattr(etl_carburants, "load_stations", lambda rows, city: loads.append(rows) or len(rows))
     monkeypatch.setattr(etl_carburants.poi_triage_service, "hide_doubtful_stations", lambda: sorted_out.append(1))
@@ -234,3 +244,43 @@ def test_a_refresh_signals_missing_stations_then_sorts_them(monkeypatch):
     monkeypatch.setattr(etl_carburants.poi_triage_service, "hide_doubtful_stations", lambda: calls.append("tri"))
     etl_carburants.refresh_prices()
     assert calls[0]["29000099"][0][0] == "station_absente" and calls[1] == "tri"
+
+
+# --- Les stations OSM rangées par l'étape OSM (osm_fuel_stations), relues par l'étape des carburants ---
+
+def _fake_database(monkeypatch, city, stations=()):
+    """Une base où cities répond `city` (ou rien) et osm_fuel_stations répond `stations` ; rend le faux curseur."""
+    cursor = MagicMock()
+    cursor.fetchone.return_value = city
+    cursor.fetchall.return_value = list(stations)
+    cnx = MagicMock()
+    cnx.cursor.return_value = cursor
+    monkeypatch.setattr(load_carburants.MySQLUtils, "connect", lambda: cnx)
+    monkeypatch.setattr(load_carburants.MySQLUtils, "disconnect", lambda c: None)
+    return cursor
+
+
+def test_the_osm_step_replaces_the_city_stations_and_notes_its_date(monkeypatch):
+    """L'étape OSM remplace les stations OSM de Plouarzel, identifiant de l'État compris, et note la date du passage."""
+    cursor = _fake_database(monkeypatch, (7,))
+    read_at = datetime(2026, 11, 27, 10, 0)
+    load_carburants.save_osm_fuel_stations("Plouarzel", [osm_station(STATION_U)], read_at)
+    queries = [call.args for call in cursor.execute.call_args_list]
+    assert queries[1] == ("DELETE FROM osm_fuel_stations WHERE city_id = %s", (7,))
+    assert queries[2][1] == (7, "node/42960018", "Station U", "Système U", "29810002", None, 48.433395, -4.716160,
+                             read_at)
+    assert queries[3] == ("UPDATE cities SET osm_stations_read_at = %s WHERE id = %s", (read_at, 7))
+
+
+def test_a_city_where_the_osm_step_never_ran_has_no_osm_stations(monkeypatch):
+    """Une ville que l'étape OSM n'a pas encore passée rend None, à distinguer d'une ville sans aucune station OSM."""
+    _fake_database(monkeypatch, {"id": 7, "osm_stations_read_at": None})
+    assert load_carburants.osm_fuel_stations_of("Plouarzel") is None
+
+
+def test_the_stored_osm_stations_are_read_back_like_overpass_gave_them(monkeypatch):
+    """Les stations OSM rangées pour Plouarzel reviennent au format d'Overpass : la Station U garde son identifiant."""
+    stored = {"osm_element": "node/42960018", "name": "Station U", "brand": "Système U", "state_ref": "29810002",
+              "postcode": None, "latitude": 48.433395, "longitude": -4.716160}
+    _fake_database(monkeypatch, {"id": 7, "osm_stations_read_at": datetime(2026, 11, 27)}, [stored])
+    assert load_carburants.osm_fuel_stations_of("Plouarzel") == [osm_station(STATION_U)]

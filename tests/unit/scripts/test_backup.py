@@ -197,16 +197,44 @@ def test_open_archive_gives_back_every_file(tmp_path):
     assert json.loads((target / "comptes.json").read_text())["mysql"] == {"spots": 0}
 
 
+WRONG_PASSWORD_MESSAGE = "Déchiffrement impossible : mot de passe faux ou archive abîmée."
+
+
 def test_open_archive_with_wrong_password_stops(tmp_path):
-    """Avec un mauvais mot de passe, l'archive ne s'ouvre pas et rien n'est posé."""
+    """Avec un mauvais mot de passe, la restauration s'arrête sur le message prévu et rien n'est posé."""
     source = tmp_path / "archive.tar.gz"
     with tarfile.open(source, "w:gz"):
         pass
     encrypted = tmp_path / "archive.tar.gz.enc"
     backup.encrypt_file(source, encrypted, TEST_PASSWORD)
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as stop:
         restore.open_archive(encrypted, tmp_path / "restauration", "mauvais-mot-de-passe")
+    assert stop.value.code == WRONG_PASSWORD_MESSAGE
     assert not list((tmp_path / "restauration").iterdir())
+
+
+def test_open_archive_stops_when_openssl_accepts_a_wrong_password(tmp_path, monkeypatch):
+    """Quand openssl « réussit » avec un mauvais mot de passe (CI du 20 nov. 2026), le message prévu s'affiche quand même."""
+    def fake_decrypt(source, target, password):
+        # Ce que rend openssl dans ce cas : des octets sans sens, sans erreur.
+        target.write_bytes(bytes(range(256)) * 4)
+
+    monkeypatch.setattr(backup, "decrypt_file", fake_decrypt)
+    with pytest.raises(SystemExit) as stop:
+        restore.open_archive(tmp_path / "archive.tar.gz.enc", tmp_path / "restauration", "mauvais")
+    assert stop.value.code == WRONG_PASSWORD_MESSAGE
+    assert not list((tmp_path / "restauration").iterdir())
+
+
+def test_is_readable_archive_refuses_a_cut_archive(tmp_path):
+    """Une archive .tar.gz coupée avant la fin n'est pas prise pour une archive intacte."""
+    work_dir, logs_dir = make_work_dir(tmp_path)
+    archive_path = tmp_path / "archive.tar.gz"
+    backup.build_archive(work_dir, logs_dir, archive_path)
+    assert restore.is_readable_archive(archive_path)
+    cut = tmp_path / "coupee.tar.gz"
+    cut.write_bytes(archive_path.read_bytes()[:-10])
+    assert not restore.is_readable_archive(cut)
 
 
 def test_is_safe_member_refuses_paths_that_leave_the_folder():
