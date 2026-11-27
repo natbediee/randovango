@@ -119,7 +119,7 @@ def encrypt_file(source: Path, target: Path, password: str) -> None:
 
 
 def decrypt_file(source: Path, target: Path, password: str) -> None:
-    """Déchiffre source dans target ; openssl échoue si le mot de passe est faux."""
+    """Déchiffre source dans target ; openssl échoue le plus souvent si le mot de passe est faux, pas toujours."""
     run_openssl(["-d", "-in", str(source), "-out", str(target)], password)
 
 
