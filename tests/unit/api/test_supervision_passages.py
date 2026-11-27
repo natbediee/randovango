@@ -29,8 +29,11 @@ def state_of(passage_id: str, status: str = "en_file") -> dict:
 
 @pytest.fixture
 def api(monkeypatch):
-    """Un client des routes des passages, connecté en admin ; state note les passages créés, lancés et repris."""
-    state = SimpleNamespace(created=[], ran=[], resumed=[], conflict=None, refusal=None, known={PASSAGE_ID})
+    """
+    Un client des routes des passages, connecté en admin ; state note les passages créés, repris, lancés en direct
+    (il ne doit plus y en avoir) et les réveils de la file.
+    """
+    state = SimpleNamespace(created=[], ran=[], woken=[], resumed=[], conflict=None, refusal=None, known={PASSAGE_ID})
     service = supervision_passages.passage_service
 
     def create_passage(chain, city_id, parts, origin):
@@ -53,6 +56,7 @@ def api(monkeypatch):
     monkeypatch.setattr(service, "create_passage", create_passage)
     monkeypatch.setattr(service, "resume_passage", resume_passage)
     monkeypatch.setattr(service, "run_passage", state.ran.append)
+    monkeypatch.setattr(supervision_passages.passage_queue, "wake", lambda: state.woken.append(True))
     monkeypatch.setattr(service, "read_passage", lambda passage_id: state_of(passage_id) if passage_id in state.known | {"reprise"} else None)
     def list_passages(limit, item_type=None, item_id=None):
         if item_type == "restaurant":
@@ -67,14 +71,14 @@ def api(monkeypatch):
     return state
 
 
-def test_a_launch_answers_at_once_and_runs_the_passage_in_the_background(api):
-    """Le lancement répond tout de suite (202) par l'état « en file » du passage, puis le passage part en tâche de fond."""
+def test_a_launch_answers_at_once_and_puts_the_passage_in_the_queue(api):
+    """Le lancement répond tout de suite (202) par l'état « en file » du passage, et réveille la file, qui le fait partir à son tour (#332)."""
     body = {"chaine": "services", "ville_id": 12, "categories": ["restaurants", "laveries"]}
     response = api.client.post("/api/supervision/passages", json=body)
     assert response.status_code == 202
     assert response.json()["passage_id"] == "nouveau" and response.json()["etat"] == "en_file"
     assert api.created == [("services", 12, ["restaurants", "laveries"], "supervision")]
-    assert api.ran == ["nouveau"]
+    assert api.woken == [True] and api.ran == []
 
 
 def test_a_launch_is_always_a_real_update(api):
@@ -120,11 +124,11 @@ def test_the_list_gives_running_queued_and_recent_passages(api):
     assert response.json()["limite"] == 5 and response.json()["en_file"][0]["passage_id"] == "nouveau"
 
 
-def test_a_failed_passage_is_resumed_in_the_background(api):
-    """La reprise d'un passage en échec répond (202) par le nouveau passage, lancé en tâche de fond."""
+def test_a_failed_passage_is_resumed_through_the_queue(api):
+    """La reprise d'un passage en échec répond (202) par le nouveau passage, qui entre dans la file et part à son tour (#332)."""
     response = api.client.post(f"/api/supervision/passages/{PASSAGE_ID}/reprise")
     assert response.status_code == 202 and response.json()["passage_id"] == "reprise"
-    assert api.resumed == [(PASSAGE_ID, "supervision")] and api.ran == ["reprise"]
+    assert api.resumed == [(PASSAGE_ID, "supervision")] and api.woken == [True] and api.ran == []
 
 
 def test_a_resume_that_cannot_start_is_refused(api):
@@ -142,7 +146,7 @@ def test_an_admin_with_a_real_token_launches_a_passage(api, monkeypatch):
     monkeypatch.setattr(dependencies, "get_roles_for_user", lambda user_id: {"admin"})
     api.client.cookies.set(AUTH_COOKIE_NAME, create_access_token({"user_id": 1, "username": "camille"}))
     response = api.client.post("/api/supervision/passages", json={"chaine": "services", "ville_id": 12})
-    assert response.status_code == 202 and api.ran == ["nouveau"]
+    assert response.status_code == 202 and api.woken == [True]
 
 
 @pytest.fixture

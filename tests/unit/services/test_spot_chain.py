@@ -43,19 +43,34 @@ def test_a_browser_that_does_not_start_fails_with_its_own_reason(monkeypatch):
     assert "ville sans position" not in str(failure.value)
 
 
-def test_the_lock_closes_leftover_browsers_once_taken(monkeypatch):
-    """Le verrou des spots pris, les Chrome restés ouverts sont fermés avant que le passage n'ouvre le sien."""
+def test_the_source_lock_closes_leftover_browsers_once_taken(monkeypatch):
+    """Le verrou de la source des spots pris, les Chrome restés ouverts sont fermés avant que le passage n'ouvre le sien."""
     events = []
 
     @contextmanager
     def named_lock(name, busy):
-        events.append("verrou pris")
+        events.append(f"verrou {name}")
         yield
     monkeypatch.setattr(spot_chain.etl_chains, "named_lock", named_lock)
     monkeypatch.setattr(spot_chain, "close_leftover_browsers", lambda: events.append("Chrome fermés"))
-    with spot_chain.lock(12):
+    with spot_chain.lock(12, "source"):
         events.append("passage")
-    assert events == ["verrou pris", "Chrome fermés", "passage"]
+    assert events == ["verrou randovango_passage_spots_source", "Chrome fermés", "passage"]
+
+
+def test_the_agents_have_their_own_lock_and_close_no_browser(monkeypatch):
+    """Les agents des spots prennent leur propre verrou, distinct de la source, et ne ferment aucun Chrome : la source lit pendant qu'ils travaillent (#332)."""
+    events = []
+
+    @contextmanager
+    def named_lock(name, busy):
+        events.append(f"verrou {name}")
+        yield
+    monkeypatch.setattr(spot_chain.etl_chains, "named_lock", named_lock)
+    monkeypatch.setattr(spot_chain, "close_leftover_browsers", lambda: events.append("Chrome fermés"))
+    with spot_chain.lock(12, "harmonisation"):
+        events.append("passage")
+    assert events == ["verrou randovango_passage_spots", "passage"]
 
 
 def test_a_busy_lock_closes_no_browser(monkeypatch):
@@ -69,7 +84,7 @@ def test_a_busy_lock_closes_no_browser(monkeypatch):
     monkeypatch.setattr(spot_chain.etl_chains, "named_lock", busy_lock)
     monkeypatch.setattr(spot_chain, "close_leftover_browsers", lambda: closed.append(True))
     with pytest.raises(PassageRunning):
-        with spot_chain.lock(12):
+        with spot_chain.lock(12, "source"):
             pass
     assert closed == []
 

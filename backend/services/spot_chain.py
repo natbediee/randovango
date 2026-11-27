@@ -14,9 +14,11 @@ Chaque agent ne prend que les spots de la ville qui restent à faire : relancer 
 échec, ne repaie aucun spot déjà fait. Un spot raté (quota, Claude surchargé) fait passer la partie en échec, avec la
 raison : la reprise ne refait que lui.
 
-UN SEUL PASSAGE À LA FOIS, TOUTES VILLES CONFONDUES
-Un spot entre deux villes voisines appartient aux deux (histo_scrap) : deux passages en même temps pourraient le payer
-deux fois. Et la source des spots ne se lit qu'avec un navigateur à la fois.
+DEUX VERROUS, CHACUN POUR TOUTES LES VILLES (issue #332)
+La source des spots ne se lit qu'avec un navigateur à la fois : un verrou pour elle. Un spot entre deux villes
+voisines appartient aux deux (histo_scrap) : deux passages d'agents en même temps pourraient le payer deux fois, d'où
+un second verrou pour les trois agents. Les deux sont distincts : la lecture de la source enchaîne les villes pendant
+que les agents travaillent sur une ville déjà lue.
 """
 from contextlib import contextmanager
 
@@ -28,8 +30,11 @@ from services import etl_chains
 from services.etl_chains import StepFailed
 from utils.db_utils import MySQLUtils
 
-LOCK_NAME = "randovango_passage_spots"
-BUSY = "Un passage de la chaîne des spots tourne déjà : attendre sa fin avant d'en lancer un autre."
+# Le verrou des agents garde l'ancien nom du verrou de toute la chaîne : un backend d'avant #332 qui tourne encore sur
+# la base commune tient ce nom pendant toute sa chaîne, et ne double donc pas les agents d'un backend à jour.
+AGENTS_LOCK = "randovango_passage_spots"
+SOURCE_LOCK = "randovango_passage_spots_source"
+BUSY = "Un passage de la chaîne des spots tourne déjà sur cette étape : attendre sa fin avant d'en lancer un autre."
 
 PARTS = {"source": "Lecture de la source des spots", "harmonisation": "Harmonisation des descriptions",
          "ouvertures": "Lecture des ouvertures", "verification": "Vérification des spots à vérifier"}
@@ -45,21 +50,28 @@ class SpotsMissed(RuntimeError):
         self.missed, self.done, self.cause = missed, done, cause
 
 
+def lock_name(part: str) -> str:
+    """Le verrou d'une partie : celui de la source pour la source, celui des agents pour les trois autres."""
+    return SOURCE_LOCK if part in FREE_PARTS else AGENTS_LOCK
+
+
 @contextmanager
-def lock(city_id: int):
+def lock(city_id: int, part: str):
     """
-    Le verrou de la chaîne, le même pour toutes les villes : un bloc « with ».
-    Une fois le verrou pris, aucun autre passage de spots ne tourne : un navigateur encore ouvert est le reste d'un
-    passage coupé net, il est fermé avant que celui-ci n'ouvre le sien (issue #333).
+    Le verrou de la partie que le passage va faire, le même pour toutes les villes : un bloc « with ».
+    Une fois le verrou de la source pris, aucune autre lecture de la source ne tourne : un navigateur encore ouvert est
+    le reste d'un passage coupé net, il est fermé avant que celui-ci n'ouvre le sien (issue #333). Les agents
+    n'ouvrent aucun navigateur : sous leur verrou, on ne ferme rien.
     """
-    with etl_chains.named_lock(LOCK_NAME, BUSY):
-        close_leftover_browsers()
+    with etl_chains.named_lock(lock_name(part), BUSY):
+        if part in FREE_PARTS:
+            close_leftover_browsers()
         yield
 
 
-def lock_is_free(city_id: int) -> bool:
-    """Le verrou de la chaîne est-il libre ?"""
-    return etl_chains.named_lock_is_free(LOCK_NAME)
+def lock_is_free(city_id: int, part: str) -> bool:
+    """Le verrou de cette partie est-il libre ?"""
+    return etl_chains.named_lock_is_free(lock_name(part))
 
 
 def source_already_read(city_id: int) -> bool:

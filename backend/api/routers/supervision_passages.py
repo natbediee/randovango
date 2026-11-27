@@ -2,18 +2,19 @@
 Les passages des chaînes d'agents, lancés et suivis depuis la supervision (issue #204, section « Passages » de /docs).
 
 Une chaîne (la chaîne des services : restaurants, commerces, supermarchés, laveries ; et, depuis #276, les chaînes
-gratuites de l'ajout d'une ville : OSM, pharmacies FINESS, carburants) se lance sur une ville sans ouvrir le conteneur. Le lancement répond tout de suite (202) : le passage tourne ensuite en tâche de fond,
-parfois des heures pour une grande ville, et l'écran relit son état. Les règles sont dans services/passage_service.py.
+gratuites de l'ajout d'une ville : OSM, pharmacies FINESS, carburants) se lance sur une ville sans ouvrir le conteneur. Le lancement répond tout de suite (202) : le passage entre dans la
+file de son étape (services/passage_queue.py), part à son tour, parfois pour des heures sur une grande ville, et
+l'écran relit son état. Les règles sont dans services/passage_service.py.
 
 Un lancement fait toujours une vraie mise à jour, payante : l'essai et le rejeu des règles restent des outils de la
 ligne de commande. Le budget des agents (issue #211, services/budget_service.py) se règle ici aussi, et un lancement
 est refusé quand il est atteint. Toutes les routes sont réservées aux admins (require_admin).
 """
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import require_admin
 from api.models.supervision import AgentSettingsRequest, PassageRequest
-from services import budget_service, passage_service
+from services import budget_service, passage_queue, passage_service
 from services.exchange_rate_service import RateUnavailable
 from services.passage_service import PassageConflict
 
@@ -23,20 +24,21 @@ router = APIRouter()
 SETTING_COLUMNS = {"services_apres_etl": "services_after_etl", "enveloppe_du_mois_eur": "monthly_budget_eur",
                    "plafond_du_jour_eur": "daily_budget_eur", "reserve_vany_eur": "vany_reserve_eur"}
 
-CONFLICT = {409: {"description": "Un passage de la chaîne tourne déjà, ou ce passage ne se reprend pas : le message dit pourquoi."}}
+CONFLICT = {409: {"description": "La chaîne est déjà demandée sur la ville, le budget est atteint, ou ce passage ne se reprend pas : le message dit pourquoi."}}
 NOT_FOUND = {404: {"description": "Ce passage n'existe pas."}}
 
 
 @router.post("/passages", status_code=202, responses=CONFLICT,
-             summary="Lance un passage d'une chaîne d'agents sur une ville, en tâche de fond.")
-def post_passage(body: PassageRequest, background: BackgroundTasks, _admin=Depends(require_admin)):
+             summary="Lance un passage d'une chaîne d'agents sur une ville : il entre dans la file de son étape.")
+def post_passage(body: PassageRequest, _admin=Depends(require_admin)):
     """
-    Écrit le passage demandé et le lance en tâche de fond ; répond tout de suite par son état (« en_file »), avec son
-    identifiant (passage_id), à relire ensuite avec GET /passages/{passage_id}.
+    Écrit le passage demandé et réveille la file, qui le fait partir au tour de son étape ; répond tout de suite par son
+    état (« en_file »), avec son identifiant (passage_id), à relire ensuite avec GET /passages/{passage_id}.
     {"chaine": "services", "ville_id": 12, "categories": ["restaurants", "laveries"]}
     Les chaînes et leurs catégories se lisent dans GET /passages/chaines : {"chaine": "osm", "ville_id": 12} relance OSM.
-    Une chaîne, une ville ou une catégorie inconnue est refusée (422). Si un passage de la chaîne tourne déjà, le
-    lancement est refusé (409) avec un message qui le nomme : un seul passage à la fois.
+    Une chaîne, une ville ou une catégorie inconnue est refusée (422). Si la même chaîne est déjà en file ou en cours
+    sur cette ville, le lancement est refusé (409) avec un message qui nomme ce passage ; une autre ville ne le
+    retient pas.
     """
     try:
         passage_id = passage_service.create_passage(body.chaine, body.ville_id, body.categories, origin="supervision")
@@ -44,7 +46,7 @@ def post_passage(body: PassageRequest, background: BackgroundTasks, _admin=Depen
         raise HTTPException(status_code=422, detail=str(error))
     except PassageConflict as error:
         raise HTTPException(status_code=409, detail=str(error))
-    background.add_task(passage_service.run_passage, passage_id)
+    passage_queue.wake()
     return passage_service.read_passage(passage_id)
 
 
@@ -135,13 +137,14 @@ def get_passage(passage_id: str, _admin=Depends(require_admin)):
 
 @router.post("/passages/{passage_id}/reprise", status_code=202, responses=NOT_FOUND | CONFLICT,
              summary="Relance une ville non faite : reprend un échec sans repayer, ou lance une ville en attente.")
-def post_resume(passage_id: str, background: BackgroundTasks, _admin=Depends(require_admin)):
+def post_resume(passage_id: str, _admin=Depends(require_admin)):
     """
     Un passage en échec : crée un nouveau passage qui ne refait que ses catégories non finies (reprise_de le relie à
-    lui), et le lance en tâche de fond. Une grande ville cherchée par zones reprend aussi ses zones finies sans les
-    repayer. Un échec n'est jamais relancé tout seul : c'est cette route qui le reprend.
-    Un passage en attente (l'ETL l'a gardé quand la mise à jour automatique était coupée) : il part lui-même.
-    Refusé (409), avec le motif : un passage ni en échec ni en attente, un autre passage en cours, un budget atteint.
+    lui), qui entre dans la file et part à son tour, même si la même étape tourne sur une autre ville. Une grande ville
+    cherchée par zones reprend aussi ses zones finies sans les repayer. Un échec payant n'est jamais relancé tout
+    seul : c'est cette route qui le reprend.
+    Un passage en attente (l'ETL l'a gardé quand la mise à jour automatique était coupée) : il retourne en file.
+    Refusé (409), avec le motif : un passage ni en échec ni en attente, un échec déjà repris, un budget atteint.
     """
     try:
         resumed = passage_service.resume_passage(passage_id, origin="supervision")
@@ -149,5 +152,5 @@ def post_resume(passage_id: str, background: BackgroundTasks, _admin=Depends(req
         raise HTTPException(status_code=409, detail=str(error))
     if resumed is None:
         raise HTTPException(status_code=404, detail="Passage introuvable")
-    background.add_task(passage_service.run_passage, resumed)
+    passage_queue.wake()
     return passage_service.read_passage(resumed)
