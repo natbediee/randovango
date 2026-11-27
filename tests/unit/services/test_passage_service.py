@@ -1313,3 +1313,55 @@ def test_a_failed_paid_chain_is_never_resumed_alone(store, chain):
     passage_service.run_passage(failed)
     store.passages[failed]["finished_at"] = datetime(2026, 11, 25, 10, 0)
     assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+# --- La reprise seule d'une source des spots en échec (services/passage_queue.py, issue #344) ---
+
+def _failed_spots(store, spots, part, finished_at):
+    """Un passage des spots de l'ETL sur Guidel, en échec sur cette partie, fini à `finished_at`."""
+    from services.etl_chains import StepFailed
+    spots["fail"][part] = StepFailed("source des spots illisible") if part == "source" else LLMTimeout("trop long")
+    passage_id = passage_service.create_passage("spots", 12, origin="etl")
+    passage_service.run_passage(passage_id)
+    del spots["fail"][part]
+    store.passages[passage_id]["finished_at"] = finished_at
+    return passage_id
+
+
+def test_a_failed_source_of_the_spots_is_resumed_by_the_queue(store, spots):
+    """Une source des spots en échec depuis 20 minutes est reprise seule, sans clic (53 sources en échec le 27 novembre 2026)."""
+    failed = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 40))
+    [resumed] = passage_queue.resume_failed_free_chains(NOW)
+    assert store.passages[resumed]["resumed_from"] == failed and store.passages[resumed]["origin"] == "etl"
+    assert [row["part"] for row in store.parts[resumed]] == ["source", "harmonisation", "ouvertures", "verification"]
+
+
+@pytest.mark.parametrize("part", ["harmonisation", "ouvertures", "verification"])
+def test_spots_failed_on_a_paid_part_wait_for_the_admin(store, spots, part):
+    """Des spots en échec sur une partie payante ne sont jamais repris seuls : une reprise coûte, l'administratrice décide."""
+    _failed_spots(store, spots, part, datetime(2026, 11, 25, 11, 40))
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failed_source_is_not_resumed_while_the_spots_of_the_city_are_queued(store, spots):
+    """Une source en échec n'est pas reprise quand les spots de la ville sont déjà en file : ils la liront."""
+    _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 40))
+    passage_service.create_passage("spots", 12, origin="etl")
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failed_source_is_not_resumed_once_the_source_was_read_since(store, spots):
+    """Une source en échec n'est pas reprise quand la source de la ville a été lue depuis, par une relance à la main."""
+    _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 40))
+    by_hand = passage_service.create_passage("spots", 12, ["source"])
+    passage_service.run_passage(by_hand)
+    assert passage_queue.resume_failed_free_chains(NOW) == []
+
+
+def test_a_failed_source_is_resumed_twice_at_most(store, spots):
+    """Une source qui échoue encore après deux reprises n'est plus reprise seule, comme les chaînes gratuites."""
+    first = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 10, 0))
+    second = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 10, 30))
+    third = _failed_spots(store, spots, "source", datetime(2026, 11, 25, 11, 0))
+    store.passages[second]["resumed_from"], store.passages[third]["resumed_from"] = first, second
+    assert passage_queue.resume_failed_free_chains(NOW) == []
