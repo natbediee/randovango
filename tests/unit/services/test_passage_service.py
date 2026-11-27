@@ -12,6 +12,7 @@ from agents.find_services import PassageRunning
 from agents.llm_service import LLMLimitReached, LLMTimeout, LLMUnavailable, passage_courant
 from services import agents_pause, passage_queue, passage_service, passage_steps, passage_store
 from services.passage_service import PassageConflict
+from utils.paris_time import PARIS
 
 CITY = {"id": 12, "name": "Guidel", "commune": "Guidel", "insee": "56078"}
 OTHER = {"id": 13, "name": "Plouarzel", "commune": "Plouarzel", "insee": "29177"}    # une seconde ville, une autre commune
@@ -206,11 +207,11 @@ def test_an_unknown_chain_city_category_or_origin_is_refused(store, chain, chain
 
 
 def test_a_launch_while_a_passage_runs_names_the_running_one(store, chain):
-    """Si un passage tourne déjà, le lancement est refusé avec un message qui nomme sa ville et son heure de début."""
+    """Si un passage tourne déjà, le lancement est refusé avec un message qui nomme sa ville et son heure de début, à l'heure de Paris (10 h 05 en base, 11 h 05 à Paris)."""
     running = passage_service.create_passage("services", 12)
     store.set_passage_status(running, "en_cours")
     chain["busy"] = True
-    with pytest.raises(PassageConflict, match="tourne déjà sur Guidel, depuis le 19/11/2026 à 10 h 05"):
+    with pytest.raises(PassageConflict, match="tourne déjà sur Guidel, depuis le 19/11/2026 à 11 h 05"):
         passage_service.create_passage("services", 12)
     assert len(store.passages) == 1
 
@@ -1130,6 +1131,27 @@ def test_a_passage_gives_what_it_found(store, chain):
     assert passage["nombre_trouvailles"] == 2
     assert [(item["id"], item["action"], item["partie"]) for item in passage["trouvailles"]] == [
         (3893, "ajout", "source"), (3893, "modification", "harmonisation")]
+
+
+def test_the_hours_of_a_passage_are_given_in_paris_in_winter(store, chain):
+    """En novembre, un passage demandé à 10 h en base se lit demandé à 11 h à Paris, et sa trouvaille de 16 h 39 à 17 h 39 (#299)."""
+    passage_id = passage_service.create_passage("services", 12)
+    _journal(store, passage_id, 3893, "ajout", "source")
+    passage = passage_service.read_passage(passage_id)
+    assert passage["demande_le"] == datetime(2026, 11, 19, 11, 0, tzinfo=PARIS)
+    assert passage["demande_le"].utcoffset() == timedelta(hours=1)
+    assert passage["trouvailles"][0]["le"] == datetime(2026, 11, 22, 17, 39, tzinfo=PARIS)
+    assert passage["debut"] is None and passage["categories"][0]["debut"] is None
+
+
+def test_the_hours_of_a_passage_are_given_in_paris_in_summer(store, chain):
+    """En juillet, à l'heure d'été, un passage demandé à 8 h en base et commencé à 8 h 05 se lit à 10 h et 10 h 05 à Paris (#299)."""
+    passage_id = passage_service.create_passage("services", 12)
+    store.passages[passage_id]["requested_at"] = datetime(2026, 7, 15, 8, 0)
+    store.passages[passage_id]["started_at"] = datetime(2026, 7, 15, 8, 5)
+    passage = passage_service.read_passage(passage_id)
+    assert passage["demande_le"] == datetime(2026, 7, 15, 10, 0, tzinfo=PARIS)
+    assert passage["debut"].hour == 10 and passage["debut"].utcoffset() == timedelta(hours=2)
 
 
 def test_the_list_of_passages_counts_the_findings_without_detailing_them(store, chain):
