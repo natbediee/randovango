@@ -99,6 +99,9 @@ flowchart TB
   échec avec une raison lisible, et le passage s'arrête. Les catégories finies restent enregistrées. La reprise
   (`POST /api/supervision/passages/ID/reprise`) ne refait que les catégories non finies ; une grande ville reprend en
   plus ses zones finies depuis son fichier JSON. Elle est acceptée même quand la même étape tourne sur une autre ville.
+  La reprise est un nouveau passage : dans l'échec, les catégories jamais commencées passent à « reprise », avec le
+  lien vers le passage qui les refait (`refaite_par`) ; une catégorie « à faire » veut donc toujours dire qu'il reste
+  du travail. Les passages repris avant cette règle sont rattrapés au démarrage de la file.
 - **Une chaîne en paramètre.** Les chaînes (`CHAINS` dans `passage_service.py`) se lancent toutes par les mêmes
   routes : services, spots, pépites, et les chaînes gratuites de l'ajout d'une ville (OSM, carburants, FINESS).
 - **Les mesures.** `llm_calls` garde chaque appel, réussi ou non : son coût en dollars, sa durée, ses tokens,
@@ -118,6 +121,12 @@ d'envoi, et n'attend jamais les étapes qui viennent après elle.
 | Pépites de la ville, services | OSM et Wikidata | oui |
 | Agents des spots : harmonisation, puis ouvertures, puis vérification | la lecture de la source | oui |
 
+- Une demande faite depuis le front avec un compte admin passe devant les envois en masse de l'ETL dans son étape :
+  une demande ou une reprise depuis la supervision (origine `supervision`), une rando envoyée par un compte admin
+  depuis la page d'ajout (origine `ajout`). Elle ne coupe pas le passage en cours : elle part juste après lui. Entre
+  deux demandes admin, l'ordre d'envoi est gardé ; le budget et le quota s'appliquent comme aux autres. Une rando d'un
+  compte contributeur, le dossier d'attente et les reprises faites seules par la file gardent l'origine `etl` et
+  l'ordre d'envoi. La supervision le montre dans le champ `prioritaire` de chaque passage.
 - Une ville pas prête pour une étape (son OSM pas fini, ou en échec) est sautée : l'étape prend la suivante, et
   seule cette ville attend.
 - Quand le quota ou le budget des agents est atteint, seules les étapes payantes attendent ; les étapes

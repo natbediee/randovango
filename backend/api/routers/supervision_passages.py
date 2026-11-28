@@ -57,7 +57,7 @@ def get_passages(limite: int = 20, objet: str | None = None, objet_id: int | Non
     Ce que montre le panneau « En cours et file d'attente » de l'espace Agents, la liste des derniers passages, et le
     tableau des villes non faites avec leur raison (budget atteint, attend la fin du passage en cours, mise à jour
     automatique coupée, échec) : {"en_cours": [...], "en_file": [...], "derniers": [...], "villes_en_attente": [...]},
-    chacun au format de GET /passages/{passage_id}, avec son origine (supervision, etl) ; une ville non faite y ajoute
+    chacun au format de GET /passages/{passage_id}, avec son origine (supervision, ajout, etl) ; une ville non faite y ajoute
     sa « raison ». Les villes ajoutées par l'ETL entrent dans la file et partent seules, l'une après l'autre.
     Chaque passage donne le nombre de ses trouvailles (nombre_trouvailles) ; leur détail est dans GET /passages/{passage_id}.
 
@@ -123,9 +123,10 @@ def put_settings(body: AgentSettingsRequest, admin=Depends(require_admin)):
 @router.get("/passages/{passage_id}", responses=NOT_FOUND, summary="L'état d'un passage, catégorie par catégorie.")
 def get_passage(passage_id: str, _admin=Depends(require_admin)):
     """
-    Où en est un passage : la ville, l'origine (supervision, etl), l'état (en_file, en_cours, fini, echec), le coût et
-    les appels lus dans llm_calls, la raison d'un échec, et pour chaque catégorie son état, son étape (recherches,
-    analyse, preuves, enregistrement), son coût et le bilan de son enregistrement.
+    Où en est un passage : la ville, l'origine (supervision, ajout, etl) et s'il passe devant l'ETL (prioritaire),
+    l'état (en_file, en_cours, fini, echec), le coût et les appels lus dans llm_calls, la raison d'un échec, et pour
+    chaque catégorie son état, son étape (recherches, analyse, preuves, enregistrement), son coût et le bilan de son
+    enregistrement. Une catégorie « reprise » n'a jamais commencé ici : refaite_par donne le passage qui l'a refaite.
     Ce qu'il a trouvé (trouvailles) : chaque service, spot ou pépite qu'il a ajouté ou modifié, avec son nom, la partie
     qui l'a fait et l'heure.
     """

@@ -17,6 +17,12 @@ RUNNING = "en_cours"
 DONE = "fini"
 FAILED = "echec"
 TO_DO = "a_faire"           # une partie que le passage n'a pas encore commencée
+RESUMED = "reprise"         # une partie jamais commencée d'un passage repris : sa reprise la fait à sa place (#295)
+
+# Les origines des passages demandés depuis le front avec un compte admin (issue #356) : une demande ou une reprise
+# depuis la supervision, une rando envoyée depuis la page d'ajout. Chaque étape de la file les prend avant les envois
+# en masse de l'ETL (origine « etl »), qui attendent derrière elles.
+PRIORITY_ORIGINS = ("supervision", "ajout")
 
 PASSAGE_COLUMNS = """p.passage_id, p.chain, p.city_id, p.origin, p.status, p.requested_at, p.started_at, p.finished_at,
                      p.error, p.resumed_from, c.name AS city_name, c.commune AS city_commune"""
@@ -63,6 +69,21 @@ def set_passage_status(passage_id: str, status: str, error: str | None = None) -
     else:
         _write("UPDATE passages SET status = %s, finished_at = %s, error = %s WHERE passage_id = %s",
                [(status, datetime.now(), error, passage_id)])
+
+
+def close_resumed_parts() -> int:
+    """
+    Les parties « à faire » des passages déjà repris passent à « reprise », et rend leur nombre (issue #295).
+    Une reprise est un nouveau passage, qui refait les parties pas finies ; l'ancien gardait les siennes « à faire »
+    pour toujours, et on lisait qu'il restait du travail sur des villes faites (177 parties le 20 novembre 2026, 1380 le
+    28). Les parties en échec gardent leur raison, et un échec pas encore repris garde ses parties « à faire » : il
+    attend sa reprise. La requête ne touche que ce qui reste à fermer : la relancer ne change rien de plus.
+    """
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        cursor.execute("""UPDATE passage_parts pp JOIN passages r ON r.resumed_from = pp.passage_id
+                          SET pp.status = %s WHERE pp.status = %s""", (RESUMED, TO_DO))
+        connection.commit()
+        return cursor.rowcount
 
 
 def set_part(passage_id: str, part: str, status: str, step: str | None = None, summary: dict | None = None,
@@ -149,14 +170,19 @@ def active_ids(chain: str, city_id: int) -> list:
 
 def queued_next_parts() -> list:
     """
-    Les passages en file, du plus ancien au plus récent, chacun avec sa prochaine partie à faire (next_part) : c'est
-    elle qui dit quelle étape de la file doit le prendre (services/passage_steps.py, issue #332). Une seule requête
-    pour toute la file : chaque étape la relit à chaque tour.
+    Les passages en file, dans l'ordre où la file doit les prendre, chacun avec sa prochaine partie à faire
+    (next_part) : c'est elle qui dit quelle étape de la file doit le prendre (services/passage_steps.py, issue #332).
+    D'abord les demandes faites depuis le front avec un compte admin (PRIORITY_ORIGINS, #356), puis les envois de
+    l'ETL ; dans chacun des deux groupes, du plus ancien au plus récent. Une seule requête pour toute la file : chaque
+    étape la relit à chaque tour.
     """
+    # « origin NOT IN (...) » vaut 0 pour une demande admin et 1 pour un envoi de l'ETL : le tri croissant les met devant.
     return _read("""SELECT p.passage_id, p.chain, p.city_id,
                            (SELECT pp.part FROM passage_parts pp WHERE pp.passage_id = p.passage_id AND pp.status = %s
                             ORDER BY pp.position LIMIT 1) AS next_part
-                    FROM passages p WHERE p.status = %s ORDER BY p.requested_at, p.passage_id""", (TO_DO, QUEUED))
+                    FROM passages p WHERE p.status = %s
+                    ORDER BY p.origin NOT IN (%s, %s), p.requested_at, p.passage_id""",
+                 (TO_DO, QUEUED, *PRIORITY_ORIGINS))
 
 
 def running_ids(chain: str) -> list:
