@@ -1,7 +1,7 @@
 # Plafonds de l'API
 
 Certaines routes de l'API sont plafonnées : au-delà d'un nombre d'appels en peu de temps, elles répondent
-**429 Too Many Requests** et ne s'exécutent pas. Le message de refus est en français, dans le champ `detail` ;
+**429 Too Many Requests** et ne s'exécutent pas. Le champ `detail` dit pourquoi l'appel est refusé et quand réessayer ;
 le front l'affiche dans un bandeau en haut de page (`frontend/static/js/common.js`, `showTooManyRequests`).
 
 Le code est dans `backend/api/rate_limit.py` (slowapi). Les compteurs sont en mémoire : ils repartent de zéro
@@ -11,12 +11,12 @@ au redémarrage de l'API, ce qui suffit pour un seul serveur.
 
 | Route | Plafond | Compté par | Pourquoi |
 | --- | --- | --- | --- |
-| `POST /api/step1/create_plan` | 1 par jour | voyageur | Un voyage gratuit par jour : chaque voyage met les agents de Vany au travail, et chaque appel à un modèle de langage coûte. |
-| `PUT /api/step1/update_day_city/{plan_id}` | 15 par heure | voyageur | Une ville par jour du séjour (7 au plus), plus quelques changements d'avis. |
+| `POST /api/step1/create_plan` | 1 voyage par jour | voyageur | Un voyage gratuit par jour : chaque voyage met les agents de Vany au travail, et chaque appel à un modèle de langage coûte. |
+| `PUT /api/step1/update_day_city/{plan_id}` | 15 changements par heure | voyageur | Une ville par jour du séjour (7 au plus), plus quelques changements d'avis. |
 | `PUT /api/step3/update_plan/{plan_id}` | 30 par heure | voyageur | Le spot du jour se choisit en quelques clics : environ 3 par jour sur 7 jours. |
 | `GET /api/step1/refresh-meteo/{city_id}` | 30 par heure | voyageur | Chaque appel fait appeler Open-Meteo ; la page ne le fait que pour une ville choisie dont les prévisions n'atteignent pas J+6. |
 | `POST /api/auth/guest` | 10 par heure | adresse IP | Un jeton invité neuf donne des compteurs neufs : sans ce plafond, il suffirait d'en demander un autre. |
-| `POST /api/auth/login` | 5 **échecs** en 15 minutes | nom de compte | Empêche d'essayer des mots de passe sans fin, sur les comptes admin compris (issue #264). |
+| `POST /api/auth/login` | 5 **échecs** en 15 minutes | nom de compte | Empêche d'essayer des mots de passe sans fin, sur les comptes admin compris. |
 | `POST /api/auth/login` | 20 **échecs** en 15 minutes | adresse IP | Arrête un script qui essaie beaucoup de noms de compte depuis la même machine. |
 
 « Voyageur » veut dire : le compte ou l'invité du cookie de connexion, sinon l'adresse IP. Compter par voyageur
@@ -39,7 +39,7 @@ inconnu). Une connexion réussie ne compte jamais.
 ## Les bornes des valeurs
 
 Un plafond compte les appels ; une borne limite ce qu'un seul appel peut demander. Au-delà, la route répond
-**422** avec un message en français, avant de lire ou d'écrire en base et avant de lancer Vany.
+**422** avec un message qui donne la limite à respecter, avant de lire ou d'écrire en base et avant de lancer Vany.
 Le code est dans `backend/api/trip_limits.py`.
 
 | Valeur | Routes | Borne | Pourquoi |
