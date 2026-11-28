@@ -6,11 +6,19 @@ from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("etl_wikidata")
 
+# Délai maximal d'attente de Wikidata, en secondes. Sans délai, un serveur muet ferait attendre l'appel sans fin :
+# l'étape OSM de la file des passages resterait figée sur cette ville, et toutes les villes en attente derrière elle.
+# Une requête ordinaire répond en 2 à 4 secondes (Le Conquet, Brest, mesuré le 28 novembre 2026) : 30 secondes laissent
+# de la marge à un serveur chargé. Au-delà, requests lève une erreur Timeout : la ville reste sans lieux Wikidata
+# et le passage continue.
+TIMEOUT_SECONDS = 30
+
 def extract_wikidata(city) -> dict:
     """
     Récupère les POI dans un rayon de 5 km autour de la ville, en utilisant des
     agrégations (GROUP BY) pour simplifier les données et obtenir tous les types
     (types) et labels (itemLabel) corrects en une seule ligne par POI.
+    Renvoie None si Wikidata ne répond pas dans le délai TIMEOUT_SECONDS ou répond en erreur.
     """
     logger.info(f"[Extract] : Lancement de l'extraction Wikidata pour : {city}")
 
@@ -78,7 +86,7 @@ def extract_wikidata(city) -> dict:
     # --- Logique de réessai ---
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(wikidata_url, params=params, headers=headers)
+            response = requests.get(wikidata_url, params=params, headers=headers, timeout=TIMEOUT_SECONDS)
             response.raise_for_status() 
 
             data = response.json()
@@ -97,6 +105,11 @@ def extract_wikidata(city) -> dict:
             # exception, pour qu'un échec Wikidata sur une ville n'interrompe pas
             # tout le traitement en lot (etl_rattrapage.py notamment).
             logger.error(f"[Extract] : Erreur HTTP {response.status_code} pour '{city}', abandon après {attempt + 1} tentative(s) : {e}")
+            return None
+
+        except requests.exceptions.Timeout:
+            # Pas de nouvel essai : un serveur muet le resterait sans doute, et l'attente totale reste bornée au délai.
+            logger.error(f"[Extract] : Wikidata n'a pas répondu en {TIMEOUT_SECONDS} secondes pour '{city}', ville passée sans ses lieux Wikidata")
             return None
 
         except requests.exceptions.RequestException as e:
