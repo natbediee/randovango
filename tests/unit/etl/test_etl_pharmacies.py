@@ -198,3 +198,19 @@ def test_finess_penmarch_counts_in_the_commune_written_with_an_apostrophe():
     rows = [_row_in("PENMARCH"), _row_in("Penmarch"), _row_in("Plomeur")]
     assert etl_pharmacies.towns_summary("Penmarc'h", rows) == (
         "Penmarc'h : 2 pharmacies dans la commune, 1 autour (Plomeur 1)")
+
+
+def test_pharmacies_cancelled_for_deadlock_are_loaded_again(deadlocked_base, monkeypatch):
+    """Les pharmacies d'une ville, annulées par MySQL pendant qu'une autre étape écrit, sont rechargées au second essai."""
+    rows = _city_rows(monkeypatch, [RIVOALEN])
+    deadlocked_base.cursor.return_value.fetchone.return_value = None
+    deadlocked_base.cursor.return_value.fetchall.return_value = []
+    deadlocked_base.cursor.return_value.lastrowid = 90
+    histories = []
+    monkeypatch.setattr(load_pharmacies, "get_or_create_source", lambda cur, name: 7)
+    monkeypatch.setattr(load_pharmacies, "insert_service_and_link", lambda cur, poi_id, s: None)
+    monkeypatch.setattr(load_pharmacies, "insert_histo_poi", lambda cur, poi_id, city: histories.append(city))
+
+    assert load_pharmacies.load_pharmacy_rows(rows, "Plougonvelin") == 1
+    assert histories == ["Plougonvelin", "Plougonvelin"]       # la pharmacie est réécrite au second essai
+    assert deadlocked_base.commit.call_count == 2
