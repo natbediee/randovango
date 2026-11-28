@@ -99,12 +99,13 @@ def test_the_active_passages_are_read_for_one_chain_on_one_city(base):
 
 
 def test_the_queue_is_read_from_the_oldest_passage_with_its_next_part(base):
-    """La file se lit du plus ancien passage au plus récent, chacun avec sa prochaine partie à faire : elle dit son étape (#332)."""
+    """La file se lit demandes admin d'abord (#356), puis du plus ancien passage au plus récent, chacun avec sa prochaine partie à faire : elle dit son étape (#332)."""
     base.rows = [{"passage_id": "p1", "chain": "spots", "city_id": 12, "next_part": "harmonisation"}]
     assert passage_store.queued_next_parts() == base.rows
     sql, values = base.queries[0]
-    assert "ORDER BY p.requested_at, p.passage_id" in sql and "ORDER BY pp.position LIMIT 1" in sql
-    assert values == ("a_faire", "en_file")
+    assert "ORDER BY p.origin NOT IN (%s, %s), p.requested_at, p.passage_id" in sql
+    assert "ORDER BY pp.position LIMIT 1" in sql
+    assert values == ("a_faire", "en_file", "supervision", "ajout")
 
 
 def test_a_pending_part_is_looked_for_in_the_other_open_passages_of_the_cities(base):

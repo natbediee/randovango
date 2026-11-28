@@ -50,7 +50,10 @@ from utils.logger_util import LoggerUtil
 
 logger = LoggerUtil.get_logger("passages")
 
-ORIGINS = ("supervision", "etl")    # qui a demandé le passage : l'administratrice, ou l'ETL d'une nouvelle ville (#211)
+# Qui a demandé le passage : l'administratrice depuis la supervision ; une rando envoyée par un compte admin depuis la
+# page d'ajout (#356) ; ou l'ETL d'une nouvelle ville (#211), pour un envoi en masse ou un compte contributeur.
+# Les deux premières passent devant l'ETL dans leur étape (passage_store.PRIORITY_ORIGINS).
+ORIGINS = ("supervision", "ajout", "etl")
 SAVING = "enregistrement"            # l'étape de l'enregistrement, que le code note lui-même : elle n'appelle aucun agent
 PAUSED = "budget"                    # l'étape d'une catégorie arrêtée en route par le budget : elle reprendra son fichier
 LOADING = "chargement"               # l'étape d'une partie d'une chaîne sans agent (OSM, FINESS, carburants) qui tourne
@@ -440,7 +443,7 @@ def searched_service_categories(cities: list) -> set:
     return {key for key, category in SERVICE_CATEGORIES.items() if names & set(latest_traces(category))}
 
 
-def request_etl_passage(city_name: str) -> str | None:
+def request_etl_passage(city_name: str, origin: str = "etl") -> str | None:
     """
     À la fin de l'ETL d'une ville : demande le passage de la chaîne des services pour sa commune, et rend son
     identifiant ; None s'il n'y a rien à chercher.
@@ -451,6 +454,7 @@ def request_etl_passage(city_name: str) -> str | None:
        passages (les communes cherchées en ligne de commande n'ont rien dans la base) et les parties finies de la base
        (commune à toutes les branches, quand les fichiers ne le sont pas).
     3. Le passage entre dans la file ; si la mise à jour automatique est coupée, il attend l'admin (« en attente »).
+    `origin` : « ajout » pour une rando envoyée par un compte admin depuis la page d'ajout, qui passe devant (#356).
     """
     city = service_store.load_city(city_name)
     if city is None:
@@ -466,7 +470,7 @@ def request_etl_passage(city_name: str) -> str | None:
         logger.info(f"[passages] {city_name} : {city_commune(city)} déjà cherchée, aucun passage des services demandé")
         return None
     status = QUEUED if budget_service.load_settings()["services_after_etl"] else WAITING
-    return create_passage("services", city["id"], left, origin="etl", status=status)
+    return create_passage("services", city["id"], left, origin=origin, status=status)
 
 
 def parts_already_asked(chain_key: str, city_id: int) -> set:
@@ -481,7 +485,7 @@ def parts_already_asked(chain_key: str, city_id: int) -> set:
     return already
 
 
-def request_city_chain(chain_key: str, city_name: str) -> str | None:
+def request_city_chain(chain_key: str, city_name: str, origin: str = "etl") -> str | None:
     """
     À l'arrivée d'une rando : met dans la file une chaîne de l'ajout d'une ville (OSM, carburants, FINESS, spots,
     pépites) sur sa ville, et rend l'identifiant du passage ; None si la chaîne n'a plus rien à faire sur la ville.
@@ -489,6 +493,7 @@ def request_city_chain(chain_key: str, city_name: str) -> str | None:
     l'Île-d'Yeu avaient lancé cinq OSM et trois FINESS (23 novembre 2026). Une ville déjà faite n'est donc plus relancée
     par une nouvelle rando ; l'admin peut toujours la relancer depuis la supervision.
     Ces chaînes travaillent sur la ville elle-même, pas sur sa commune : l'OSM de Morgat est le sien.
+    `origin` : « ajout » pour une rando envoyée par un compte admin depuis la page d'ajout, qui passe devant (#356).
     """
     city = next((row for row in service_store.load_cities() if row["name"] == city_name), None)
     if city is None:
@@ -499,7 +504,7 @@ def request_city_chain(chain_key: str, city_name: str) -> str | None:
     if not left:
         logger.info(f"[passages] {city_name} : chaîne {chain_key} déjà faite ou déjà demandée, rien de plus")
         return None
-    return create_passage(chain_key, city["id"], left, origin="etl")
+    return create_passage(chain_key, city["id"], left, origin=origin)
 
 
 def launch_waiting(passage: dict) -> str:
@@ -785,7 +790,7 @@ def untracked_passage(passage_id: str, item: tuple) -> dict:
     calls = passage_store.load_calls(passage_id)
     return {"passage_id": passage_id, "chaine": None,
             "libelle_chaine": "lancement hors supervision (ligne de commande ou action d'un voyageur)",
-            "ville": None, "origine": None, "etat": None, "payant": bool(calls),
+            "ville": None, "origine": None, "prioritaire": False, "etat": None, "payant": bool(calls),
             "demande_le": None, "debut": None, "fin": None, "raison_echec": None, "raison_attente": None,
             "reprise_de": None, "repris_par": None, **call_totals(calls), "categories": [],
             **found_items(passage_id, True, item)}
@@ -806,7 +811,8 @@ def read_passage(passage_id: str, details: bool = True, item: tuple | None = Non
     calls = passage_store.load_calls(passage_id)
     return {"passage_id": passage_id, "chaine": chain.key, "libelle_chaine": chain.label,
             "ville": {"id": passage["city_id"], "nom": passage["city_name"], "commune": passage["city_commune"]},
-            "origine": passage["origin"], "etat": passage["status"], "payant": chain.paid,
+            "origine": passage["origin"], "prioritaire": passage["origin"] in passage_store.PRIORITY_ORIGINS,
+            "etat": passage["status"], "payant": chain.paid,
             "demande_le": to_paris(passage["requested_at"]), "debut": to_paris(passage["started_at"]),
             "fin": to_paris(passage["finished_at"]),
             "raison_echec": passage["error"], "raison_attente": waiting_reason(passage),

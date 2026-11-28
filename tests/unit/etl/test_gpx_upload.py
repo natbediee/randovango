@@ -129,7 +129,7 @@ def test_only_loaded_hikes_complete_their_city(waiting_dir, commune_found, monke
     monkeypatch.setattr(etl_pipeline, "load_gpx_data", lambda data, gpx_path, verifie: data["city_name"])
     completed = []
     monkeypatch.setattr(etl_pipeline, "load_weather", completed.append)
-    monkeypatch.setattr(etl_pipeline, "request_chains_of_cities", lambda cities: None)
+    monkeypatch.setattr(etl_pipeline, "request_chains_of_cities", lambda cities, origin="etl": None)
     drop_sample(waiting_dir, "trace.gpx")
     drop_sample(waiting_dir, "route_only.gpx")
 
@@ -150,7 +150,7 @@ def upload_client(waiting_dir, commune_found, monkeypatch):
     monkeypatch.setattr(etl_router, "insert_auth_log", lambda **kwargs: None)
     monkeypatch.setattr(etl_pipeline, "load_gpx_data", lambda data, gpx_path, verifie: data["city_name"])
     monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
-    monkeypatch.setattr(etl_pipeline, "start_chain_requests", lambda cities: None)
+    monkeypatch.setattr(etl_pipeline, "start_chain_requests", lambda cities, origin="etl": None)
     monkeypatch.setattr(etl_pipeline, "start_folder_worker", lambda role: None)
     app = FastAPI()
     app.include_router(etl_router.router, prefix="/api/etl")
