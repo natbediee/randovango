@@ -78,3 +78,38 @@ def exchange_rates(monkeypatch):
     monkeypatch.setattr(exchange_rate_store, "last_fetch", lambda: datetime.now())
     monkeypatch.setattr(exchange_rate_store, "rate_on_or_before", lambda day: {"rate_date": day, "usd_per_eur": 1.20})
     monkeypatch.setattr(exchange_rate_store, "oldest_rate", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def no_write_lock(monkeypatch):
+    """
+    Aucun test ne demande le verrou d'écriture commun à MySQL (MySQLUtils.write_lock, issue #361) : les tests qui
+    remplacent la base par une fausse connexion ne savent pas répondre à GET_LOCK. Le bloc s'exécute tout de suite.
+    Les tests du verrou remettent la vraie fonction (tests/unit/utils/test_db_utils.py, REAL_WRITE_LOCK).
+    """
+    from contextlib import nullcontext
+
+    from utils.db_utils import MySQLUtils
+
+    monkeypatch.setattr(MySQLUtils, "write_lock", staticmethod(lambda label: nullcontext()))
+
+
+@pytest.fixture
+def deadlocked_base(monkeypatch):
+    """
+    Une fausse base MySQL dont le premier commit est annulé pour interblocage (erreur 1213), et le second accepté :
+    pour vérifier qu'une écriture des étapes de la file est refaite (issue #361). Rend la fausse connexion ; ses
+    commits se comptent avec connection.commit.call_count. Les attentes entre deux essais ne durent pas.
+    """
+    from unittest.mock import MagicMock
+
+    import mysql.connector
+
+    from utils import db_utils
+
+    connection = MagicMock()
+    connection.commit.side_effect = [mysql.connector.errors.InternalError(msg="Deadlock found", errno=1213), None]
+    monkeypatch.setattr(db_utils.MySQLUtils, "connect", staticmethod(lambda: connection))
+    monkeypatch.setattr(db_utils.MySQLUtils, "disconnect", staticmethod(lambda cnx: None))
+    monkeypatch.setattr(db_utils.time, "sleep", lambda seconds: None)
+    return connection
