@@ -186,17 +186,14 @@ def process_upload(gpx_path, user_role="user", allow_same_path=False) -> dict:
     Le fichier envoyé par la page d'ajout, traité avant tout le reste : lu, chargé, la météo de sa ville, puis son
     résultat rendu à la route. Les chaînes de sa ville sont demandées à côté. Les fichiers du dossier d'attente, s'il y
     en a, partent ensuite dans le fil de fond (start_folder_worker) : la réponse ne les attend pas.
+    Les chaînes de la ville d'un compte admin passent devant les envois en masse dans la file (origine « ajout »,
+    issue #356) ; celles d'un compte contributeur gardent l'ordre de la file.
     allow_same_path : l'admin confirme le chargement d'un tracé qui suit le chemin d'une rando en base (issue #271).
     Les fichiers du dossier d'attente, eux, n'ont personne pour confirmer : ils restent refusés dans ce cas.
     """
     verifie = 1 if user_role == "admin" else 0
-    outcome = process_file(str(gpx_path), os.path.basename(gpx_path), verifie, allow_same_path)
-    Les chaînes de la ville d'un compte admin passent devant les envois en masse dans la file (origine « ajout »,
-    issue #356) ; celles d'un compte contributeur gardent l'ordre de la file.
-    """
-    verifie = 1 if user_role == "admin" else 0
     origin = "ajout" if user_role == "admin" else "etl"
-    outcome = process_file(str(gpx_path), os.path.basename(gpx_path), verifie)
+    outcome = process_file(str(gpx_path), os.path.basename(gpx_path), verifie, allow_same_path)
     if not outcome["reason"]:
         load_weather(outcome["city"])
         start_chain_requests([outcome["city"]], origin)
