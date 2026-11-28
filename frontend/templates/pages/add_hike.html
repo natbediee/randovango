@@ -27,6 +27,9 @@
         <span>Le point de départ doit être accessible et stationnable en van.</span>
       </div>
       <div class="addhike-msg" id="gpxMsg" style="display:none;"></div>
+      {# Pour l'admin seulement, après le refus d'un tracé qui suit le chemin d'une rando déjà en base (issue #271) :
+         un autre départ (un autre parking) peut valoir la peine de garder les deux randos. contrib.js l'affiche. #}
+      <button type="button" class="btn btn--outline btn--sm" id="loadAnyway" style="display:none; align-self:flex-start;">Charger quand même</button>
     </div>
   </div>
 

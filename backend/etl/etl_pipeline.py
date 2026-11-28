@@ -163,14 +163,17 @@ def start_chain_requests(cities, origin="etl") -> threading.Thread:
     return worker
 
 
-def process_file(gpx_path, fname, verifie) -> dict:
+def process_file(gpx_path, fname, verifie, allow_same_path=False) -> dict:
     """
-    Lit un fichier GPX puis le charge en base, et rend son résultat {"filename", "city", "reason"}. La lecture se fait
-    sans verrou (elle attend surtout geo.api.gouv.fr) ; le chargement prend le verrou des chargements.
+    Lit un fichier GPX puis le charge en base, et rend son résultat {"filename", "city", "reason", "same_path"}.
+    La lecture se fait sans verrou (elle attend surtout geo.api.gouv.fr) ; le chargement prend le verrou des
+    chargements. allow_same_path : l'admin confirme un tracé qui suit le chemin d'une rando en base (issue #271).
     """
-    gpx_file = read_gpx_file(gpx_path, fname)
+    gpx_file = read_gpx_file(gpx_path, fname, allow_same_path)
     with _load_lock:
         outcome = load_one_gpx(gpx_file, verifie)
+    # La rando en base dont ce tracé suit le chemin, s'il est refusé pour cela : la route la rend à la page d'ajout.
+    outcome["same_path"] = gpx_file.get("same_path")
     if outcome["reason"]:
         logger.info(f"[ETL] Fichier {fname} non chargé : {outcome['reason']}")
     else:
@@ -178,17 +181,19 @@ def process_file(gpx_path, fname, verifie) -> dict:
     return outcome
 
 
-def process_upload(gpx_path, user_role="user") -> dict:
+def process_upload(gpx_path, user_role="user", allow_same_path=False) -> dict:
     """
     Le fichier envoyé par la page d'ajout, traité avant tout le reste : lu, chargé, la météo de sa ville, puis son
     résultat rendu à la route. Les chaînes de sa ville sont demandées à côté. Les fichiers du dossier d'attente, s'il y
     en a, partent ensuite dans le fil de fond (start_folder_worker) : la réponse ne les attend pas.
     Les chaînes de la ville d'un compte admin passent devant les envois en masse dans la file (origine « ajout »,
     issue #356) ; celles d'un compte contributeur gardent l'ordre de la file.
+    allow_same_path : l'admin confirme le chargement d'un tracé qui suit le chemin d'une rando en base (issue #271).
+    Les fichiers du dossier d'attente, eux, n'ont personne pour confirmer : ils restent refusés dans ce cas.
     """
     verifie = 1 if user_role == "admin" else 0
     origin = "ajout" if user_role == "admin" else "etl"
-    outcome = process_file(str(gpx_path), os.path.basename(gpx_path), verifie)
+    outcome = process_file(str(gpx_path), os.path.basename(gpx_path), verifie, allow_same_path)
     if not outcome["reason"]:
         load_weather(outcome["city"])
         start_chain_requests([outcome["city"]], origin)

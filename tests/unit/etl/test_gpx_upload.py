@@ -29,6 +29,7 @@ def waiting_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(gpx, "GPX_DIR", tmp_path)
     monkeypatch.setattr(etl_router, "UPLOAD_DIR", tmp_path / "envoi")
     monkeypatch.setattr(gpx, "gpx_already_in_mysql", lambda fname: False)
+    monkeypatch.setattr(gpx, "find_same_path_hike", lambda points: None)
     return tmp_path
 
 
@@ -79,6 +80,27 @@ def test_a_gpx_already_in_mysql_is_refused_and_removed(waiting_dir, commune_foun
     path = drop_sample(waiting_dir, "trace.gpx")
 
     assert gpx.read_gpx_file(path, "trace.gpx")["reason"] == gpx.ALREADY_LOADED
+    assert not path.exists()
+
+
+# Deux randos en base, telles que les rend find_same_path_hike : le Gouet Nord, identique au tracé envoyé (même
+# chemin, même départ), et la pointe Saint-Gildas, recouverte à 86 % avec un départ à 2,6 km.
+GOUET_NORD = {"id": 307, "name": "Tour de la retenue du Gouet Nord", "city": "Ploufragan", "share": 1.0,
+              "start_gap_m": 0, "identical": True}
+SAINT_GILDAS = {"id": 325, "name": "Pointe Saint-Gildas", "city": "Préfailles", "share": 0.86,
+                "start_gap_m": 2600, "identical": False}
+
+
+def test_a_trace_on_the_path_of_a_hike_in_base_is_refused_with_its_name(waiting_dir, commune_found, monkeypatch) -> None:
+    """Un tracé renommé qui suit le chemin d'une rando déjà en base est refusé avec le nom de cette rando (cas du Gouet Nord 2, rando 305)."""
+    monkeypatch.setattr(gpx, "find_same_path_hike", lambda points: GOUET_NORD)
+    path = drop_sample(waiting_dir, "trace.gpx", name="Tour de la retenue du Gouet Nord 2.gpx")
+
+    result = gpx.read_gpx_file(path, path.name)
+
+    assert result["reason"] == ("ce tracé est identique à la rando « Tour de la retenue du Gouet Nord » (Ploufragan),"
+                                " qui part du même endroit")
+    assert (result["data"], result["same_path"]) == (None, GOUET_NORD)
     assert not path.exists()
 
 
@@ -158,10 +180,12 @@ def upload_client(waiting_dir, commune_found, monkeypatch):
     return TestClient(app)
 
 
-def send(client, sample, name=None):
+def send(client, sample, name=None, load_anyway=False):
     """Envoie un GPX d'essai à la route upload_gpx, comme la page d'ajout, et rend la réponse JSON."""
     content = (SAMPLES / sample).read_bytes()
-    return client.post("/api/etl/upload_gpx", files={"file": (name or sample, content, "application/gpx+xml")}).json()
+    form = {"load_anyway": "true"} if load_anyway else {}
+    return client.post("/api/etl/upload_gpx", files={"file": (name or sample, content, "application/gpx+xml")},
+                       data=form).json()
 
 
 def test_the_upload_route_answers_a_refusal_with_its_reason(upload_client, waiting_dir) -> None:
@@ -207,3 +231,62 @@ def test_the_upload_answers_for_its_own_file_and_leaves_the_folder_to_the_backgr
     assert (answer["success"], answer["city"]) == (True, "Le Conquet")
     assert gpx.waiting_files() == ["envoi-en-masse.gpx"]
     assert started == ["user"]
+
+
+def in_base(monkeypatch, hike) -> None:
+    """Cette rando est en base, et tout tracé envoyé suit son chemin."""
+    monkeypatch.setattr(gpx, "find_same_path_hike", lambda points: hike)
+
+
+def as_admin(monkeypatch) -> None:
+    """La personne connectée est l'admin."""
+    monkeypatch.setattr(etl_router, "get_roles_for_user", lambda user_id: ["admin"])
+
+
+def test_a_contributor_cannot_load_a_trace_on_the_path_of_a_hike_in_base(upload_client, monkeypatch) -> None:
+    """Un contributeur reçoit le refus avec le nom de la rando en base, sans bouton pour charger quand même, même s'il le demande."""
+    in_base(monkeypatch, SAINT_GILDAS)
+
+    answer = send(upload_client, "trace.gpx", name="Saint-Gildas.gpx")
+    forced = send(upload_client, "trace.gpx", name="Saint-Gildas.gpx", load_anyway=True)
+
+    assert (answer["success"], answer["same_path_hike"], answer["can_load_anyway"]) == (
+        False, "Pointe Saint-Gildas", False)
+    assert forced["success"] is False
+
+
+def test_the_admin_can_load_a_trace_on_the_path_of_a_hike_in_base(upload_client, monkeypatch) -> None:
+    """L'admin voit le refus avec la rando en base, puis charge quand même le tracé en confirmant : un départ à 2,6 km peut avoir son intérêt (cas de Préfailles)."""
+    in_base(monkeypatch, SAINT_GILDAS)
+    as_admin(monkeypatch)
+
+    answer = send(upload_client, "trace.gpx", name="Saint-Gildas.gpx")
+    confirmed = send(upload_client, "trace.gpx", name="Saint-Gildas.gpx", load_anyway=True)
+
+    assert (answer["success"], answer["can_load_anyway"]) == (False, True)
+    assert (confirmed["success"], confirmed["city"]) == (True, "Le Conquet")
+
+
+def test_an_identical_trace_is_refused_even_for_the_admin(upload_client, monkeypatch) -> None:
+    """Un tracé identique à une rando en base (même chemin, même départ) est refusé à l'admin aussi, sans bouton, même s'il confirme (cas du Gouet Nord 2)."""
+    in_base(monkeypatch, GOUET_NORD)
+    as_admin(monkeypatch)
+
+    answer = send(upload_client, "trace.gpx", name="Gouet Nord 2.gpx")
+    forced = send(upload_client, "trace.gpx", name="Gouet Nord 2.gpx", load_anyway=True)
+
+    assert (answer["success"], answer["can_load_anyway"]) == (False, False)
+    assert forced["success"] is False
+    assert "identique" in forced["message"]
+
+
+def test_a_waiting_folder_file_on_the_path_of_a_hike_in_base_stays_refused(waiting_dir, commune_found, monkeypatch) -> None:
+    """Dans un envoi en masse, personne ne confirme : un tracé qui suit le chemin d'une rando en base est refusé et quitte le dossier."""
+    in_base(monkeypatch, SAINT_GILDAS)
+    monkeypatch.setattr(etl_pipeline, "load_gpx_data", lambda data, gpx_path, verifie: data["city_name"])
+    drop_sample(waiting_dir, "trace.gpx", name="Saint-Gildas.gpx")
+
+    outcomes = etl_pipeline.process_waiting_folder(user_role="admin")
+
+    assert outcomes[0]["same_path"] == SAINT_GILDAS
+    assert gpx.waiting_files() == []

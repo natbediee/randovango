@@ -57,7 +57,7 @@ def test_an_upload_answers_before_the_chains_are_asked(monkeypatch) -> None:
     def slow_request(city, origin="etl"):
         may_ask.wait(5)
         asked.set()
-    monkeypatch.setattr(etl_pipeline, "process_file", lambda path, fname, verifie: loaded(fname, "Plougonvelin"))
+    monkeypatch.setattr(etl_pipeline, "process_file", lambda path, fname, verifie, allow_same_path=False: loaded(fname, "Plougonvelin"))
     monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
     monkeypatch.setattr(etl_pipeline, "start_folder_worker", lambda role: None)
     monkeypatch.setattr(etl_pipeline, "request_city_chains", slow_request)
@@ -74,7 +74,7 @@ def test_the_front_file_passes_before_the_waiting_folder(monkeypatch) -> None:
     """Pendant qu'un envoi en masse attend geo.api.gouv.fr pour un fichier du dossier, le fichier du front est chargé et répond sans l'attendre."""
     folder_may_go = threading.Event()
 
-    def read_and_load(path, fname, verifie):
+    def read_and_load(path, fname, verifie, allow_same_path=False):
         if fname.startswith("dossier"):
             folder_may_go.wait(5)
         return loaded(fname, "Le Conquet")
@@ -181,7 +181,7 @@ def test_two_uploads_never_ask_their_chains_at_the_same_time(monkeypatch) -> Non
 def test_the_upload_gives_its_origin_to_the_chains_of_its_city(monkeypatch, role, origin) -> None:
     """La rando d'un compte admin demande les chaînes de sa ville comme prioritaires (« ajout ») ; celle d'un contributeur garde l'ordre de la file (#356)."""
     given = []
-    monkeypatch.setattr(etl_pipeline, "process_file", lambda path, fname, verifie: loaded(fname, "Plougonvelin"))
+    monkeypatch.setattr(etl_pipeline, "process_file", lambda path, fname, verifie, allow_same_path=False: loaded(fname, "Plougonvelin"))
     monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
     monkeypatch.setattr(etl_pipeline, "start_folder_worker", lambda role: None)
     monkeypatch.setattr(etl_pipeline, "start_chain_requests", lambda cities, origin="etl": given.append(origin))
