@@ -176,7 +176,7 @@ def upload_client(waiting_dir, commune_found, monkeypatch):
     monkeypatch.setattr(etl_pipeline, "start_folder_worker", lambda role: None)
     app = FastAPI()
     app.include_router(etl_router.router, prefix="/api/etl")
-    app.dependency_overrides[dependencies.get_current_user] = lambda: {"user_id": 7, "username": "contributrice"}
+    app.dependency_overrides[dependencies.require_contributor] = lambda: {"user_id": 7, "username": "contributrice"}
     return TestClient(app)
 
 

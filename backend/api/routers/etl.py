@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends
-from api.dependencies import get_current_user, require_admin
+from api.dependencies import require_admin, require_contributor
 from api.models.etl import GPXUploadResponse, GPXDeleteResponse
 from etl.etl_pipeline import process_upload
 from etl.extract.gpx import UPLOAD_DIR
@@ -32,7 +32,7 @@ def safe_gpx_name(filename) -> str | None:
 def upload_gpx(
     file: UploadFile = File(..., description="Fichier GPX"),
     load_anyway: bool = Form(False, description="L'admin charge le tracé même s'il suit le chemin d'une rando en base"),
-    user=Depends(get_current_user)
+    user=Depends(require_contributor)
 ):
     """
     Reçoit le GPX d'une rando depuis la page d'ajout, le charge en base et dit ce qui s'est vraiment passé :

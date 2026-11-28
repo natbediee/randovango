@@ -77,3 +77,15 @@ def test_admin_role_is_read_from_the_database(monkeypatch):
     assert status_of(lambda: dependencies.require_admin(account)) == 403
     monkeypatch.setattr(dependencies, "get_roles_for_user", lambda user_id: {"admin"})
     assert dependencies.require_admin(account) == account
+
+
+@pytest.mark.parametrize("roles, allowed", [({"contributor"}, True), ({"admin"}, True), ({"user"}, False),
+                                            ({"guest"}, False), (set(), False)])
+def test_only_contributors_and_admins_pass_contributor_routes(monkeypatch, roles, allowed):
+    """Seuls les rôles contributor et admin passent l'envoi de tracés GPX ; un compte user ou guest reçoit 403 (issue #213)."""
+    account = {"user_id": 7, "username": "camille", "guest_id": None}
+    monkeypatch.setattr(dependencies, "get_roles_for_user", lambda user_id: roles)
+    if allowed:
+        assert dependencies.require_contributor(account) == account
+    else:
+        assert status_of(lambda: dependencies.require_contributor(account)) == 403

@@ -8,6 +8,7 @@ plus stricte :
 
     get_current_traveller   tout porteur d'un jeton valide : compte ou invité   (sinon 401)
       └ get_current_user    un compte, pas un invité                            (sinon 403)
+          └ require_contributor  un compte qui a le rôle admin ou contributor  (sinon 403)
           └ require_admin   un compte qui a le rôle admin en base               (sinon 403)
       └ require_plan_owner  le propriétaire du plan demandé, compte ou invité (sinon 404 ou 403)
 
@@ -60,6 +61,20 @@ def get_current_user(traveller: dict = Depends(get_current_traveller)) -> dict:
     if traveller["user_id"] is None:
         raise HTTPException(status_code=403, detail="Accès refusé : compte requis")
     return traveller
+
+
+# Les rôles qui ajoutent du contenu : un admin peut tout ce que peut un contributeur.
+CONTRIBUTOR_ROLES = {"admin", "contributor"}
+
+
+def require_contributor(user: dict = Depends(get_current_user)) -> dict:
+    """
+    Réservé aux admins et aux contributeurs, comme l'envoi de tracés GPX (issue #213). Un compte qui n'a que le rôle
+    user ou guest est refusé : être connecté ne suffit pas. Les rôles sont relus en base, comme pour require_admin.
+    """
+    if not CONTRIBUTOR_ROLES & set(get_roles_for_user(user["user_id"])):
+        raise HTTPException(status_code=403, detail="Accès refusé : rôle contributeur ou admin requis")
+    return user
 
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
