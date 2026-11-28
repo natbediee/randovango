@@ -68,9 +68,19 @@ def _upsert_poi(cursor, source_id: int, finess: str, poi: dict, protected: dict)
 
 
 def load_pharmacy_rows(rows: list, city_name: str) -> int:
-    """Charge les pharmacies ouvertes d'une ville. Une seule transaction : tout ou rien."""
+    """
+    Charge les pharmacies ouvertes d'une ville. Une seule transaction : tout ou rien. Elle passe sous le verrou commun
+    aux étapes de la file, et elle est refaite si MySQL l'annule quand même pour interblocage (issue #361).
+    """
     if not rows:
         return 0
+    MySQLUtils.exclusive_write(lambda: _load_pharmacy_rows_once(rows, city_name), f"les pharmacies de {city_name}")
+    logger.info(f"[Load] : {len(rows)} pharmacies chargées pour {city_name}")
+    return len(rows)
+
+
+def _load_pharmacy_rows_once(rows: list, city_name: str) -> None:
+    """Un essai de load_pharmacy_rows : la transaction entière, de la première pharmacie au commit."""
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor()
     try:
@@ -87,8 +97,6 @@ def load_pharmacy_rows(rows: list, city_name: str) -> int:
     finally:
         cursor.close()
         MySQLUtils.disconnect(cnx)
-    logger.info(f"[Load] : {len(rows)} pharmacies chargées pour {city_name}")
-    return len(rows)
 
 
 def known_pharmacies() -> dict:

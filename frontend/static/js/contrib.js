@@ -98,6 +98,7 @@
     var label = document.getElementById('gpxDropLabel');
     var msg = document.getElementById('gpxMsg');
     var submit = document.getElementById('submitHike');
+    var loadAnyway = document.getElementById('loadAnyway');
     var selectedFile = null;
 
     function showMsg(text, ok) {
@@ -118,49 +119,68 @@
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
           selectedFile = e.dataTransfer.files[0];
           label.textContent = selectedFile.name;
+          hideLoadAnyway();
         }
       });
       input.addEventListener('change', function () {
         if (input.files && input.files[0]) {
           selectedFile = input.files[0];
           label.textContent = selectedFile.name;
+          hideLoadAnyway();
         }
       });
     }
 
-    if (submit) {
-      submit.addEventListener('click', async function () {
-        msg.style.display = 'none';
-        if (!selectedFile) { showMsg('Ajoute d\'abord ton fichier .gpx.', false); return; }
+    // Le bouton « Charger quand même » ne vaut que pour le fichier qui vient d'être refusé : il disparaît dès qu'un
+    // autre fichier est choisi ou qu'un nouvel envoi part.
+    function hideLoadAnyway() {
+      if (loadAnyway) loadAnyway.style.display = 'none';
+    }
 
-        if (!window.RVG.isLoggedIn()) { window.location.href = window.APP_URLS.contributorLogin; return; }
-        var formData = new FormData();
-        formData.append('file', selectedFile);
+    // Envoie le fichier choisi à l'API et affiche ce qui s'est passé. loadAnywayAsked : l'admin confirme le
+    // chargement d'un tracé qui suit le chemin d'une rando déjà en base (issue #271) ; l'API ne l'accepte que d'un admin.
+    async function sendFile(loadAnywayAsked) {
+      msg.style.display = 'none';
+      hideLoadAnyway();
+      if (!selectedFile) { showMsg('Ajoute d\'abord ton fichier .gpx.', false); return; }
 
-        submit.disabled = true;
-        var original = submit.innerHTML;
-        submit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi…';
-        try {
-          var res = await window.RVG.apiFetch('/api/etl/upload_gpx', {
-            method: 'POST',
-            body: formData
-          });
-          if (res.status === 401) { window.location.href = window.APP_URLS.contributorLogin; return; }
-          var ct = res.headers.get('content-type') || '';
-          var data = ct.includes('application/json') ? await res.json() : { message: await res.text() };
-          if (res.ok && (data.success === undefined || data.success)) {
-            var city = data.city ? ' Ville détectée : ' + data.city + '.' : '';
-            showMsg((data.message || 'Tracé envoyé en relecture.') + city, true);
-          } else {
-            showMsg(data.message || ('Erreur lors de l\'envoi (' + res.status + ').'), false);
-          }
-        } catch (err) {
-          showMsg('Impossible de joindre le serveur. Réessaie plus tard.', false);
-        } finally {
-          submit.disabled = false;
-          submit.innerHTML = original;
+      if (!window.RVG.isLoggedIn()) { window.location.href = window.APP_URLS.contributorLogin; return; }
+      var formData = new FormData();
+      formData.append('file', selectedFile);
+      if (loadAnywayAsked) formData.append('load_anyway', 'true');
+
+      submit.disabled = true;
+      var original = submit.innerHTML;
+      submit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi…';
+      try {
+        var res = await window.RVG.apiFetch('/api/etl/upload_gpx', {
+          method: 'POST',
+          body: formData
+        });
+        if (res.status === 401) { window.location.href = window.APP_URLS.contributorLogin; return; }
+        var ct = res.headers.get('content-type') || '';
+        var data = ct.includes('application/json') ? await res.json() : { message: await res.text() };
+        if (res.ok && (data.success === undefined || data.success)) {
+          var city = data.city ? ' Ville détectée : ' + data.city + '.' : '';
+          showMsg((data.message || 'Tracé envoyé en relecture.') + city, true);
+        } else {
+          showMsg(data.message || ('Erreur lors de l\'envoi (' + res.status + ').'), false);
+          // L'API dit si la personne (un admin) peut charger quand même ce tracé qui suit une rando en base.
+          if (data.can_load_anyway && loadAnyway) loadAnyway.style.display = 'inline-flex';
         }
-      });
+      } catch (err) {
+        showMsg('Impossible de joindre le serveur. Réessaie plus tard.', false);
+      } finally {
+        submit.disabled = false;
+        submit.innerHTML = original;
+      }
+    }
+
+    if (submit) {
+      submit.addEventListener('click', function () { sendFile(false); });
+    }
+    if (loadAnyway) {
+      loadAnyway.addEventListener('click', function () { sendFile(true); });
     }
   }
 

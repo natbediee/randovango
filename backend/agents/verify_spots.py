@@ -387,6 +387,14 @@ def mark_doubt(cursor, spot_id: int) -> None:
 # 3. LANCEMENT
 # =============================================================================
 
+def _save_verification(cursor, spot_id: int, payload: dict, model: str) -> None:
+    """Écrit la vérification d'un spot, le marque douteux s'il l'est, et la note dans le journal des passages (#276)."""
+    write_verification(cursor, spot_id, payload, model)
+    if is_doubtful(payload):
+        mark_doubt(cursor, spot_id)
+    passage_store.note_item(cursor, "spot", spot_id, passage_store.CHANGED, "verification")
+
+
 def run(limit: int = None, spot_ids: list = None, only_new: bool = False, city_id: int = None,
         check_budget=lambda: None) -> dict:
     """
@@ -436,12 +444,9 @@ def run(limit: int = None, spot_ids: list = None, only_new: bool = False, city_i
                     break
                 continue
             failures_in_a_row = 0
-            write_verification(cursor, spot["id"], payload, service.model)
-            if is_doubtful(payload):
-                mark_doubt(cursor, spot["id"])
-            # Le journal des passages (#276) : la vérification de ce spot vient de ce passage.
-            passage_store.note_item(cursor, "spot", spot["id"], passage_store.CHANGED, "verification")
-            connection.commit()
+            # L'écriture du spot, sous le verrou commun aux étapes de la file, refaite si MySQL l'annule (issue #361).
+            MySQLUtils.exclusive_commit(cursor, lambda: _save_verification(cursor, spot["id"], payload, service.model),
+                                        f"la vérification du spot {spot['id']}")
             summary["faits"] += 1
             counts[payload["statut"]] += 1
             counts["non_utilisable"] += payload["utilisable"] == "non"

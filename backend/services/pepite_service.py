@@ -577,18 +577,24 @@ def relocate(cursor, places: list) -> int | None:
     except (LLMUnavailable, json.JSONDecodeError) as error:
         logger.warning(f"[pépites] positions : recalage échoué : {error}")
         return None
+    # Les positions retrouvées s'écrivent en une transaction, sous le verrou commun aux étapes de la file (issue #361).
+    MySQLUtils.exclusive_commit(cursor, lambda: _save_positions(cursor, places, found, LOCATE_PROMPT_VERSION), "les positions des pépites")
+    return len(found)
+
+
+def _save_positions(cursor, places: list, found: dict, version: int) -> None:
+    """Écrit la position retrouvée de chaque lieu du lot, ou note qu'il a été essayé sans succès (relocate)."""
     for place in places:
         if place["id"] in found:
             latitude, longitude, url = found[place["id"]]
             cursor.execute("UPDATE pepites SET latitude = %s, longitude = %s, position_source = 'source',"
                            " position_url = %s, located_version = %s, located_at = NOW() WHERE id = %s",
-                           (latitude, longitude, url, LOCATE_PROMPT_VERSION, place["id"]))
+                           (latitude, longitude, url, version, place["id"]))
             # Le journal des passages (#276) : la position de cette pépite vient de ce passage.
             passage_store.note_item(cursor, "pepite", place["id"], passage_store.CHANGED, "position")
         else:
             cursor.execute("UPDATE pepites SET located_version = %s, located_at = NOW() WHERE id = %s",
-                           (LOCATE_PROMPT_VERSION, place["id"]))
-    return len(found)
+                           (version, place["id"]))
 
 
 def relocate_zone(cursor, zone: dict) -> None:
@@ -796,11 +802,19 @@ def search_and_store(cursor, day: dict, mode: str, trip_day_id: int = None, rais
             raise
         logger.warning(f"[pépites] {mode} {day.get('spot_name') or day.get('city_name')} : recherche échouée : {error}")
         return None
+    # Les idées s'écrivent en une transaction, sous le verrou commun aux étapes de la file (issue #361).
+    MySQLUtils.exclusive_commit(cursor, lambda: _save_ideas(cursor, day, mode, ideas, in_zone, version, model, trip_day_id),
+                                f"les pépites de {day.get('spot_name') or day.get('city_name')}")
+    return len(ideas)
+
+
+def _save_ideas(cursor, day: dict, mode: str, ideas: list, in_zone: list, version: int, model: str,
+                trip_day_id: int | None) -> None:
+    """Place et enregistre chaque idée trouvée par l'agent, puis note la recherche (search_and_store)."""
     for idea in ideas:
         locate(cursor, idea)
         save_pepite(cursor, idea, in_zone, version, model, part=mode)
     record_search(cursor, day, mode, len(ideas), version, trip_day_id)
-    return len(ideas)
 
 
 def search_zone(plan_id: int, day_number: int) -> None:

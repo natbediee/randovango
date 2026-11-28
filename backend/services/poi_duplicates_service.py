@@ -228,7 +228,16 @@ def _already_handled(cursor, poi_id: int) -> bool:
 
 
 def run(trial: bool, city: str | None = None, limit: int | None = None) -> dict:
-    """Masque chaque doublon sûr et signale chaque doute, sur le lieu qui ne reste pas. Une transaction."""
+    """
+    Masque chaque doublon sûr et signale chaque doute, sur le lieu qui ne reste pas. Une transaction, sous le verrou
+    commun aux étapes de la file, et refaite si MySQL l'annule pour interblocage (issue #361).
+    """
+    return MySQLUtils.exclusive_write(lambda: _run_once(trial, city, limit),
+                                      f"les doublons de {city or 'toutes les villes'}")
+
+
+def _run_once(trial: bool, city: str | None, limit: int | None) -> dict:
+    """Un essai de run : la transaction entière, de la première paire au commit, puis le bilan."""
     summary = {"paires": 0, SAME_PLACE: 0, DOUBT: 0, "deja_tranches": 0}
     connection = MySQLUtils.connect()
     try:

@@ -124,7 +124,14 @@ def hide_doubtful_stations(trial: bool = False) -> dict:
     """
     Masque les stations de l'État qui ont un signal des carburants à relire ; réaffiche celles qui n'ont plus rien à
     relire et qu'aucune décision non annulée n'a retirées ou fusionnées. Renvoie {"masquees": n, "reaffichees": n}.
+    Ses deux UPDATE parcourent les stations de toute la base : elles passent sous le verrou commun aux étapes de la
+    file, pour ne pas croiser les services d'une ville en train de s'écrire (issue #361).
     """
+    return MySQLUtils.exclusive_write(lambda: _hide_doubtful_stations_once(trial), "le masquage des stations douteuses")
+
+
+def _hide_doubtful_stations_once(trial: bool) -> dict:
+    """Un essai de hide_doubtful_stations : la transaction des deux UPDATE, jusqu'au commit, puis le bilan."""
     sources = (SIGNALS_FROM_OSM, SIGNALS_FROM_STATE)
     removing = ", ".join(["%s"] * len(REMOVING_DECISIONS))
     connection = MySQLUtils.connect()

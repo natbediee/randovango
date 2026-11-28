@@ -8,6 +8,10 @@
 // filtres) → 7. Sélection et création du plan.
 
 document.addEventListener('DOMContentLoaded', async function() {
+    // Nombre de jours de prévisions qu'Open-Meteo donne pour une ville : aujourd'hui (J) puis J+1 à J+6.
+    // Une ville qui en a moins garde d'anciennes prévisions : sa météo est à redemander (issue #367).
+    const FORECAST_DAYS = 7;
+
     // --- 1. Contexte du séjour ---
     // Mode "changement de ville mi-séjour" : l'utilisateur a déjà un plan en cours
     // (déclenché depuis /results, bouton "Changer de ville") et vient simplement
@@ -330,20 +334,24 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (planBtn) planBtn.style.display = '';
         document.getElementById('weatherTitle').textContent = '🌤️ Météo à ' + city.name + ' - Prochains jours';
 
-        // Charger la météo si nécessaire (villes dont la météo en base est périmée :
-        // /refresh-meteo la réactualise et renvoie la même forme enrichie que /cities)
+        // Charger la météo si nécessaire : une ville sans prévision, ou dont les prévisions n'atteignent plus J+6
+        // (elles datent d'un jour précédent, le tour quotidien n'est pas encore passé par elle, issue #367).
+        // /refresh-meteo la réactualise tout de suite et renvoie la même forme enrichie que /cities.
         let meteoData = [];
         try { meteoData = JSON.parse(city.option.getAttribute('data-meteo')) || []; } catch(e) {}
 
-        if (!meteoData || meteoData.length === 0) {
+        if (meteoData.length < FORECAST_DAYS) {
             const weatherGrid = document.getElementById('weatherGrid');
             weatherGrid.innerHTML = '<p style="grid-column:1/-1;text-align:center;"><i class="fas fa-spinner fa-spin"></i> Chargement météo...</p>';
             try {
                 const data = await apiGet(`/api/step1/refresh-meteo/${cityId}`);
                 city.option.setAttribute('data-meteo', JSON.stringify(data.meteo));
             } catch(err) {
-                weatherGrid.innerHTML = '<p style="grid-column:1/-1;text-align:center;">⚠️ Météo indisponible</p>';
-                return;
+                // Échec de la demande : les anciennes prévisions, s'il y en a, restent affichées.
+                if (meteoData.length === 0) {
+                    weatherGrid.innerHTML = '<p style="grid-column:1/-1;text-align:center;">⚠️ Météo indisponible</p>';
+                    return;
+                }
             }
         }
         updateWeatherDisplay(city.option);
