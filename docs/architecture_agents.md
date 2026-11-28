@@ -99,6 +99,9 @@ flowchart TB
   échec avec une raison lisible, et le passage s'arrête. Les catégories finies restent enregistrées. La reprise
   (`POST /api/supervision/passages/ID/reprise`) ne refait que les catégories non finies ; une grande ville reprend en
   plus ses zones finies depuis son fichier JSON. Elle est acceptée même quand la même étape tourne sur une autre ville.
+  La reprise est un nouveau passage : dans l'échec, les catégories jamais commencées passent à « reprise », avec le
+  lien vers le passage qui les refait (`refaite_par`) ; une catégorie « à faire » veut donc toujours dire qu'il reste
+  du travail. Les passages repris avant cette règle sont rattrapés au démarrage de la file.
 - **Une chaîne en paramètre.** Les chaînes (`CHAINS` dans `passage_service.py`) se lancent toutes par les mêmes
   routes : services, spots, pépites, et les chaînes gratuites de l'ajout d'une ville (OSM, carburants, FINESS).
 - **Les mesures.** `llm_calls` garde chaque appel, réussi ou non : son coût en dollars, sa durée, ses tokens,

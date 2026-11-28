@@ -125,8 +125,8 @@ def get_passage(passage_id: str, _admin=Depends(require_admin)):
     """
     Où en est un passage : la ville, l'origine (supervision, ajout, etl) et s'il passe devant l'ETL (prioritaire),
     l'état (en_file, en_cours, fini, echec), le coût et les appels lus dans llm_calls, la raison d'un échec, et pour
-    chaque catégorie son état, son étape (recherches,
-    analyse, preuves, enregistrement), son coût et le bilan de son enregistrement.
+    chaque catégorie son état, son étape (recherches, analyse, preuves, enregistrement), son coût et le bilan de son
+    enregistrement. Une catégorie « reprise » n'a jamais commencé ici : refaite_par donne le passage qui l'a refaite.
     Ce qu'il a trouvé (trouvailles) : chaque service, spot ou pépite qu'il a ajouté ou modifié, avec son nom, la partie
     qui l'a fait et l'heure.
     """
