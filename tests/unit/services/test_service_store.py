@@ -1,8 +1,12 @@
 """Un agent enrichit, il ne recrée pas : le service déjà en base est retrouvé dans tous les services, au même endroit."""
+import mysql.connector
+import pytest
+
 from agents.find_commerces import COMMERCES
 from agents.find_restaurants import RESTAURANTS
 from services import service_store
 from services.service_store import find_known, is_verified, same_name
+from utils import db_utils
 
 PLOUDALMEZEAU = {"id": 1, "name": "Ploudalmézeau", "latitude": 48.5439, "longitude": -4.655}
 GALION_SPOT = (48.5413, -4.65673)
@@ -146,8 +150,9 @@ class _Base:
     """Une base factice : garde les requêtes, ne trouve ni signal, ni décision, ni correction humaine."""
     lastrowid = 99
 
-    def __init__(self, waiting=False):
+    def __init__(self, waiting=False, deadlocks=0):
         self.queries, self.waiting, self.last, self.ended = [], waiting, "", []
+        self.deadlocks = deadlocks      # combien de commits MySQL annule pour interblocage avant d'en accepter un
 
     def cursor(self):
         return self
@@ -166,6 +171,9 @@ class _Base:
         pass
 
     def commit(self):
+        if self.deadlocks:
+            self.deadlocks -= 1
+            raise mysql.connector.errors.InternalError(msg="Deadlock found when trying to get lock", errno=1213)
         self.ended.append("commit")
 
     def rollback(self):
@@ -175,9 +183,10 @@ class _Base:
         return [params for sql, params in self.queries if sql.startswith(start)]
 
 
-def _save(monkeypatch, category, row, known=(), sheets=(), waiting=False, trial=False):
+def _save(monkeypatch, category, row, known=(), sheets=(), waiting=False, trial=False, deadlocks=0):
     """Enregistre un lieu de Ploudalmézeau. Rend la base, les lieux créés et les services ajoutés à un lieu existant."""
-    base, created, linked = _Base(waiting), [], []
+    base, created, linked = _Base(waiting, deadlocks), [], []
+    monkeypatch.setattr(db_utils.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(service_store.MySQLUtils, "connect", staticmethod(lambda: base))
     monkeypatch.setattr(service_store.MySQLUtils, "disconnect", staticmethod(lambda connection: None))
     monkeypatch.setattr(service_store, "get_or_create_source", lambda cursor, source: 1)
@@ -192,6 +201,20 @@ def _save(monkeypatch, category, row, known=(), sheets=(), waiting=False, trial=
 
 RESTAURANT = {"nom": "Le Galion", "genre": "bar-brasserie", "categorie": "bistrot", "adresse": GALION_ADDRESS, "pages": [SITE]}
 CAFE = {"nom": "Le Galion", "genre": "bar-tabac", "categorie": "cafe", "adresse": GALION_ADDRESS, "pages": [SITE]}
+
+
+def test_services_cancelled_for_deadlock_are_saved_on_the_next_attempt(monkeypatch):
+    """Les services d'une ville annulés une fois pour interblocage (Donville-les-Bains, 28 novembre) : refaits en entier, ils sont enregistrés."""
+    summary, base, created, _ = _save(monkeypatch, RESTAURANTS, RESTAURANT, deadlocks=1)
+    assert summary["fiches"] == 1
+    assert created == ["Le Galion", "Le Galion"]       # le premier essai a été annulé en entier par MySQL
+    assert base.ended == ["rollback", "commit"]
+
+
+def test_services_cancelled_at_every_attempt_make_the_passage_fail(monkeypatch):
+    """Annulés à chaque essai, les services font échouer le passage, avec un message qui nomme la ville et l'interblocage."""
+    with pytest.raises(db_utils.DeadlockRetriesExhausted, match=r"en écrivant les services \(restaurants\) de Ploudalmézeau"):
+        _save(monkeypatch, RESTAURANTS, RESTAURANT, deadlocks=db_utils.DEADLOCK_ATTEMPTS)
 
 
 def test_the_restaurant_first_then_the_cafe_makes_one_service(monkeypatch):
