@@ -39,12 +39,81 @@
   // Les routes du voyage exigent un jeton (carte #103) : un visiteur sans compte reçoit d'abord un
   // jeton invité (ensureSession), puis l'appel part. Les routes /api/auth/ n'en ont pas besoin.
   async function apiFetch(path, options) {
-    if (path.indexOf('/api/auth/') !== 0) await ensureSession();
-    var response = await fetch(window.API_BASE + path, Object.assign({}, options, { credentials: 'include' }));
+    var isAuthRoute = path.indexOf('/api/auth/') === 0;
+    if (!isAuthRoute) await ensureSession();
+    var response = await sendToApi(path, options);
+    // 401 : le cookie a disparu ou n'est plus valable, alors que la page croyait la session ouverte
+    // (issue #298). Les routes /api/auth/ gardent leur propre 401 : « mot de passe incorrect ».
+    if (response.status === 401 && !isAuthRoute) response = await recoverLostSession(path, options, response);
     // 429 : l'API a refusé, trop de demandes en peu de temps (carte #21). Certains appels se font
     // en arrière-plan sans rien afficher (choix du spot) : le message est donc montré ici, pour tous.
     if (response.status === 429) showTooManyRequests(response.clone());
     return response;
+  }
+
+  // L'appel lui-même, avec le cookie joint.
+  function sendToApi(path, options) {
+    return fetch(window.API_BASE + path, Object.assign({}, options, { credentials: 'include' }));
+  }
+
+  // ===== Session perdue (issue #298) =====
+  // La page ne voit pas le cookie (httpOnly) : elle croit la session ouverte tant que l'heure de fin
+  // notée n'est pas passée. Le cookie peut pourtant disparaître avant (cookies effacés, secret des
+  // jetons changé, compte supprimé) : l'API répond alors 401 à chaque appel.
+  //   - Un compte : on ne peut pas le reconnecter à sa place. La page l'invite à se reconnecter ;
+  //     ses voyages sont liés à son compte, il les retrouve après la connexion.
+  //   - Un invité : il reçoit un nouveau jeton invité, et l'appel repart une fois. Son voyage en
+  //     cours reste lié à l'ancien identifiant invité, que plus personne ne peut présenter : l'API le
+  //     refuse (403), et la page lui dit de recommencer un voyage.
+  // Dans tous les cas, la réponse rendue à la page porte un message clair dans detail, à la place
+  // de « Token manquant » ou « Token invalide » : les pages qui affichent detail montrent celui-là.
+  // Les mots du voyageur, pas ceux du code : ni « session », ni « jeton », ni « navigateur ».
+  var MESSAGE_ACCOUNT_LOST = 'Ta connexion a pris fin : reconnecte-toi pour retrouver tes voyages.';
+  var MESSAGE_GUEST_UNRENEWED = 'Impossible de continuer pour l\'instant. Réessaie dans un moment.';
+  var MESSAGE_TRIP_LOST = 'Oups, on a perdu la trace de ton voyage. Recommence-en un nouveau : c\'est prêt en quelques minutes.';
+
+  async function recoverLostSession(path, options, response) {
+    if (isLoggedIn()) {
+      showSessionNotice(MESSAGE_ACCOUNT_LOST, 'Me reconnecter', window.APP_URLS.contributorLogin);
+      return clearResponse(response.status, MESSAGE_ACCOUNT_LOST);
+    }
+    // L'heure de fin notée ne vaut plus rien : on l'oublie, pour que ensureSession redemande un jeton.
+    localStorage.removeItem('guestExpiresAt');
+    await ensureSession();
+    if (!hasGuestSession()) return clearResponse(response.status, MESSAGE_GUEST_UNRENEWED);
+    var retried = await sendToApi(path, options);
+    // 403 juste après le nouveau jeton : le voyage demandé appartenait à l'ancien invité.
+    if (retried.status === 403) {
+      showSessionNotice(MESSAGE_TRIP_LOST, 'Nouveau voyage', window.APP_URLS.duration);
+      return clearResponse(retried.status, MESSAGE_TRIP_LOST);
+    }
+    if (retried.status === 401) return clearResponse(retried.status, MESSAGE_GUEST_UNRENEWED);
+    return retried;
+  }
+
+  // Une réponse au même code HTTP, dont detail est un message lisible par le voyageur.
+  function clearResponse(status, message) {
+    return new Response(JSON.stringify({ detail: message }), {
+      status: status,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Bandeau en haut de page, avec un lien vers la suite (connexion ou nouveau voyage). Il reste
+  // affiché : sans lui, le voyageur ne saurait pas pourquoi plus rien ne marche. Plusieurs appels
+  // partis en même temps peuvent le demander : un seul bandeau est montré.
+  function showSessionNotice(message, linkText, linkHref) {
+    if (document.querySelector('[data-session-notice]')) return;
+    var notice = document.createElement('div');
+    notice.className = 'rate-limit-notice';
+    notice.setAttribute('role', 'alert');
+    notice.setAttribute('data-session-notice', '');
+    notice.textContent = message + ' ';
+    var link = document.createElement('a');
+    link.href = linkHref;
+    link.textContent = linkText;
+    notice.appendChild(link);
+    document.body.appendChild(notice);
   }
 
   // Bandeau en haut de page avec le message de l'API ; il disparaît seul après quelques secondes.
