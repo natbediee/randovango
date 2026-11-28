@@ -1,184 +1,97 @@
 # RandoVango
 
-Application de planification de randonnées en itinérance en van avec recherche de spots, météo et points d'intérêt.
+Application de planification de randonnées en itinérance en van : le voyageur choisit une ville, ses randos, ses spots
+pour la nuit et les services utiles autour, et Vany lui propose des pépites pour chaque jour.
 
-## Architecture (2025)
-
-- **Backend Python** :
-    - FastAPI pour l’API REST (gestion des villes, randonnées, plans, utilisateurs, authentification JWT)
-    - Scripts ETL pour l’extraction, la transformation et le chargement des données multi-sources (GPX, météo, OSM, Wikidata, P4N)
-    - MySQL pour les données structurées (villes, randonnées, utilisateurs, plans, météo)
-    - MongoDB pour les traces GPX brutes et données non structurées
-    - SQLITE pour l'authentication et l'historisation des accès aux routes
-- **Frontend** :
-    - Flask pour le serveur web, rendu des pages avec Jinja2
-    - HTML/CSS/JS pour l’interface utilisateur interactive
-- **Orchestration & DevOps** :
-    - Docker pour la conteneurisation, orchestration via docker-compose
-    - Logging centralisé, gestion des variables d’environnement
-- **Sécurité** :
-    - Authentification JWT en cookie httpOnly, gestion des rôles (SQLite), audit des accès
-      (voir « Sécurité de l'API » plus bas)
-
-### Schéma simplifié
+## Architecture
 
 ```mermaid
-graph TD
-  USER["Utilisateur"]
-  UI["Frontend (Flask, HTML/CSS/JS)"]
-  API["API REST (FastAPI)"]
-  ETL["ETL Pipeline"]
-  EXTRACTION["Extraction (GPX, APIs, Scraping)"]
-  AGGREGATION["Agrégation / Nettoyage"]
-  MYSQL["MySQL"]
-  MONGO["MongoDB"]
-  SQLITE["SQLite (authentification)"]
+flowchart TB
+    NAV["Navigateur<br/>voyageur, contributeur, admin"]
+    subgraph docker["Docker Compose"]
+        NG["nginx<br/>port 80"]
+        FR["Front Flask<br/>pages Jinja2"]
+        API["API FastAPI<br/>port 8000"]
+        ETL["ETL<br/>la rando, sa ville, sa météo"]
+        FILE["File des passages<br/>une file par étape,<br/>une ville à la fois"]
+        AG["Agents<br/>services, spots, pépites de Vany"]
+        MY[("MySQL<br/>villes, randos, spots,<br/>services, voyages, passages")]
+        MO[("MongoDB<br/>tracés GPX")]
+        SQ[("SQLite<br/>comptes, rôles,<br/>journal des accès")]
+    end
+    EXT["Sources extérieures<br/>OpenStreetMap, Wikidata, Open-Meteo,<br/>données de l'État, BCE,<br/>source des spots, pages web"]
+    LLM["Modèle de langage"]
+    SAV["Sauvegarde chiffrée<br/>hors de la machine"]
 
-  USER -- "Dépose GPX / Utilise l'interface" --> UI
-  UI -- "Appels HTTP" --> API
-  API -- "Déclenche ETL" --> ETL
-  ETL -- "Extraction" --> EXTRACTION
-  ETL -- "Agrégation" --> AGGREGATION
-  AGGREGATION -- "Stockage structuré" --> MYSQL
-  AGGREGATION -- "Stockage GPX brut" --> MONGO
-  API -- "Lecture/écriture" --> MYSQL
-  API -- "Lecture/écriture" --> MONGO
-  API -- "Lecture/écriture" --> SQLITE
+    NAV --> NG
+    NG -- "pages" --> FR
+    NG -- "/api/" --> API
+    API --> ETL
+    ETL --> FILE
+    API -- "supervision :<br/>lancer, reprendre" --> FILE
+    FILE --> AG
+    AG --> LLM
+    EXT --> ETL
+    EXT --> FILE
+    API --> MY
+    API --> MO
+    API --> SQ
+    FILE --> MY
+    MY -.-> SAV
 ```
 
-L'architecture des agents, de la route de la supervision jusqu'aux mesures de chaque appel :
-[docs/architecture_agents.md](docs/architecture_agents.md).
+- **Une rando envoyée** (page d'ajout, ou dossier d'attente) est lue et chargée tout de suite, avec la météo de sa
+  ville. Le reste (OSM et Wikidata, carburants, pharmacies, spots, pépites, services) part dans la
+  [file des passages](docs/architecture_agents.md#la-file-des-passages) : chaque étape prend une ville à la fois.
+- **Les agents proposent, le code contrôle, l'humain tranche** : chaque appel au modèle est mesuré, son coût est suivi
+  en euros sous un budget, et les décisions de la supervision priment sur les agents
+  ([architecture des agents](docs/architecture_agents.md)).
+- **Chaque route a un niveau d'accès** (public, voyageur, propriétaire du plan, compte, admin), et les routes coûteuses
+  sont plafonnées ([plafonds](docs/plafonds.md)).
+- **Les trois bases se sauvegardent chiffrées hors de la machine**, avant chaque gros passage
+  ([exploitation](docs/exploitation.md)).
 
-## Prérequis
+## Installation
 
-### Environnement Docker (recommandé)
+Il faut Docker et Docker Compose : Python, Chromium, MySQL et MongoDB sont dans les conteneurs.
 
-- Docker
-- Docker Compose
-
-Toutes les dépendances (Python, Chromium, MySQL, MongoDB) sont gérées automatiquement dans les conteneurs.
-
-### Environnement local (développement)
-
-#### Python et dépendances
-```bash
-python 3.12+
-pip install -r requirements.txt
-```
-
-#### Chromium et chromedriver (pour le scraping P4N)
-
-**Sur Ubuntu :**
-```bash
-sudo apt-get update
-sudo apt-get install -y chromium chromium-driver
-```
-**Configuration du script Python (`backend/etl/extract/scraper_p4n.py`) :**
-Adapter les chemins selon votre installation locale :
-```python
-CHROME_BINARY_PATH = '/usr/bin/chromium'  
-CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
-```
-
-> **Note :** Si vous utilisez Docker, Chromium et Chromedriver sont installés automatiquement dans les conteneurs. L'installation manuelle n'est requise que pour un usage local hors Docker.
-
-#### Bases de données
-- MySQL 8.0+
-- MongoDB 6.0+
-
-## Installation et lancement
-
-### Avec Docker (recommandé)
-
-1. **Clone le projet**
 ```bash
 git clone <repo-url>
 cd randovango
-```
-
-2. **Configure les variables d'environnement**
-Copie et adapte le fichier `.env` :
-```bash
-cp .env.example .env
-# Édite .env avec vos paramètres
-```
-
-3. **Lance les services**
-```bash
+cp .env.example .env      # puis remplir les mots de passe et les clés
 docker compose up -d
 ```
-### Lancement manuel des ETL (hors interface frontend)
 
-- **ETL principal (intégration GPX, météo, OSM, Wikidata, P4N), integrer un ou des fichiers GPX dnas le dossier Data**
+| Quoi | Adresse |
+| --- | --- |
+| L'application | http://localhost |
+| La documentation de l'API (chaque route y affiche son niveau d'accès) | http://localhost:8000/docs |
+| Adminer, pour lire MySQL (serveur `db_randovango`) | http://localhost:`ADMINER_PORT` (voir `.env`) |
+
+Les tables se créent au premier démarrage de l'API (`backend/db_init`). Quand une mise à jour en apporte de
+nouvelles, on les crée à la main ; le script n'ajoute que ce qui manque, sans rien renommer ni supprimer :
+```bash
+docker exec fastapi_backend python db_init/db_randovango.py
+```
+
+## Ajouter des données
+
+En temps normal, tout passe par l'interface : la page d'ajout pour une rando, la supervision pour relancer une chaîne.
+Les fichiers GPX du dossier d'attente se chargent aussi à la main :
+
 ```bash
 docker compose exec backend python3 -m etl.etl_pipeline
 ```
-- **ETL de rattrapage sur OSM,P4N,Wiki (pour relancer l'intégration sur des données déjà présentes)**
-```bash
-docker compose exec backend python3 -m etl.etl_rattrapage
-```
-- **ETL meteo pour rafraichir les données**
-```bash
-docker compose exec backend python3 -m etl.etl_meteo
-```
 
-> ⚠️ Le lancement manuel des ETL est réservé aux cas où vous ne passez pas par le frontend Flask. Sinon, toutes les opérations d'intégration de données se font via l'interface utilisateur.
+`etl_pipeline` demande les chaînes de chaque nouvelle ville à la file du backend principal. Une chaîne manquante ou
+en échec sur une ville déjà en base (OSM, source des spots, carburants, FINESS, pépites, services) se relance depuis
+la supervision, par la même file (`POST /api/supervision/passages`).
 
-### Sauvegarde de la base MySQL
+La météo n'a rien à lancer : elle se charge avec la rando, puis la page du voyage la redemande d'elle-même quand les
+prévisions d'une ville choisie n'atteignent plus J+6 (`GET /api/step1/refresh-meteo/{city_id}`).
 
-> La sauvegarde complète des trois bases et des traces des passages, chiffrée et copiée hors de la
-> machine avant chaque gros passage, se fait avec `python3 scripts/backup.py` : voir
-> [docs/exploitation.md](docs/exploitation.md#sauvegarde-et-restauration-des-bases).
+## Sécurité de l'API
 
-Le dump ci-dessous sert à peupler la base en production. Le refaire après chaque traitement important des données (scraping, harmonisation des spots…).
-
-```bash
-docker compose exec db_randovango mysqldump -u randovango_user -p \
-  --single-transaction --no-tablespaces --set-gtid-purged=OFF --skip-masking-policies \
-  bdd_randovango > sauvegardes/bdd_randovango_dump.sql
-```
-
-Le mot de passe demandé est `DB_PSWD` (voir `.env`). Le compte applicatif suffit : inutile d'utiliser root.
-
-| Option | Rôle |
-| --- | --- |
-| `--single-transaction` | photo cohérente de la base, même si un script y écrit pendant le dump |
-| `--no-tablespaces` | n'exporte pas les espaces de stockage (réservé aux administrateurs, inutile ici) |
-| `--set-gtid-purged=OFF` | n'inclut pas les identifiants de transactions du serveur, qui feraient échouer la restauration sur un autre serveur |
-| `--skip-masking-policies` | n'exporte pas les politiques de masquage de colonnes (MySQL 9, non utilisées) |
-
-Pour vérifier que le dump est complet, la dernière ligne du fichier doit être `-- Dump completed on …`.
-
-### En local
-
-1. **Installe les dépendances**
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-2. **Configure `.env`** avec les informations de connexion MySQL et MongoDB locales
-
-3. **Lance le backend FastAPI**
-```bash
-cd backend
-uvicorn main:app --reload
-```
-
-4. **Lance le frontend Flask**
-```bash
-cd frontend
-python app.py
-```
-
-## Utilisation
-
-### Backend API (FastAPI)
-- URL : `http://localhost:8000`
-- Documentation interactive : `http://localhost:8000/docs` (chaque route y affiche son niveau d'accès)
-
-### Sécurité de l'API
 Le jeton de connexion (JWT) est posé par l'API dans un cookie httpOnly `access_token` : le JavaScript des
 pages ne le voit pas. Un compte l'obtient par `POST /api/auth/login` (60 minutes), un voyageur sans compte
 par `POST /api/auth/guest` (30 jours). Chaque route a un niveau d'accès, lu dans ses dépendances
@@ -197,53 +110,40 @@ Les routes qui lancent les recherches de Vany et les essais de connexion manqué
 `RATE_LIMIT_ENABLED=0` coupe ces plafonds sur le poste de développement. CORS n'accepte que les origines
 de `ALLOWED_ORIGINS` (`backend/api/cors.py`).
 
-### Frontend (Flask)
-- URL : `http://localhost:5000`
-
-### Adminer (interface MySQL)
-- URL : `http://localhost:8080`
-- Serveur : `db_randovango`
-### SQLite
-- Utilisateur : `randovango_user` (voir `.env`)
-
 ## Structure du projet
 
 ```
 randovango/
 ├── backend/
-│   ├── api/              # Routers FastAPI
-│   ├── etl/              # Extract, Transform, Load
-│   │   ├── extract/      # Scrapers et API externes
-│   │   ├── transform/    # Transformation des données
-│   │   └── load/         # Chargement en base
-│   ├── db_init/          # Scripts d'initialisation DB
-│   ├── utils/            # Utilitaires (logger, DB, geo)
-│   └── main.py           # Point d'entrée FastAPI
-├── frontend/
-│   ├── static/           # CSS, JS, images
-│   ├── templates/        # Templates Jinja2
-│   └── app.py            # Point d'entrée Flask
-├── data/                 # Données d'entrée (GPX)
-├── storage/
-│   ├── mysql/            # Volumes persistants MySQL
-│   ├── mongodb/          # Volumes persistants MongoDB
-│   └── sqlite/           # Bdd authentification
-├── logs/                 # Logs applicatifs
-├── docker-compose.yml
-├── Dockerfile.backend
-├── Dockerfile.frontend
-├── requirements.txt
-└── .env
+│   ├── api/              # routes FastAPI, niveaux d'accès, plafonds
+│   ├── agents/           # agents : services, spots, pépites de Vany ; llm_service, seul point d'appel au modèle
+│   ├── services/         # règles métier : file des passages, budget, voyage, supervision
+│   ├── etl/              # extraction, transformation, chargement (extract/, transform/, load/)
+│   ├── db_init/          # création des tables MySQL et SQLite
+│   ├── utils/            # connexion aux bases, journal, heure de Paris
+│   └── main.py           # point d'entrée de l'API
+├── frontend/             # Flask : templates/ (pages Jinja2), static/ (CSS, JavaScript), app.py
+├── nginx/                # le point d'entrée unique, port 80
+├── scripts/              # sauvegarde et restauration des bases
+├── tests/                # unit/ et functional/ (voir tests/README.md)
+├── docs/                 # architecture des agents, exploitation, plafonds, restauration
+├── storage/              # SQLite et fichiers de travail, monté dans le backend
+├── logs/                 # journaux des conteneurs
+├── docker-compose.yml          # l'application principale
+├── docker-compose.branche.yml  # un backend de branche, à côté du principal
+└── .env.example                # les réglages à recopier dans .env
 ```
 
-## ETL Pipeline
+MySQL et MongoDB gardent leurs données dans des volumes Docker nommés (`mysql_data`, `mongo_data`).
 
-Le pipeline ETL extrait, transforme et charge les données depuis plusieurs sources :
+## Tests
 
-- **Météo** : API Open-Meteo
-- **Points d'intérêt (POI)** : OpenStreetMap (Overpass API), Wikidata
-- **Spots VAN** : P4N (scraping Selenium)
-- **Traces GPX** : Fichiers GPX locaux
+```bash
+pytest tests/unit          # rien à lancer : ni base, ni réseau, ni modèle
+pytest tests/functional    # les scénarios de l'application vus de l'extérieur
+```
+
+Le détail est dans [tests/README.md](tests/README.md). La CI les lance à chaque PR.
 
 ## Développement
 
@@ -286,12 +186,12 @@ BRANCHE=carburants docker compose -f docker-compose.branche.yml down
 ```
 Toujours avec `-f` : sans lui, `docker compose` lirait `docker-compose.yml`, celui du projet principal.
 
-### Logs
-Les logs sont générés dans le dossier `logs/` et affichés dans la console.
+### Journaux
 
+Les journaux sont écrits dans le dossier `logs/` et affichés dans la console des conteneurs.
 
 ## Auteurs
 
 [![GitHub](https://img.shields.io/badge/GitHub-Nathalie%20Bédiée-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/natbediee/)  
 En formation développeur IA   
-ISEN Brest  
+ISEN Brest
