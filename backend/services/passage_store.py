@@ -28,12 +28,21 @@ PASSAGE_COLUMNS = """p.passage_id, p.chain, p.city_id, p.origin, p.status, p.req
                      p.error, p.resumed_from, c.name AS city_name, c.commune AS city_commune"""
 
 
-def _write(sql: str, rows: list) -> None:
-    """Exécute une écriture pour chaque ligne de `rows`, puis la valide (commit)."""
-    with MySQLUtils.open_cursor() as (connection, cursor):
-        for row in rows:
-            cursor.execute(sql, row)
-        connection.commit()
+# POURQUOI LE VERROU COMMUN (issue #370)
+# Chaque étape de la file a son fil (#332) : plusieurs étapes écrivent en même temps l'état de leurs passages et de
+# leurs parties. Comme les autres écritures des étapes (#361), celles du journal passent donc par le verrou commun :
+# une seule écriture à la fois, et une écriture que MySQL annule quand même pour interblocage est refaite.
+def _write(sql: str, rows: list, label: str) -> None:
+    """
+    Exécute une écriture pour chaque ligne de `rows`, puis la valide (commit), sous le verrou d'écriture commun.
+    label dit ce qui s'écrit (« l'état du passage … ») : c'est lui que nomme l'erreur si l'écriture échoue.
+    """
+    def write_once():
+        with MySQLUtils.open_cursor() as (connection, cursor):
+            for row in rows:
+                cursor.execute(sql, row)
+            connection.commit()
+    MySQLUtils.exclusive_write(write_once, label)
 
 
 def _read(sql: str, params: tuple) -> list:
@@ -51,9 +60,11 @@ def insert_passage(passage_id: str, chain: str, city_id: int, origin: str, parts
     """
     _write("""INSERT INTO passages (passage_id, chain, city_id, origin, status, requested_at, resumed_from)
               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-           [(passage_id, chain, city_id, origin, status, datetime.now(), resumed_from)])
+           [(passage_id, chain, city_id, origin, status, datetime.now(), resumed_from)],
+           f"le nouveau passage {passage_id}")
     _write("INSERT INTO passage_parts (passage_id, part, position, status) VALUES (%s, %s, %s, %s)",
-           [(passage_id, part, position, TO_DO) for position, part in enumerate(parts, start=1)])
+           [(passage_id, part, position, TO_DO) for position, part in enumerate(parts, start=1)],
+           f"les parties du nouveau passage {passage_id}")
 
 
 def set_passage_status(passage_id: str, status: str, error: str | None = None) -> None:
@@ -61,14 +72,15 @@ def set_passage_status(passage_id: str, status: str, error: str | None = None) -
     Change l'état d'un passage : son début est noté quand il passe en cours, sa fin quand il finit ou échoue. Un passage
     remis en file (relancé par l'admin) garde sa date de demande : il reprend sa place dans la file.
     """
+    label = f"l'état « {status} » du passage {passage_id}"
     if status == QUEUED:
-        _write("UPDATE passages SET status = %s WHERE passage_id = %s", [(status, passage_id)])
+        _write("UPDATE passages SET status = %s WHERE passage_id = %s", [(status, passage_id)], label)
     elif status == RUNNING:
         _write("UPDATE passages SET status = %s, started_at = %s WHERE passage_id = %s",
-               [(status, datetime.now(), passage_id)])
+               [(status, datetime.now(), passage_id)], label)
     else:
         _write("UPDATE passages SET status = %s, finished_at = %s, error = %s WHERE passage_id = %s",
-               [(status, datetime.now(), error, passage_id)])
+               [(status, datetime.now(), error, passage_id)], label)
 
 
 def close_resumed_parts() -> int:
@@ -78,12 +90,16 @@ def close_resumed_parts() -> int:
     pour toujours, et on lisait qu'il restait du travail sur des villes faites (177 parties le 20 novembre 2026, 1380 le
     28). Les parties en échec gardent leur raison, et un échec pas encore repris garde ses parties « à faire » : il
     attend sa reprise. La requête ne touche que ce qui reste à fermer : la relancer ne change rien de plus.
+    Elle passe par le verrou commun, comme _write (issue #370) : elle change l'état de parties que d'autres étapes
+    écrivent peut-être au même moment.
     """
-    with MySQLUtils.open_cursor() as (connection, cursor):
-        cursor.execute("""UPDATE passage_parts pp JOIN passages r ON r.resumed_from = pp.passage_id
-                          SET pp.status = %s WHERE pp.status = %s""", (RESUMED, TO_DO))
-        connection.commit()
-        return cursor.rowcount
+    def close_once() -> int:
+        with MySQLUtils.open_cursor() as (connection, cursor):
+            cursor.execute("""UPDATE passage_parts pp JOIN passages r ON r.resumed_from = pp.passage_id
+                              SET pp.status = %s WHERE pp.status = %s""", (RESUMED, TO_DO))
+            connection.commit()
+            return cursor.rowcount
+    return MySQLUtils.exclusive_write(close_once, "la fermeture des parties des passages déjà repris")
 
 
 def set_part(passage_id: str, part: str, status: str, step: str | None = None, summary: dict | None = None,
@@ -96,7 +112,8 @@ def set_part(passage_id: str, part: str, status: str, step: str | None = None, s
                   finished_at = CASE WHEN %s IN ('fini', 'echec') THEN %s ELSE NULL END
               WHERE passage_id = %s AND part = %s""",
            [(status, step, json.dumps(summary, ensure_ascii=False) if summary is not None else None, error, now,
-             status, now, passage_id, part)])
+             status, now, passage_id, part)],
+           f"l'état « {status} » de la partie {part} du passage {passage_id}")
 
 
 def load_passage(passage_id: str) -> dict | None:
