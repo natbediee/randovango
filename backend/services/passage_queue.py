@@ -198,7 +198,9 @@ def work_on_resumes() -> None:
     Le travail du fil des reprises : marquer « interrompu » les passages coupés (#344), reprendre les parties
     gratuites en échec qui peuvent l'être, réveiller les étapes s'il en a repris, puis attendre une minute. Un seul fil
     le fait : deux fils pourraient reprendre le même échec.
+    Au démarrage, il ferme aussi les parties « à faire » des passages repris avant #295 (close_finished_resumes).
     """
+    close_finished_resumes()
     while True:
         try:
             cut = passage_service.mark_cut_passages()
@@ -210,6 +212,20 @@ def work_on_resumes() -> None:
             logger.exception("[file] erreur en reprenant les échecs : nouvel essai au prochain tour")
         _wakes[RESUMES].wait(CHECK_SECONDS)
         _wakes[RESUMES].clear()
+
+
+def close_finished_resumes() -> None:
+    """
+    Le rattrapage des passages repris avant #295 : leurs parties jamais commencées passent à « reprise ». Fait une
+    fois par démarrage, et sans danger à refaire. Une base injoignable ne retient pas la file : elle est notée, et le
+    prochain démarrage recommencera.
+    """
+    try:
+        closed = passage_store.close_resumed_parts()
+        if closed:
+            logger.info(f"[file] {closed} partie(s) de passages déjà repris fermée(s) : « reprise »")
+    except Exception:
+        logger.exception("[file] parties des passages repris non fermées : nouvel essai au prochain démarrage")
 
 
 def wake() -> None:

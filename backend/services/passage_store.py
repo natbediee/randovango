@@ -17,6 +17,7 @@ RUNNING = "en_cours"
 DONE = "fini"
 FAILED = "echec"
 TO_DO = "a_faire"           # une partie que le passage n'a pas encore commencée
+RESUMED = "reprise"         # une partie jamais commencée d'un passage repris : sa reprise la fait à sa place (#295)
 
 # Les origines des passages demandés depuis le front avec un compte admin (issue #356) : une demande ou une reprise
 # depuis la supervision, une rando envoyée depuis la page d'ajout. Chaque étape de la file les prend avant les envois
@@ -68,6 +69,21 @@ def set_passage_status(passage_id: str, status: str, error: str | None = None) -
     else:
         _write("UPDATE passages SET status = %s, finished_at = %s, error = %s WHERE passage_id = %s",
                [(status, datetime.now(), error, passage_id)])
+
+
+def close_resumed_parts() -> int:
+    """
+    Les parties « à faire » des passages déjà repris passent à « reprise », et rend leur nombre (issue #295).
+    Une reprise est un nouveau passage, qui refait les parties pas finies ; l'ancien gardait les siennes « à faire »
+    pour toujours, et on lisait qu'il restait du travail sur des villes faites (177 parties le 20 novembre 2026, 1380 le
+    28). Les parties en échec gardent leur raison, et un échec pas encore repris garde ses parties « à faire » : il
+    attend sa reprise. La requête ne touche que ce qui reste à fermer : la relancer ne change rien de plus.
+    """
+    with MySQLUtils.open_cursor() as (connection, cursor):
+        cursor.execute("""UPDATE passage_parts pp JOIN passages r ON r.resumed_from = pp.passage_id
+                          SET pp.status = %s WHERE pp.status = %s""", (RESUMED, TO_DO))
+        connection.commit()
+        return cursor.rowcount
 
 
 def set_part(passage_id: str, part: str, status: str, step: str | None = None, summary: dict | None = None,
