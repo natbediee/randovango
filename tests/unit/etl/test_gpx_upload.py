@@ -8,6 +8,7 @@ d'attente. Ni base ni réseau : la recherche de la commune et l'enregistrement e
 import inspect
 import shutil
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -176,7 +177,7 @@ def upload_client(waiting_dir, commune_found, monkeypatch):
     monkeypatch.setattr(etl_pipeline, "start_folder_worker", lambda role: None)
     app = FastAPI()
     app.include_router(etl_router.router, prefix="/api/etl")
-    app.dependency_overrides[dependencies.get_current_user] = lambda: {"user_id": 7, "username": "contributrice"}
+    app.dependency_overrides[dependencies.require_contributor] = lambda: {"user_id": 7, "username": "contributrice"}
     return TestClient(app)
 
 
@@ -330,3 +331,57 @@ def test_a_waiting_folder_hike_outside_france_is_loaded_and_logged(waiting_dir, 
 
     assert (outcomes[0]["city"], outcomes[0]["reason"]) == ("Finhaut", None)
     assert any("Départ hors de France (Suisse)" in line for line in warnings)
+
+
+@pytest.mark.parametrize("received, kept", [
+    ("trace.gpx", "trace.gpx"),
+    ("Mont Saint-Michel.GPX", "Mont Saint-Michel.GPX"),
+    ("../../trace.gpx", "trace.gpx"),
+    ("/etc/cron.d/trace.gpx", "trace.gpx"),
+    ("..\\..\\trace.gpx", "trace.gpx"),
+])
+def test_the_received_name_keeps_no_path(received, kept) -> None:
+    """Le nom reçu du navigateur ne garde que le nom du fichier, jamais les dossiers qui le précèdent (issue #213)."""
+    assert etl_router.safe_gpx_name(received) == kept
+
+
+@pytest.mark.parametrize("received", [None, "", "trace", "trace.exe", "trace.gpx.exe", ".gpx", "..", "../..", "trace\0.gpx"])
+def test_a_name_without_gpx_extension_is_refused(received) -> None:
+    """Un nom vide, caché ou qui ne finit pas par .gpx est refusé (issue #213)."""
+    assert etl_router.safe_gpx_name(received) is None
+
+
+def test_a_name_climbing_up_folders_stays_in_the_waiting_folder(upload_client, waiting_dir, monkeypatch) -> None:
+    """Un fichier nommé « ../../trace.gpx » est écrit dans le sous-dossier d'envoi sous le nom trace.gpx, et nulle part au-dessus (issue #213)."""
+    written = []
+    monkeypatch.setattr(etl_router, "process_upload", lambda path, **kwargs: written.append(path) or {
+        "filename": path.name, "city": "Le Conquet", "reason": None})
+
+    answer = send(upload_client, "trace.gpx", name="../../trace.gpx")
+
+    assert written == [waiting_dir / "envoi" / "trace.gpx"]
+    assert answer["message"] == "Nouveau tracé sur Le Conquet (fichier trace.gpx)."
+    assert not (waiting_dir.parent / "trace.gpx").exists()
+
+
+def test_the_upload_route_refuses_a_file_that_is_not_gpx(upload_client, waiting_dir) -> None:
+    """Un fichier qui n'est pas un .gpx est refusé avec un message clair, sans rien écrire dans le dossier (issue #213)."""
+    answer = send(upload_client, "trace.gpx", name="trace.exe")
+
+    assert (answer["success"], answer["message"]) == (False, etl_router.REFUSED_NAME_MESSAGE)
+    assert not (waiting_dir / "envoi").exists()
+
+
+def test_a_failed_upload_does_not_show_the_internal_error(upload_client, waiting_dir, monkeypatch) -> None:
+    """Un chargement qui plante répond un message simple : le texte de l'erreur, qui peut montrer la base, reste dans le journal (issue #213)."""
+    def failing_upload(path, **kwargs):
+        raise RuntimeError("Access denied for user 'root'@'db_randovango' (using password: YES)")
+    monkeypatch.setattr(etl_router, "process_upload", failing_upload)
+    monkeypatch.setattr(etl_router, "logger", MagicMock())
+
+    answer = send(upload_client, "trace.gpx")
+
+    assert (answer["success"], answer["message"]) == (False, etl_router.UPLOAD_FAILED_MESSAGE)
+    assert "root" not in str(answer)
+    etl_router.logger.error.assert_called_once()
+    assert list((waiting_dir / "envoi").iterdir()) == []

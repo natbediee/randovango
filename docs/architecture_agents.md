@@ -1,81 +1,148 @@
-# Architecture de la chaîne des services
+# Architecture des agents et de la file des passages
 
-La chaîne des services est un agent de Randovango : pour une ville, elle cherche sur le web les
-restaurants, commerces, supermarchés et laveries, avec une preuve pour chacun. L'administratrice
-la lance et la suit depuis la supervision, par l'API, sans ouvrir le conteneur.
+Les agents de Randovango travaillent en chaînes, une ville à la fois : la chaîne des services cherche sur le web
+les restaurants, commerces, supermarchés et laveries, avec une preuve pour chacun ; celle des spots harmonise,
+date et vérifie les spots de la source des spots ; celle des pépites prépare les idées de Vany. Chaque chaîne
+passe par la file des passages, qu'elle soit demandée par l'envoi d'une rando ou par l'administratrice depuis la
+supervision. Les schémas suivent la chaîne des services ; les autres suivent le même chemin.
 
 Le principe, pour tous les agents : **l'agent propose, le code contrôle, l'humain tranche.**
 
-## Le schéma
+## Les schémas
+
+### 1. D'où viennent les passages
+
+Trois entrées remplissent la même file. Les demandes faites depuis le front par un compte admin (origines
+`supervision` et `ajout`) sont prioritaires ; l'envoi en masse et les randos des contributeurs gardent l'ordre
+d'envoi (origine `etl`).
+
+```mermaid
+flowchart LR
+    ADD["Rando envoyée<br/>depuis la page d'ajout"] --> ETL["ETL de la rando<br/>lecture, chargement,<br/>météo"]
+    BULK["Envoi en masse<br/>fichiers déposés dans<br/>le dossier d'attente,<br/>traités un à un en fond"] --> ETL
+    ETL -- "nouvelle commune" --> ASK["Chaînes de la commune<br/>seulement ce qui n'a<br/>jamais été fait"]
+    ASK --> FILE[["File des passages"]]
+    ADMIN["Administratrice<br/>supervision : lancer,<br/>reprendre"] --> FILE
+```
+
+### 2. Le principe de la file
+
+Chaque étape a sa propre file : elle prend une ville à la fois, les demandes prioritaires d'abord, puis dans l'ordre
+d'envoi. Elle n'attend jamais les étapes qui viennent après elle.
+
+```mermaid
+flowchart TD
+    ENV["Envoi de randos : villes dans l'ordre d'arrivée"]
+
+    subgraph GRATUIT["Étapes gratuites : elles enchaînent les villes sans attendre la suite"]
+        OSM["OSM et Wikidata : seul appel Overpass, une ville à la fois"]
+        CARB["Carburants (fichier de l'État et stations OSM déjà chargées)"]
+        FIN["FINESS (pharmacies)"]
+        SRC["Lecture de la source des spots, un navigateur à la fois"]
+    end
+
+    subgraph PAYANT["Étapes payantes : elles attendent le quota ou le budget sans échouer"]
+        HAR["Harmonisation des spots"] --> OUV["Lecture des ouvertures"] --> VER["Vérification des spots"]
+        PEP["Pépites de la ville"]
+        SER["Services : restaurants, commerces, supermarchés, laveries"]
+    end
+
+    ENV --> OSM
+    ENV --> SRC
+    OSM -->|"ville N prête"| CARB
+    OSM -->|"ville N prête"| FIN
+    OSM -->|"ville N prête"| PEP
+    OSM -->|"ville N prête"| SER
+    SRC -->|"ville N prête"| HAR
+
+    OSM -.->|"N fini : prend N+1"| OSM
+    SRC -.->|"N fini : prend N+1"| SRC
+    CARB -.->|"N fini : prend N+1 si prête"| CARB
+    FIN -.->|"N fini : prend N+1 si prête"| FIN
+    PEP -.->|"N fini : prend N+1 si prête"| PEP
+    SER -.->|"N fini : prend N+1 si prête"| SER
+    HAR -.->|"N fini : prend N+1 si prête"| HAR
+```
+
+Les flèches pointillées : chaque étape, dès qu'elle a fini la ville N, prend la ville N+1 si celle-ci est prête pour
+elle. Les étapes de tête (OSM, source des spots) n'attendent personne ; les autres attendent seulement que leur étape
+d'avant ait fini cette ville-là.
+
+Exemple dans le temps, trois villes envoyées ensemble (durées inventées, FINESS omis) :
+
+```mermaid
+gantt
+    title Trois villes envoyées ensemble
+    dateFormat HH:mm
+    axisFormat %H:%M
+    section OSM (Overpass)
+    Ville 1 :o1, 00:00, 5m
+    Ville 2 :o2, after o1, 5m
+    Ville 3 :o3, after o2, 5m
+    section Carburants
+    Ville 1 :c1, after o1, 2m
+    Ville 2 :c2, after o2, 2m
+    Ville 3 :c3, after o3, 2m
+    section Pépites (payant)
+    Ville 1 :p1, after o1, 15m
+    Ville 2 :p2, after p1, 15m
+    Ville 3 :p3, after p2, 15m
+    section Services (payant)
+    Ville 1 :s1, after o1, 20m
+    Ville 2 :s2, after s1, 20m
+    Ville 3 :s3, after s2, 20m
+    section Source des spots
+    Ville 1 :r1, 00:00, 4m
+    Ville 2 :r2, after r1, 4m
+    Ville 3 :r3, after r2, 4m
+    section Agents des spots (payant)
+    Ville 1 :a1, after r1, 12m
+    Ville 2 :a2, after a1, 12m
+    Ville 3 :a3, after a2, 12m
+```
+
+OSM a fini les trois villes en un quart d'heure, pendant que les pépites et les services de la ville 1 tournent
+encore : les étapes payantes prennent la ville suivante à leur rythme.
+
+### 3. La chaîne des services, étape par étape
+
+Pour chaque catégorie (restaurants, commerces, supermarchés, laveries), les agents et le code se relaient :
+l'agent propose, le code contrôle, et ce qui reste douteux part en supervision, où l'humain tranche.
 
 ```mermaid
 flowchart TB
-    ADMIN["Administratrice<br/>supervision, espace Agents"]
-    ETLV["Ajout d'une ville par l'ETL<br/>à venir"]
+    S1["1. Recherches en parallèle<br/>agent find_…"] --> S2["2. Contrôle des pages<br/>par le code"]
+    S2 --> S3["3. Relecture de chaque lieu<br/>agent analyze_…"]
+    S3 --> S4["4. Preuves par petits lots<br/>agent prove_…"]
+    S4 --> S5["5. Contrôle des détails<br/>et lecture du registre, par le code"]
+    S5 --> STORE["6. Enregistrement<br/>met à jour un service existant,<br/>n'en crée jamais un en double"]
+    S3 -- "doute" --> SUP["Supervision<br/>l'humain tranche"]
+    S5 -- "doute" --> SUP
 
-    subgraph API["API FastAPI : routes de la supervision, réservées aux admins"]
-        POST["POST /api/supervision/passages<br/>lance, répond tout de suite (202)"]
-        RESUME["POST /api/supervision/passages/ID/reprise<br/>reprend un passage en échec"]
-        GET["GET /api/supervision/passages/ID<br/>et GET /api/supervision/passages : l'état"]
-    end
-
-    subgraph SVC["services/passage_service.py"]
-        CREATE["create_passage<br/>écrit la demande : en file"]
-        QUEUE["passage_queue : une file par étape<br/>une ville à la fois, dans l'ordre d'envoi"]
-        RUN["run_passage<br/>les parties de l'étape, sous son verrou"]
-        READ["read_passage<br/>assemble ce que l'écran affiche"]
-    end
-
-    subgraph CHAIN["La chaîne des services : une catégorie après l'autre"]
-        direction TB
-        S1["1. Recherches en parallèle<br/>agent find_…"]
-        S2["2. Le code contrôle les pages"]
-        S3["3. L'analyste relit chaque lieu<br/>agent analyze_…"]
-        S4["4. Preuves par petits lots<br/>agent prove_…"]
-        S5["5. Le code contrôle les détails<br/>et lit le registre"]
-        STORE["Enregistrement<br/>met à jour un service existant,<br/>n'en crée jamais un en double"]
-        S1 --> S2 --> S3 --> S4 --> S5 --> STORE
-    end
-
-    subgraph COMMON["Socle commun à tous les agents"]
-        LLM["llm_service<br/>un seul point d'appel à Claude"]
-        CONF["llm_config<br/>le modèle de chaque agent"]
-        WS["Recherche web<br/>WebSearch, WebFetch"]
-        TRACE[("Fichiers JSON<br/>reprise et rejeu sans repayer")]
-    end
-
-    subgraph DB["MySQL"]
-        PASS[("passages, passage_parts<br/>demande, état, origine, raison d'un échec")]
-        CALLS[("llm_calls<br/>coût, durée, passage et étape de chaque appel")]
-        SERV[("Services<br/>ce que voit le voyageur")]
-        DEC[("decisions<br/>l'humain prime sur l'agent")]
-    end
-
-    ADMIN --> POST
-    ADMIN --> RESUME
-    ADMIN --> GET
-    ETLV -.-> CREATE
-    POST --> CREATE
-    RESUME --> CREATE
-    CREATE --> PASS
-    POST -- "réveille" --> QUEUE
-    RESUME -- "réveille" --> QUEUE
-    QUEUE --> RUN
-    RUN --> CHAIN
-    RUN -- "état de chaque catégorie" --> PASS
-    S1 -.-> LLM
-    S3 -.-> LLM
-    S4 -.-> LLM
-    LLM -.-> CONF
-    LLM -.-> WS
-    LLM -- "mesure de chaque appel" --> CALLS
-    CHAIN -.-> TRACE
-    STORE --> SERV
-    S3 -- "doute" --> DEC
-    GET --> READ
-    READ --> PASS
-    READ --> CALLS
+    classDef agent fill:#E3EEF8,stroke:#2F6496,color:#22424B
+    classDef code fill:#F0EEE3,stroke:#8A877A,color:#22424B
+    class S1,S3,S4 agent
+    class S2,S5,STORE code
 ```
+
+En bleu, ce que fait un agent ; en gris, ce que fait le code.
+
+### 4. Ce que chaque passage laisse derrière lui
+
+```mermaid
+flowchart TB
+    RUN["Un passage"] --> PASS[("passages, passage_parts<br/>la demande, l'état,<br/>la raison d'un échec")]
+    RUN --> CALLS[("llm_calls<br/>tokens, durée et coût<br/>de chaque appel")]
+    RUN --> SERV[("Services<br/>ce que voit le voyageur")]
+    RUN --> ITEMS[("passage_items<br/>ce que le passage a<br/>ajouté ou modifié")]
+    RUN --> TRACE["Carnet de bord JSON<br/>reprise et rejeu<br/>sans repayer"]
+```
+
+L'espace Agents de la supervision lit ces traces (`GET /api/supervision/passages`) pour montrer l'état d'un passage,
+ce qu'il a trouvé et ce qu'il a coûté.
+
+**Le socle commun.** Tous les agents appellent le modèle de langage par un seul fichier, `agents/llm_service.py`,
+et `agents/llm_config.py` dit quel modèle sert à chaque agent : changer de fournisseur ne touche que ces deux fichiers.
 
 ## Ce qu'il faut retenir
 
@@ -104,6 +171,14 @@ flowchart TB
   du travail. Les passages repris avant cette règle sont rattrapés au démarrage de la file.
 - **Une chaîne en paramètre.** Les chaînes (`CHAINS` dans `passage_service.py`) se lancent toutes par les mêmes
   routes : services, spots, pépites, et les chaînes gratuites de l'ajout d'une ville (OSM, carburants, FINESS).
+- **Ce qu'un passage a trouvé.** Chaque service, spot ou pépite qu'un passage ajoute ou modifie est noté dans
+  `passage_items`, avec la partie qui l'a écrit. `GET /api/supervision/passages/ID` donne la liste de ses trouvailles ;
+  la liste des passages, filtrée sur un objet, dit quel passage a apporté une information. Un lancement en ligne de
+  commande ou une action d'un voyageur y figure aussi, sous son identifiant, sans ligne dans `passages`.
+- **Une écriture à la fois.** Les étapes de la file écrivent chacune à son tour : avant d'écrire, une étape demande à
+  MySQL un verrou nommé commun à toutes (`randovango_ecriture_file`), et la suivante attend que la première ait fini,
+  dix minutes au plus. Si MySQL annule malgré tout une écriture pour interblocage, elle est refaite, trois fois au
+  plus ; le passage n'échoue plus pour cela. Les écritures du journal des passages passent sous le même verrou.
 - **Les mesures.** `llm_calls` garde chaque appel, réussi ou non : son coût en dollars, sa durée, ses tokens,
   ses recherches web, son passage et son étape. C'est la source du suivi des coûts dans la supervision.
 
@@ -148,8 +223,8 @@ d'envoi, et n'attend jamais les étapes qui viennent après elle.
 ## Le coût en euros et le budget
 
 - **En dollars dans la base.** Le fournisseur des agents facture en dollars : `llm_calls.cost_usd` garde le coût de
-  chaque appel dans cette monnaie. Par l'abonnement (moteur `claude-code`), c'est ce qu'aurait coûté l'appel par l'API,
-  donné par le programme `claude` : un équivalent, pas une dépense. Par l'API (moteurs `api` et `api-batch`), c'est
+  chaque appel dans cette monnaie. Par l'abonnement, c'est ce qu'aurait coûté l'appel par l'API, donné par le
+  programme du fournisseur installé sur la machine : un équivalent, pas une dépense. Par l'API, c'est
   une dépense réelle, calculée avec le tarif de chaque modèle (`agents/llm_prices.py`, à tenir à jour à la main).
 - **En euros à l'écran.** La conversion se fait à la lecture, jamais dans `llm_calls` : dollars ÷ taux × 1,20 (TVA),
   au taux de référence de la Banque centrale européenne du jour de l'appel. C'est une estimation : la banque applique

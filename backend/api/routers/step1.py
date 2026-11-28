@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from api.dependencies import get_current_traveller, require_plan_owner
-from api.rate_limit import CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT, limiter
+from api.rate_limit import (CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT,
+                            METEO_REFRESH_LIMIT, METEO_REFRESH_MESSAGE, limiter)
 from api.trip_limits import DEFAULT_RADIUS_KM, check_day_in_trip, check_radius, check_trip_duration
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
@@ -307,10 +308,19 @@ def load_communes(cursor) -> list:
 
 
 @router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
-async def get_ville_list(
+def get_ville_list(
     request: Request,
     distance_km: float = Query(DEFAULT_RADIUS_KM, description="Rayon de recherche en km (25 au plus)")
 ):
+    """
+    La liste des villes de « Où pars-tu », avec leurs statistiques et leur météo ; lance aussi les rafraîchissements
+    du jour (météo, carburants, pharmacies) en arrière-plan.
+
+    Une route « def », et non « async def » (issue #342, même piège que les issues #328 et #367) : elle lit MySQL avec
+    une bibliothèque qui ne rend pas la main pendant la lecture (1,2 seconde mesurée le 27 novembre 2026). En
+    « async def », tout le serveur attendait avec elle : deux voyageurs qui ouvraient la page s'attendaient, et les
+    autres pages aussi. Une route « def », FastAPI la fait tourner à part, et les autres requêtes sont servies.
+    """
     check_radius(distance_km)   # avant toute lecture en base (issue #263)
     # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
     with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
@@ -375,6 +385,10 @@ async def get_ville_list(
     return cities
 
 
+# Le message d'une création de voyage qui plante (issue #377) : le texte de l'erreur reste dans le journal du serveur.
+CREATE_PLAN_FAILED_MESSAGE = "Ton voyage n'a pas pu être créé. Réessaie dans quelques instants."
+
+
 @router.post("/create_plan", summary="Create a new trip plan with empty days (owner taken from the token).")
 # La ville choisie lance les recherches de Vany (carte #21).
 @limiter.limit(CREATE_PLAN_LIMIT, error_message=CREATE_PLAN_MESSAGE)
@@ -421,7 +435,10 @@ def create_plan(
         # telle quelle plutôt que de la ré-emballer en 500.
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la création du plan : {str(e)}")
+        # Le texte de l'erreur peut montrer la base, une requête ou un chemin : il part dans le journal du serveur,
+        # et le voyageur reçoit un message simple (issue #377, comme les routes GPX et météo).
+        logger.error(f"Échec de la création d'un voyage (ville {city_id}, {duration_days} jours) : {e}")
+        raise HTTPException(status_code=500, detail=CREATE_PLAN_FAILED_MESSAGE)
 
 
 def insert_plan_with_days(cursor, plan_start_date, duration_days, city_id, user_token, user_id) -> int:
@@ -458,8 +475,14 @@ def update_day_city(request: Request, plan_id: int, data: dict = Body(...)):
     return {"status": "updated", "plan_id": plan_id, "day_number": day_number, "city_id": city_id}
 
 
+# Le message d'une actualisation météo qui plante (issue #213) : le texte de l'erreur reste dans le journal du serveur.
+METEO_REFRESH_FAILED_MESSAGE = "La météo de cette ville n'a pas pu être actualisée. Réessaie plus tard."
+
+
 @router.get("/refresh-meteo/{city_id}", summary="Refresh weather data for a specific city")
-def refresh_city_meteo(city_id: int):
+# Chaque appel fait appeler Open-Meteo : plafonné par voyageur (issue #213, docs/plafonds.md).
+@limiter.limit(METEO_REFRESH_LIMIT, error_message=METEO_REFRESH_MESSAGE)
+def refresh_city_meteo(request: Request, city_id: int):
     """
     Lance l'ETL météo d'une ville, quand ses prévisions manquent ou n'atteignent plus J+6, et rend les nouvelles.
 
@@ -480,8 +503,9 @@ def refresh_city_meteo(city_id: int):
             city_name = result['name']
             logger.info(f"[REFRESH] Lancement ETL météo pour la ville : {city_name}")
 
-            # Lancer l'ETL météo avec les coordonnées DB (évite l'appel Nominatim)
-            etl_result = run_meteo_etl(city_name, result['latitude'], result['longitude'])
+            # Lancer l'ETL météo avec les coordonnées DB (évite l'appel Nominatim). Son résultat reste ici : il peut
+            # porter le texte d'une erreur interne, que le navigateur n'a pas à voir (issue #213).
+            run_meteo_etl(city_name, result['latitude'], result['longitude'])
 
             # Récupérer les prévisions météo fraîchement créées
             cursor.execute("SELECT * FROM weather WHERE city_id = %s AND DATE >= %s ORDER BY date ASC", (city_id, paris_today()))
@@ -505,13 +529,13 @@ def refresh_city_meteo(city_id: int):
             "city_id": city_id,
             "city_name": city_name,
             "meteo": enrich_meteo_forecasts(forecasts),
-            "etl_result": etl_result,
             "message": f"Données météo actualisées pour {city_name}"
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erreur lors du refresh météo pour city_id {city_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de l'actualisation météo : {str(e)}")
+        # Le texte de l'erreur part dans le journal ci-dessus, jamais au navigateur (issue #213).
+        raise HTTPException(status_code=500, detail=METEO_REFRESH_FAILED_MESSAGE)
 
 

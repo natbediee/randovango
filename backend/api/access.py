@@ -8,13 +8,15 @@ toujours ce que fait vraiment le code.
 """
 from fastapi.routing import APIRoute
 
-from api.dependencies import get_current_traveller, get_current_user, require_admin, require_plan_owner
+from api.dependencies import (get_current_traveller, get_current_user, require_admin, require_contributor,
+                              require_plan_owner)
 
 # Du plus ouvert au plus fermé : ce qu'il faut pour passer, et les refus possibles.
 PUBLIC = "public"
 TRAVELLER = "voyageur"
 PLAN_OWNER = "propriétaire du plan"
 ACCOUNT = "compte"
+CONTRIBUTOR = "contributeur"
 ADMIN = "admin"
 
 LEVEL_TEXT = {
@@ -22,6 +24,7 @@ LEVEL_TEXT = {
     TRAVELLER: "jeton exigé, de compte ou d'invité (cookie access_token).",
     PLAN_OWNER: "jeton exigé, et le plan doit appartenir au voyageur du jeton.",
     ACCOUNT: "réservé aux comptes connectés ; un invité est refusé.",
+    CONTRIBUTOR: "réservé aux comptes qui ont le rôle contributor ou admin, relu en base à chaque appel.",
     ADMIN: "réservé aux comptes qui ont le rôle admin, relu en base à chaque appel.",
 }
 
@@ -35,6 +38,7 @@ LEVEL_RESPONSES = {
     TRAVELLER: UNAUTHORIZED,
     PLAN_OWNER: UNAUTHORIZED | FORBIDDEN_PLAN | PLAN_NOT_FOUND,
     ACCOUNT: UNAUTHORIZED | FORBIDDEN_ACCOUNT,
+    CONTRIBUTOR: UNAUTHORIZED | FORBIDDEN_ACCOUNT,
     ADMIN: UNAUTHORIZED | FORBIDDEN_ACCOUNT,
 }
 
@@ -53,6 +57,8 @@ def access_level(route: APIRoute) -> str:
     calls = dependency_calls(route.dependant)
     if require_admin in calls:
         return ADMIN
+    if require_contributor in calls:
+        return CONTRIBUTOR
     if get_current_user in calls:
         return ACCOUNT
     if require_plan_owner in calls:

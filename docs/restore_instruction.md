@@ -4,12 +4,12 @@
 | --- | --- |
 | **Objet** | Remettre en service les données de Randovango à partir d'une sauvegarde chiffrée |
 | **Quand l'utiliser** | La machine est en panne ou remplacée ; ou un passage a abîmé les données |
-| **Liée à** | Issue #205 ; sauvegarde décrite dans le [guide d'exploitation](exploitation.md#sauvegarde-et-restauration-des-bases) |
+| **Liée à** | La sauvegarde décrite dans le [guide d'exploitation](exploitation.md#sauvegarde-et-restauration-des-bases) |
 
 ## 1. Avant de commencer
 
 Il faut :
-- une archive `randovango_AAAAMMJJ_HHMMSS.tar.gz.enc` (dossier `Randovango-sauvegardes` du drive) :
+- une archive `randovango_AAAAMMJJ_HHMMSS.tar.gz.enc` (dans le dossier des sauvegardes) :
   la date dans le nom est celle de la sauvegarde ;
 - son mot de passe, et le fichier `.env` du projet, tous deux gardés hors de la machine ;
 - Docker, git et python3 installés, et le projet récupéré avec git.

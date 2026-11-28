@@ -1,14 +1,21 @@
 """
 L'ordre du tour météo (api/routers/step1, issue #367) : les villes des voyages pas encore finis passent d'abord,
 puis les plus choisies par les voyageurs, puis les autres ; la météo d'une ville choisie se redemande sans bloquer le
-serveur. Ni réseau ni base : la base et l'appel météo sont remplacés.
+serveur, et sans jamais montrer d'erreur interne au navigateur. Et la page des villes ne fait pas attendre les autres
+requêtes pendant sa lecture en base. Ni réseau ni base : la base et l'appel météo sont remplacés.
 """
 import inspect
+import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import date
+from unittest.mock import MagicMock
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from api import rate_limit
 from api.routers import step1
 
 TODAY = date(2026, 11, 28)
@@ -92,3 +99,116 @@ def test_the_daily_refresh_starts_with_the_cities_of_travellers(weather_calls):
 def test_the_weather_of_a_chosen_city_does_not_hold_the_server():
     """La route qui redemande la météo d'une ville est une route « def » : les autres pages répondent pendant qu'elle attend Open-Meteo."""
     assert not inspect.iscoroutinefunction(step1.refresh_city_meteo)
+
+
+class RefreshCursor:
+    """Le curseur de refresh-meteo : la ville demandée (fetchone), puis ses prévisions (fetchall)."""
+
+    def __init__(self, city, forecasts):
+        self.city, self.forecasts = city, forecasts
+
+    def execute(self, query, params=None):
+        pass
+
+    def fetchone(self):
+        return self.city
+
+    def fetchall(self):
+        return self.forecasts
+
+
+def refresh_client(monkeypatch, open_cursor):
+    """La vraie route refresh-meteo, avec une base remplacée et un journal muet."""
+    monkeypatch.setattr(step1.MySQLUtils, "open_cursor", open_cursor)
+    monkeypatch.setattr(step1, "logger", MagicMock())
+    app = FastAPI()
+    rate_limit.add_rate_limit(app)
+    app.include_router(step1.router, prefix="/api/step1")
+    return TestClient(app)
+
+
+def test_the_weather_answer_keeps_the_etl_result_on_the_server(monkeypatch):
+    """La réponse de refresh-meteo donne les prévisions, sans le résultat de l'ETL, qui peut porter une erreur interne (issue #213)."""
+    forecast = {"date": TODAY, "temp_max_c": 12, "temp_min_c": 5, "weather_code": 3, "precipitation_mm": 0,
+                "wind_max_kmh": 20}
+
+    @contextmanager
+    def open_cursor(dictionary=False, buffered=False):
+        yield None, RefreshCursor(PLOUGONVELIN, [forecast])
+
+    monkeypatch.setattr(step1, "run_meteo_etl", lambda *args: {"error": "Can't connect to MySQL server on 'db'"})
+    answer = refresh_client(monkeypatch, open_cursor).get("/api/step1/refresh-meteo/2").json()
+
+    assert answer["city_name"] == "Plougonvelin" and len(answer["meteo"]) == 1
+    assert "etl_result" not in answer and "MySQL" not in str(answer)
+
+
+def test_a_failed_weather_refresh_does_not_show_the_internal_error(monkeypatch):
+    """Une actualisation météo qui plante répond 500 avec un message simple, sans le texte de l'erreur (issue #213)."""
+    @contextmanager
+    def open_cursor(dictionary=False, buffered=False):
+        raise RuntimeError("Access denied for user 'root'@'db_randovango'")
+        yield
+
+    response = refresh_client(monkeypatch, open_cursor).get("/api/step1/refresh-meteo/2")
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": step1.METEO_REFRESH_FAILED_MESSAGE}
+
+
+def test_the_weather_refresh_is_capped(monkeypatch):
+    """Au-delà de 30 demandes de météo en une heure, la réponse est 429 avec un message clair, et Open-Meteo n'est plus appelé (issue #213)."""
+    @contextmanager
+    def open_cursor(dictionary=False, buffered=False):
+        yield None, RefreshCursor(PLOUGONVELIN, [])
+
+    calls = []
+    monkeypatch.setattr(step1, "run_meteo_etl", lambda *args: calls.append(args))
+    client = refresh_client(monkeypatch, open_cursor)
+
+    statuses = [client.get("/api/step1/refresh-meteo/2").status_code for _ in range(31)]
+
+    assert statuses == [200] * 30 + [429]
+    assert len(calls) == 30
+    assert client.get("/api/step1/refresh-meteo/2").json() == {"detail": rate_limit.METEO_REFRESH_MESSAGE}
+
+
+SLOW_READ_SECONDS = 0.5
+
+
+@pytest.fixture
+def slow_cities_client(monkeypatch):
+    """La vraie route /cities, sur une base remplacée qui met une demi-seconde à répondre, comme une vraie lecture."""
+    class CitiesCursor:
+        def execute(self, query, params=None):
+            pass
+
+        def fetchone(self):
+            return {"count": 1}   # la météo de J+6 est déjà en base : aucun tour météo ne part
+
+    @contextmanager
+    def open_cursor(dictionary=False, buffered=False):
+        time.sleep(SLOW_READ_SECONDS)   # une lecture bloquante, qui ne rend pas la main au serveur
+        yield None, CitiesCursor()
+
+    monkeypatch.setattr(step1.MySQLUtils, "open_cursor", open_cursor)
+    monkeypatch.setattr(step1, "load_communes", lambda cursor: [])
+    monkeypatch.setattr(step1, "get_all_city_stats", lambda cursor, cities, distance_km: {})
+    monkeypatch.setattr(step1, "start_fuel_prices_refresh", lambda: False)
+    monkeypatch.setattr(step1, "start_pharmacies_refresh", lambda: False)
+    app = FastAPI()
+    app.include_router(step1.router, prefix="/api/step1")
+    # « with » : un seul serveur pour toutes les requêtes du test, comme uvicorn.
+    with TestClient(app) as client:
+        yield client
+
+
+def test_two_travellers_opening_the_cities_do_not_wait_for_each_other(slow_cities_client):
+    """Deux voyageurs qui ouvrent la page des villes en même temps sont servis ensemble, pas l'un après l'autre (1,2 s par lecture le 27 novembre 2026)."""
+    start = time.monotonic()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = list(pool.map(lambda _: slow_cities_client.get("/api/step1/cities").status_code, range(2)))
+    elapsed = time.monotonic() - start
+
+    assert statuses == [200, 200]
+    assert elapsed < 2 * SLOW_READ_SECONDS

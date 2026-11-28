@@ -13,7 +13,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from api import dependencies
-from api.access import ACCOUNT, ADMIN, PLAN_OWNER, PUBLIC, TRAVELLER, access_level
+from api.access import ACCOUNT, ADMIN, CONTRIBUTOR, PLAN_OWNER, PUBLIC, TRAVELLER, access_level
 from services.authentification import AUTH_COOKIE_NAME, create_access_token
 
 # La grille : chaque route de l'API et ce qu'il faut pour y entrer.
@@ -48,7 +48,7 @@ ACCESS = {
     ("PUT", "/api/pepites/seen/{plan_id}"): PLAN_OWNER,
     ("PUT", "/api/pepites/choose/{plan_id}"): PLAN_OWNER,
     # Les contributeurs.
-    ("POST", "/api/etl/upload_gpx"): ACCOUNT,
+    ("POST", "/api/etl/upload_gpx"): CONTRIBUTOR,
     # Les admins.
     ("DELETE", "/api/etl/delete_gpx/{filename}"): ADMIN,
     ("POST", "/api/supervision/decisions"): ADMIN,
@@ -119,19 +119,19 @@ def test_every_route_is_in_the_grid(app):
     assert declared == ACCESS
 
 
-@pytest.mark.parametrize("method,path", routes_at(TRAVELLER, PLAN_OWNER, ACCOUNT, ADMIN))
+@pytest.mark.parametrize("method,path", routes_at(TRAVELLER, PLAN_OWNER, ACCOUNT, CONTRIBUTOR, ADMIN))
 def test_protected_route_refuses_without_token(client, method, path):
     """Sans cookie, toute route protégée répond 401, avant d'exécuter la moindre ligne de la route."""
     assert call(client, method, path).status_code == 401
 
 
-@pytest.mark.parametrize("method,path", routes_at(TRAVELLER, PLAN_OWNER, ACCOUNT, ADMIN))
+@pytest.mark.parametrize("method,path", routes_at(TRAVELLER, PLAN_OWNER, ACCOUNT, CONTRIBUTOR, ADMIN))
 def test_protected_route_refuses_a_fake_token(client, method, path):
     """Un jeton qui n'est pas signé par l'API est refusé (401) sur toute route protégée."""
     assert call(client, method, path, "pas-un-jeton").status_code == 401
 
 
-@pytest.mark.parametrize("method,path", routes_at(ACCOUNT, ADMIN))
+@pytest.mark.parametrize("method,path", routes_at(ACCOUNT, CONTRIBUTOR, ADMIN))
 def test_guest_refused_on_account_routes(client, method, path):
     """Un invité, même avec un jeton valide, est refusé (403) sur les routes des contributeurs et des admins."""
     assert call(client, method, path, create_access_token({"guest_id": "invite-1"})).status_code == 403
@@ -141,6 +141,14 @@ def test_guest_refused_on_account_routes(client, method, path):
 def test_account_without_admin_role_refused_on_admin_routes(client, method, path, monkeypatch):
     """Un compte sans le rôle admin en base est refusé (403) sur toutes les routes d'admin."""
     monkeypatch.setattr(dependencies, "get_roles_for_user", lambda user_id: {"contributor"})
+    token = create_access_token({"user_id": 7, "username": "camille"})
+    assert call(client, method, path, token).status_code == 403
+
+
+@pytest.mark.parametrize("method,path", routes_at(CONTRIBUTOR))
+def test_account_without_contributor_role_refused_on_contributor_routes(client, method, path, monkeypatch):
+    """Un compte qui n'a que le rôle user est refusé (403) sur l'envoi de tracés GPX, réservé aux contributeurs et aux admins (issue #213)."""
+    monkeypatch.setattr(dependencies, "get_roles_for_user", lambda user_id: {"user"})
     token = create_access_token({"user_id": 7, "username": "camille"})
     assert call(client, method, path, token).status_code == 403
 

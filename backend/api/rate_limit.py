@@ -35,11 +35,16 @@ DAY_SPOT_LIMIT = "30/hour"
 # pour contourner les trois précédents. Compté par adresse IP : 10 nouveaux visiteurs par heure
 # derrière un même wifi de camping partagé, avant qu'un onzième soit refusé.
 GUEST_TOKEN_LIMIT = "10/hour"
+# La météo d'une ville se redemande à Open-Meteo quand ses prévisions n'atteignent plus J+6 (issue #367), une fois
+# par ville choisie. 30 villes par heure laissent explorer largement la carte ; au-delà, c'est un script qui ferait
+# appeler Open-Meteo sans fin (issue #213).
+METEO_REFRESH_LIMIT = "30/hour"
 
 # Le message de chaque refus dit au voyageur ce qui s'est passé et quand recommencer, sans jargon.
 # Les compteurs à l'heure repartent au plus une heure après le premier appel compté.
 CREATE_PLAN_MESSAGE = "Tu as déjà composé ton voyage gratuit aujourd'hui. Reviens demain pour en composer un autre."
 DAY_CHOICE_MESSAGE = "Trop de changements en peu de temps : ton choix n'a pas été enregistré. Réessaie dans une heure au plus."
+METEO_REFRESH_MESSAGE = "Trop de demandes de météo en peu de temps. Réessaie dans une heure au plus."
 GUEST_TOKEN_MESSAGE = "Trop de nouveaux visiteurs depuis ta connexion internet. Réessaie dans une heure au plus."
 
 # Essais de connexion manqués (issue #264, OWASP API2) : sans plafond, un script pourrait essayer des

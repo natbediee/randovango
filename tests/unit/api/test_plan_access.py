@@ -7,6 +7,7 @@ Les routeurs et les jetons sont les vrais ; les plans en base et les recherches 
 """
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -196,4 +197,19 @@ def test_plan_creation_refused_without_token(world, created_plans):
     """Sans cookie, aucun plan n'est créé (401), donc aucune recherche de Vany ne part."""
     assert create_plan(world).status_code == 401
     assert created_plans == []
+    assert world.writes == []
+
+
+def test_a_failed_plan_creation_does_not_show_the_internal_error(world, monkeypatch):
+    """Une création de voyage qui plante répond un message simple ; le texte de l'erreur, qui peut montrer la base, ne va que dans le journal (issue #377)."""
+    def failing_connect():
+        raise RuntimeError("Access denied for user 'root'@'db_randovango' (using password: YES)")
+    monkeypatch.setattr(step1.MySQLUtils, "connect", failing_connect)
+    monkeypatch.setattr(step1, "logger", MagicMock())
+
+    response = create_plan(world, guest_token("invite-1"))
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": step1.CREATE_PLAN_FAILED_MESSAGE}
+    assert "root" in step1.logger.error.call_args.args[0]
     assert world.writes == []
