@@ -18,6 +18,11 @@ DONE = "fini"
 FAILED = "echec"
 TO_DO = "a_faire"           # une partie que le passage n'a pas encore commencée
 
+# Les origines des passages demandés depuis le front avec un compte admin (issue #356) : une demande ou une reprise
+# depuis la supervision, une rando envoyée depuis la page d'ajout. Chaque étape de la file les prend avant les envois
+# en masse de l'ETL (origine « etl »), qui attendent derrière elles.
+PRIORITY_ORIGINS = ("supervision", "ajout")
+
 PASSAGE_COLUMNS = """p.passage_id, p.chain, p.city_id, p.origin, p.status, p.requested_at, p.started_at, p.finished_at,
                      p.error, p.resumed_from, c.name AS city_name, c.commune AS city_commune"""
 
@@ -149,14 +154,19 @@ def active_ids(chain: str, city_id: int) -> list:
 
 def queued_next_parts() -> list:
     """
-    Les passages en file, du plus ancien au plus récent, chacun avec sa prochaine partie à faire (next_part) : c'est
-    elle qui dit quelle étape de la file doit le prendre (services/passage_steps.py, issue #332). Une seule requête
-    pour toute la file : chaque étape la relit à chaque tour.
+    Les passages en file, dans l'ordre où la file doit les prendre, chacun avec sa prochaine partie à faire
+    (next_part) : c'est elle qui dit quelle étape de la file doit le prendre (services/passage_steps.py, issue #332).
+    D'abord les demandes faites depuis le front avec un compte admin (PRIORITY_ORIGINS, #356), puis les envois de
+    l'ETL ; dans chacun des deux groupes, du plus ancien au plus récent. Une seule requête pour toute la file : chaque
+    étape la relit à chaque tour.
     """
+    # « origin NOT IN (...) » vaut 0 pour une demande admin et 1 pour un envoi de l'ETL : le tri croissant les met devant.
     return _read("""SELECT p.passage_id, p.chain, p.city_id,
                            (SELECT pp.part FROM passage_parts pp WHERE pp.passage_id = p.passage_id AND pp.status = %s
                             ORDER BY pp.position LIMIT 1) AS next_part
-                    FROM passages p WHERE p.status = %s ORDER BY p.requested_at, p.passage_id""", (TO_DO, QUEUED))
+                    FROM passages p WHERE p.status = %s
+                    ORDER BY p.origin NOT IN (%s, %s), p.requested_at, p.passage_id""",
+                 (TO_DO, QUEUED, *PRIORITY_ORIGINS))
 
 
 def running_ids(chain: str) -> list:

@@ -118,6 +118,12 @@ d'envoi, et n'attend jamais les étapes qui viennent après elle.
 | Pépites de la ville, services | OSM et Wikidata | oui |
 | Agents des spots : harmonisation, puis ouvertures, puis vérification | la lecture de la source | oui |
 
+- Une demande faite depuis le front avec un compte admin passe devant les envois en masse de l'ETL dans son étape :
+  une demande ou une reprise depuis la supervision (origine `supervision`), une rando envoyée par un compte admin
+  depuis la page d'ajout (origine `ajout`). Elle ne coupe pas le passage en cours : elle part juste après lui. Entre
+  deux demandes admin, l'ordre d'envoi est gardé ; le budget et le quota s'appliquent comme aux autres. Une rando d'un
+  compte contributeur, le dossier d'attente et les reprises faites seules par la file gardent l'origine `etl` et
+  l'ordre d'envoi. La supervision le montre dans le champ `prioritaire` de chaque passage.
 - Une ville pas prête pour une étape (son OSM pas fini, ou en échec) est sautée : l'étape prend la suivante, et
   seule cette ville attend.
 - Quand le quota ou le budget des agents est atteint, seules les étapes payantes attendent ; les étapes

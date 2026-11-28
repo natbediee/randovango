@@ -18,8 +18,8 @@ def asked(monkeypatch):
     """Ce que l'ETL demande à la file, dans l'ordre : les chaînes de la ville, les services, puis le réveil de la file."""
     calls = []
     monkeypatch.setattr(etl_pipeline, "logger", MagicMock())
-    monkeypatch.setattr(passage_service, "request_city_chain", lambda key, city: calls.append((key, city)) or "p1")
-    monkeypatch.setattr(passage_service, "request_etl_passage", lambda city: calls.append(("services", city)) or None)
+    monkeypatch.setattr(passage_service, "request_city_chain", lambda key, city, origin="etl": calls.append((key, city)) or "p1")
+    monkeypatch.setattr(passage_service, "request_etl_passage", lambda city, origin="etl": calls.append(("services", city)) or None)
     monkeypatch.setattr(passage_queue, "wake", lambda: calls.append(("réveil",)))
     return calls
 
@@ -34,7 +34,7 @@ def test_a_new_city_asks_each_of_its_chains_then_wakes_the_queue(asked) -> None:
 
 def test_an_error_on_one_chain_never_stops_the_others(asked, monkeypatch) -> None:
     """Une base injoignable en demandant FINESS est notée dans le journal ; les spots, les pépites et les services sont quand même demandés."""
-    def broken_on_finess(key, city):
+    def broken_on_finess(key, city, origin="etl"):
         if key == "finess":
             raise ConnectionError("base injoignable")
         asked.append((key, city))
@@ -54,7 +54,7 @@ def test_an_upload_answers_before_the_chains_are_asked(monkeypatch) -> None:
     """Le fichier du front rend sa ville après la météo, sans attendre la demande des chaînes (≈ 1 s par ville le 25 novembre 2026), qui se fait à côté."""
     may_ask, asked = threading.Event(), threading.Event()
 
-    def slow_request(city):
+    def slow_request(city, origin="etl"):
         may_ask.wait(5)
         asked.set()
     monkeypatch.setattr(etl_pipeline, "process_file", lambda path, fname, verifie: loaded(fname, "Plougonvelin"))
@@ -80,7 +80,7 @@ def test_the_front_file_passes_before_the_waiting_folder(monkeypatch) -> None:
         return loaded(fname, "Le Conquet")
     monkeypatch.setattr(etl_pipeline, "process_file", read_and_load)
     monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
-    monkeypatch.setattr(etl_pipeline, "request_city_chains", lambda city: None)
+    monkeypatch.setattr(etl_pipeline, "request_city_chains", lambda city, origin="etl": None)
     monkeypatch.setattr(etl_pipeline.gpx, "waiting_files", lambda: ["dossier-1.gpx", "dossier-2.gpx"])
     folder = threading.Thread(target=etl_pipeline.process_waiting_folder)
     folder.start()
@@ -102,7 +102,7 @@ def test_each_city_of_the_folder_gets_its_weather_once_then_its_chains(monkeypat
     monkeypatch.setattr(etl_pipeline.gpx, "waiting_files", lambda: sorted(results))
     monkeypatch.setattr(etl_pipeline, "process_waiting_file", lambda fname, verifie: results[fname])
     monkeypatch.setattr(etl_pipeline, "load_weather", weather.append)
-    monkeypatch.setattr(etl_pipeline, "request_city_chains", chains.append)
+    monkeypatch.setattr(etl_pipeline, "request_city_chains", lambda city, origin="etl": chains.append(city))
 
     outcomes = etl_pipeline.process_waiting_folder()
 
@@ -145,7 +145,7 @@ def test_an_error_on_one_city_never_stops_the_next_ones(monkeypatch) -> None:
     monkeypatch.setattr(etl_pipeline, "logger", MagicMock())
     asked = []
 
-    def broken_on_crozon(city):
+    def broken_on_crozon(city, origin="etl"):
         if city == "Crozon":
             raise ConnectionError("base injoignable")
         asked.append(city)
@@ -162,7 +162,7 @@ def test_two_uploads_never_ask_their_chains_at_the_same_time(monkeypatch) -> Non
     """Deux envois qui se suivent demandent leurs chaînes l'un après l'autre : sinon tous deux pourraient croire Crozon pas encore demandée."""
     inside, overlaps = [], []
 
-    def request(city):
+    def request(city, origin="etl"):
         if inside:
             overlaps.append(city)
         inside.append(city)
@@ -175,3 +175,24 @@ def test_two_uploads_never_ask_their_chains_at_the_same_time(monkeypatch) -> Non
         worker.join(5)
 
     assert overlaps == []
+
+
+@pytest.mark.parametrize("role,origin", [("admin", "ajout"), ("user", "etl")])
+def test_the_upload_gives_its_origin_to_the_chains_of_its_city(monkeypatch, role, origin) -> None:
+    """La rando d'un compte admin demande les chaînes de sa ville comme prioritaires (« ajout ») ; celle d'un contributeur garde l'ordre de la file (#356)."""
+    given = []
+    monkeypatch.setattr(etl_pipeline, "process_file", lambda path, fname, verifie: loaded(fname, "Plougonvelin"))
+    monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
+    monkeypatch.setattr(etl_pipeline, "start_folder_worker", lambda role: None)
+    monkeypatch.setattr(etl_pipeline, "start_chain_requests", lambda cities, origin="etl": given.append(origin))
+    etl_pipeline.process_upload("/usr/src/data/envoi/trace.gpx", user_role=role)
+    assert given == [origin]
+
+
+def test_the_chains_of_a_city_carry_the_origin_of_their_sending(asked, monkeypatch) -> None:
+    """Chaque chaîne de la ville et ses services sont demandés avec l'origine de l'envoi (#356)."""
+    origins = []
+    monkeypatch.setattr(passage_service, "request_city_chain", lambda key, city, origin="etl": origins.append(origin))
+    monkeypatch.setattr(passage_service, "request_etl_passage", lambda city, origin="etl": origins.append(origin))
+    etl_pipeline.request_city_chains("Plougonvelin", "ajout")
+    assert origins == ["ajout"] * 6
