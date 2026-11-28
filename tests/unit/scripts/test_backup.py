@@ -5,6 +5,7 @@ chiffrement utilise un mot de passe de test. openssl, lui, est le vrai.
 """
 import json
 import sqlite3
+import subprocess
 import tarfile
 from datetime import datetime
 
@@ -81,7 +82,7 @@ def test_check_no_secret_stops_when_env_is_inside(tmp_path):
 # --- Chiffrement par mot de passe --------------------------------------------------------------
 
 def test_encrypted_archive_reopens_only_with_its_password(tmp_path):
-    """L'archive chiffrée se rouvre avec son mot de passe, et pas avec un autre."""
+    """L'archive chiffrée se rouvre avec son mot de passe ; un autre ne redonne jamais son contenu (test instable, #376)."""
     source = tmp_path / "clair.txt"
     source.write_text("données des spots")
     encrypted = tmp_path / "clair.txt.enc"
@@ -92,8 +93,16 @@ def test_encrypted_archive_reopens_only_with_its_password(tmp_path):
     backup.decrypt_file(encrypted, reopened, TEST_PASSWORD)
     assert reopened.read_text() == "données des spots"
 
-    with pytest.raises(Exception):
-        backup.decrypt_file(encrypted, tmp_path / "faux.txt", "mauvais-mot-de-passe")
+    # Piège : avec un mauvais mot de passe, openssl refuse le plus souvent (« bad decrypt »), mais pas toujours. Il ne
+    # reconnaît le mot de passe qu'au remplissage du dernier bloc, qui tombe juste par hasard environ une fois sur 256
+    # (le sel change à chaque chiffrement) : il rend alors des octets sans sens, sans erreur. Le test attendait toujours
+    # un refus et échouait au hasard. Ce qui compte, et qui est toujours vrai : le contenu d'origine ne revient pas.
+    wrong = tmp_path / "faux.txt"
+    try:
+        backup.decrypt_file(encrypted, wrong, "mauvais-mot-de-passe")
+    except subprocess.CalledProcessError:
+        return
+    assert b"spots" not in wrong.read_bytes()
 
 
 def test_get_password_refuses_an_empty_password(monkeypatch):
