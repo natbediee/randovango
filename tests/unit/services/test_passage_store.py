@@ -165,3 +165,66 @@ def test_resumed_failures_have_their_parts_to_do_closed(base):
     passage_store.close_resumed_parts()
     sql, values = base.queries[0]
     assert "JOIN passages r ON r.resumed_from = pp.passage_id" in sql and values == ("reprise", "a_faire")
+
+
+# --- Le journal sous le verrou d'écriture commun (issue #370) ---
+
+class _DeadlockedBase(_Base):
+    """Une base factice dont les `deadlocks` premiers commits sont annulés par MySQL pour interblocage (erreur 1213)."""
+    def __init__(self, deadlocks):
+        super().__init__()
+        self.deadlocks = deadlocks
+
+    def commit(self):
+        if self.deadlocks:
+            self.deadlocks -= 1
+            import mysql.connector
+            raise mysql.connector.errors.InternalError(
+                msg="Deadlock found when trying to get lock; try restarting transaction", errno=1213)
+        super().commit()
+
+
+@pytest.fixture
+def deadlocked_base(monkeypatch):
+    """Branche une base qui annule ses premiers commits, et note les écritures qui demandent le verrou commun."""
+    from utils import db_utils
+    state = {"base": None, "locks": []}
+
+    @contextmanager
+    def open_cursor(dictionary=False, buffered=False):
+        yield state["base"], state["base"]
+
+    @contextmanager
+    def write_lock(label):
+        state["locks"].append(label)
+        yield
+
+    monkeypatch.setattr(passage_store.MySQLUtils, "open_cursor", open_cursor)
+    monkeypatch.setattr(passage_store.MySQLUtils, "write_lock", staticmethod(write_lock))
+    monkeypatch.setattr(db_utils.time, "sleep", lambda seconds: None)
+    return state
+
+
+def test_a_passage_state_is_written_under_the_common_lock_and_redone_after_a_deadlock(deadlocked_base):
+    """L'état d'un passage s'écrit sous le verrou commun ; annulé une fois par MySQL pour interblocage, il est réécrit."""
+    deadlocked_base["base"] = _DeadlockedBase(deadlocks=1)
+    passage_store.set_passage_status("p1", "en_cours")
+    assert deadlocked_base["locks"] == ["l'état « en_cours » du passage p1"]
+    assert deadlocked_base["base"].commits == 1 and len(deadlocked_base["base"].queries) == 2
+
+
+def test_a_part_state_cancelled_at_every_attempt_names_its_passage(deadlocked_base):
+    """Une partie dont l'écriture est annulée à chaque essai échoue avec un message qui nomme la partie et son passage."""
+    from utils.db_utils import DEADLOCK_ATTEMPTS, DeadlockRetriesExhausted
+    deadlocked_base["base"] = _DeadlockedBase(deadlocks=DEADLOCK_ATTEMPTS)
+    with pytest.raises(DeadlockRetriesExhausted) as raised:
+        passage_store.set_part("p1", "restaurants", "fini")
+    assert "la partie restaurants du passage p1" in str(raised.value)
+
+
+def test_closing_resumed_parts_goes_through_the_common_lock(deadlocked_base):
+    """La fermeture des parties des passages déjà repris passe elle aussi par le verrou commun, et rend son nombre de parties."""
+    deadlocked_base["base"] = _DeadlockedBase(deadlocks=0)
+    deadlocked_base["base"].rowcount = 3
+    assert passage_store.close_resumed_parts() == 3
+    assert deadlocked_base["locks"] == ["la fermeture des parties des passages déjà repris"]
