@@ -12,7 +12,7 @@ from services import passage_store
 class _Base:
     """Une base factice : chaque requête est notée avec ses valeurs ; une lecture rend `rows`."""
     def __init__(self, rows=()):
-        self.queries, self.rows, self.commits = [], list(rows), 0
+        self.queries, self.rows, self.commits, self.rowcount = [], list(rows), 0, 0
 
     def execute(self, sql, params=None):
         self.queries.append((" ".join(sql.split()), params))
@@ -99,12 +99,13 @@ def test_the_active_passages_are_read_for_one_chain_on_one_city(base):
 
 
 def test_the_queue_is_read_from_the_oldest_passage_with_its_next_part(base):
-    """La file se lit du plus ancien passage au plus récent, chacun avec sa prochaine partie à faire : elle dit son étape (#332)."""
+    """La file se lit demandes admin d'abord (#356), puis du plus ancien passage au plus récent, chacun avec sa prochaine partie à faire : elle dit son étape (#332)."""
     base.rows = [{"passage_id": "p1", "chain": "spots", "city_id": 12, "next_part": "harmonisation"}]
     assert passage_store.queued_next_parts() == base.rows
     sql, values = base.queries[0]
-    assert "ORDER BY p.requested_at, p.passage_id" in sql and "ORDER BY pp.position LIMIT 1" in sql
-    assert values == ("a_faire", "en_file")
+    assert "ORDER BY p.origin NOT IN (%s, %s), p.requested_at, p.passage_id" in sql
+    assert "ORDER BY pp.position LIMIT 1" in sql
+    assert values == ("a_faire", "en_file", "supervision", "ajout")
 
 
 def test_a_pending_part_is_looked_for_in_the_other_open_passages_of_the_cities(base):
@@ -157,3 +158,10 @@ def test_the_passages_of_an_item_are_read_from_the_most_recent(base):
     base.rows = [{"passage_id": "p2"}, {"passage_id": "p1"}]
     assert passage_store.passages_of_item("spot", 3893) == ["p2", "p1"]
     assert "ORDER BY last_written DESC" in base.queries[0][0] and base.queries[0][1] == ("spot", 3893)
+
+
+def test_resumed_failures_have_their_parts_to_do_closed(base):
+    """Les parties « à faire » des seuls passages qui ont une reprise passent à « reprise » (#295)."""
+    passage_store.close_resumed_parts()
+    sql, values = base.queries[0]
+    assert "JOIN passages r ON r.resumed_from = pp.passage_id" in sql and values == ("reprise", "a_faire")

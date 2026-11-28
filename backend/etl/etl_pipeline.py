@@ -18,6 +18,9 @@ prenne du temps n'est pas grave, mais une demande du front doit toujours passer 
   ne les attend jamais : entre deux fichiers du dossier, son fichier passe ;
 - la demande des chaînes d'une ville à la file se fait à côté, sans retenir la réponse (≈ 1 s par ville le 25 novembre).
   Ces fils ne font que remplir la file ; c'est toujours la file qui fait partir les passages, étape par étape.
+- dans la file, les chaînes d'une rando envoyée par un compte admin depuis la page d'ajout ont l'origine « ajout » :
+  chaque étape les prend avant celles des envois en masse (issue #356). Celles d'un compte contributeur, et celles du
+  dossier d'attente, gardent l'origine « etl » et l'ordre d'envoi.
 """
 import os
 import threading
@@ -52,14 +55,14 @@ _folder_lock = threading.Lock()
 _requests_lock = threading.Lock()
 
 
-def request_city_chains(city):
+def request_city_chains(city, origin="etl"):
     """
     Met dans la file des passages les chaînes de la ville qui restent à faire, puis la réveille : chaque étape les
     fera partir à son tour. L'ETL n'attend pas leur fin. Une chaîne déjà faite ou déjà demandée n'est pas redemandée.
     """
     for chain_key in CITY_CHAINS:
-        request_chain(chain_key, city)
-    launch_services(city)
+        request_chain(chain_key, city, origin)
+    launch_services(city, origin)
     try:
         from services import passage_queue
         passage_queue.wake()
@@ -68,21 +71,21 @@ def request_city_chains(city):
         logger.warning(f"[ETL] File des passages non réveillée : {wake_error}")
 
 
-def request_chain(chain_key, city):
+def request_chain(chain_key, city, origin="etl"):
     """
     Demande une chaîne pour la ville (passage_service.request_city_chain). Non bloquant : une erreur (base injoignable)
     est écrite dans le journal, et les autres chaînes de la ville sont quand même demandées.
     """
     try:
         from services import passage_service
-        passage_id = passage_service.request_city_chain(chain_key, city)
+        passage_id = passage_service.request_city_chain(chain_key, city, origin)
         if passage_id:
             logger.info(f"[ETL] {chain_key} demandée pour {city} : passage {passage_id}")
     except Exception as request_error:
         logger.warning(f"[ETL] {chain_key} non demandée pour {city} : {request_error}")
 
 
-def launch_services(city):
+def launch_services(city, origin="etl"):
     """
     Demande le passage de la chaîne des services pour la commune de la ville (request_etl_passage, issue #211), puis
     réveille la file des passages. Non bloquant, comme les autres étapes : une ville sans passage reste affichable, et
@@ -90,7 +93,7 @@ def launch_services(city):
     """
     try:
         from services import passage_queue, passage_service
-        passage_id = passage_service.request_etl_passage(city)
+        passage_id = passage_service.request_etl_passage(city, origin)
         if passage_id:
             logger.info(f"[ETL-SC] Passage des services demandé pour {city} : {passage_id}")
             passage_queue.wake()
@@ -133,27 +136,28 @@ def load_weather(city) -> None:
         logger.error(f"[ETL] Erreur lors de l'extraction/chargement météo pour {city} : {e}")
 
 
-def request_chains_of_cities(cities) -> None:
+def request_chains_of_cities(cities, origin="etl") -> None:
     """
     Met en file les chaînes de chaque ville, l'une après l'autre (request_city_chains), sous le verrou qui empêche deux
     fils de demander en même temps. Une erreur sur une ville n'arrête pas les autres.
+    `origin` : « ajout » pour la rando d'un compte admin envoyée par la page d'ajout, sinon « etl » (passage_service).
     """
     with _requests_lock:
         for city in cities:
             try:
-                request_city_chains(city)
+                request_city_chains(city, origin)
             except Exception as request_error:
                 logger.warning(f"[ETL] Chaînes non demandées pour {city} : {request_error}")
         logger.info(f"[ETL] Chaînes demandées à la file pour {len(cities)} ville(s)")
 
 
-def start_chain_requests(cities) -> threading.Thread:
+def start_chain_requests(cities, origin="etl") -> threading.Thread:
     """
     Lance le fil qui demande les chaînes des villes à la file, et le rend tout de suite, sans attendre sa fin : la
     réponse au front n'attend pas les ≈ 1 s par ville de la demande. Le fil s'arrête avec l'API (« daemon ») ; s'il est
     coupé en route, une ville pas encore demandée se lance depuis la supervision.
     """
-    worker = threading.Thread(target=request_chains_of_cities, args=(list(cities),),
+    worker = threading.Thread(target=request_chains_of_cities, args=(list(cities), origin),
                               name="demande-des-chaines", daemon=True)
     worker.start()
     return worker
@@ -179,12 +183,15 @@ def process_upload(gpx_path, user_role="user") -> dict:
     Le fichier envoyé par la page d'ajout, traité avant tout le reste : lu, chargé, la météo de sa ville, puis son
     résultat rendu à la route. Les chaînes de sa ville sont demandées à côté. Les fichiers du dossier d'attente, s'il y
     en a, partent ensuite dans le fil de fond (start_folder_worker) : la réponse ne les attend pas.
+    Les chaînes de la ville d'un compte admin passent devant les envois en masse dans la file (origine « ajout »,
+    issue #356) ; celles d'un compte contributeur gardent l'ordre de la file.
     """
     verifie = 1 if user_role == "admin" else 0
+    origin = "ajout" if user_role == "admin" else "etl"
     outcome = process_file(str(gpx_path), os.path.basename(gpx_path), verifie)
     if not outcome["reason"]:
         load_weather(outcome["city"])
-        start_chain_requests([outcome["city"]])
+        start_chain_requests([outcome["city"]], origin)
     start_folder_worker(user_role)
     return outcome
 

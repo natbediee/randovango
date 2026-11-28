@@ -58,12 +58,26 @@ class _Store:
     def resumed_by(self, passage_id):
         return next((key for key, row in self.passages.items() if row["resumed_from"] == passage_id), None)
 
+    def close_resumed_parts(self):
+        # Comme la requête : les parties « à faire » des passages qui ont une reprise passent à « reprise ».
+        closed = 0
+        for key in self.passages:
+            if self.resumed_by(key) is None:
+                continue
+            for part in self.parts[key]:
+                if part["status"] == passage_store.TO_DO:
+                    part["status"], closed = passage_store.RESUMED, closed + 1
+        return closed
+
     def queued_next_parts(self):
-        # Les passages sont gardés dans l'ordre où ils ont été demandés (un dictionnaire garde l'ordre d'écriture).
+        # Comme la requête : les demandes admin d'abord, puis l'ETL ; dans chaque groupe, l'ordre où les passages ont
+        # été demandés (un dictionnaire garde l'ordre d'écriture, et sorted garde l'ordre des égaux).
+        queued = [(key, row) for key, row in self.passages.items() if row["status"] == passage_store.QUEUED]
+        queued = sorted(queued, key=lambda item: item[1]["origin"] not in passage_store.PRIORITY_ORIGINS)
         return [{"passage_id": key, "chain": row["chain"], "city_id": row["city_id"],
                  "next_part": next((part["part"] for part in self.parts[key] if part["status"] == passage_store.TO_DO),
                                    None)}
-                for key, row in self.passages.items() if row["status"] == passage_store.QUEUED]
+                for key, row in queued]
 
     def pending_part(self, chain, part, city_ids, other_than):
         # Comme la requête : la partie pas finie dans un autre passage ouvert, ou en échec pas encore repris.
@@ -142,7 +156,7 @@ def store(monkeypatch):
     """La trace en mémoire, branchée à la place des requêtes de passage_store."""
     fake = _Store()
     for name in ("insert_passage", "set_passage_status", "set_part", "load_passage", "load_parts", "load_calls",
-                 "passage_ids", "recent_ids", "resumed_by", "queued_next_parts", "pending_part", "running_ids", "active_ids", "open_parts", "finished_parts",
+                 "passage_ids", "recent_ids", "resumed_by", "close_resumed_parts", "queued_next_parts", "pending_part", "running_ids", "active_ids", "open_parts", "finished_parts",
                  "failures_to_resume",
                  "load_items", "count_items", "passages_of_item"):
         monkeypatch.setattr(passage_store, name, getattr(fake, name))
@@ -783,7 +797,7 @@ def test_the_etl_wakes_the_queue_after_its_request(monkeypatch):
     """À la fin de l'ETL, la demande de passage est faite, puis la file est réveillée pour la lancer sans attendre."""
     from etl import etl_pipeline
     calls = []
-    monkeypatch.setattr(passage_service, "request_etl_passage", lambda city: calls.append(("demande", city)) or "abc")
+    monkeypatch.setattr(passage_service, "request_etl_passage", lambda city, origin="etl": calls.append(("demande", city)) or "abc")
     monkeypatch.setattr(passage_queue, "wake", lambda: calls.append(("réveil",)))
     etl_pipeline.launch_services("Guidel")
     assert calls == [("demande", "Guidel"), ("réveil",)]
@@ -793,7 +807,7 @@ def test_a_failed_request_does_not_stop_the_etl(monkeypatch):
     """Une base injoignable au moment de la demande est notée dans le journal ; l'ETL de la ville finit quand même."""
     from etl import etl_pipeline
 
-    def broken(city):
+    def broken(city, origin="etl"):
         raise ConnectionError("base injoignable")
     monkeypatch.setattr(passage_service, "request_etl_passage", broken)
     etl_pipeline.launch_services("Guidel")
@@ -1527,3 +1541,131 @@ def test_the_resumes_worker_marks_the_cut_passages_first(store, monkeypatch):
     with pytest.raises(SystemExit):
         passage_queue.work_on_resumes()
     assert turns == ["coupés", "reprises"]
+
+
+# --- Les demandes faites depuis le front avec un compte admin passent devant l'ETL (issue #356) ---
+
+def _etl_then_admin(store, origin="supervision"):
+    """Des services de l'ETL sur Guidel, puis des services demandés par l'admin sur Plouarzel, plus tard."""
+    etl = passage_service.create_passage("services", 12, ["restaurants"], origin="etl")
+    admin = passage_service.create_passage("services", 13, ["restaurants"], origin=origin)
+    store.passages[admin]["requested_at"] = datetime(2026, 11, 19, 11)
+    return etl, admin
+
+
+@pytest.mark.parametrize("origin", ["supervision", "ajout"])
+def test_an_admin_request_is_taken_before_the_etl_sendings(store, chain, origin):
+    """Une demande de la supervision ou une rando envoyée par un compte admin passe devant les services envoyés plus tôt par l'ETL (ville 607, 27 novembre 2026)."""
+    etl, admin = _etl_then_admin(store, origin)
+    assert passage_queue.next_for(step("services")) == admin
+
+
+def test_an_admin_resume_is_taken_before_the_etl_sendings(store, spots):
+    """La reprise d'une vérification des spots en échec, faite depuis la supervision, passe devant les agents des spots envoyés par l'ETL."""
+    spots["fail"]["verification"] = LLMTimeout("trop long")
+    failed = passage_service.create_passage("spots", 12, origin="etl")
+    passage_service.run_passage(failed)
+    del spots["fail"]["verification"]
+    waiting = passage_service.create_passage("spots", 13, ["harmonisation"], origin="etl")
+    resumed = passage_service.resume_passage(failed, origin="supervision")
+    assert store.passages[resumed]["origin"] == "supervision"
+    assert passage_queue.next_for(step("agents_spots")) == resumed and waiting != resumed
+
+
+def test_an_admin_request_waits_for_the_passage_running_on_its_step(store, chain):
+    """Une demande admin ne coupe pas les services qui tournent : elle part juste après eux."""
+    etl, admin = _etl_then_admin(store)
+    chain["busy"] = True            # des services tournent : le verrou de l'étape est tenu
+    assert passage_queue.next_for(step("services")) is None
+    chain["busy"] = False
+    assert passage_queue.next_for(step("services")) == admin
+
+
+def test_two_admin_requests_keep_their_sending_order(store, chain):
+    """Entre deux demandes admin, la première envoyée part la première."""
+    etl, first = _etl_then_admin(store)
+    second = passage_service.create_passage("services", 12, ["laveries"], origin="ajout")
+    store.passages[second]["requested_at"] = datetime(2026, 11, 19, 12)
+    passage_queue.run_step_once(step("services"))
+    assert store.passages[first]["status"] == "fini" and store.passages[second]["status"] == "en_file"
+    assert passage_queue.next_for(step("services")) == second
+
+
+def test_an_admin_request_does_not_pass_a_reached_budget(store, chain):
+    """Une demande admin payante attend le budget comme les autres : elle ne part pas quand il est atteint."""
+    _etl_then_admin(store)
+    store.budget_reason = "enveloppe du mois atteinte"
+    assert passage_queue.next_for(step("services")) is None
+
+
+@pytest.mark.parametrize("origin,priority", [("supervision", True), ("ajout", True), ("etl", False)])
+def test_the_supervision_shows_whether_a_passage_is_a_priority(store, chain, origin, priority):
+    """La supervision dit si un passage passe devant : oui pour une demande admin, non pour un envoi de l'ETL."""
+    passage_id = passage_service.create_passage("services", 12, ["restaurants"], origin=origin)
+    assert passage_service.read_passage(passage_id)["prioritaire"] is priority
+
+
+def test_a_city_chain_asked_by_an_admin_upload_is_a_priority(store, free):
+    """L'OSM de la ville d'une rando envoyée par un compte admin depuis la page d'ajout entre dans la file comme prioritaire."""
+    passage_id = passage_service.request_city_chain("osm", "Guidel", origin="ajout")
+    assert store.passages[passage_id]["origin"] == "ajout"
+
+
+# --- Une reprise ferme les parties restées à faire du passage qu'elle remplace (issue #295) ---
+
+def _failed_on_commerces(store, chain):
+    """Des services de Guidel en échec sur les commerces : restaurants finis, supermarchés et laveries jamais commencés."""
+    chain["fail"]["commerces"] = LLMTimeout("délai dépassé")
+    failed = passage_service.create_passage("services", 12, ["restaurants", "commerces", "supermarches", "laveries"])
+    passage_service.run_passage(failed)
+    del chain["fail"]["commerces"]
+    return failed
+
+
+def test_a_resume_closes_the_parts_never_started_of_the_failure(store, chain):
+    """Reprendre un échec passe ses catégories jamais commencées à « reprise » ; l'échec garde sa raison et le fini reste fini (Donville-les-Bains, 28 novembre 2026)."""
+    failed = _failed_on_commerces(store, chain)
+    passage_service.resume_passage(failed)
+    states = {row["part"]: (row["status"], row["error"]) for row in store.parts[failed]}
+    assert states["restaurants"][0] == "fini" and states["commerces"][0] == "echec"
+    assert states["commerces"][1].startswith("délai dépassé")
+    assert states["supermarches"][0] == states["laveries"][0] == "reprise"
+
+
+def test_the_supervision_links_a_resumed_part_to_the_passage_that_redid_it(store, chain):
+    """La supervision montre une catégorie « reprise » avec la reprise qui l'a refaite ; les autres n'ont pas de lien."""
+    failed = _failed_on_commerces(store, chain)
+    resumed = passage_service.resume_passage(failed)
+    parts = {part["cle"]: part for part in passage_service.read_passage(failed)["categories"]}
+    assert parts["laveries"]["etat"] == "reprise" and parts["laveries"]["refaite_par"] == resumed
+    assert parts["laveries"]["etape"] is None
+    assert parts["commerces"]["refaite_par"] is None and parts["restaurants"]["refaite_par"] is None
+
+
+def test_a_failure_not_yet_resumed_keeps_its_parts_to_do(store, chain):
+    """Un échec qui attend sa reprise garde ses catégories « à faire », même quand une autre reprise ferme les siennes."""
+    waiting = _failed_on_commerces(store, chain)
+    other = _failed_on_commerces(store, chain)
+    passage_service.resume_passage(other)
+    assert [row["status"] for row in store.parts[waiting]] == ["fini", "echec", "a_faire", "a_faire"]
+
+
+def test_the_queue_closes_at_start_the_parts_left_by_older_resumes(store, chain):
+    """Au démarrage, la file ferme les catégories « à faire » des passages repris avant ce changement (1380 le 28 novembre 2026)."""
+    failed = _failed_on_commerces(store, chain)
+    resumed = passage_service.create_passage("services", 12, ["commerces", "supermarches", "laveries"],
+                                             resumed_from=failed)      # une reprise faite avant #295
+    assert store.parts[failed][2]["status"] == "a_faire"
+    passage_queue.close_finished_resumes()
+    assert [row["status"] for row in store.parts[failed]] == ["fini", "echec", "reprise", "reprise"]
+    assert [row["status"] for row in store.parts[resumed]] == ["a_faire"] * 3
+
+
+def test_a_resumed_part_is_neither_done_nor_left_to_do(store, chain):
+    """Une catégorie « reprise » ne compte ni comme faite ni comme demandée : seule la reprise dit où en est la ville."""
+    failed = _failed_on_commerces(store, chain)
+    resumed = passage_service.resume_passage(failed)
+    store.set_passage_status(resumed, "fini")
+    for part in store.parts[resumed]:
+        part["status"] = "fini"
+    assert passage_service.request_etl_passage("Guidel") is None
