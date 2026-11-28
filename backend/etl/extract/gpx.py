@@ -11,6 +11,7 @@ from pathlib import Path
 import gpxpy
 from utils.logger_util import LoggerUtil
 
+from etl.extract.same_path import find_same_path_hike, same_path_reason
 from etl.transform.transform_gpx import transform_gpx
 from utils.db_utils import gpx_already_in_mysql
 
@@ -62,12 +63,16 @@ def track_refusal(gpx_content) -> str | None:
     return NO_TRACK
 
 
-def read_gpx_file(gpx_path, fname) -> dict:
+def read_gpx_file(gpx_path, fname, allow_same_path=False) -> dict:
     """
     Lit un fichier du dossier d'attente et rend son résultat : les données prêtes à charger, ou le motif du refus.
     Un fichier refusé est retiré du dossier tout de suite.
+    Un tracé qui suit le même chemin qu'une rando déjà en base est refusé aussi, même sous un autre nom de fichier
+    (issue #271) : « same_path » donne alors cette rando, pour que la page d'ajout puisse la nommer.
+    allow_same_path : l'admin a vu ce refus et confirme le chargement (un autre départ peut avoir son intérêt pour
+    le voyageur). Un tracé identique à une rando en base reste refusé, même avec cette confirmation.
     """
-    result = {"filename": fname, "gpx_path": gpx_path, "data": None, "reason": None}
+    result = {"filename": fname, "gpx_path": gpx_path, "data": None, "reason": None, "same_path": None}
     if gpx_already_in_mysql(fname):
         result["reason"] = ALREADY_LOADED
     else:
@@ -79,10 +84,30 @@ def read_gpx_file(gpx_path, fname) -> dict:
             result["data"] = transform_gpx(gpx_content, fname)
             if not result["data"]:
                 result["reason"] = START_NOT_FOUND
+            else:
+                refuse_same_path(result, allow_same_path)
     if result["reason"]:
         logger.info(f"[Extract] : Fichier {fname} refusé : {result['reason']}")
         remove_file(gpx_path)
     return result
+
+
+def refuse_same_path(result, allow_same_path) -> None:
+    """
+    Refuse le tracé lu s'il suit le même chemin qu'une rando déjà en base (recouvert à 85 % ou plus, dans les deux
+    sens) : le motif nomme cette rando, et ses données ne sont pas chargées. Si l'admin a confirmé (allow_same_path),
+    le tracé passe, sauf s'il est identique à cette rando : c'est alors la même, et le refus reste.
+    """
+    same_path = find_same_path_hike(result["data"]["points"])
+    if not same_path:
+        return
+    if allow_same_path and not same_path["identical"]:
+        logger.info(f"[Extract] : {result['filename']} chargé à la demande de l'admin, bien qu'il suive le chemin de "
+                    f"la rando {same_path['id']} ({same_path['name']})")
+        return
+    result["same_path"] = same_path
+    result["reason"] = same_path_reason(same_path)
+    result["data"] = None
 
 
 def waiting_files() -> list:
