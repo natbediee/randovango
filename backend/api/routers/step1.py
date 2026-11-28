@@ -308,10 +308,19 @@ def load_communes(cursor) -> list:
 
 
 @router.get("/cities", response_model=List[CityList], summary="Returns the list of cities with statistics and updated weather forecasts.")
-async def get_ville_list(
+def get_ville_list(
     request: Request,
     distance_km: float = Query(DEFAULT_RADIUS_KM, description="Rayon de recherche en km (25 au plus)")
 ):
+    """
+    La liste des villes de « Où pars-tu », avec leurs statistiques et leur météo ; lance aussi les rafraîchissements
+    du jour (météo, carburants, pharmacies) en arrière-plan.
+
+    Une route « def », et non « async def » (issue #342, même piège que les issues #328 et #367) : elle lit MySQL avec
+    une bibliothèque qui ne rend pas la main pendant la lecture (1,2 seconde mesurée le 27 novembre 2026). En
+    « async def », tout le serveur attendait avec elle : deux voyageurs qui ouvraient la page s'attendaient, et les
+    autres pages aussi. Une route « def », FastAPI la fait tourner à part, et les autres requêtes sont servies.
+    """
     check_radius(distance_km)   # avant toute lecture en base (issue #263)
     # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
     with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):

@@ -1,9 +1,12 @@
 """
 L'ordre du tour météo (api/routers/step1, issue #367) : les villes des voyages pas encore finis passent d'abord,
 puis les plus choisies par les voyageurs, puis les autres ; la météo d'une ville choisie se redemande sans bloquer le
-serveur, et sans jamais montrer d'erreur interne au navigateur. Ni réseau ni base : la base et l'appel météo sont remplacés.
+serveur, et sans jamais montrer d'erreur interne au navigateur. Et la page des villes ne fait pas attendre les autres
+requêtes pendant sa lecture en base. Ni réseau ni base : la base et l'appel météo sont remplacés.
 """
 import inspect
+import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import date
 from unittest.mock import MagicMock
@@ -168,3 +171,44 @@ def test_the_weather_refresh_is_capped(monkeypatch):
     assert statuses == [200] * 30 + [429]
     assert len(calls) == 30
     assert client.get("/api/step1/refresh-meteo/2").json() == {"detail": rate_limit.METEO_REFRESH_MESSAGE}
+
+
+SLOW_READ_SECONDS = 0.5
+
+
+@pytest.fixture
+def slow_cities_client(monkeypatch):
+    """La vraie route /cities, sur une base remplacée qui met une demi-seconde à répondre, comme une vraie lecture."""
+    class CitiesCursor:
+        def execute(self, query, params=None):
+            pass
+
+        def fetchone(self):
+            return {"count": 1}   # la météo de J+6 est déjà en base : aucun tour météo ne part
+
+    @contextmanager
+    def open_cursor(dictionary=False, buffered=False):
+        time.sleep(SLOW_READ_SECONDS)   # une lecture bloquante, qui ne rend pas la main au serveur
+        yield None, CitiesCursor()
+
+    monkeypatch.setattr(step1.MySQLUtils, "open_cursor", open_cursor)
+    monkeypatch.setattr(step1, "load_communes", lambda cursor: [])
+    monkeypatch.setattr(step1, "get_all_city_stats", lambda cursor, cities, distance_km: {})
+    monkeypatch.setattr(step1, "start_fuel_prices_refresh", lambda: False)
+    monkeypatch.setattr(step1, "start_pharmacies_refresh", lambda: False)
+    app = FastAPI()
+    app.include_router(step1.router, prefix="/api/step1")
+    # « with » : un seul serveur pour toutes les requêtes du test, comme uvicorn.
+    with TestClient(app) as client:
+        yield client
+
+
+def test_two_travellers_opening_the_cities_do_not_wait_for_each_other(slow_cities_client):
+    """Deux voyageurs qui ouvrent la page des villes en même temps sont servis ensemble, pas l'un après l'autre (1,2 s par lecture le 27 novembre 2026)."""
+    start = time.monotonic()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = list(pool.map(lambda _: slow_cities_client.get("/api/step1/cities").status_code, range(2)))
+    elapsed = time.monotonic() - start
+
+    assert statuses == [200, 200]
+    assert elapsed < 2 * SLOW_READ_SECONDS
