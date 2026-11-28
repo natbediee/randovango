@@ -3,7 +3,20 @@ import os
 import re
 import unicodedata
 import gpxpy
-from utils.geo_utils import get_city_from_coordinates, get_commune_at
+from utils.geo_utils import get_admin_info_from_coordinates, get_city_from_coordinates, get_commune_at
+
+
+def country_outside_france(latitude, longitude) -> str | None:
+	"""
+	Le pays du départ s'il n'est pas la France (« Suisse »), sinon None (issue #272).
+	On ne la demande que si l'État n'a trouvé aucune commune : ou le départ est hors de France, ou l'État n'a pas
+	répondu. Nominatim (OpenStreetMap) départage les deux. S'il ne répond pas non plus, on ne prévient de rien :
+	mieux vaut aucun avertissement qu'un avertissement faux sur une rando bretonne.
+	"""
+	country = get_admin_info_from_coordinates(latitude, longitude)[2]
+	if country and country != "France":
+		return country
+	return None
 
 def extract_points(gpx):
 	"""Extrait la liste des points (lat, lon, ele) de toutes les traces du GPX."""
@@ -105,6 +118,8 @@ def transform_gpx(gpx_content, fname) -> dict:
 	# Si la ville n'est pas trouvée, on arrête la transformation (aucun chargement)
 	if not city_name:
 		return None
+	# Un départ hors de France est chargé, mais l'admin est prévenu de ce qui manquera (issue #272).
+	outside_france = None if commune_details else country_outside_france(start_lat, start_lon)
 
 	if gpx.tracks:
 		# Calcul de la distance totale en 3D (prend en compte l'altitude)
@@ -179,5 +194,6 @@ def transform_gpx(gpx_content, fname) -> dict:
 		'city_name': city_name,
 		'commune': commune,
 		'insee': insee,
-		'commune_details': commune_details
+		'commune_details': commune_details,
+		'outside_france': outside_france
 	}

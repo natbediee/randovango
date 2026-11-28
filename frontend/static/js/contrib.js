@@ -107,6 +107,14 @@
       msg.style.display = 'block';
     }
 
+    // Une rando chargée dont le départ est hors de France (issue #272) : le message reste celui d'un succès, mais
+    // en orange, avec ce qui manquera (pharmacies, carburants), pour que l'admin ne le prenne pas pour un envoi ordinaire.
+    function showWarning(text) {
+      msg.textContent = text;
+      msg.className = 'addhike-msg is-warn';
+      msg.style.display = 'block';
+    }
+
     if (dropzone && input) {
       dropzone.addEventListener('click', function () { input.click(); });
       ['dragover', 'dragenter'].forEach(function (ev) {
@@ -162,7 +170,12 @@
         var data = ct.includes('application/json') ? await res.json() : { message: await res.text() };
         if (res.ok && (data.success === undefined || data.success)) {
           var city = data.city ? ' Ville détectée : ' + data.city + '.' : '';
-          showMsg((data.message || 'Tracé envoyé en relecture.') + city, true);
+          var text = (data.message || 'Tracé envoyé en relecture.') + city;
+          if (data.warning) {
+            showWarning(text + ' ' + data.warning);
+          } else {
+            showMsg(text, true);
+          }
         } else {
           showMsg(data.message || ('Erreur lors de l\'envoi (' + res.status + ').'), false);
           // L'API dit si la personne (un admin) peut charger quand même ce tracé qui suit une rando en base.

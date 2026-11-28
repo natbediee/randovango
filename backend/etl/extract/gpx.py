@@ -30,6 +30,17 @@ ROUTE_ONLY = "il ne contient pas une trace complète"
 NO_TRACK = "le fichier ne contient aucune trace"
 START_NOT_FOUND = "le lieu de départ est introuvable : aucune commune trouvée au premier point de la trace"
 LOAD_FAILED = "une erreur est survenue pendant l'enregistrement en base"
+# L'avertissement d'une rando chargée dont le départ est hors de France (issue #272). Les spots, les lieux
+# d'OpenStreetMap et les agents marchent partout ; les pharmacies (registre FINESS) et les prix des carburants viennent
+# de sources françaises : ils ne trouvent que ce qui est côté français, près de la frontière (cas de Genève et Finhaut).
+OUTSIDE_FRANCE = ("Départ hors de France ({country}) : les pharmacies et les prix des carburants viennent de sources "
+                  "françaises, ils manqueront, sauf près de la frontière.")
+
+
+def outside_france_warning(data) -> str | None:
+    """L'avertissement à montrer pour ces données de rando si leur départ est hors de France, sinon None."""
+    country = data.get("outside_france") if data else None
+    return OUTSIDE_FRANCE.format(country=country) if country else None
 
 
 def remove_file(gpx_path) -> None:

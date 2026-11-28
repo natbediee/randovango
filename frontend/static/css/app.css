@@ -1714,6 +1714,8 @@ input.duration-card__num::placeholder { color: var(--muted-2); }
 .addhike-msg { border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; }
 .addhike-msg.is-ok { background: var(--ok-bg); border: 1px solid var(--ok-bd); color: var(--ok-tx); }
 .addhike-msg.is-error { background: #FBEAE7; border: 1px solid #E9C4BD; color: #B4432E; }
+/* Rando chargée, mais partie hors de France : des services manqueront (issue #272). */
+.addhike-msg.is-warn { background: #FDF3E1; border: 1px solid #F0D7A8; color: #8A5A12; }
 .addhike-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 @media (max-width: 768px) {
