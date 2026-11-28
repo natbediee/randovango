@@ -30,8 +30,42 @@ meteo_refresh_lock = threading.Lock()
 meteo_refresh_in_progress = False
 
 
+# L'ORDRE DU TOUR MÉTÉO (issue #367)
+# Le tour de toutes les villes dure environ une demi-heure (782 villes, 2 secondes entre deux appels). Les villes que
+# les voyageurs ont choisies passent donc en premier : d'abord celles des voyages pas encore finis, puis les plus
+# choisies, puis toutes les autres, dans l'ordre de la table.
+# Un voyage passe par sa ville de départ (trip_plans.city_id) et par la ville de chacun de ses jours (trip_days.city_id).
+# UNION, et non UNION ALL, retire les doublons : une ville vue à plusieurs jours d'un même voyage compte une seule fois.
+TRIP_CITIES_QUERY = """
+    SELECT tp.id AS plan_id, tp.city_id, tp.start_date, tp.duration_days FROM trip_plans tp
+    UNION
+    SELECT tp.id, td.city_id, tp.start_date, tp.duration_days
+    FROM trip_days td JOIN trip_plans tp ON tp.id = td.trip_plan_id
+    WHERE td.city_id IS NOT NULL
+"""
+
+
+def trip_last_day(start_date, duration_days) -> date:
+    """Le dernier jour d'un voyage : un voyage de 3 jours qui part le 1er finit le 3."""
+    return start_date + timedelta(days=duration_days - 1)
+
+
+def order_cities_for_meteo(cities, trip_cities, today) -> list:
+    """
+    Range les villes pour le tour météo : celles des voyages pas encore finis d'abord, puis les plus choisies
+    (le nombre de voyages qui passent par elles), puis les autres. À égalité, l'ordre de la table est gardé.
+    """
+    upcoming, choices = set(), {}
+    for row in trip_cities:
+        choices[row["city_id"]] = choices.get(row["city_id"], 0) + 1
+        if trip_last_day(row["start_date"], row["duration_days"]) >= today:
+            upcoming.add(row["city_id"])
+    # sorted garde l'ordre d'origine à égalité ; False (ville d'un voyage à venir) passe avant True.
+    return sorted(cities, key=lambda city: (city["id"] not in upcoming, -choices.get(city["id"], 0)))
+
+
 def refresh_all_cities_meteo_background():
-    """Rafraîchit la météo de toutes les villes en arrière-plan (thread séparé, non bloquant)."""
+    """Rafraîchit la météo de toutes les villes en arrière-plan (thread séparé, non bloquant), celles des voyageurs d'abord."""
     global meteo_refresh_in_progress
     try:
         # « with » : la connexion se ferme à la sortie du bloc, même si la requête échoue (issue #206).
@@ -39,6 +73,9 @@ def refresh_all_cities_meteo_background():
         with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
             cursor.execute("SELECT id, name, latitude, longitude FROM cities")
             cities = cursor.fetchall()
+            cursor.execute(TRIP_CITIES_QUERY)
+            trip_cities = cursor.fetchall()
+        cities = order_cities_for_meteo(cities, trip_cities, paris_today())
 
         logger.info(f"[METEO-BG] Début du rafraîchissement météo en arrière-plan pour {len(cities)} villes")
         for idx, city in enumerate(cities):
@@ -422,8 +459,14 @@ def update_day_city(request: Request, plan_id: int, data: dict = Body(...)):
 
 
 @router.get("/refresh-meteo/{city_id}", summary="Refresh weather data for a specific city")
-async def refresh_city_meteo(city_id: int):
-    """Lancer l'ETL météo pour une ville spécifique (en cas de données manquantes)"""
+def refresh_city_meteo(city_id: int):
+    """
+    Lance l'ETL météo d'une ville, quand ses prévisions manquent ou n'atteignent plus J+6, et rend les nouvelles.
+
+    Une route « def », et non « async def » (issue #367, même piège que l'issue #328) : elle attend Open-Meteo et
+    la base sans rendre la main. En « async def », tout le serveur attendait avec elle, environ 1 seconde, jusqu'à
+    10 si Open-Meteo ne répond pas. Une route « def », FastAPI la fait tourner à part, et les autres pages répondent.
+    """
     try:
         # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
         with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):
