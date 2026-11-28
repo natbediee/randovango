@@ -3,6 +3,8 @@ La page d'ajout d'une randonnée (frontend/templates/pages/add_hike.html) ne mon
 à l'API : le fichier GPX (issue #265). Page rendue par le vrai front Flask, comme test_free_limit_page.py ;
 l'envoi lui-même est vérifié à la main dans une vraie page.
 """
+from pathlib import Path
+
 # pytest met le dossier de ce test dans le chemin d'import (pas de __init__.py) : on importe le fichier voisin.
 from test_free_limit_page import load_front
 
@@ -32,3 +34,12 @@ def test_add_hike_page_hides_the_load_anyway_button_until_the_api_offers_it():
     page = add_hike_page()
     assert 'id="loadAnyway" style="display:none;' in page
     assert "Charger quand même" in page
+
+
+def test_add_hike_page_shows_the_outside_france_warning_in_its_own_colour():
+    """La page montre l'avertissement d'une rando partie hors de France dans une couleur à part : le script lit « warning » et la feuille de style a sa couleur (issue #272)."""
+    front = Path(__file__).resolve().parents[3] / "frontend" / "static"
+    script = (front / "js" / "contrib.js").read_text(encoding="utf-8")
+    styles = (front / "css" / "app.css").read_text(encoding="utf-8")
+    assert "data.warning" in script and "is-warn" in script
+    assert ".addhike-msg.is-warn" in styles
