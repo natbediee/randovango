@@ -8,6 +8,7 @@ d'attente. Ni base ni réseau : la recherche de la commune et l'enregistrement e
 import inspect
 import shutil
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -369,3 +370,18 @@ def test_the_upload_route_refuses_a_file_that_is_not_gpx(upload_client, waiting_
 
     assert (answer["success"], answer["message"]) == (False, etl_router.REFUSED_NAME_MESSAGE)
     assert not (waiting_dir / "envoi").exists()
+
+
+def test_a_failed_upload_does_not_show_the_internal_error(upload_client, waiting_dir, monkeypatch) -> None:
+    """Un chargement qui plante répond un message simple : le texte de l'erreur, qui peut montrer la base, reste dans le journal (issue #213)."""
+    def failing_upload(path, **kwargs):
+        raise RuntimeError("Access denied for user 'root'@'db_randovango' (using password: YES)")
+    monkeypatch.setattr(etl_router, "process_upload", failing_upload)
+    monkeypatch.setattr(etl_router, "logger", MagicMock())
+
+    answer = send(upload_client, "trace.gpx")
+
+    assert (answer["success"], answer["message"]) == (False, etl_router.UPLOAD_FAILED_MESSAGE)
+    assert "root" not in str(answer)
+    etl_router.logger.error.assert_called_once()
+    assert list((waiting_dir / "envoi").iterdir()) == []

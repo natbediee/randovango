@@ -5,11 +5,16 @@ from etl.etl_pipeline import process_upload
 from etl.extract.gpx import UPLOAD_DIR
 from etl.load.load_gpx import delete_hike_with_trace
 from services.authentification import get_roles_for_user, insert_auth_log
+from utils.logger_util import LoggerUtil
 
 router = APIRouter()
+logger = LoggerUtil.get_logger("router")
 
 ALLOWED_EXT = {"gpx"}
 REFUSED_NAME_MESSAGE = "Fichier refusé : seul un fichier .gpx est accepté."
+# Le message d'un chargement qui plante (issue #213). Le texte de l'erreur, lui, ne part que dans le journal du serveur :
+# il peut montrer la base, un chemin ou une requête, que le navigateur n'a pas à voir.
+UPLOAD_FAILED_MESSAGE = "Le chargement du fichier a échoué. Réessaie plus tard ; si cela recommence, préviens l'administratrice."
 
 
 def safe_gpx_name(filename) -> str | None:
@@ -79,7 +84,8 @@ def upload_gpx(
             status_code=500,
             filename=filename
         )
-        return GPXUploadResponse(success=False, message=f"Erreur ETL: {e}", role=user_role)
+        logger.error(f"[ETL] Échec du chargement de {filename} envoyé par {user['username']} : {e}")
+        return GPXUploadResponse(success=False, message=UPLOAD_FAILED_MESSAGE, role=user_role)
 
     if outcome["reason"]:
         # Refus : la page d'ajout montre le motif, pour que l'admin ou le contributeur sache quoi corriger (issue #266).
