@@ -459,8 +459,14 @@ def update_day_city(request: Request, plan_id: int, data: dict = Body(...)):
 
 
 @router.get("/refresh-meteo/{city_id}", summary="Refresh weather data for a specific city")
-async def refresh_city_meteo(city_id: int):
-    """Lancer l'ETL météo pour une ville spécifique (en cas de données manquantes)"""
+def refresh_city_meteo(city_id: int):
+    """
+    Lance l'ETL météo d'une ville, quand ses prévisions manquent ou n'atteignent plus J+6, et rend les nouvelles.
+
+    Une route « def », et non « async def » (issue #367, même piège que l'issue #328) : elle attend Open-Meteo et
+    la base sans rendre la main. En « async def », tout le serveur attendait avec elle, environ 1 seconde, jusqu'à
+    10 si Open-Meteo ne répond pas. Une route « def », FastAPI la fait tourner à part, et les autres pages répondent.
+    """
     try:
         # « with » : la connexion se ferme à la sortie du bloc, même si une requête échoue (issue #206).
         with MySQLUtils.open_cursor(dictionary=True) as (cnx, cursor):

@@ -1,7 +1,9 @@
 """
 L'ordre du tour météo (api/routers/step1, issue #367) : les villes des voyages pas encore finis passent d'abord,
-puis les plus choisies par les voyageurs, puis les autres. Ni réseau ni base : la base et l'appel météo sont remplacés.
+puis les plus choisies par les voyageurs, puis les autres ; la météo d'une ville choisie se redemande sans bloquer le
+serveur. Ni réseau ni base : la base et l'appel météo sont remplacés.
 """
+import inspect
 from contextlib import contextmanager
 from datetime import date
 
@@ -85,3 +87,8 @@ def test_the_daily_refresh_starts_with_the_cities_of_travellers(weather_calls):
     step1.refresh_all_cities_meteo_background()
     assert weather_calls == ["Brest", "Le Conquet", "Plougonvelin"]
     assert step1.meteo_refresh_in_progress is False
+
+
+def test_the_weather_of_a_chosen_city_does_not_hold_the_server():
+    """La route qui redemande la météo d'une ville est une route « def » : les autres pages répondent pendant qu'elle attend Open-Meteo."""
+    assert not inspect.iscoroutinefunction(step1.refresh_city_meteo)
