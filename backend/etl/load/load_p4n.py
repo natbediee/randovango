@@ -45,6 +45,13 @@ def load_p4n_to_mysql(df: pd.DataFrame, city: str) -> None:
     logger.info(f"[load] : Chargement de {len(df)} lignes depuis DataFrame fourni")
     # Remplacer tous les NaN par None pour éviter les erreurs MySQL
     df = df.where(pd.notnull(df), None)
+    # Sous le verrou commun aux étapes de la file, et refait depuis le début si MySQL l'annule pour interblocage
+    # (issue #361). Refaire ne crée rien en double : les spots déjà enregistrés sont relus, puis écartés.
+    MySQLUtils.exclusive_write(lambda: _load_spots_once(df, city, logger), f"les spots de {city}")
+
+
+def _load_spots_once(df: pd.DataFrame, city: str, logger) -> None:
+    """Un essai du chargement des spots d'une ville : la transaction entière, de la source au dernier spot, jusqu'au commit."""
     # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur ou de return anticipé (issue #206).
     # Une seule connexion pour tout le chargement. Avant, la fonction en ouvrait deux et ne fermait jamais la
     # première : une connexion perdue à chaque passage, même sans erreur, y compris dans l'API (envoi d'un GPX).

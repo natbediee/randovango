@@ -172,6 +172,12 @@ def write_opening(cursor, spot_id: int, opening_period: str, payload: dict) -> N
     )
 
 
+def _save_opening(cursor, spot: dict, payload: dict) -> None:
+    """Écrit les dates d'ouverture lues d'un spot, et les note dans le journal des passages (#276)."""
+    write_opening(cursor, spot["id"], spot["opening_period"], payload)
+    passage_store.note_item(cursor, "spot", spot["id"], passage_store.CHANGED, "ouvertures")
+
+
 def run(limit: int = None, spot_ids: list = None, service=None, city_id: int = None,
         check_budget=lambda: None) -> dict:
     """
@@ -204,10 +210,9 @@ def run(limit: int = None, spot_ids: list = None, service=None, city_id: int = N
                     break
                 continue
             failures_in_a_row = 0
-            write_opening(cursor, spot["id"], spot["opening_period"], payload)
-            # Le journal des passages (#276) : les dates d'ouverture de ce spot viennent de ce passage.
-            passage_store.note_item(cursor, "spot", spot["id"], passage_store.CHANGED, "ouvertures")
-            connection.commit()
+            # L'écriture du spot, sous le verrou commun aux étapes de la file, refaite si MySQL l'annule (issue #361).
+            MySQLUtils.exclusive_commit(cursor, lambda: _save_opening(cursor, spot, payload),
+                                        f"les dates d'ouverture du spot {spot['id']}")
             summary["faits"] += 1
             logger.info(f"[ouvertures] #{spot['id']} {spot['opening_period']!r} -> {normalize(payload)}")
     finally:

@@ -826,7 +826,17 @@ def save_commune(category, city: dict, answer: dict, version: int, model: str, t
     """
     Enregistre une commune en une transaction. Renvoie le nombre de fiches, de lieux à relire et de lieux écartés.
     À l'essai (trial), tout est calculé puis annulé : le bilan dit ce qui serait écrit, la base ne change pas.
+    Les étapes de la file écrivent chacune à leur tour (le verrou commun, issue #361) : les carburants d'une autre ville
+    attendent la fin de cette transaction. Si MySQL l'annule quand même pour interblocage, elle est refaite depuis le
+    début : la réponse de l'agent est déjà là, rien n'est repayé.
     """
+    return MySQLUtils.exclusive_write(
+        lambda: _save_commune_once(category, city, answer, version, model, trial),
+        f"les services ({category.key}) de {city['name']}")
+
+
+def _save_commune_once(category, city: dict, answer: dict, version: int, model: str, trial: bool) -> dict:
+    """Un essai d'enregistrement d'une commune (save_commune) : la transaction entière, du premier lieu au commit."""
     summary = {"fiches": 0, "a_confirmer": 0, "sans_page": 0, "liquidation": 0,
                **{count: 0 for _, _, count, _ in category.shown_elsewhere.values()}}
     sheets, saved = set(), {}

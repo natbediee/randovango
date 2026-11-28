@@ -129,6 +129,31 @@ def test_a_trial_refresh_notes_nothing(monkeypatch):
     assert (loads, marks) == ([], [])
 
 
+def test_stations_cancelled_for_deadlock_are_loaded_on_the_next_attempt(monkeypatch):
+    """Les carburants d'une ville annulés une fois pour interblocage, pendant l'écriture des services d'une autre, sont rechargés."""
+    import mysql.connector
+    from utils import db_utils
+    rows, _ = _city_rows(monkeypatch, [STATION_U])
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (12,)
+    cursor.fetchall.return_value = []
+    cnx = MagicMock()
+    cnx.cursor.return_value = cursor
+    # Le premier commit est annulé par MySQL pour interblocage, le second passe.
+    cnx.commit.side_effect = [mysql.connector.errors.InternalError(msg="Deadlock found", errno=1213), None]
+    monkeypatch.setattr(load_carburants.MySQLUtils, "connect", lambda: cnx)
+    monkeypatch.setattr(load_carburants.MySQLUtils, "disconnect", lambda c: None)
+    monkeypatch.setattr(load_carburants, "get_or_create_source", lambda cursor, name: 3)
+    monkeypatch.setattr(load_carburants, "insert_service_and_link", lambda cursor, poi_id, service: None)
+    histories = []
+    monkeypatch.setattr(load_carburants, "insert_histo_poi", lambda cursor, poi_id, city: histories.append(city))
+    monkeypatch.setattr(db_utils.time, "sleep", lambda seconds: None)
+
+    assert load_carburants.load_stations(rows, "Barcelonnette") == 1
+    assert histories == ["Barcelonnette", "Barcelonnette"]      # la station est réécrite au second essai
+    assert cnx.commit.call_count == 2 and cnx.rollback.call_count == 1
+
+
 def test_a_refresh_without_city_writes_no_city_history(monkeypatch):
     """Le rafraîchissement (ville vide) remplace les prix sans écrire d'historique de commune (histo_poi)."""
     rows, _ = _city_rows(monkeypatch, [STATION_U])
@@ -284,3 +309,12 @@ def test_the_stored_osm_stations_are_read_back_like_overpass_gave_them(monkeypat
               "postcode": None, "latitude": 48.433395, "longitude": -4.716160}
     _fake_database(monkeypatch, {"id": 7, "osm_stations_read_at": datetime(2026, 11, 27)}, [stored])
     assert load_carburants.osm_fuel_stations_of("Plouarzel") == [osm_station(STATION_U)]
+
+
+def test_osm_fuel_stations_cancelled_for_deadlock_are_saved_again(deadlocked_base, monkeypatch):
+    """Les stations-service OSM d'une ville, annulées pour interblocage, sont rangées au second essai."""
+    monkeypatch.setattr(load_carburants.ServiceUtil, "get_city_id", lambda cursor, name: 12)
+
+    load_carburants.save_osm_fuel_stations("Le Conquet", [], datetime(2026, 11, 28))
+
+    assert deadlocked_base.commit.call_count == 2

@@ -52,3 +52,15 @@ def test_a_loading_error_goes_up_to_the_chain(steps) -> None:
     steps.load.side_effect = RuntimeError("MySQL indisponible")
     with pytest.raises(RuntimeError):
         etl_osm.run_osm_etl("Dinard")
+
+
+def test_osm_places_cancelled_for_deadlock_are_loaded_again(deadlocked_base, monkeypatch):
+    """Les lieux OSM d'une ville, annulés par MySQL pendant qu'une autre étape écrit, sont rechargés au second essai."""
+    from etl.load import load_poi
+    monkeypatch.setattr(load_poi, "address_with_commune", lambda address, lat, lon: address)
+    deadlocked_base.cursor.return_value.lastrowid = 5
+    places = pd.DataFrame([{"osm_id": "node/1", "name": "Boulangerie du Port", "lat": 48.36, "lon": -4.77, "type": "bakery"}])
+
+    load_poi.load_osm_poi(places, "Le Conquet")
+
+    assert deadlocked_base.commit.call_count == 2

@@ -478,6 +478,12 @@ def write_services(cursor, spot_id: int, service_names: list) -> None:
 # 3. LES TROIS FAÇONS DE LANCER L'HARMONISATION
 # =============================================================================
 
+def _save_harmonization(cursor, spot_id: int, payload: dict) -> None:
+    """Écrit la description harmonisée d'un spot, et la note dans le journal des passages (#276)."""
+    write_harmonization(cursor, spot_id, payload)
+    passage_store.note_item(cursor, "spot", spot_id, passage_store.CHANGED, "harmonisation")
+
+
 def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new: bool = False,
                city_id: int = None, check_budget=lambda: None) -> dict:
     """
@@ -517,10 +523,9 @@ def run_sample(sample: int = None, service=None, spot_ids: list = None, only_new
                 summary["erreur"] = error
                 continue
 
-            write_harmonization(cursor, spot["id"], payload)
-            # Le journal des passages (#276) : la description de ce spot vient de ce passage.
-            passage_store.note_item(cursor, "spot", spot["id"], passage_store.CHANGED, "harmonisation")
-            connection.commit()
+            # L'écriture du spot, sous le verrou commun aux étapes de la file, refaite si MySQL l'annule (issue #361).
+            MySQLUtils.exclusive_commit(cursor, lambda: _save_harmonization(cursor, spot["id"], payload),
+                                        f"la description du spot {spot['id']}")
             summary["faits"] += 1
             logger.info(
                 f"[harmonize] #{spot['id']} {payload.get('description') or '(rien d’utile)'}"
