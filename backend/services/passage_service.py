@@ -43,7 +43,7 @@ from services import (agents_pause, budget_service, etl_chains, llm_calls_servic
                       pepite_chain, service_store, spot_chain)
 from services.etl_chains import StepFailed
 from services.spot_chain import SpotsMissed
-from services.passage_store import DONE, FAILED, QUEUED, RUNNING, TO_DO, WAITING
+from services.passage_store import DONE, FAILED, QUEUED, RESUMED, RUNNING, TO_DO, WAITING
 from utils.geo_utils import city_commune
 from utils.paris_time import to_paris
 from utils.logger_util import LoggerUtil
@@ -544,7 +544,10 @@ def resume_passage(passage_id: str, origin: str = "supervision") -> str | None:
     if passage["repris_par"]:
         raise PassageConflict(f"Ce passage a déjà été repris par {passage['repris_par']} : reprendre celui-là s'il a échoué.")
     left = [part["cle"] for part in passage["categories"] if part["etat"] != DONE]
-    return create_passage(passage["chaine"], passage["ville"]["id"], left, origin, resumed_from=passage_id)
+    resumed = create_passage(passage["chaine"], passage["ville"]["id"], left, origin, resumed_from=passage_id)
+    # Les parties jamais commencées de l'échec passent à « reprise » : c'est la reprise qui les fait (#295).
+    passage_store.close_resumed_parts()
+    return resumed
 
 
 # --- Dire où il en est ---
@@ -738,15 +741,16 @@ def summary_text(summary: dict | None) -> str | None:
     return " ; ".join(pieces) + "."
 
 
-def part_state(chain: Chain, part: dict, calls: list) -> dict:
+def part_state(chain: Chain, part: dict, calls: list, resumed_by: str | None = None) -> dict:
     """
     Ce que l'écran montre d'une catégorie : son état, son étape, son coût, son bilan ou la raison de son échec.
     L'étape vient du dernier appel de ses agents (recherches, analyse, preuves), sauf l'enregistrement, noté par le code.
+    Une catégorie « reprise » montre le passage qui l'a refaite (refaite_par, #295) : `resumed_by`, la reprise du passage.
     """
     steps = chain.steps_of(part["part"])
     mine = [call for call in calls if call["agent"] in steps]
     last = mine[-1] if mine else None
-    if part["status"] in (TO_DO, DONE):
+    if part["status"] in (TO_DO, DONE, RESUMED):
         step, detail = None, None
     elif part["step"]:
         step, detail = part["step"], None
@@ -757,7 +761,7 @@ def part_state(chain: Chain, part: dict, calls: list) -> dict:
     return {"cle": part["part"], "libelle": chain.parts.get(part["part"], part["part"]), "payant": part_is_paid(chain, part["part"]), "etat": part["status"],
             "etape": step, "detail_etape": detail, "agent": last["agent"] if last and step != SAVING else None,
             **call_totals(mine), "bilan": part["summary"], "bilan_texte": summary_text(part["summary"]),
-            "raison_echec": part["error"],
+            "raison_echec": part["error"], "refaite_par": resumed_by if part["status"] == RESUMED else None,
             "debut": to_paris(part["started_at"]), "fin": to_paris(part["finished_at"])}
 
 
@@ -809,6 +813,7 @@ def read_passage(passage_id: str, details: bool = True, item: tuple | None = Non
         interrupt_if_cut(passage)
     parts = passage_store.load_parts(passage_id)
     calls = passage_store.load_calls(passage_id)
+    resumed_by = passage_store.resumed_by(passage_id)
     return {"passage_id": passage_id, "chaine": chain.key, "libelle_chaine": chain.label,
             "ville": {"id": passage["city_id"], "nom": passage["city_name"], "commune": passage["city_commune"]},
             "origine": passage["origin"], "prioritaire": passage["origin"] in passage_store.PRIORITY_ORIGINS,
@@ -817,8 +822,8 @@ def read_passage(passage_id: str, details: bool = True, item: tuple | None = Non
             "fin": to_paris(passage["finished_at"]),
             "raison_echec": passage["error"], "raison_attente": waiting_reason(passage),
             "reprise_de": passage["resumed_from"],
-            "repris_par": passage_store.resumed_by(passage_id), **call_totals(calls),
-            "categories": [part_state(chain, part, calls) for part in parts],
+            "repris_par": resumed_by, **call_totals(calls),
+            "categories": [part_state(chain, part, calls, resumed_by) for part in parts],
             **found_items(passage_id, details, item)}
 
 

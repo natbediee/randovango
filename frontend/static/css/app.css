@@ -2372,3 +2372,9 @@ a.bilan-total:hover { border-color: var(--teal); }
   color: var(--warn-tx);
   box-shadow: var(--shadow-soft);
 }
+/* Le lien du bandeau de session perdue (issue #298) : « Me reconnecter » ou « Nouveau voyage ». */
+.rate-limit-notice a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
