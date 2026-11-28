@@ -307,3 +307,33 @@ def test_a_spot_harmonized_under_a_passage_is_noted_in_its_journal(monkeypatch) 
     with mesure_passage("p1"):
         harmonize_spots.run_sample(service=FakeLLM(), only_new=True, city_id=50)
     assert noted == [("spot", 3893, "modification", "harmonisation")]
+
+
+def test_a_spot_cancelled_for_deadlock_is_written_again_without_a_new_agent_call(monkeypatch) -> None:
+    """La description d'un spot, annulée par MySQL pendant qu'une autre étape écrit, est réécrite sans rappeler (ni repayer) l'agent."""
+    import mysql.connector
+    from utils import db_utils
+
+    class CountingLLM(FakeLLM):
+        calls = 0
+
+        def complete_json(self, system, user, schema):
+            CountingLLM.calls += 1
+            return self.payload
+
+    deadlocks = [mysql.connector.errors.InternalError(msg="Deadlock found", errno=1213)]
+    written = _run_on(monkeypatch, [{**SPOT, "id": 1, "reviews": []}])
+
+    def write_once_deadlocked(cursor, spot_id, payload):
+        written.append(spot_id)
+        if deadlocks:
+            raise deadlocks.pop()
+
+    monkeypatch.setattr(harmonize_spots, "write_harmonization", write_once_deadlocked)
+    monkeypatch.setattr(db_utils.time, "sleep", lambda seconds: None)
+
+    summary = harmonize_spots.run_sample(service=CountingLLM(), only_new=True, city_id=12)
+
+    assert written == [1, 1]
+    assert CountingLLM.calls == 1
+    assert summary["faits"] == 1

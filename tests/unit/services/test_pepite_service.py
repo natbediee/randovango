@@ -477,3 +477,35 @@ def test_the_transaction_ends_before_positions_are_looked_up(monkeypatch) -> Non
     monkeypatch.setattr(locate_pepites, "locate_places", locate_places)
     assert pepite_service.relocate(cursor, [{"id": 41}]) == 0
     assert seen == [True]
+
+
+def test_ideas_cancelled_for_deadlock_are_saved_again_without_a_new_search(monkeypatch) -> None:
+    """Les idées de Vany, annulées par MySQL pendant qu'une autre étape écrit, sont réenregistrées sans relancer (ni repayer) la recherche."""
+    import mysql.connector
+    from agents import find_pepites
+    from utils import db_utils
+
+    cursor = RecordingCursor()
+    searches, saved = [], []
+    deadlocks = [mysql.connector.errors.InternalError(msg="Deadlock found", errno=1213)]
+
+    def search_agenda(day, known_names):
+        searches.append(1)
+        return [{"nom": "Fest-noz du port"}], "modele", 1
+
+    def save_pepite(cursor, idea, existing, version, model, part):
+        saved.append(idea["nom"])
+        if deadlocks:
+            raise deadlocks.pop()
+
+    monkeypatch.setattr(find_pepites, "search_agenda", search_agenda)
+    monkeypatch.setattr(pepite_service, "find_candidates", lambda cursor, day: [])
+    monkeypatch.setattr(pepite_service, "locate", lambda cursor, idea: None)
+    monkeypatch.setattr(pepite_service, "save_pepite", save_pepite)
+    monkeypatch.setattr(pepite_service, "record_search", lambda *args: None)
+    monkeypatch.setattr(db_utils.time, "sleep", lambda seconds: None)
+
+    assert pepite_service.search_and_store(cursor, dict(DAY), "agenda") == 1
+    assert searches == [1]
+    assert saved == ["Fest-noz du port", "Fest-noz du port"]
+    assert cursor.queries[-1] == "COMMIT"
