@@ -12,6 +12,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from api import rate_limit
 from api.routers import step1
 
 TODAY = date(2026, 11, 28)
@@ -118,6 +119,7 @@ def refresh_client(monkeypatch, open_cursor):
     monkeypatch.setattr(step1.MySQLUtils, "open_cursor", open_cursor)
     monkeypatch.setattr(step1, "logger", MagicMock())
     app = FastAPI()
+    rate_limit.add_rate_limit(app)
     app.include_router(step1.router, prefix="/api/step1")
     return TestClient(app)
 
@@ -149,3 +151,20 @@ def test_a_failed_weather_refresh_does_not_show_the_internal_error(monkeypatch):
 
     assert response.status_code == 500
     assert response.json() == {"detail": step1.METEO_REFRESH_FAILED_MESSAGE}
+
+
+def test_the_weather_refresh_is_capped(monkeypatch):
+    """Au-delà de 30 demandes de météo en une heure, la réponse est 429 avec un message clair, et Open-Meteo n'est plus appelé (issue #213)."""
+    @contextmanager
+    def open_cursor(dictionary=False, buffered=False):
+        yield None, RefreshCursor(PLOUGONVELIN, [])
+
+    calls = []
+    monkeypatch.setattr(step1, "run_meteo_etl", lambda *args: calls.append(args))
+    client = refresh_client(monkeypatch, open_cursor)
+
+    statuses = [client.get("/api/step1/refresh-meteo/2").status_code for _ in range(31)]
+
+    assert statuses == [200] * 30 + [429]
+    assert len(calls) == 30
+    assert client.get("/api/step1/refresh-meteo/2").json() == {"detail": rate_limit.METEO_REFRESH_MESSAGE}

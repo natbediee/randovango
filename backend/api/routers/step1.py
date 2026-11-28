@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from api.dependencies import get_current_traveller, require_plan_owner
-from api.rate_limit import CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT, limiter
+from api.rate_limit import (CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT,
+                            METEO_REFRESH_LIMIT, METEO_REFRESH_MESSAGE, limiter)
 from api.trip_limits import DEFAULT_RADIUS_KM, check_day_in_trip, check_radius, check_trip_duration
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
@@ -463,7 +464,9 @@ METEO_REFRESH_FAILED_MESSAGE = "La météo de cette ville n'a pas pu être actua
 
 
 @router.get("/refresh-meteo/{city_id}", summary="Refresh weather data for a specific city")
-def refresh_city_meteo(city_id: int):
+# Chaque appel fait appeler Open-Meteo : plafonné par voyageur (issue #213, docs/plafonds.md).
+@limiter.limit(METEO_REFRESH_LIMIT, error_message=METEO_REFRESH_MESSAGE)
+def refresh_city_meteo(request: Request, city_id: int):
     """
     Lance l'ETL météo d'une ville, quand ses prévisions manquent ou n'atteignent plus J+6, et rend les nouvelles.
 
