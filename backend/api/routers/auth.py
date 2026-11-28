@@ -22,11 +22,16 @@ from services.authentification import (
 router = APIRouter()
 
 @router.post("/login", summary="Login user: the JWT is set in an httpOnly cookie")
-async def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse:
+def login(request: Request, body: UserLogin = Body(...)) -> ORJSONResponse:
     """
     Vérifie le mot de passe, puis pose le jeton dans le cookie. La réponse donne seulement
     ce que le front affiche (nom, rôles) et l'heure d'expiration de la session.
     Au-delà de 5 échecs pour un compte, ou de 20 pour une adresse, en 15 minutes : 429 (api/rate_limit.py).
+
+    Une route « def », et non « async def » (issue #384, même piège que les issues #328, #367 et #342) : bcrypt
+    vérifie le mot de passe par un calcul volontairement lent (0,2 à 0,3 seconde), et la base des comptes se lit
+    et s'écrit sans rendre la main. En « async def », tout le serveur attendait la fin de la connexion. Une route
+    « def », FastAPI la fait tourner à part, et les autres pages continuent de répondre.
     """
     username = body.username
     password = body.password
