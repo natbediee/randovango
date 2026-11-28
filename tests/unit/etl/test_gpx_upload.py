@@ -330,3 +330,42 @@ def test_a_waiting_folder_hike_outside_france_is_loaded_and_logged(waiting_dir, 
 
     assert (outcomes[0]["city"], outcomes[0]["reason"]) == ("Finhaut", None)
     assert any("Départ hors de France (Suisse)" in line for line in warnings)
+
+
+@pytest.mark.parametrize("received, kept", [
+    ("trace.gpx", "trace.gpx"),
+    ("Mont Saint-Michel.GPX", "Mont Saint-Michel.GPX"),
+    ("../../trace.gpx", "trace.gpx"),
+    ("/etc/cron.d/trace.gpx", "trace.gpx"),
+    ("..\\..\\trace.gpx", "trace.gpx"),
+])
+def test_the_received_name_keeps_no_path(received, kept) -> None:
+    """Le nom reçu du navigateur ne garde que le nom du fichier, jamais les dossiers qui le précèdent (issue #213)."""
+    assert etl_router.safe_gpx_name(received) == kept
+
+
+@pytest.mark.parametrize("received", [None, "", "trace", "trace.exe", "trace.gpx.exe", ".gpx", "..", "../..", "trace\0.gpx"])
+def test_a_name_without_gpx_extension_is_refused(received) -> None:
+    """Un nom vide, caché ou qui ne finit pas par .gpx est refusé (issue #213)."""
+    assert etl_router.safe_gpx_name(received) is None
+
+
+def test_a_name_climbing_up_folders_stays_in_the_waiting_folder(upload_client, waiting_dir, monkeypatch) -> None:
+    """Un fichier nommé « ../../trace.gpx » est écrit dans le sous-dossier d'envoi sous le nom trace.gpx, et nulle part au-dessus (issue #213)."""
+    written = []
+    monkeypatch.setattr(etl_router, "process_upload", lambda path, **kwargs: written.append(path) or {
+        "filename": path.name, "city": "Le Conquet", "reason": None})
+
+    answer = send(upload_client, "trace.gpx", name="../../trace.gpx")
+
+    assert written == [waiting_dir / "envoi" / "trace.gpx"]
+    assert answer["message"] == "Nouveau tracé sur Le Conquet (fichier trace.gpx)."
+    assert not (waiting_dir.parent / "trace.gpx").exists()
+
+
+def test_the_upload_route_refuses_a_file_that_is_not_gpx(upload_client, waiting_dir) -> None:
+    """Un fichier qui n'est pas un .gpx est refusé avec un message clair, sans rien écrire dans le dossier (issue #213)."""
+    answer = send(upload_client, "trace.gpx", name="trace.exe")
+
+    assert (answer["success"], answer["message"]) == (False, etl_router.REFUSED_NAME_MESSAGE)
+    assert not (waiting_dir / "envoi").exists()

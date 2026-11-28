@@ -9,6 +9,23 @@ from services.authentification import get_roles_for_user, insert_auth_log
 router = APIRouter()
 
 ALLOWED_EXT = {"gpx"}
+REFUSED_NAME_MESSAGE = "Fichier refusé : seul un fichier .gpx est accepté."
+
+
+def safe_gpx_name(filename) -> str | None:
+    """
+    Nettoie le nom du fichier reçu, et rend None s'il n'est pas acceptable.
+    Ce nom vient du navigateur, et n'importe qui peut l'écrire : « ../../x.gpx » ferait écrire le fichier hors du
+    dossier d'attente. On ne garde donc que le dernier morceau du nom, après le dernier « / » ou « \\ » (le séparateur
+    de Windows) : jamais de chemin. Puis on refuse un nom caché (qui commence par un point, comme « .. »), un nom
+    vide ou un fichier qui ne finit pas par « .gpx ».
+    """
+    name = (filename or "").replace("\\", "/").split("/")[-1]
+    if name.startswith(".") or "\0" in name:
+        return None
+    if name.split(".")[-1].lower() not in ALLOWED_EXT:
+        return None
+    return name
 
 
 @router.post("/upload_gpx", summary="Upload a GPX file and launch the ETL pipeline (Admin and Contributor only)", response_model=GPXUploadResponse)
@@ -34,14 +51,14 @@ def upload_gpx(
     user_id = user["user_id"]
     roles = get_roles_for_user(user_id)
     user_role = "admin" if "admin" in roles else "user"
-    # Vérification extension
-    ext = file.filename.split(".")[-1].lower()
-    if ext not in ALLOWED_EXT:
-        return GPXUploadResponse(success=False, message=f"Extension non autorisée: {ext}")
+    # Le nom reçu, sans chemin et en .gpx seulement (issue #213) : c'est lui qui sert ensuite, jamais file.filename.
+    filename = safe_gpx_name(file.filename)
+    if filename is None:
+        return GPXUploadResponse(success=False, message=REFUSED_NAME_MESSAGE)
     # Le fichier envoyé attend à part, dans le sous-dossier « envoi » du dossier d'attente (volume Docker) : il est
     # traité tout de suite, avant les fichiers d'un envoi en masse déposés dans le dossier (issue #328).
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    dest_path = UPLOAD_DIR / file.filename
+    dest_path = UPLOAD_DIR / filename
     with open(dest_path, "wb") as f:
         # file.file : le fichier reçu, lu directement, puisqu'une route « def » ne peut pas attendre file.read().
         f.write(file.file.read())
@@ -60,7 +77,7 @@ def upload_gpx(
             action="upload_gpx_failed",
             route="/api/etl/upload_gpx",
             status_code=500,
-            filename=file.filename
+            filename=filename
         )
         return GPXUploadResponse(success=False, message=f"Erreur ETL: {e}", role=user_role)
 
@@ -72,10 +89,10 @@ def upload_gpx(
             action="upload_gpx_refused",
             route="/api/etl/upload_gpx",
             status_code=200,
-            filename=file.filename
+            filename=filename
         )
         same_path = outcome.get("same_path")
-        return GPXUploadResponse(success=False, message=f"Fichier {file.filename} non chargé : {outcome['reason']}.",
+        return GPXUploadResponse(success=False, message=f"Fichier {filename} non chargé : {outcome['reason']}.",
                                  role=user_role, same_path_hike=same_path["name"] if same_path else None,
                                  can_load_anyway=can_load_anyway(same_path, user_role))
 
@@ -86,11 +103,11 @@ def upload_gpx(
         action="upload_gpx",
         route="/api/etl/upload_gpx",
         status_code=200,
-        filename=file.filename
+        filename=filename
     )
     city = outcome["city"]
     # warning : la rando est chargée, mais son départ est hors de France et des services manqueront (issue #272).
-    return GPXUploadResponse(success=True, message=f"Nouveau tracé sur {city} (fichier {file.filename}).",
+    return GPXUploadResponse(success=True, message=f"Nouveau tracé sur {city} (fichier {filename}).",
                              city=city, role=user_role, warning=outcome.get("warning"))
 
 
