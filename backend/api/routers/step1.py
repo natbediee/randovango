@@ -376,6 +376,10 @@ async def get_ville_list(
     return cities
 
 
+# Le message d'une création de voyage qui plante (issue #377) : le texte de l'erreur reste dans le journal du serveur.
+CREATE_PLAN_FAILED_MESSAGE = "Ton voyage n'a pas pu être créé. Réessaie dans quelques instants."
+
+
 @router.post("/create_plan", summary="Create a new trip plan with empty days (owner taken from the token).")
 # La ville choisie lance les recherches de Vany (carte #21).
 @limiter.limit(CREATE_PLAN_LIMIT, error_message=CREATE_PLAN_MESSAGE)
@@ -422,7 +426,10 @@ def create_plan(
         # telle quelle plutôt que de la ré-emballer en 500.
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la création du plan : {str(e)}")
+        # Le texte de l'erreur peut montrer la base, une requête ou un chemin : il part dans le journal du serveur,
+        # et le voyageur reçoit un message simple (issue #377, comme les routes GPX et météo).
+        logger.error(f"Échec de la création d'un voyage (ville {city_id}, {duration_days} jours) : {e}")
+        raise HTTPException(status_code=500, detail=CREATE_PLAN_FAILED_MESSAGE)
 
 
 def insert_plan_with_days(cursor, plan_start_date, duration_days, city_id, user_token, user_id) -> int:
