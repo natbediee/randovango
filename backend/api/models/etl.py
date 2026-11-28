@@ -10,6 +10,8 @@ class GPXUploadResponse(BaseModel):
     # personne qui envoie (un admin) peut le charger quand même.
     same_path_hike: Optional[str] = None
     can_load_anyway: bool = False
+    # Rando chargée dont le départ est hors de France (issue #272) : ce qui manquera (pharmacies, carburants).
+    warning: Optional[str] = None
 
 class GPXDeleteResponse(BaseModel):
     success: bool

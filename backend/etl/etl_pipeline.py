@@ -30,7 +30,7 @@ from etl.load.load_gpx import load_gpx_data
 from etl.extract.api_meteo import extract_weather_data
 from etl.load.load_meteo import load_weather_data
 from etl.extract import gpx
-from etl.extract.gpx import read_gpx_file, remove_file, ALREADY_LOADED, LOAD_FAILED
+from etl.extract.gpx import read_gpx_file, remove_file, outside_france_warning, ALREADY_LOADED, LOAD_FAILED
 
 
 logger = LoggerUtil.get_logger("etl_pipeline")
@@ -165,19 +165,25 @@ def start_chain_requests(cities, origin="etl") -> threading.Thread:
 
 def process_file(gpx_path, fname, verifie, allow_same_path=False) -> dict:
     """
-    Lit un fichier GPX puis le charge en base, et rend son résultat {"filename", "city", "reason", "same_path"}.
-    La lecture se fait sans verrou (elle attend surtout geo.api.gouv.fr) ; le chargement prend le verrou des
-    chargements. allow_same_path : l'admin confirme un tracé qui suit le chemin d'une rando en base (issue #271).
+    Lit un fichier GPX puis le charge en base, et rend son résultat {"filename", "city", "reason", "same_path",
+    "warning"}. La lecture se fait sans verrou (elle attend surtout geo.api.gouv.fr) ; le chargement prend le verrou
+    des chargements. allow_same_path : l'admin confirme un tracé qui suit le chemin d'une rando en base (issue #271).
+    warning : l'avertissement d'une rando chargée dont le départ est hors de France (issue #272), sinon None.
     """
     gpx_file = read_gpx_file(gpx_path, fname, allow_same_path)
     with _load_lock:
         outcome = load_one_gpx(gpx_file, verifie)
     # La rando en base dont ce tracé suit le chemin, s'il est refusé pour cela : la route la rend à la page d'ajout.
     outcome["same_path"] = gpx_file.get("same_path")
+    outcome["warning"] = None
     if outcome["reason"]:
         logger.info(f"[ETL] Fichier {fname} non chargé : {outcome['reason']}")
     else:
         logger.info(f"[ETL] Ville extraite du GPX: {outcome['city']}")
+        # Dans un envoi en masse, personne ne regarde la page d'ajout : l'avertissement reste au moins dans les logs.
+        outcome["warning"] = outside_france_warning(gpx_file["data"])
+        if outcome["warning"]:
+            logger.warning(f"[ETL] Fichier {fname} chargé sur {outcome['city']}, {outcome['warning']}")
     return outcome
 
 

@@ -28,6 +28,7 @@ def upload_gpx(
     Un tracé qui suit le chemin d'une rando déjà en base est refusé avec le nom de cette rando (issue #271). Seul un
     admin peut alors le charger quand même, en le renvoyant avec load_anyway : pour un contributeur, le refus reste.
     Un tracé identique (même chemin, même départ) est refusé pour tous : le bouton n'est pas proposé.
+    Une rando dont le départ est hors de France est chargée, avec un avertissement qui dit ce qui manquera (issue #272).
     """
     # Récupérer le rôle de l'utilisateur
     user_id = user["user_id"]
@@ -88,8 +89,9 @@ def upload_gpx(
         filename=file.filename
     )
     city = outcome["city"]
+    # warning : la rando est chargée, mais son départ est hors de France et des services manqueront (issue #272).
     return GPXUploadResponse(success=True, message=f"Nouveau tracé sur {city} (fichier {file.filename}).",
-                             city=city, role=user_role)
+                             city=city, role=user_role, warning=outcome.get("warning"))
 
 
 def can_load_anyway(same_path, user_role) -> bool:
