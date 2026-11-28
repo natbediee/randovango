@@ -3,8 +3,11 @@ Connexion et déconnexion (api/routers/auth.py, carte #24) : le jeton part dans 
 httpOnly, jamais dans le JSON que lit le JavaScript du front.
 
 Les comptes et le journal des connexions (SQLite) sont remplacés ; le mot de passe, le jeton
-et le cookie sont les vrais.
+et le cookie sont les vrais. Et une connexion ne fait pas attendre les autres requêtes (issue #384).
 """
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -93,3 +96,35 @@ def test_logout_clears_the_cookie(client):
     assert cookie.startswith('access_token=""') or cookie.startswith("access_token=;")
     assert "max-age=0" in cookie
     assert "path=/api" in cookie
+
+
+SLOW_ACCOUNT_SECONDS = 0.5
+
+
+@pytest.fixture
+def slow_login_client(monkeypatch):
+    """La vraie route de connexion, sur une base des comptes remplacée qui met une demi-seconde à répondre."""
+    def get_user_by_username(username):
+        time.sleep(SLOW_ACCOUNT_SECONDS)   # une lecture bloquante, qui ne rend pas la main au serveur
+        return ACCOUNT if username == "camille" else None
+
+    monkeypatch.setattr(auth, "get_user_by_username", get_user_by_username)
+    monkeypatch.setattr(auth, "get_roles_for_user", lambda user_id: {"admin"})
+    monkeypatch.setattr(auth, "insert_auth_log", lambda *args, **kwargs: None)
+    app = FastAPI()
+    app.include_router(auth.router, prefix="/api/auth")
+    # « with » : un seul serveur pour toutes les requêtes du test, comme uvicorn.
+    with TestClient(app) as client:
+        yield client
+
+
+def test_two_logins_at_the_same_time_do_not_wait_for_each_other(slow_login_client):
+    """Deux connexions lancées ensemble sont servies ensemble, pas l'une après l'autre, et chacune reçoit son cookie."""
+    start = time.monotonic()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(lambda _: login(slow_login_client), range(2)))
+    elapsed = time.monotonic() - start
+
+    assert [response.status_code for response in responses] == [200, 200]
+    assert all(response.headers["set-cookie"].startswith("access_token=") for response in responses)
+    assert elapsed < 2 * SLOW_ACCOUNT_SECONDS

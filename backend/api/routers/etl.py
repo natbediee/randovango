@@ -126,13 +126,17 @@ def can_load_anyway(same_path, user_role) -> bool:
 
 
 @router.delete("/delete_gpx/{filename}", summary="Delete a GPX file (Admin only)", response_model=GPXDeleteResponse)
-async def delete_gpx(
+def delete_gpx(
     filename: str,
     user=Depends(require_admin)
 ):
     """
     Supprime un fichier GPX du dossier data et la randonnée associée dans MySQL/MongoDB. Nécessite un rôle admin :
     require_admin le vérifie avant la route (carte #106), comme pour la supervision, et la doc l'affiche.
+
+    Une route « def », et non « async def » (issue #384, comme l'envoi d'un GPX dans l'issue #328) : MySQL et
+    MongoDB s'attendent sans rendre la main. En « async def », tout le serveur attendait la fin de la suppression.
+    Une route « def », FastAPI la fait tourner à part, et les autres pages continuent de répondre.
     """
     user_id = user["user_id"]
 
