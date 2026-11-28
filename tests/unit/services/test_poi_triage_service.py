@@ -156,3 +156,19 @@ def test_a_trial_sort_of_stations_writes_nothing(monkeypatch):
     _, connection, _ = _sort_stations(monkeypatch, trial=True)
     connection.rollback.assert_called_once()
     connection.commit.assert_not_called()
+
+
+def test_sorting_stations_cancelled_for_deadlock_is_redone(monkeypatch):
+    """Le masquage des stations douteuses, annulé par MySQL pendant que des services s'écrivent, est refait et compte juste."""
+    import mysql.connector
+    from unittest.mock import MagicMock
+    from utils import db_utils
+    connection = MagicMock()
+    connection.cursor.return_value.rowcount = 1
+    connection.commit.side_effect = [mysql.connector.errors.InternalError(msg="Deadlock found", errno=1213), None]
+    monkeypatch.setattr(triage.MySQLUtils, "connect", lambda: connection)
+    monkeypatch.setattr(triage.MySQLUtils, "disconnect", lambda c: None)
+    monkeypatch.setattr(db_utils.time, "sleep", lambda seconds: None)
+
+    assert triage.hide_doubtful_stations() == {"masquees": 1, "reaffichees": 1}
+    assert connection.commit.call_count == 2
