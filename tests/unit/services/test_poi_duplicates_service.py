@@ -177,3 +177,12 @@ def test_the_cafe_of_the_shops_gives_way_to_the_restaurant_sheet():
     places = [_agent(32295, "DEK Café", "1 place de la Mairie, 29217 Plougonvelin"),
               _agent(47923, "Dek", "1 place de la Mairie, 29217 Plougonvelin", categories=("cafe",), shop="cafe")]
     assert _found(places) == [(32295, 47923, duplicates.SAME_PLACE)]
+
+
+def test_duplicates_cancelled_for_deadlock_are_handled_again(deadlocked_base, monkeypatch):
+    """Le traitement des doublons d'une ville, annulé pour interblocage après le chargement OSM, est refait au second essai."""
+    monkeypatch.setattr(duplicates, "_visible_places", lambda cursor: [])
+    monkeypatch.setattr(duplicates, "_city_ids", lambda cursor, city: set())
+
+    assert duplicates.run(trial=False, city="Le Conquet")["paires"] == 0
+    assert deadlocked_base.commit.call_count == 2

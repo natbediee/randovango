@@ -75,6 +75,12 @@ def load_osm_poi(df_osm: pd.DataFrame, city_name: str):
         return
     # Remplacer les NaN par None pour éviter les erreurs MySQL
     df_osm = df_osm.where(pd.notnull(df_osm), None)
+    # Sous le verrou commun aux étapes de la file, et refaite si MySQL l'annule pour interblocage (issue #361).
+    MySQLUtils.exclusive_write(lambda: _load_osm_poi_once(df_osm, city_name), f"les lieux OSM de {city_name}")
+
+
+def _load_osm_poi_once(df_osm: pd.DataFrame, city_name: str) -> None:
+    """Un essai de load_osm_poi : la transaction entière, du premier lieu au commit."""
     # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
     with MySQLUtils.open_cursor() as (cnx, cursor):
         source_id = get_or_create_source(cursor, 'osm')
@@ -126,6 +132,12 @@ def load_wikidata_poi(df_wiki: pd.DataFrame, city_name: str):
     if df_wiki is None or df_wiki.empty:
         logger.warning("[load_wikidata_poi] : Aucun POI Wikidata à insérer.")
         return
+    # Sous le verrou commun aux étapes de la file, et refaite si MySQL l'annule pour interblocage (issue #361).
+    MySQLUtils.exclusive_write(lambda: _load_wikidata_poi_once(df_wiki, city_name), f"les lieux Wikidata de {city_name}")
+
+
+def _load_wikidata_poi_once(df_wiki: pd.DataFrame, city_name: str) -> None:
+    """Un essai de load_wikidata_poi : la transaction entière, du premier lieu au commit."""
     # « with » : la connexion se ferme à la sortie du bloc, même en cas d'erreur (issue #206).
     with MySQLUtils.open_cursor() as (cnx, cursor):
         source_id = get_or_create_source(cursor, 'wikidata')
