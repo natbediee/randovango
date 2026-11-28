@@ -44,9 +44,11 @@ def test_a_silent_open_meteo_gives_no_weather(monkeypatch) -> None:
 
 @pytest.fixture
 def waiting_dir(tmp_path, monkeypatch):
-    """Un dossier d'attente vide, à la place de /usr/src/data, et aucune rando encore en base."""
+    """Un dossier d'attente vide, à la place de /usr/src/data, et aucune rando encore en base, ni au même nom ni au même tracé."""
     monkeypatch.setattr(gpx, "GPX_DIR", tmp_path)
     monkeypatch.setattr(gpx, "gpx_already_in_mysql", lambda fname: False)
+    # Aucune rando au même tracé en base : sans ce remplacement, le test lirait la vraie base MySQL.
+    monkeypatch.setattr(gpx, "find_same_path_hike", lambda points: None)
     return tmp_path
 
 
