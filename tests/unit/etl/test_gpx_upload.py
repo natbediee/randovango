@@ -290,3 +290,43 @@ def test_a_waiting_folder_file_on_the_path_of_a_hike_in_base_stays_refused(waiti
 
     assert outcomes[0]["same_path"] == SAINT_GILDAS
     assert gpx.waiting_files() == []
+
+
+@pytest.fixture
+def start_in_switzerland(monkeypatch):
+    """Le départ de la trace est à Finhaut, en Suisse : aucune commune française, Nominatim dit « Suisse »."""
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda lat, lon: None)
+    monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Finhaut")
+    monkeypatch.setattr(transform_gpx, "get_admin_info_from_coordinates",
+                        lambda lat, lon: ("Bas-Valais", "Valais", "Suisse"))
+
+
+def test_a_hike_starting_outside_france_is_loaded_with_a_warning(upload_client, start_in_switzerland) -> None:
+    """Une rando partie de Suisse est chargée, et la page d'ajout dit ce qui manquera : pharmacies et carburants (cas de Finhaut)."""
+    answer = send(upload_client, "trace.gpx", name="Boucle d'Émosson.gpx")
+
+    assert (answer["success"], answer["city"]) == (True, "Finhaut")
+    assert answer["warning"] == gpx.OUTSIDE_FRANCE.format(country="Suisse")
+    assert "pharmacies" in answer["warning"] and "carburants" in answer["warning"]
+
+
+def test_a_hike_starting_in_france_has_no_warning(upload_client) -> None:
+    """Une rando partie d'une commune française est chargée sans avertissement."""
+    answer = send(upload_client, "trace.gpx")
+
+    assert (answer["success"], answer["warning"]) == (True, None)
+
+
+def test_a_waiting_folder_hike_outside_france_is_loaded_and_logged(waiting_dir, start_in_switzerland, monkeypatch) -> None:
+    """Dans un envoi en masse, la rando partie de Suisse est chargée, et l'avertissement est écrit dans les logs, faute de page pour le montrer."""
+    monkeypatch.setattr(etl_pipeline, "load_gpx_data", lambda data, gpx_path, verifie: data["city_name"])
+    monkeypatch.setattr(etl_pipeline, "load_weather", lambda city: None)
+    monkeypatch.setattr(etl_pipeline, "request_chains_of_cities", lambda cities: None)
+    warnings = []
+    monkeypatch.setattr(etl_pipeline.logger, "warning", warnings.append)
+    drop_sample(waiting_dir, "trace.gpx", name="Boucle d'Émosson.gpx")
+
+    outcomes = etl_pipeline.process_waiting_folder(user_role="admin")
+
+    assert (outcomes[0]["city"], outcomes[0]["reason"]) == ("Finhaut", None)
+    assert any("Départ hors de France (Suisse)" in line for line in warnings)

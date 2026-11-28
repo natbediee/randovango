@@ -27,6 +27,13 @@ GPX_SAMPLE = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 """
 
 
+@pytest.fixture(autouse=True)
+def nominatim_says_france(monkeypatch):
+    """Sans réseau : Nominatim place le départ en France, sauf si un test dit autre chose (issue #272)."""
+    monkeypatch.setattr(transform_gpx, "get_admin_info_from_coordinates",
+                        lambda lat, lon: ("Finistère", "Bretagne", "France"))
+
+
 def test_normalize_name_replaces_tokens() -> None:
     """Le numéro d'ordre devant le nom est retiré et l'apostrophe de « d_armor » remise."""
     assert transform_gpx.normalize_name("01-rando_test_d_armor") == "rando test d'armor"
@@ -142,3 +149,43 @@ def test_the_department_comes_with_the_commune_of_the_start(monkeypatch) -> None
     monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: commune("Plouarzel", "29177"))
 
     assert transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")["commune_details"]["department"] == "Finistère"
+
+
+def test_a_start_outside_france_is_marked_with_its_country(monkeypatch) -> None:
+    """Un départ qu'aucune commune française ne contient, et que Nominatim place en Suisse, est marqué « hors de France » (cas de la Boucle d'Émosson, à Finhaut)."""
+    monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Finhaut")
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: None)
+    monkeypatch.setattr(transform_gpx, "get_admin_info_from_coordinates",
+                        lambda lat, lon: ("Bas-Valais", "Valais", "Suisse"))
+
+    result = transform_gpx.transform_gpx(GPX_SAMPLE, "Boucle d'Émosson.gpx")
+
+    assert (result["city_name"], result["outside_france"]) == ("Finhaut", "Suisse")
+
+
+def test_a_state_without_answer_does_not_mark_a_french_start(monkeypatch) -> None:
+    """Si geo.api.gouv.fr ne répond pas, un départ que Nominatim place en France n'est pas marqué hors de France."""
+    monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Trézien")
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: None)
+
+    assert transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")["outside_france"] is None
+
+
+def test_without_any_answer_no_country_is_guessed(monkeypatch) -> None:
+    """Si ni l'État ni Nominatim ne disent le pays, on ne prévient de rien plutôt que de se tromper."""
+    monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: "Trézien")
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: None)
+    monkeypatch.setattr(transform_gpx, "get_admin_info_from_coordinates", lambda lat, lon: (None, None, None))
+
+    assert transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")["outside_france"] is None
+
+
+def test_a_french_commune_does_not_ask_nominatim_for_the_country(monkeypatch) -> None:
+    """Un départ dans une commune française n'est pas marqué, et Nominatim n'est pas appelé pour le pays."""
+    asked = []
+    monkeypatch.setattr(transform_gpx, "get_city_from_coordinates", lambda *args, **kwargs: None)
+    monkeypatch.setattr(transform_gpx, "get_commune_at", lambda *args, **kwargs: commune("Brest", "29019"))
+    monkeypatch.setattr(transform_gpx, "get_admin_info_from_coordinates", lambda lat, lon: asked.append((lat, lon)))
+
+    assert transform_gpx.transform_gpx(GPX_SAMPLE, "trace.gpx")["outside_france"] is None
+    assert asked == []
