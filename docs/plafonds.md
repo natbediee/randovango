@@ -14,6 +14,7 @@ au redémarrage de l'API, ce qui suffit pour un seul serveur.
 | `POST /api/step1/create_plan` | 1 par jour | voyageur | Un voyage gratuit par jour : chaque voyage met les agents de Vany au travail, et chaque appel à un modèle de langage coûte. |
 | `PUT /api/step1/update_day_city/{plan_id}` | 15 par heure | voyageur | Une ville par jour du séjour (7 au plus), plus quelques changements d'avis. |
 | `PUT /api/step3/update_plan/{plan_id}` | 30 par heure | voyageur | Le spot du jour se choisit en quelques clics : environ 3 par jour sur 7 jours. |
+| `GET /api/step1/refresh-meteo/{city_id}` | 30 par heure | voyageur | Chaque appel fait appeler Open-Meteo ; la page ne le fait que pour une ville choisie dont les prévisions n'atteignent pas J+6. |
 | `POST /api/auth/guest` | 10 par heure | adresse IP | Un jeton invité neuf donne des compteurs neufs : sans ce plafond, il suffirait d'en demander un autre. |
 | `POST /api/auth/login` | 5 **échecs** en 15 minutes | nom de compte | Empêche d'essayer des mots de passe sans fin, sur les comptes admin compris (issue #264). |
 | `POST /api/auth/login` | 20 **échecs** en 15 minutes | adresse IP | Arrête un script qui essaie beaucoup de noms de compte depuis la même machine. |

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from api.dependencies import get_current_traveller, require_plan_owner
-from api.rate_limit import CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT, limiter
+from api.rate_limit import (CREATE_PLAN_LIMIT, CREATE_PLAN_MESSAGE, DAY_CHOICE_MESSAGE, DAY_CITY_LIMIT,
+                            METEO_REFRESH_LIMIT, METEO_REFRESH_MESSAGE, limiter)
 from api.trip_limits import DEFAULT_RADIUS_KM, check_day_in_trip, check_radius, check_trip_duration
 from utils.logger_util import LoggerUtil
 from utils.db_utils import MySQLUtils
@@ -458,8 +459,14 @@ def update_day_city(request: Request, plan_id: int, data: dict = Body(...)):
     return {"status": "updated", "plan_id": plan_id, "day_number": day_number, "city_id": city_id}
 
 
+# Le message d'une actualisation météo qui plante (issue #213) : le texte de l'erreur reste dans le journal du serveur.
+METEO_REFRESH_FAILED_MESSAGE = "La météo de cette ville n'a pas pu être actualisée. Réessaie plus tard."
+
+
 @router.get("/refresh-meteo/{city_id}", summary="Refresh weather data for a specific city")
-def refresh_city_meteo(city_id: int):
+# Chaque appel fait appeler Open-Meteo : plafonné par voyageur (issue #213, docs/plafonds.md).
+@limiter.limit(METEO_REFRESH_LIMIT, error_message=METEO_REFRESH_MESSAGE)
+def refresh_city_meteo(request: Request, city_id: int):
     """
     Lance l'ETL météo d'une ville, quand ses prévisions manquent ou n'atteignent plus J+6, et rend les nouvelles.
 
@@ -480,8 +487,9 @@ def refresh_city_meteo(city_id: int):
             city_name = result['name']
             logger.info(f"[REFRESH] Lancement ETL météo pour la ville : {city_name}")
 
-            # Lancer l'ETL météo avec les coordonnées DB (évite l'appel Nominatim)
-            etl_result = run_meteo_etl(city_name, result['latitude'], result['longitude'])
+            # Lancer l'ETL météo avec les coordonnées DB (évite l'appel Nominatim). Son résultat reste ici : il peut
+            # porter le texte d'une erreur interne, que le navigateur n'a pas à voir (issue #213).
+            run_meteo_etl(city_name, result['latitude'], result['longitude'])
 
             # Récupérer les prévisions météo fraîchement créées
             cursor.execute("SELECT * FROM weather WHERE city_id = %s AND DATE >= %s ORDER BY date ASC", (city_id, paris_today()))
@@ -505,13 +513,13 @@ def refresh_city_meteo(city_id: int):
             "city_id": city_id,
             "city_name": city_name,
             "meteo": enrich_meteo_forecasts(forecasts),
-            "etl_result": etl_result,
             "message": f"Données météo actualisées pour {city_name}"
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erreur lors du refresh météo pour city_id {city_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de l'actualisation météo : {str(e)}")
+        # Le texte de l'erreur part dans le journal ci-dessus, jamais au navigateur (issue #213).
+        raise HTTPException(status_code=500, detail=METEO_REFRESH_FAILED_MESSAGE)
 
 
