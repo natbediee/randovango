@@ -5,10 +5,16 @@ from utils.geo_utils import get_city_center
 
 logger = LoggerUtil.get_logger("etl_meteo")
 
+# Délai maximal d'attente d'Open-Meteo, en secondes. Sans délai, un serveur muet ferait attendre l'appel sans fin :
+# l'envoi d'une rando resterait figé sur ce fichier, et le fil de fond qui charge un envoi en masse avec lui.
+# Au-delà de ce délai, requests lève une erreur Timeout : la rando est chargée sans météo et l'envoi continue.
+TIMEOUT_SECONDS = 10
+
 def extract_weather_data(city, latitude=None, longitude=None) -> bool | None:
     """
     Récupère les données météo pour une ville donnée via l'API Open-Meteo.
     Sans latitude/longitude, la position vient de la table cities (voir get_city_center).
+    Renvoie None si l'API ne répond pas dans le délai TIMEOUT_SECONDS ou répond en erreur : la météo manque, sans plus.
     """
     BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -40,7 +46,7 @@ def extract_weather_data(city, latitude=None, longitude=None) -> bool | None:
 
     try:
         logger.info("[Extract] : Appel de l'API météo...")
-        response = requests.get(BASE_URL, params=params)
+        response = requests.get(BASE_URL, params=params, timeout=TIMEOUT_SECONDS)
         response.raise_for_status()
         data = response.json()
         daily_data = data.get('daily', {})
