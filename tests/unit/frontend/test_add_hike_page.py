@@ -25,3 +25,10 @@ def test_add_hike_page_no_longer_shows_lost_fields():
     page = add_hike_page()
     for lost in ("Nom de la randonnée", "Ton récit du parcours", "Glisse 1 à 3 photos", "Enregistrer le brouillon"):
         assert lost not in page
+
+
+def test_add_hike_page_hides_the_load_anyway_button_until_the_api_offers_it():
+    """Le bouton « Charger quand même » est sur la page mais caché : contrib.js ne l'affiche qu'à l'admin, après le refus d'un tracé qui suit une rando en base."""
+    page = add_hike_page()
+    assert 'id="loadAnyway" style="display:none;' in page
+    assert "Charger quand même" in page
