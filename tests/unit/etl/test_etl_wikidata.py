@@ -29,3 +29,14 @@ def test_a_wikidata_failure_is_written_in_the_log_without_raising(monkeypatch):
     monkeypatch.setattr(etl_wikidata, "logger", MagicMock())
     assert etl_wikidata.run_wikidata_etl("Plougonvelin") is None
     assert "Wikidata en échec pour Plougonvelin" in etl_wikidata.logger.error.call_args.args[0]
+
+
+def test_wikidata_places_cancelled_for_deadlock_are_loaded_again(deadlocked_base):
+    """Les lieux Wikidata d'une ville, annulés par MySQL pendant qu'une autre étape écrit, sont rechargés au second essai."""
+    from etl.load import load_poi
+    deadlocked_base.cursor.return_value.lastrowid = 5
+    places = pd.DataFrame([{"wikidata_id": "Q1", "name": "Phare de Kermorvan", "lat": 48.36, "lon": -4.79, "type": "lighthouse"}])
+
+    load_poi.load_wikidata_poi(places, "Le Conquet")
+
+    assert deadlocked_base.commit.call_count == 2

@@ -131,9 +131,21 @@ def _replace_prices(cursor, poi_id: int, prices: list) -> None:
 
 
 def load_stations(rows: list, city_name: str | None) -> int:
-    """Charge les stations d'une ville (ou du rafraîchissement des prix si city_name est None). Une seule transaction."""
+    """
+    Charge les stations d'une ville (ou du rafraîchissement des prix si city_name est None). Une seule transaction.
+    Elle passe sous le verrou commun aux étapes de la file (issue #361), et elle est refaite depuis le début si MySQL
+    l'annule quand même pour interblocage.
+    """
     if not rows:
         return 0
+    label = f"les carburants de {city_name}" if city_name else "les prix des carburants"
+    MySQLUtils.exclusive_write(lambda: _load_stations_once(rows, city_name), label)
+    logger.info(f"[Load] : {len(rows)} stations chargées{f' pour {city_name}' if city_name else ''}")
+    return len(rows)
+
+
+def _load_stations_once(rows: list, city_name: str | None) -> None:
+    """Un essai de chargement des stations (load_stations) : la transaction entière, de la première station au commit."""
     cnx = MySQLUtils.connect()
     cursor = cnx.cursor()
     try:
@@ -156,8 +168,6 @@ def load_stations(rows: list, city_name: str | None) -> int:
     finally:
         cursor.close()
         MySQLUtils.disconnect(cnx)
-    logger.info(f"[Load] : {len(rows)} stations chargées{f' pour {city_name}' if city_name else ''}")
-    return len(rows)
 
 
 def load_missing_signals(signals: dict, known: dict) -> None:
@@ -226,7 +236,14 @@ def save_osm_fuel_stations(city_name: str, stations: list, read_at) -> None:
     Range les stations-service d'OSM d'une ville (au format de transform_carburants.osm_station) et note la date du
     passage dans cities.osm_stations_read_at. Les lignes d'avant de la ville sont remplacées : une station retirée
     d'OSM disparaît. Une ville absente de la table cities n'a rien à ranger.
+    Sous le verrou commun aux étapes de la file, et refaite si MySQL l'annule pour interblocage (issue #361).
     """
+    MySQLUtils.exclusive_write(lambda: _save_osm_fuel_stations_once(city_name, stations, read_at),
+                               f"les stations-service OSM de {city_name}")
+
+
+def _save_osm_fuel_stations_once(city_name: str, stations: list, read_at) -> None:
+    """Un essai de save_osm_fuel_stations : la transaction entière, jusqu'au commit."""
     # buffered : get_city_id ne lit que la première ligne, la requête suivante doit pouvoir partir.
     with MySQLUtils.open_cursor(buffered=True) as (cnx, cursor):
         city_id = ServiceUtil.get_city_id(cursor, city_name)

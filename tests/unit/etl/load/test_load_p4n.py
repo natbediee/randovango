@@ -77,3 +77,13 @@ def test_spots_are_read_with_a_buffered_cursor(monkeypatch) -> None:
     load_p4n.load_p4n_to_mysql(_spots(), "Ville inconnue")
 
     assert connection.options == [{"buffered": True}]
+
+
+def test_spots_cancelled_for_deadlock_are_loaded_again(deadlocked_base) -> None:
+    """Le chargement des spots d'une ville, annulé par MySQL pendant qu'une autre étape écrit, est refait au second essai."""
+    # Un spot où l'on ne peut pas dormir : il est écarté, la transaction va droit au commit.
+    day_only = pd.DataFrame([{"p4n_id": "124", "Type_Place": "PARKING JOUR UNIQUEMENT", "Nom_Place": "Parking du port"}])
+
+    load_p4n.load_p4n_to_mysql(day_only, "Le Conquet")
+
+    assert deadlocked_base.commit.call_count == 2
